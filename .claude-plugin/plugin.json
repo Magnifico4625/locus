@@ -1,0 +1,9 @@
+{
+  "name": "locus",
+  "version": "0.1.0",
+  "description": "Persistent project-aware memory for Claude Code. Structural map, decisions, session history — zero native deps.",
+  "author": "",
+  "homepage": "",
+  "repository": "",
+  "license": "MIT"
+}

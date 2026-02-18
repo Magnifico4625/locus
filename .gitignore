@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Test coverage
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.*
+
+# Locus runtime data (never commit user memory)
+*.db
+locus.log
+locus.log.*
+
+# Debug
+*.log
+
+# Temporary
+tmp/
+temp/
