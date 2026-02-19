@@ -28,7 +28,7 @@ Every Task tool call MUST include explicit `model` parameter:
 
 ```
 Layer 0 (no deps):       logger, redact, file-ignore, stripNonCode, utils (ALL DONE)
-Layer 1 (logger):        NodeSqliteAdapter, SqlJsAdapter, migrations, initStorage
+Layer 1 (logger):        NodeSqliteAdapter, SqlJsAdapter, migrations, initStorage (ALL DONE)
 Layer 2 (strip+ignore):  TS parser, Python parser, config parser, aliases, confidence, ignore (ALL DONE)
 Layer 3 (L1+L2):         chooseScanStrategy, scanProject
 Layer 4 (L1):            SemanticMemory, EpisodicMemory, MemoryCompressor
@@ -1147,7 +1147,7 @@ git commit -m "feat: implement confidence scoring with reasons"
 
 ---
 
-### Task 11: NodeSqliteAdapter
+### Task 11: NodeSqliteAdapter [DONE — 7e7f939]
 
 **Files:**
 - Modify: `src/storage/node-sqlite.ts`
@@ -1255,7 +1255,7 @@ git commit -m "feat: implement NodeSqliteAdapter wrapping node:sqlite"
 
 ---
 
-### Task 12: SqlJsAdapter
+### Task 12: SqlJsAdapter [DONE — 7e7f939]
 
 **Files:**
 - Modify: `src/storage/sql-js.ts`
@@ -1300,7 +1300,7 @@ git commit -m "feat: implement SqlJsAdapter with debounced persistence"
 
 ---
 
-### Task 13: Database migrations
+### Task 13: Database migrations [DONE — 7e7f939]
 
 **Files:**
 - Modify: `src/storage/migrations.ts`
@@ -1351,7 +1351,7 @@ git commit -m "feat: implement database migrations with schema versioning"
 
 ---
 
-### Task 14: initStorage + detectFts5
+### Task 14: initStorage + detectFts5 [DONE — 7e7f939]
 
 **Files:**
 - Modify: `src/storage/init.ts`
