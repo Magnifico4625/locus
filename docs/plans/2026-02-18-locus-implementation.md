@@ -29,7 +29,7 @@ Every Task tool call MUST include explicit `model` parameter:
 ```
 Layer 0 (no deps):       logger, redact, file-ignore, stripNonCode, utils (ALL DONE)
 Layer 1 (logger):        NodeSqliteAdapter, SqlJsAdapter, migrations, initStorage
-Layer 2 (strip+ignore):  TS parser, Python parser, config parser, aliases, confidence, ignore
+Layer 2 (strip+ignore):  TS parser, Python parser, config parser, aliases, confidence, ignore (ALL DONE)
 Layer 3 (L1+L2):         chooseScanStrategy, scanProject
 Layer 4 (L1):            SemanticMemory, EpisodicMemory, MemoryCompressor
 Layer 5 (L1+L3):         project-map resource, decisions resource, recent resource
@@ -866,7 +866,7 @@ git commit -m "feat: implement package.json and tsconfig.json parsers"
 
 ---
 
-### Task 8: Path alias resolution
+### Task 8: Path alias resolution [DONE — 894fe86]
 
 **Files:**
 - Modify: `src/scanner/aliases.ts`
@@ -949,7 +949,7 @@ git commit -m "feat: implement tsconfig path alias resolution"
 
 ---
 
-### Task 9: Ignore rules (shouldIgnore)
+### Task 9: Ignore rules (shouldIgnore) [DONE — 894fe86]
 
 **Files:**
 - Modify: `src/scanner/ignore.ts`
@@ -1041,7 +1041,7 @@ git commit -m "feat: implement ignore rules with hardcoded ignore list"
 
 ---
 
-### Task 10: Confidence scoring
+### Task 10: Confidence scoring [DONE — 894fe86]
 
 **Files:**
 - Modify: `src/scanner/confidence.ts`

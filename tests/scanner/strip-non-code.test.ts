@@ -34,39 +34,47 @@ describe('stripNonCode', () => {
   });
 
   it('preserves code inside template expressions', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: testing template literal parsing
     expect(stripNonCode('const x = `${a + b}`;')).toBe('const x = `a + b`;');
   });
 
   it('strips strings inside template expressions', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: testing template literal parsing
     expect(stripNonCode('const x = `${fn("arg")}`;')).toBe('const x = `fn("")`;');
   });
 
   // --- Nested templates ---
   it('handles nested template literals', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: testing template literal parsing
     expect(stripNonCode('`a${`b${c}`}d`')).toBe('``c``');
   });
 
   it('handles string indexing inside template', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: testing template literal parsing
     expect(stripNonCode('`${obj["key"]}`')).toBe('`obj[""]`');
   });
 
   // --- Brace depth ---
   it('handles arrow functions in template expressions', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: testing template literal parsing
     expect(stripNonCode('`${items.map(x => { return x; })}`')).toBe(
       '`items.map(x => { return x; })`',
     );
   });
 
   it('handles object literals in template expressions', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: testing template literal parsing
     expect(stripNonCode('`${{ a: 1 }}`')).toBe('`{ a: 1 }`');
   });
 
   // --- Dynamic imports (must be preserved) ---
   it('preserves import() inside template expression', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: testing template literal parsing
     expect(stripNonCode('`${import("./module")}`')).toBe('`import("")`');
   });
 
   it('preserves await import() inside template expression', () => {
+    // biome-ignore lint/suspicious/noTemplateCurlyInString: testing template literal parsing
     expect(stripNonCode('`${await import("./x")}`')).toBe('`await import("")`');
   });
 
