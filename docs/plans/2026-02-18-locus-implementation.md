@@ -27,7 +27,7 @@ Every Task tool call MUST include explicit `model` parameter:
 ## Dependency Graph
 
 ```
-Layer 0 (no deps):       logger, redact, file-ignore, stripNonCode, utils (done)
+Layer 0 (no deps):       logger, redact, file-ignore, stripNonCode, utils (ALL DONE)
 Layer 1 (logger):        NodeSqliteAdapter, SqlJsAdapter, migrations, initStorage
 Layer 2 (strip+ignore):  TS parser, Python parser, config parser, aliases, confidence, ignore
 Layer 3 (L1+L2):         chooseScanStrategy, scanProject
@@ -42,7 +42,7 @@ Tasks are numbered in implementation order. Each task is atomic and TDD.
 
 ---
 
-### Task 1: File-based rotating logger
+### Task 1: File-based rotating logger [DONE — b92d5ea]
 
 **Files:**
 - Modify: `src/logger.ts`
@@ -170,7 +170,7 @@ git commit -m "feat: implement file-based rotating logger with maskPath (Contrac
 
 ---
 
-### Task 2: Content redaction patterns
+### Task 2: Content redaction patterns [DONE — 0159d4a]
 
 **Files:**
 - Modify: `src/security/redact.ts`
@@ -289,7 +289,7 @@ git commit -m "feat: implement content redaction patterns (Contract 1 Layer 2)"
 
 ---
 
-### Task 3: File denylist matching
+### Task 3: File denylist matching [DONE — 0159d4a]
 
 **Files:**
 - Modify: `src/security/file-ignore.ts`
@@ -379,7 +379,7 @@ git commit -m "feat: implement file denylist matching (Contract 1 Layer 1)"
 
 ---
 
-### Task 4: stripNonCode state machine
+### Task 4: stripNonCode state machine [DONE — 0159d4a]
 
 **Files:**
 - Modify: `src/scanner/strip.ts`
@@ -523,7 +523,7 @@ git commit -m "feat: implement stripNonCode state machine (Contract 4)"
 
 ---
 
-### Task 5: TypeScript/JavaScript export/import parser
+### Task 5: TypeScript/JavaScript export/import parser [DONE — 0159d4a]
 
 **Files:**
 - Modify: `src/scanner/parsers/typescript.ts`
