@@ -669,7 +669,7 @@ git commit -m "feat: implement JS/TS export/import/re-export regex parsers"
 
 ---
 
-### Task 6: Python export/import parser
+### Task 6: Python export/import parser [DONE]
 
 **Files:**
 - Modify: `src/scanner/parsers/python.ts`
@@ -761,7 +761,7 @@ git commit -m "feat: implement Python class/def/import regex parsers"
 
 ---
 
-### Task 7: Config file parser (package.json, tsconfig.json)
+### Task 7: Config file parser (package.json, tsconfig.json) [DONE]
 
 **Files:**
 - Modify: `src/scanner/parsers/config.ts`
