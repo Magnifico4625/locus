@@ -34,8 +34,8 @@ Layer 3 (L1+L2):         chooseScanStrategy, scanProject (ALL DONE)
 Layer 4 (L1):            SemanticMemory, EpisodicMemory, MemoryCompressor (ALL DONE)
 Layer 5 (L1+L3):         project-map resource, decisions resource, recent resource (ALL DONE)
 Layer 6 (all above):     9 tool handlers (explore, search, remember, forget, scan, status, doctor, audit, purge) (ALL DONE)
-Layer 7 (L1+security):   post-tool-use hook
-Layer 8 (all):           server.ts wiring + E2E tests
+Layer 7 (L1+security):   post-tool-use hook (ALL DONE)
+Layer 8 (all):           server.ts wiring + E2E tests (ALL DONE)
 ```
 
 Tasks are numbered in implementation order. Each task is atomic and TDD.
@@ -1853,7 +1853,7 @@ git commit -m "feat: implement purge with two-call confirmation (Contract 9)"
 
 ---
 
-### Task 29: post-tool-use hook
+### Task 29: post-tool-use hook [DONE]
 
 **Files:**
 - Modify: `hooks/post-tool-use.js`
@@ -1878,7 +1878,7 @@ git commit -m "feat: implement post-tool-use hook with capture levels (Contract 
 
 ---
 
-### Task 30: Server integration -- wire everything together
+### Task 30: Server integration -- wire everything together [DONE]
 
 **Files:**
 - Modify: `src/server.ts`
@@ -1920,7 +1920,7 @@ git commit -m "feat: wire server.ts with all dependencies and handlers"
 
 ---
 
-### Task 31: End-to-end tests
+### Task 31: End-to-end tests [DONE]
 
 **Files:**
 - Create: `tests/integration/e2e.test.ts`
@@ -1947,7 +1947,7 @@ git commit -m "test: add end-to-end integration tests"
 
 ---
 
-### Task 32: Final verification + tag
+### Task 32: Final verification + tag [DONE]
 
 **Step 1: Run full check**
 
