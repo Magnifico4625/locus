@@ -33,7 +33,7 @@ Layer 2 (strip+ignore):  TS parser, Python parser, config parser, aliases, confi
 Layer 3 (L1+L2):         chooseScanStrategy, scanProject (ALL DONE)
 Layer 4 (L1):            SemanticMemory, EpisodicMemory, MemoryCompressor (ALL DONE)
 Layer 5 (L1+L3):         project-map resource, decisions resource, recent resource (ALL DONE)
-Layer 6 (all above):     9 tool handlers (explore, search, remember, forget, scan, status, doctor, audit, purge)
+Layer 6 (all above):     9 tool handlers (explore, search, remember, forget, scan, status, doctor, audit, purge) (ALL DONE)
 Layer 7 (L1+security):   post-tool-use hook
 Layer 8 (all):           server.ts wiring + E2E tests
 ```
@@ -1735,7 +1735,7 @@ git commit -m "feat: implement recent episodes MCP resource (Contract 8)"
 
 ---
 
-### Task 24: Tool handlers -- explore + search
+### Task 24: Tool handlers -- explore + search [DONE — 55bbca4]
 
 **Files:**
 - Modify: `src/tools/explore.ts`, `src/tools/search.ts`
@@ -1755,7 +1755,7 @@ git commit -m "feat: implement explore and search tool handlers"
 
 ---
 
-### Task 25: Tool handlers -- remember + forget
+### Task 25: Tool handlers -- remember + forget [DONE — 55bbca4]
 
 **Files:**
 - Modify: `src/tools/remember.ts`, `src/tools/forget.ts`
@@ -1771,7 +1771,7 @@ git commit -m "feat: implement remember and forget tool handlers"
 
 ---
 
-### Task 26: Tool handlers -- scan + status
+### Task 26: Tool handlers -- scan + status [DONE — 55bbca4]
 
 **Files:**
 - Modify: `src/tools/scan.ts`, `src/tools/status.ts`
@@ -1787,7 +1787,7 @@ git commit -m "feat: implement scan and status tool handlers"
 
 ---
 
-### Task 27: Tool handlers -- doctor + audit
+### Task 27: Tool handlers -- doctor + audit [DONE — 55bbca4]
 
 **Files:**
 - Modify: `src/tools/doctor.ts`, `src/tools/audit.ts`
@@ -1803,7 +1803,7 @@ git commit -m "feat: implement doctor and audit tool handlers"
 
 ---
 
-### Task 28: Tool handler -- purge
+### Task 28: Tool handler -- purge [DONE — 55bbca4]
 
 **Files:**
 - Modify: `src/tools/purge.ts`

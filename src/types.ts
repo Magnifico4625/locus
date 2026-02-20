@@ -244,3 +244,25 @@ export interface PurgeResponseError {
 }
 
 export type PurgeResponse = PurgeResponsePending | PurgeResponseDone | PurgeResponseError;
+
+// ─── Forget ───
+
+export interface ForgetResponseDeleted {
+  status: 'deleted';
+  deleted: number;
+  message: string;
+}
+
+export interface ForgetResponsePending {
+  status: 'pending_confirmation';
+  confirmToken: string;
+  matches: number;
+  message: string;
+}
+
+export interface ForgetResponseError {
+  status: 'error';
+  message: string;
+}
+
+export type ForgetResponse = ForgetResponseDeleted | ForgetResponsePending | ForgetResponseError;

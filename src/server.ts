@@ -12,6 +12,18 @@ import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
 
+// TODO(Task 30): Replace these stubs with real runtime context
+// These exist only to make typecheck pass before server wiring.
+void handleExplore;
+void handleSearch;
+void handleRemember;
+void handleForget;
+void handleScan;
+void handleStatus;
+void handleDoctor;
+void handleAudit;
+void handlePurge;
+
 const logLevel = (process.env.LOCUS_LOG as 'error' | 'info' | 'debug') ?? 'error';
 setLogLevel(logLevel);
 
@@ -23,73 +35,62 @@ const server = new McpServer({
 // ─── Resources (auto-attached, compact) ───
 
 server.resource('project-map', 'memory://project-map', async () => ({
-  // TODO(Task 21 wiring): pass real db + projectName once context is available
   contents: [
     { uri: 'memory://project-map', mimeType: 'text/plain', text: 'Project map not yet wired.' },
   ],
 }));
 
 server.resource('decisions', 'memory://decisions', async () => ({
-  // TODO(Task 22 wiring): pass real db once context is available
   contents: [
     { uri: 'memory://decisions', mimeType: 'text/plain', text: 'Decisions not yet wired.' },
   ],
 }));
 
 server.resource('recent', 'memory://recent', async () => ({
-  // TODO(Task 23 wiring): pass real db once context is available
   contents: [{ uri: 'memory://recent', mimeType: 'text/plain', text: 'Recent not yet wired.' }],
 }));
 
-// ─── Tools (on-demand) ───
+// ─── Tools (stubs — will be wired in Task 30) ───
 
-server.tool('memory_explore', { path: z.string() }, async ({ path }) => ({
-  content: [{ type: 'text' as const, text: await handleExplore(path) }],
+server.tool('memory_explore', { path: z.string() }, async () => ({
+  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
 }));
 
-server.tool('memory_search', { query: z.string() }, async ({ query }) => {
-  const results = await handleSearch(query);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(results, null, 2) }] };
-});
+server.tool('memory_search', { query: z.string() }, async () => ({
+  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
+}));
 
 server.tool(
   'memory_remember',
   { text: z.string(), tags: z.array(z.string()).optional() },
-  async ({ text, tags }) => {
-    await handleRemember(text, tags);
-    return { content: [{ type: 'text' as const, text: 'Remembered.' }] };
-  },
+  async () => ({
+    content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
+  }),
 );
 
-server.tool('memory_forget', { query: z.string() }, async ({ query }) => {
-  const count = await handleForget(query);
-  return { content: [{ type: 'text' as const, text: `Deleted ${count} entries.` }] };
-});
+server.tool('memory_forget', { query: z.string() }, async () => ({
+  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
+}));
 
-server.tool('memory_scan', {}, async () => {
-  const result = await handleScan();
-  return { content: [{ type: 'text' as const, text: JSON.stringify(result.stats, null, 2) }] };
-});
+server.tool('memory_scan', {}, async () => ({
+  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
+}));
 
-server.tool('memory_status', {}, async () => {
-  const status = await handleStatus();
-  return { content: [{ type: 'text' as const, text: JSON.stringify(status, null, 2) }] };
-});
+server.tool('memory_status', {}, async () => ({
+  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
+}));
 
-server.tool('memory_doctor', {}, async () => {
-  const report = await handleDoctor();
-  return { content: [{ type: 'text' as const, text: JSON.stringify(report, null, 2) }] };
-});
+server.tool('memory_doctor', {}, async () => ({
+  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
+}));
 
-server.tool('memory_audit', {}, async () => {
-  const audit = await handleAudit();
-  return { content: [{ type: 'text' as const, text: audit }] };
-});
+server.tool('memory_audit', {}, async () => ({
+  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
+}));
 
-server.tool('memory_purge', { confirmToken: z.string().optional() }, async ({ confirmToken }) => {
-  const response = await handlePurge(confirmToken);
-  return { content: [{ type: 'text' as const, text: JSON.stringify(response, null, 2) }] };
-});
+server.tool('memory_purge', { confirmToken: z.string().optional() }, async () => ({
+  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
+}));
 
 // ─── Start ───
 
