@@ -30,7 +30,7 @@ Every Task tool call MUST include explicit `model` parameter:
 Layer 0 (no deps):       logger, redact, file-ignore, stripNonCode, utils (ALL DONE)
 Layer 1 (logger):        NodeSqliteAdapter, SqlJsAdapter, migrations, initStorage (ALL DONE)
 Layer 2 (strip+ignore):  TS parser, Python parser, config parser, aliases, confidence, ignore (ALL DONE)
-Layer 3 (L1+L2):         chooseScanStrategy, scanProject
+Layer 3 (L1+L2):         chooseScanStrategy, scanProject (ALL DONE)
 Layer 4 (L1):            SemanticMemory, EpisodicMemory, MemoryCompressor
 Layer 5 (L1+L3):         project-map resource, decisions resource, recent resource
 Layer 6 (all above):     9 tool handlers (explore, search, remember, forget, scan, status, doctor, audit, purge)
@@ -1391,7 +1391,7 @@ git commit -m "feat: implement storage initialization with node:sqlite/sql.js fa
 
 ---
 
-### Task 15: Scanner orchestrator -- chooseScanStrategy
+### Task 15: Scanner orchestrator -- chooseScanStrategy [DONE — 27bf293]
 
 **Files:**
 - Modify: `src/scanner/index.ts`
@@ -1441,7 +1441,7 @@ git commit -m "feat: implement scan strategy selection (Contract 6)"
 
 ---
 
-### Task 16: Scanner orchestrator -- scanProject
+### Task 16: Scanner orchestrator -- scanProject [DONE — 27bf293]
 
 **Files:**
 - Modify: `src/scanner/index.ts`
