@@ -31,7 +31,7 @@ Layer 0 (no deps):       logger, redact, file-ignore, stripNonCode, utils (ALL D
 Layer 1 (logger):        NodeSqliteAdapter, SqlJsAdapter, migrations, initStorage (ALL DONE)
 Layer 2 (strip+ignore):  TS parser, Python parser, config parser, aliases, confidence, ignore (ALL DONE)
 Layer 3 (L1+L2):         chooseScanStrategy, scanProject (ALL DONE)
-Layer 4 (L1):            SemanticMemory, EpisodicMemory, MemoryCompressor
+Layer 4 (L1):            SemanticMemory, EpisodicMemory, MemoryCompressor (ALL DONE)
 Layer 5 (L1+L3):         project-map resource, decisions resource, recent resource
 Layer 6 (all above):     9 tool handlers (explore, search, remember, forget, scan, status, doctor, audit, purge)
 Layer 7 (L1+security):   post-tool-use hook
@@ -1498,7 +1498,7 @@ git commit -m "feat: implement scanProject with file walking and parsing"
 
 ---
 
-### Task 17: SemanticMemory
+### Task 17: SemanticMemory [DONE — d6f45d0]
 
 **Files:**
 - Modify: `src/memory/semantic.ts`
@@ -1538,7 +1538,7 @@ git commit -m "feat: implement SemanticMemory with FTS5 search"
 
 ---
 
-### Task 18: EpisodicMemory
+### Task 18: EpisodicMemory [DONE — d6f45d0]
 
 **Files:**
 - Modify: `src/memory/episodic.ts`
@@ -1578,7 +1578,7 @@ git commit -m "feat: implement EpisodicMemory with session tracking"
 
 ---
 
-### Task 19: MemoryCompressor
+### Task 19: MemoryCompressor [DONE — d6f45d0]
 
 **Files:**
 - Modify: `src/memory/compressor.ts`
