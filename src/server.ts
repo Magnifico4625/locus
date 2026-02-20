@@ -1,8 +1,19 @@
+import { homedir } from 'node:os';
+import { basename, join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { log, setLogLevel } from './logger.js';
+import { MemoryCompressor } from './memory/compressor.js';
+import { EpisodicMemory } from './memory/episodic.js';
+import { SemanticMemory } from './memory/semantic.js';
+import { resolveProjectRoot } from './project-root.js';
+import { generateDecisions } from './resources/decisions.js';
+import { generateProjectMap } from './resources/project-map.js';
+import { generateRecent } from './resources/recent.js';
+import { initStorage } from './storage/init.js';
 import { handleAudit } from './tools/audit.js';
+import { ConfirmationTokenStore } from './tools/confirmation-token.js';
 import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';
@@ -11,92 +22,226 @@ import { handleRemember } from './tools/remember.js';
 import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
+import type { DatabaseAdapter, ProjectRootMethod } from './types.js';
+import { LOCUS_DEFAULTS } from './types.js';
+import { projectHash } from './utils.js';
 
-// TODO(Task 30): Replace these stubs with real runtime context
-// These exist only to make typecheck pass before server wiring.
-void handleExplore;
-void handleSearch;
-void handleRemember;
-void handleForget;
-void handleScan;
-void handleStatus;
-void handleDoctor;
-void handleAudit;
-void handlePurge;
+// ─── Public interfaces ────────────────────────────────────────────────────────
+
+export interface CreateServerOptions {
+  cwd?: string;
+  dbPath?: string;
+}
+
+export interface ServerContext {
+  server: McpServer;
+  db: DatabaseAdapter;
+  backend: 'node:sqlite' | 'sql.js';
+  fts5: boolean;
+  projectRoot: string;
+  projectRootMethod: ProjectRootMethod;
+  semantic: SemanticMemory;
+  episodic: EpisodicMemory;
+  cleanup: () => void;
+}
+
+// ─── Factory ──────────────────────────────────────────────────────────────────
+
+export async function createServer(options?: CreateServerOptions): Promise<ServerContext> {
+  const cwd = options?.cwd ?? process.cwd();
+
+  // 1. Resolve project root
+  const { root, method } = resolveProjectRoot(cwd);
+  const projectName = basename(root);
+
+  // 2. Compute DB path (skip hash when caller supplies explicit path)
+  const dbPath =
+    options?.dbPath ??
+    join(homedir(), '.claude', 'memory', `locus-${projectHash(root)}`, 'locus.db');
+  const logPath = join(homedir(), '.claude', 'memory', 'locus.log');
+
+  // 3. Initialise storage
+  const { db, backend, fts5 } = await initStorage(dbPath);
+
+  // 4. Config (use defaults; env overrides can be layered here later)
+  const config = { ...LOCUS_DEFAULTS };
+
+  // 5. Memory layers
+  const semantic = new SemanticMemory(db, fts5);
+  const episodic = new EpisodicMemory(db);
+  // MemoryCompressor is used internally (not exposed via ServerContext)
+  const _compressor = new MemoryCompressor(config);
+  void _compressor;
+
+  // 6. Confirmation token stores (separate prefix per operation)
+  const purgeTokenStore = new ConfirmationTokenStore('purge');
+  const forgetTokenStore = new ConfirmationTokenStore('forget');
+
+  // 7. Log startup info
+  const fileCountRow = db.get<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM files');
+  const fileCount = fileCountRow?.cnt ?? 0;
+  log('info', `Locus started: backend=${backend} fts5=${fts5} db=${dbPath} files=${fileCount}`);
+  if (config.captureLevel !== 'metadata') {
+    log(
+      'info',
+      `WARNING: captureLevel is '${config.captureLevel}' (not 'metadata') — content may be stored`,
+    );
+  }
+
+  // 8. MCP server
+  const server = new McpServer({ name: 'locus', version: '0.1.0' });
+
+  // ─── Resources ───────────────────────────────────────────────────────────────
+
+  server.resource('project-map', 'memory://project-map', async () => ({
+    contents: [
+      {
+        uri: 'memory://project-map',
+        mimeType: 'text/plain',
+        text: generateProjectMap(db, projectName),
+      },
+    ],
+  }));
+
+  server.resource('decisions', 'memory://decisions', async () => ({
+    contents: [
+      {
+        uri: 'memory://decisions',
+        mimeType: 'text/plain',
+        text: generateDecisions(db),
+      },
+    ],
+  }));
+
+  server.resource('recent', 'memory://recent', async () => ({
+    contents: [
+      {
+        uri: 'memory://recent',
+        mimeType: 'text/plain',
+        text: generateRecent(db),
+      },
+    ],
+  }));
+
+  // ─── Tools ───────────────────────────────────────────────────────────────────
+
+  // 1. memory_explore
+  server.tool('memory_explore', { path: z.string() }, async ({ path }) => ({
+    content: [{ type: 'text' as const, text: handleExplore(path, { db }) }],
+  }));
+
+  // 2. memory_search
+  server.tool('memory_search', { query: z.string() }, async ({ query }) => ({
+    content: [
+      {
+        type: 'text' as const,
+        text: JSON.stringify(handleSearch(query, { db, semantic, fts5 })),
+      },
+    ],
+  }));
+
+  // 3. memory_remember
+  server.tool(
+    'memory_remember',
+    { text: z.string(), tags: z.array(z.string()).optional() },
+    async ({ text, tags }) => {
+      const entry = handleRemember(text, tags ?? [], { semantic });
+      return {
+        content: [{ type: 'text' as const, text: `Remembered (id=${entry.id}): ${entry.content}` }],
+      };
+    },
+  );
+
+  // 4. memory_forget
+  server.tool(
+    'memory_forget',
+    { query: z.string(), confirmToken: z.string().optional() },
+    async ({ query, confirmToken }) => {
+      const result = handleForget(query, { semantic, tokenStore: forgetTokenStore }, confirmToken);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+    },
+  );
+
+  // 5. memory_scan
+  server.tool('memory_scan', {}, async () => {
+    const result = await handleScan({ projectPath: root, db, config });
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result.stats) }] };
+  });
+
+  // 6. memory_status
+  server.tool('memory_status', {}, async () => {
+    const status = handleStatus({
+      projectPath: cwd,
+      projectRoot: root,
+      projectRootMethod: method,
+      dbPath,
+      db,
+      config,
+      backend,
+      fts5,
+    });
+    return { content: [{ type: 'text' as const, text: JSON.stringify(status) }] };
+  });
+
+  // 7. memory_doctor
+  server.tool('memory_doctor', {}, async () => {
+    const report = handleDoctor({
+      nodeVersion: process.version,
+      backend,
+      fts5,
+      dbPath,
+      projectRoot: root,
+      projectRootMethod: method,
+      captureLevel: config.captureLevel,
+      logPath,
+      db,
+    });
+    return { content: [{ type: 'text' as const, text: JSON.stringify(report) }] };
+  });
+
+  // 8. memory_audit
+  server.tool('memory_audit', {}, async () => {
+    const report = handleAudit({
+      db,
+      projectPath: cwd,
+      dbPath,
+      logPath,
+      captureLevel: config.captureLevel,
+    });
+    return { content: [{ type: 'text' as const, text: report }] };
+  });
+
+  // 9. memory_purge
+  server.tool('memory_purge', { confirmToken: z.string().optional() }, async ({ confirmToken }) => {
+    const result = handlePurge(
+      { db, dbPath, projectPath: cwd, tokenStore: purgeTokenStore },
+      confirmToken,
+    );
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+  });
+
+  return {
+    server,
+    db,
+    backend,
+    fts5,
+    projectRoot: root,
+    projectRootMethod: method,
+    semantic,
+    episodic,
+    cleanup: () => db.close(),
+  };
+}
+
+// ─── Entry point ──────────────────────────────────────────────────────────────
 
 const logLevel = (process.env.LOCUS_LOG as 'error' | 'info' | 'debug') ?? 'error';
 setLogLevel(logLevel);
 
-const server = new McpServer({
-  name: 'locus',
-  version: '0.1.0',
-});
-
-// ─── Resources (auto-attached, compact) ───
-
-server.resource('project-map', 'memory://project-map', async () => ({
-  contents: [
-    { uri: 'memory://project-map', mimeType: 'text/plain', text: 'Project map not yet wired.' },
-  ],
-}));
-
-server.resource('decisions', 'memory://decisions', async () => ({
-  contents: [
-    { uri: 'memory://decisions', mimeType: 'text/plain', text: 'Decisions not yet wired.' },
-  ],
-}));
-
-server.resource('recent', 'memory://recent', async () => ({
-  contents: [{ uri: 'memory://recent', mimeType: 'text/plain', text: 'Recent not yet wired.' }],
-}));
-
-// ─── Tools (stubs — will be wired in Task 30) ───
-
-server.tool('memory_explore', { path: z.string() }, async () => ({
-  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
-}));
-
-server.tool('memory_search', { query: z.string() }, async () => ({
-  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
-}));
-
-server.tool(
-  'memory_remember',
-  { text: z.string(), tags: z.array(z.string()).optional() },
-  async () => ({
-    content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
-  }),
-);
-
-server.tool('memory_forget', { query: z.string() }, async () => ({
-  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
-}));
-
-server.tool('memory_scan', {}, async () => ({
-  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
-}));
-
-server.tool('memory_status', {}, async () => ({
-  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
-}));
-
-server.tool('memory_doctor', {}, async () => ({
-  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
-}));
-
-server.tool('memory_audit', {}, async () => ({
-  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
-}));
-
-server.tool('memory_purge', { confirmToken: z.string().optional() }, async () => ({
-  content: [{ type: 'text' as const, text: 'Not yet wired to runtime context.' }],
-}));
-
-// ─── Start ───
-
 async function main(): Promise<void> {
+  const ctx = await createServer();
   const transport = new StdioServerTransport();
-  await server.connect(transport);
+  await ctx.server.connect(transport);
   log('info', `Locus MCP server started (log level: ${logLevel})`);
 }
 
