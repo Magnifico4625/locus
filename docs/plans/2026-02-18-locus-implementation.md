@@ -32,7 +32,7 @@ Layer 1 (logger):        NodeSqliteAdapter, SqlJsAdapter, migrations, initStorag
 Layer 2 (strip+ignore):  TS parser, Python parser, config parser, aliases, confidence, ignore (ALL DONE)
 Layer 3 (L1+L2):         chooseScanStrategy, scanProject (ALL DONE)
 Layer 4 (L1):            SemanticMemory, EpisodicMemory, MemoryCompressor (ALL DONE)
-Layer 5 (L1+L3):         project-map resource, decisions resource, recent resource
+Layer 5 (L1+L3):         project-map resource, decisions resource, recent resource (ALL DONE)
 Layer 6 (all above):     9 tool handlers (explore, search, remember, forget, scan, status, doctor, audit, purge)
 Layer 7 (L1+security):   post-tool-use hook
 Layer 8 (all):           server.ts wiring + E2E tests
@@ -1615,7 +1615,7 @@ git commit -m "feat: implement MemoryCompressor with threshold-based triggering"
 
 ---
 
-### Task 20: Project root resolution
+### Task 20: Project root resolution [DONE]
 
 **Files:**
 - Create: `src/project-root.ts`
@@ -1655,7 +1655,7 @@ git commit -m "feat: implement project root resolution (Contract 7)"
 
 ---
 
-### Task 21: MCP Resource -- project-map
+### Task 21: MCP Resource -- project-map [DONE]
 
 **Files:**
 - Modify: `src/resources/project-map.ts`
@@ -1699,7 +1699,7 @@ git commit -m "feat: implement project-map MCP resource (Contract 8)"
 
 ---
 
-### Task 22: MCP Resource -- decisions
+### Task 22: MCP Resource -- decisions [DONE]
 
 **Files:**
 - Modify: `src/resources/decisions.ts`
@@ -1717,7 +1717,7 @@ git commit -m "feat: implement decisions MCP resource (Contract 8)"
 
 ---
 
-### Task 23: MCP Resource -- recent
+### Task 23: MCP Resource -- recent [DONE]
 
 **Files:**
 - Modify: `src/resources/recent.ts`

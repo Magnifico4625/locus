@@ -2,9 +2,6 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { log, setLogLevel } from './logger.js';
-import { generateDecisions } from './resources/decisions.js';
-import { generateProjectMap } from './resources/project-map.js';
-import { generateRecent } from './resources/recent.js';
 import { handleAudit } from './tools/audit.js';
 import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
@@ -26,15 +23,22 @@ const server = new McpServer({
 // ─── Resources (auto-attached, compact) ───
 
 server.resource('project-map', 'memory://project-map', async () => ({
-  contents: [{ uri: 'memory://project-map', mimeType: 'text/plain', text: generateProjectMap() }],
+  // TODO(Task 21 wiring): pass real db + projectName once context is available
+  contents: [
+    { uri: 'memory://project-map', mimeType: 'text/plain', text: 'Project map not yet wired.' },
+  ],
 }));
 
 server.resource('decisions', 'memory://decisions', async () => ({
-  contents: [{ uri: 'memory://decisions', mimeType: 'text/plain', text: generateDecisions() }],
+  // TODO(Task 22 wiring): pass real db once context is available
+  contents: [
+    { uri: 'memory://decisions', mimeType: 'text/plain', text: 'Decisions not yet wired.' },
+  ],
 }));
 
 server.resource('recent', 'memory://recent', async () => ({
-  contents: [{ uri: 'memory://recent', mimeType: 'text/plain', text: generateRecent() }],
+  // TODO(Task 23 wiring): pass real db once context is available
+  contents: [{ uri: 'memory://recent', mimeType: 'text/plain', text: 'Recent not yet wired.' }],
 }));
 
 // ─── Tools (on-demand) ───
