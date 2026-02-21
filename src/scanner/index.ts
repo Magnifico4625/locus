@@ -602,6 +602,10 @@ export async function scanProject(
 
   const durationMs = Date.now() - startTime;
 
+  // Write strategy and duration to scan_state
+  setScanState(db, 'lastStrategy', strategy.type);
+  setScanState(db, 'lastScanDuration', String(durationMs));
+
   const stats: ScanStats = {
     totalFiles: filePaths.length,
     scannedFiles: scannedEntries.length,

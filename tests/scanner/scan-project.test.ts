@@ -165,4 +165,21 @@ describe('scanProject', () => {
     const nmFile = result.files.find((f) => f.relativePath.includes('node_modules'));
     expect(nmFile).toBeUndefined();
   });
+
+  it('writes lastStrategy and lastScanDuration to scan_state', async () => {
+    const config = { ...LOCUS_DEFAULTS };
+    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+
+    const strategyRow = db.get<{ value: string }>(
+      "SELECT value FROM scan_state WHERE key = 'lastStrategy'",
+    );
+    expect(strategyRow).toBeDefined();
+    expect(strategyRow?.value).toBe('full');
+
+    const durationRow = db.get<{ value: string }>(
+      "SELECT value FROM scan_state WHERE key = 'lastScanDuration'",
+    );
+    expect(durationRow).toBeDefined();
+    expect(Number(durationRow?.value)).toBeGreaterThanOrEqual(0);
+  });
 });
