@@ -20,6 +20,7 @@ Thumbs.db
 # Environment
 .env
 .env.*
+.claude/settings.local.json
 
 # Locus runtime data (never commit user memory)
 *.db

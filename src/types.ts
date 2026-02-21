@@ -235,7 +235,7 @@ export interface PurgeResponsePending {
 export interface PurgeResponseDone {
   status: 'purged';
   message: string;
-  deletedDbPath: string;
+  clearedDbPath: string;
 }
 
 export interface PurgeResponseError {

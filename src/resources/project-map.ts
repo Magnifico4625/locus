@@ -200,7 +200,7 @@ export function generateProjectMap(db: DatabaseAdapter, projectName: string): st
 
   const lastScanRaw = scanState.get('lastScan');
   const lastScanDuration = scanState.get('lastScanDuration') ?? '?';
-  const lastScanStrategy = scanState.get('lastScanStrategy') ?? 'unknown';
+  const lastScanStrategy = scanState.get('lastStrategy') ?? 'unknown';
 
   let lastScanStr = 'never';
   if (lastScanRaw) {

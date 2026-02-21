@@ -222,7 +222,7 @@ describe('generateProjectMap', () => {
     const nowSec = Math.floor(Date.now() / 1000);
     setScanState(adapter, 'lastScan', String(nowSec));
     setScanState(adapter, 'lastScanDuration', '42');
-    setScanState(adapter, 'lastScanStrategy', 'git-diff');
+    setScanState(adapter, 'lastStrategy', 'git-diff');
 
     const result = generateProjectMap(adapter, 'my-project');
     const lines = result.split('\n');

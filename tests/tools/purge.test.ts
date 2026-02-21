@@ -213,7 +213,7 @@ describe('handlePurge', () => {
 
   // ── Test 9: PurgeResponseDone includes correct dbPath ────────────────────
 
-  it('PurgeResponseDone includes correct deletedDbPath', () => {
+  it('PurgeResponseDone includes correct clearedDbPath', () => {
     const pending = handlePurge(deps);
     expect(pending.status).toBe('pending_confirmation');
     if (pending.status !== 'pending_confirmation') return;
@@ -222,7 +222,8 @@ describe('handlePurge', () => {
 
     expect(result.status).toBe('purged');
     if (result.status === 'purged') {
-      expect(result.deletedDbPath).toBe(dbPath);
+      expect(result.clearedDbPath).toBe(dbPath);
+      expect(result.message).toContain('preserved');
       expect(result.message).toContain(dbPath);
     }
   });

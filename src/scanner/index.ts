@@ -377,6 +377,25 @@ function storeFileEntry(db: DatabaseAdapter, entry: FileEntry): void {
   );
 }
 
+// ─── Store skipped file entry to DB ──────────────────────────
+
+function storeSkippedEntry(
+  db: DatabaseAdapter,
+  relPath: string,
+  reason: string,
+  now: number,
+): void {
+  db.run(
+    `INSERT OR REPLACE INTO files (
+      relative_path, exports_json, imports_json, re_exports_json,
+      file_type, language, lines,
+      confidence_level, confidence_reason,
+      last_scanned, skipped_reason
+    ) VALUES (?, '[]', '[]', '[]', 'module', 'typescript', 0, 'high', NULL, ?, ?)`,
+    [relPath, now, reason],
+  );
+}
+
 // ─── scanProject ─────────────────────────────────────────────
 
 export async function scanProject(
@@ -438,14 +457,23 @@ export async function scanProject(
   const now = deps.now();
 
   for (const relPath of filePaths) {
+    // maxScanFiles limit
+    if (scannedEntries.length >= config.maxScanFiles) {
+      storeSkippedEntry(db, relPath, 'max-files-reached', now);
+      skippedFiles++;
+      continue;
+    }
+
     // Ignore check
     if (shouldIgnore(relPath)) {
+      storeSkippedEntry(db, relPath, 'ignored', now);
       skippedFiles++;
       continue;
     }
 
     // Security denylist check
     if (isDenylisted(relPath)) {
+      storeSkippedEntry(db, relPath, 'denylisted', now);
       skippedFiles++;
       continue;
     }
@@ -453,6 +481,7 @@ export async function scanProject(
     // Language detection
     const language = detectLanguage(relPath);
     if (language === null) {
+      storeSkippedEntry(db, relPath, 'unknown-language', now);
       skippedFiles++;
       continue;
     }
@@ -463,11 +492,13 @@ export async function scanProject(
     try {
       stat = statSync(fullPath);
     } catch {
+      storeSkippedEntry(db, relPath, 'stat-failed', now);
       skippedFiles++;
       continue;
     }
 
     if (stat.size > config.maxFileSize) {
+      storeSkippedEntry(db, relPath, 'too-large', now);
       skippedFiles++;
       continue;
     }
@@ -477,12 +508,14 @@ export async function scanProject(
     try {
       content = readFileSync(fullPath, 'utf-8');
     } catch {
+      storeSkippedEntry(db, relPath, 'read-failed', now);
       skippedFiles++;
       continue;
     }
 
     // Binary check
     if (isBinary(content)) {
+      storeSkippedEntry(db, relPath, 'binary', now);
       skippedFiles++;
       continue;
     }
@@ -601,6 +634,10 @@ export async function scanProject(
   }
 
   const durationMs = Date.now() - startTime;
+
+  // Write strategy and duration to scan_state
+  setScanState(db, 'lastStrategy', strategy.type);
+  setScanState(db, 'lastScanDuration', String(durationMs));
 
   const stats: ScanStats = {
     totalFiles: filePaths.length,

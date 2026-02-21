@@ -85,7 +85,7 @@ export function handlePurge(deps: PurgeDeps, confirmToken?: string): PurgeRespon
 
   return {
     status: 'purged',
-    message: `Deleted ${deps.dbPath}. Memory cleared.`,
-    deletedDbPath: deps.dbPath,
+    message: `All data cleared. Database file preserved at ${deps.dbPath}.`,
+    clearedDbPath: deps.dbPath,
   };
 }

@@ -4,12 +4,10 @@ description: Locus memory management commands — remember decisions, search mem
 triggers:
   - /remember
   - /forget
-  - /compact
   - /memory-status
   - /memory-doctor
   - /memory-audit
   - /memory-purge
-  - /memory-config
 ---
 
 # Locus Memory Commands
@@ -21,7 +19,7 @@ Text is redacted before storage. Use tags with `--tags tag1,tag2`.
 ## /forget <query>
 Delete memory entries matching the query. If >5 matches, requires confirmation.
 
-## /compact
+## /compact *(planned — not yet implemented)*
 Manually trigger episodic memory compression.
 
 ## /memory-status
@@ -36,5 +34,5 @@ Show all stored data grouped by type with counts and sizes.
 ## /memory-purge
 Delete ALL memory for current project. Requires two-step confirmation.
 
-## /memory-config <key> <value>
+## /memory-config <key> <value> *(planned — not yet implemented)*
 Change Locus configuration (captureLevel, maskPaths, compressionMode, etc.).
