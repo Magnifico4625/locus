@@ -288,7 +288,7 @@ describe('E2E: Full lifecycle', () => {
     );
     expect(done.status).toBe('purged');
     const doneTyped = done as PurgeResponseDone;
-    expect(doneTyped.deletedDbPath).toBe(dbPath);
+    expect(doneTyped.clearedDbPath).toBe(dbPath);
 
     // All tables must now be empty
     const filesAfter = db.get<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM files');
