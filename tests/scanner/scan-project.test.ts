@@ -116,7 +116,7 @@ describe('scanProject', () => {
     await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
 
     const rows = db.all<{ relative_path: string }>(
-      'SELECT relative_path FROM files ORDER BY relative_path',
+      'SELECT relative_path FROM files WHERE skipped_reason IS NULL ORDER BY relative_path',
     );
     const paths = rows.map((r) => r.relative_path);
     expect(paths).toContain('src/index.ts');
@@ -191,5 +191,46 @@ describe('scanProject', () => {
     expect(result.stats.scannedFiles).toBe(1);
     // Remaining scannable files should count as skipped
     expect(result.stats.skippedFiles).toBeGreaterThanOrEqual(1);
+  });
+
+  it('stores skipped entries with skippedReason in the database', async () => {
+    const config = { ...LOCUS_DEFAULTS };
+    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+
+    // The fixture has .env (ignored — shouldIgnore fires before isDenylisted)
+    // and package.json/tsconfig.json (unknown-language)
+    const skippedRows = db.all<{ relative_path: string; skipped_reason: string }>(
+      'SELECT relative_path, skipped_reason FROM files WHERE skipped_reason IS NOT NULL',
+    );
+    expect(skippedRows.length).toBeGreaterThanOrEqual(1);
+
+    // .env is in HARDCODED_IGNORE so shouldIgnore fires first → reason 'ignored'
+    const envRow = skippedRows.find((r) => r.relative_path === '.env');
+    expect(envRow).toBeDefined();
+    expect(envRow?.skipped_reason).toBe('ignored');
+  });
+
+  it('stores unknown-language skip reason for non-code files', async () => {
+    const config = { ...LOCUS_DEFAULTS };
+    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+
+    const skippedRows = db.all<{ relative_path: string; skipped_reason: string }>(
+      'SELECT relative_path, skipped_reason FROM files WHERE skipped_reason IS NOT NULL',
+    );
+
+    // package.json has no known language
+    const pkgRow = skippedRows.find((r) => r.relative_path === 'package.json');
+    expect(pkgRow).toBeDefined();
+    expect(pkgRow?.skipped_reason).toBe('unknown-language');
+  });
+
+  it('stores max-files-reached skip reason when limit hit', async () => {
+    const config = { ...LOCUS_DEFAULTS, maxScanFiles: 1 };
+    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+
+    const skippedRows = db.all<{ relative_path: string; skipped_reason: string }>(
+      "SELECT relative_path, skipped_reason FROM files WHERE skipped_reason = 'max-files-reached'",
+    );
+    expect(skippedRows.length).toBeGreaterThanOrEqual(1);
   });
 });
