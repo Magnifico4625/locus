@@ -182,4 +182,14 @@ describe('scanProject', () => {
     expect(durationRow).toBeDefined();
     expect(Number(durationRow?.value)).toBeGreaterThanOrEqual(0);
   });
+
+  it('stops scanning after reaching maxScanFiles limit', async () => {
+    const config = { ...LOCUS_DEFAULTS, maxScanFiles: 1 };
+    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+
+    // Only 1 file should be scanned (maxScanFiles=1)
+    expect(result.stats.scannedFiles).toBe(1);
+    // Remaining scannable files should count as skipped
+    expect(result.stats.skippedFiles).toBeGreaterThanOrEqual(1);
+  });
 });

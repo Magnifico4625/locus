@@ -438,6 +438,12 @@ export async function scanProject(
   const now = deps.now();
 
   for (const relPath of filePaths) {
+    // maxScanFiles limit
+    if (scannedEntries.length >= config.maxScanFiles) {
+      skippedFiles++;
+      continue;
+    }
+
     // Ignore check
     if (shouldIgnore(relPath)) {
       skippedFiles++;
