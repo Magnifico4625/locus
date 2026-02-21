@@ -4,6 +4,11 @@
   "description": "Persistent memory plugin for Claude Code. Knows your project, remembers your decisions, costs almost nothing.",
   "type": "module",
   "main": "dist/server.js",
+  "files": [
+    "dist/",
+    "LICENSE",
+    "README.md"
+  ],
   "scripts": {
     "build": "node esbuild.config.ts",
     "dev": "node --watch src/server.ts",
@@ -27,10 +32,11 @@
   "author": "",
   "license": "MIT",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.26.0"
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "^3.25 || ^4.0"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.2",
