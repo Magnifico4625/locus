@@ -84,7 +84,7 @@ Three resources are auto-injected at the start of every Claude Code session. The
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
 | `LOCUS_LOG` | `error`, `info`, `debug` | `error` | Logging verbosity |
-| `LOCUS_CAPTURE_LEVEL` | `metadata`, `redacted`, `full` | `metadata` | Hook capture detail level |
+| `LOCUS_CAPTURE_LEVEL` | `metadata`, `redacted`, `full` | `metadata` | PostToolUse hook capture detail level (MCP server override planned) |
 
 **Default Configuration:**
 
