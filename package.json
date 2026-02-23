@@ -29,8 +29,20 @@
     "mcp",
     "ai-agent"
   ],
-  "author": "",
+  "author": {
+    "name": "Magnifico4625",
+    "email": "vozol81@mail.ru",
+    "url": "https://github.com/Magnifico4625"
+  },
   "license": "MIT",
+  "homepage": "https://github.com/Magnifico4625/locus",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Magnifico4625/locus.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Magnifico4625/locus/issues"
+  },
   "engines": {
     "node": ">=22.0.0"
   },
