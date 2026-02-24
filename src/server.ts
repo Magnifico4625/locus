@@ -13,6 +13,7 @@ import { generateProjectMap } from './resources/project-map.js';
 import { generateRecent } from './resources/recent.js';
 import { initStorage } from './storage/init.js';
 import { handleAudit } from './tools/audit.js';
+import { handleConfig } from './tools/config.js';
 import { ConfirmationTokenStore } from './tools/confirmation-token.js';
 import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
@@ -223,6 +224,12 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       confirmToken,
     );
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+  });
+
+  // 10. memory_config
+  server.tool('memory_config', {}, async () => {
+    const result = handleConfig(config, process.env, fts5);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
 
   return {
