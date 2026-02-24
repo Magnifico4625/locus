@@ -22,7 +22,7 @@ import { handleRemember } from './tools/remember.js';
 import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
-import type { DatabaseAdapter, ProjectRootMethod } from './types.js';
+import type { DatabaseAdapter, LocusConfig, ProjectRootMethod } from './types.js';
 import { LOCUS_DEFAULTS } from './types.js';
 import { projectHash } from './utils.js';
 
@@ -36,6 +36,7 @@ export interface CreateServerOptions {
 export interface ServerContext {
   server: McpServer;
   db: DatabaseAdapter;
+  config: LocusConfig;
   backend: 'node:sqlite' | 'sql.js';
   fts5: boolean;
   projectRoot: string;
@@ -63,8 +64,12 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   // 3. Initialise storage
   const { db, backend, fts5 } = await initStorage(dbPath);
 
-  // 4. Config (use defaults; env overrides can be layered here later)
-  const config = { ...LOCUS_DEFAULTS };
+  // 4. Config (defaults + env overrides)
+  const config: LocusConfig = { ...LOCUS_DEFAULTS };
+  const envCapture = process.env.LOCUS_CAPTURE_LEVEL;
+  if (envCapture === 'metadata' || envCapture === 'redacted' || envCapture === 'full') {
+    config.captureLevel = envCapture;
+  }
 
   // 5. Memory layers
   const semantic = new SemanticMemory(db, fts5);
@@ -223,6 +228,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   return {
     server,
     db,
+    config,
     backend,
     fts5,
     projectRoot: root,
