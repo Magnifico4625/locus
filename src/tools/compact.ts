@@ -43,10 +43,9 @@ export function handleCompact(db: DatabaseAdapter, params: CompactParams): Compa
     );
     deletedEntries = result.changes;
   } else {
-    const result = db.run(
-      "DELETE FROM memories WHERE layer = 'episodic' AND created_at < ?",
-      [cutoff],
-    );
+    const result = db.run("DELETE FROM memories WHERE layer = 'episodic' AND created_at < ?", [
+      cutoff,
+    ]);
     deletedEntries = result.changes;
   }
 

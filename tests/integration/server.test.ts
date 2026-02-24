@@ -181,7 +181,10 @@ describe('createServer', () => {
     const original = process.env.LOCUS_CAPTURE_LEVEL;
     try {
       process.env.LOCUS_CAPTURE_LEVEL = 'invalid';
-      const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'capture-invalid.db') });
+      const ctx2 = await createServer({
+        cwd: tempDir,
+        dbPath: join(tempDir, 'capture-invalid.db'),
+      });
       try {
         expect(ctx2.config.captureLevel).toBe('metadata');
       } finally {
