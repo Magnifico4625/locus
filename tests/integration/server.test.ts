@@ -157,4 +157,42 @@ describe('createServer', () => {
       ctx2.cleanup();
     }
   });
+
+  it('reads LOCUS_CAPTURE_LEVEL from environment', async () => {
+    const original = process.env.LOCUS_CAPTURE_LEVEL;
+    try {
+      process.env.LOCUS_CAPTURE_LEVEL = 'redacted';
+      const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'capture-test.db') });
+      try {
+        expect(ctx2.config.captureLevel).toBe('redacted');
+      } finally {
+        ctx2.cleanup();
+      }
+    } finally {
+      if (original === undefined) {
+        delete process.env.LOCUS_CAPTURE_LEVEL;
+      } else {
+        process.env.LOCUS_CAPTURE_LEVEL = original;
+      }
+    }
+  });
+
+  it('ignores invalid LOCUS_CAPTURE_LEVEL values', async () => {
+    const original = process.env.LOCUS_CAPTURE_LEVEL;
+    try {
+      process.env.LOCUS_CAPTURE_LEVEL = 'invalid';
+      const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'capture-invalid.db') });
+      try {
+        expect(ctx2.config.captureLevel).toBe('metadata');
+      } finally {
+        ctx2.cleanup();
+      }
+    } finally {
+      if (original === undefined) {
+        delete process.env.LOCUS_CAPTURE_LEVEL;
+      } else {
+        process.env.LOCUS_CAPTURE_LEVEL = original;
+      }
+    }
+  });
 });

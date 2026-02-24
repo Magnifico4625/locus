@@ -10,6 +10,5 @@
   "homepage": "https://github.com/Magnifico4625/locus",
   "license": "MIT",
   "keywords": ["memory", "mcp", "codebase", "context", "ai-agent"],
-  "mcpServers": "./.mcp.json",
-  "hooks": "./hooks/hooks.json"
+  "mcpServers": "./.mcp.json"
 }
