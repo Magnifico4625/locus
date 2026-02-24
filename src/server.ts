@@ -13,6 +13,7 @@ import { generateProjectMap } from './resources/project-map.js';
 import { generateRecent } from './resources/recent.js';
 import { initStorage } from './storage/init.js';
 import { handleAudit } from './tools/audit.js';
+import { handleCompact } from './tools/compact.js';
 import { handleConfig } from './tools/config.js';
 import { ConfirmationTokenStore } from './tools/confirmation-token.js';
 import { handleDoctor } from './tools/doctor.js';
@@ -231,6 +232,22 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     const result = handleConfig(config, process.env, fts5);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
+
+  // 11. memory_compact
+  server.tool(
+    'memory_compact',
+    {
+      maxAgeDays: z.number().optional().describe('Delete entries older than this (default: 30)'),
+      keepSessions: z
+        .number()
+        .optional()
+        .describe('Always keep this many recent sessions (default: 5)'),
+    },
+    async (params) => {
+      const result = handleCompact(db, params);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    },
+  );
 
   return {
     server,
