@@ -174,6 +174,16 @@ describe('handleStatus', () => {
     expect(statusAfter.scanStrategy).toBe('full');
   });
 
+  it('reports searchEngine as FTS5 when available', () => {
+    const status = handleStatus(makeStatusDeps(adapter, tempDir, { fts5: true }));
+    expect(status.searchEngine).toBe('FTS5');
+  });
+
+  it('reports searchEngine as LIKE fallback when FTS5 unavailable', () => {
+    const status = handleStatus(makeStatusDeps(adapter, tempDir, { fts5: false }));
+    expect(status.searchEngine).toBe('LIKE fallback');
+  });
+
   it('skippedFiles counts only rows with non-null skipped_reason', () => {
     const now = Math.floor(Date.now() / 1000);
     // 2 normal files, 1 skipped

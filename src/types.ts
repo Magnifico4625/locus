@@ -205,6 +205,7 @@ export interface MemoryStatus {
   nodeVersion: string;
   storageBackend: 'node:sqlite' | 'sql.js';
   fts5Available: boolean;
+  searchEngine: 'FTS5' | 'LIKE fallback';
 }
 
 // ─── Doctor ───
