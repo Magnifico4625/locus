@@ -391,7 +391,7 @@ function storeSkippedEntry(
       file_type, language, lines,
       confidence_level, confidence_reason,
       last_scanned, skipped_reason
-    ) VALUES (?, '[]', '[]', '[]', 'module', 'typescript', 0, 'high', NULL, ?, ?)`,
+    ) VALUES (?, '[]', '[]', '[]', NULL, NULL, 0, NULL, NULL, ?, ?)`,
     [relPath, now, reason],
   );
 }

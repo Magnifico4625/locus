@@ -13,6 +13,8 @@ import { generateProjectMap } from './resources/project-map.js';
 import { generateRecent } from './resources/recent.js';
 import { initStorage } from './storage/init.js';
 import { handleAudit } from './tools/audit.js';
+import { handleCompact } from './tools/compact.js';
+import { handleConfig } from './tools/config.js';
 import { ConfirmationTokenStore } from './tools/confirmation-token.js';
 import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
@@ -22,7 +24,7 @@ import { handleRemember } from './tools/remember.js';
 import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
-import type { DatabaseAdapter, ProjectRootMethod } from './types.js';
+import type { DatabaseAdapter, LocusConfig, ProjectRootMethod } from './types.js';
 import { LOCUS_DEFAULTS } from './types.js';
 import { projectHash } from './utils.js';
 
@@ -36,6 +38,7 @@ export interface CreateServerOptions {
 export interface ServerContext {
   server: McpServer;
   db: DatabaseAdapter;
+  config: LocusConfig;
   backend: 'node:sqlite' | 'sql.js';
   fts5: boolean;
   projectRoot: string;
@@ -63,8 +66,12 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   // 3. Initialise storage
   const { db, backend, fts5 } = await initStorage(dbPath);
 
-  // 4. Config (use defaults; env overrides can be layered here later)
-  const config = { ...LOCUS_DEFAULTS };
+  // 4. Config (defaults + env overrides)
+  const config: LocusConfig = { ...LOCUS_DEFAULTS };
+  const envCapture = process.env.LOCUS_CAPTURE_LEVEL;
+  if (envCapture === 'metadata' || envCapture === 'redacted' || envCapture === 'full') {
+    config.captureLevel = envCapture;
+  }
 
   // 5. Memory layers
   const semantic = new SemanticMemory(db, fts5);
@@ -89,7 +96,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   }
 
   // 8. MCP server
-  const server = new McpServer({ name: 'locus', version: '0.1.0' });
+  const server = new McpServer({ name: 'locus', version: '0.2.0' });
 
   // ─── Resources ───────────────────────────────────────────────────────────────
 
@@ -220,9 +227,32 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
   });
 
+  // 10. memory_config
+  server.tool('memory_config', {}, async () => {
+    const result = handleConfig(config, process.env, fts5);
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+  });
+
+  // 11. memory_compact
+  server.tool(
+    'memory_compact',
+    {
+      maxAgeDays: z.number().optional().describe('Delete entries older than this (default: 30)'),
+      keepSessions: z
+        .number()
+        .optional()
+        .describe('Always keep this many recent sessions (default: 5)'),
+    },
+    async (params) => {
+      const result = handleCompact(db, params);
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
   return {
     server,
     db,
+    config,
     backend,
     fts5,
     projectRoot: root,

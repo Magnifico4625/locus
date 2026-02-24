@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/locus-memory)](https://www.npmjs.com/package/locus-memory)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-485%20passed-brightgreen)](https://github.com/Magnifico4625/locus)
+[![Tests](https://img.shields.io/badge/tests-506%20passed-brightgreen)](https://github.com/Magnifico4625/locus)
 
 ## What is Locus?
 
@@ -24,7 +24,7 @@ Locus stores metadata only by default. No raw file content is ever written to di
 ## Features
 
 - 3 memory layers: structural (auto-parsed), semantic (user-curated), episodic (auto-captured)
-- 9 MCP tools for exploring, searching, remembering, and managing memory
+- 11 MCP tools for exploring, searching, remembering, and managing memory
 - 3 auto-injected MCP resources (<3.5k tokens total)
 - Incremental scanning: git-diff → mtime → full rescan strategies
 - 4-layer security: metadata-only → file denylist → content redaction → audit UX
@@ -65,6 +65,8 @@ Use `memory_scan` to index your project structure on first run, then `memory_sea
 | `memory_status` | — | Runtime stats, config, and DB info |
 | `memory_doctor` | — | 10-point environment health check |
 | `memory_audit` | — | Data inventory and security audit |
+| `memory_config` | — | Show current configuration and sources |
+| `memory_compact` | `maxAgeDays?: number, keepSessions?: number` | Clean up old episodic memory entries |
 | `memory_purge` | `confirmToken?: string` | Clear all project memory (two-step confirmation) |
 
 ## Resources
@@ -84,7 +86,7 @@ Three resources are auto-injected at the start of every Claude Code session. The
 | Variable | Values | Default | Description |
 |----------|--------|---------|-------------|
 | `LOCUS_LOG` | `error`, `info`, `debug` | `error` | Logging verbosity |
-| `LOCUS_CAPTURE_LEVEL` | `metadata`, `redacted`, `full` | `metadata` | PostToolUse hook capture detail level (MCP server override planned) |
+| `LOCUS_CAPTURE_LEVEL` | `metadata`, `redacted`, `full` | `metadata` | Capture detail level (read by both hook and MCP server) |
 
 **Default Configuration:**
 
@@ -97,6 +99,8 @@ rescanThreshold:      30%          # Rescan if >30% files changed
 fullRescanCooldown:   5 min        # Minimum interval between full rescans
 minScanInterval:      10 sec       # Minimum interval between any scans
 ```
+
+**Search Engine:** Locus uses SQLite FTS5 for full-text search when available. If your Node.js build doesn't include FTS5, search automatically falls back to LIKE queries (slower, less accurate). Run `memory_doctor` to check your search engine status.
 
 ## Security
 
@@ -117,7 +121,7 @@ Locus uses a 4-layer security model:
 | project    | decisions  | recent         |
 | -map       |            |                |
 +------------+------------+----------------+
-|             9 MCP Tools                  |
+|            11 MCP Tools                  |
 +------------------------------------------+
 |         Scanner (regex-based)            |
 |    git-diff -> mtime -> full rescan      |
@@ -142,7 +146,7 @@ git clone https://github.com/Magnifico4625/locus.git
 cd locus
 npm install
 
-npm test            # 485 tests (vitest)
+npm test            # 506 tests (vitest)
 npm run typecheck   # TypeScript strict mode
 npm run lint        # Biome linter
 npm run build       # Bundle -> dist/server.js (~1.1 MB)

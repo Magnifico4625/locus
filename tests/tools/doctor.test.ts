@@ -140,7 +140,7 @@ describe('handleDoctor', () => {
     const ftsCheck = report.checks.find((c) => c.name === 'FTS5');
     expect(ftsCheck?.status).toBe('warn');
     expect(ftsCheck?.message).toContain('not available');
-    expect(ftsCheck?.fix).toContain('FTS5');
+    expect(ftsCheck?.fix).toContain('LIKE fallback');
   });
 
   it('marks FTS5 ok when available', () => {

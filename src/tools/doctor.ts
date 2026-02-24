@@ -70,7 +70,7 @@ export function handleDoctor(deps: DoctorDeps): DoctorReport {
           name: 'FTS5',
           status: 'warn',
           message: 'not available (using LIKE fallback)',
-          fix: 'Rebuild Node.js with FTS5 support',
+          fix: 'Depends on Node.js SQLite build. Search still works via LIKE fallback.',
         },
   );
 

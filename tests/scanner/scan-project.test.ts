@@ -22,6 +22,7 @@ function fullScanDeps(): ScanDeps {
       'src/auth/login.ts',
       'src/utils/helpers.ts',
       '.env',
+      'secrets.key',
       'package.json',
       'tsconfig.json',
       'node_modules/.keep',
@@ -232,5 +233,41 @@ describe('scanProject', () => {
       "SELECT relative_path, skipped_reason FROM files WHERE skipped_reason = 'max-files-reached'",
     );
     expect(skippedRows.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('stores denylisted skip reason for .key files', async () => {
+    const config = { ...LOCUS_DEFAULTS };
+    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+
+    // secrets.key should not appear in scanned files
+    expect(result.files.some((f) => f.relativePath.includes('secrets.key'))).toBe(false);
+
+    const rows = db.all<{ relative_path: string; skipped_reason: string | null }>(
+      'SELECT relative_path, skipped_reason FROM files WHERE skipped_reason IS NOT NULL',
+    );
+    const keyRow = rows.find((r) => r.relative_path === 'secrets.key');
+    expect(keyRow).toBeDefined();
+    expect(keyRow?.skipped_reason).toBe('denylisted');
+  });
+
+  it('stores NULL for language and confidence on skipped entries', async () => {
+    const config = { ...LOCUS_DEFAULTS };
+    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+
+    const skippedRows = db.all<{
+      relative_path: string;
+      language: string | null;
+      confidence_level: string | null;
+      file_type: string | null;
+      skipped_reason: string | null;
+    }>(
+      'SELECT relative_path, language, confidence_level, file_type, skipped_reason FROM files WHERE skipped_reason IS NOT NULL',
+    );
+
+    for (const row of skippedRows) {
+      expect(row.language).toBeNull();
+      expect(row.confidence_level).toBeNull();
+      expect(row.file_type).toBeNull();
+    }
   });
 });

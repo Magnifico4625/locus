@@ -33,7 +33,9 @@ describe('redact', () => {
 
   it('redacts connection strings', () => {
     expect(redact('postgres://user:p4ss_example@host:5432/db')).toBe('postgres://[REDACTED]');
-    expect(redact('mongodb://admin:s3cr3t_example@cluster.example.net/mydb')).toBe('mongodb://[REDACTED]');
+    expect(redact('mongodb://admin:s3cr3t_example@cluster.example.net/mydb')).toBe(
+      'mongodb://[REDACTED]',
+    );
   });
 
   it('redacts KEY=VALUE patterns', () => {

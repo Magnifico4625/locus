@@ -90,5 +90,6 @@ export function handleStatus(deps: StatusDeps): MemoryStatus {
     nodeVersion: process.version,
     storageBackend: deps.backend,
     fts5Available: deps.fts5,
+    searchEngine: deps.fts5 ? 'FTS5' : 'LIKE fallback',
   };
 }

@@ -1,6 +1,6 @@
 {
   "name": "locus",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Persistent project-aware memory for Claude Code. Structural map, decisions, session history — zero native deps.",
   "author": {
     "name": "Magnifico4625",
@@ -10,6 +10,5 @@
   "homepage": "https://github.com/Magnifico4625/locus",
   "license": "MIT",
   "keywords": ["memory", "mcp", "codebase", "context", "ai-agent"],
-  "mcpServers": "./.mcp.json",
-  "hooks": "./hooks/hooks.json"
+  "mcpServers": "./.mcp.json"
 }
