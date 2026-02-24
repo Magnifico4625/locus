@@ -96,7 +96,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   }
 
   // 8. MCP server
-  const server = new McpServer({ name: 'locus', version: '0.1.0' });
+  const server = new McpServer({ name: 'locus', version: '0.2.0' });
 
   // ─── Resources ───────────────────────────────────────────────────────────────
 
