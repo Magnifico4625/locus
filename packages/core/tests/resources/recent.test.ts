@@ -311,3 +311,222 @@ describe('generateRecent', () => {
     expect(matches).toHaveLength(1);
   });
 });
+
+// ─── Conversation Event Helpers ────────────────────────────────────────────
+
+let ceCounter = 0;
+
+function insertConversationEvent(
+  db: DatabaseAdapter,
+  opts: {
+    event_id?: string;
+    kind: string;
+    timestamp?: number;
+    payload_json?: string;
+    significance?: string;
+    session_id?: string;
+  },
+): void {
+  ceCounter++;
+  const eventId = opts.event_id ?? `evt-recent-${ceCounter}-${Date.now()}`;
+  db.run(
+    `INSERT INTO conversation_events
+     (event_id, source, source_event_id, project_root, session_id,
+      timestamp, kind, payload_json, significance, tags_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      eventId,
+      'test',
+      null,
+      '/test/project',
+      opts.session_id ?? 'test-session',
+      opts.timestamp ?? Date.now(),
+      opts.kind,
+      opts.payload_json ?? null,
+      opts.significance ?? 'medium',
+      null,
+      Date.now(),
+    ],
+  );
+}
+
+function insertRecentEventFile(db: DatabaseAdapter, eventId: string, filePath: string): void {
+  db.run('INSERT INTO event_files (event_id, file_path) VALUES (?, ?)', [eventId, filePath]);
+}
+
+// ─── Conversation Stats Tests ──────────────────────────────────────────────
+
+describe('generateRecent — conversation stats', () => {
+  let tempDir: string;
+  let adapter: NodeSqliteAdapter;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'locus-recent-conv-'));
+    adapter = createAdapter(tempDir);
+    runMigrations(adapter, true);
+  });
+
+  afterEach(() => {
+    adapter.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  // ── 1. Shows conversation event counts ──────────────────────────────────
+
+  it('shows conversation event counts when events exist', () => {
+    insertConversationEvent(adapter, { kind: 'tool_use' });
+    insertConversationEvent(adapter, { kind: 'tool_use' });
+    insertConversationEvent(adapter, { kind: 'file_diff' });
+
+    const result = generateRecent(adapter);
+
+    expect(result).toContain('Conversation Activity');
+    expect(result).toContain('3');
+  });
+
+  // ── 2. Shows event counts by kind ──────────────────────────────────────
+
+  it('shows event counts broken down by kind', () => {
+    insertConversationEvent(adapter, { kind: 'tool_use' });
+    insertConversationEvent(adapter, { kind: 'tool_use' });
+    insertConversationEvent(adapter, { kind: 'tool_use' });
+    insertConversationEvent(adapter, { kind: 'file_diff' });
+    insertConversationEvent(adapter, { kind: 'user_prompt' });
+
+    const result = generateRecent(adapter);
+
+    expect(result).toContain('tool_use');
+    expect(result).toContain('file_diff');
+  });
+
+  // ── 3. Shows recent files from event_files (max 5) ─────────────────────
+
+  it('shows recent files from conversation events with hard limit 5', () => {
+    for (let i = 0; i < 7; i++) {
+      const eventId = `evt-file-${i}`;
+      insertConversationEvent(adapter, {
+        event_id: eventId,
+        kind: 'tool_use',
+        payload_json: `{"tool":"Write","files":["src/file${i}.ts"],"status":"success"}`,
+      });
+      insertRecentEventFile(adapter, eventId, `src/file${i}.ts`);
+    }
+
+    const result = generateRecent(adapter);
+
+    expect(result).toContain('Recent files:');
+    // Count file paths in the Recent files line
+    const recentLine = result.split('\n').find((l) => l.includes('Recent files:')) ?? '';
+    // Should have at most 5 files shown + possibly "N more"
+    const fileMatches = recentLine.match(/src\/file\d+\.ts/g) ?? [];
+    expect(fileMatches.length).toBeLessThanOrEqual(5);
+  });
+
+  // ── 4. Shows last 3 prompts at captureLevel='full' ────────────────────
+
+  it('shows last 3 prompts at captureLevel=full', () => {
+    for (let i = 1; i <= 5; i++) {
+      insertConversationEvent(adapter, {
+        event_id: `evt-prompt-${i}`,
+        kind: 'user_prompt',
+        timestamp: Date.now() - (6 - i) * 60000,
+        payload_json: JSON.stringify({ prompt: `User prompt number ${i}` }),
+      });
+    }
+
+    const result = generateRecent(adapter, 'full');
+
+    expect(result).toContain('Last prompts:');
+    expect(result).toContain('User prompt number 5');
+    expect(result).toContain('User prompt number 4');
+    expect(result).toContain('User prompt number 3');
+    expect(result).not.toContain('User prompt number 1');
+  });
+
+  // ── 5. No prompts at captureLevel='metadata' ─────────────────────────
+
+  it('does not show prompts at captureLevel=metadata', () => {
+    insertConversationEvent(adapter, {
+      kind: 'user_prompt',
+      payload_json: '{"prompt":"Secret user prompt"}',
+    });
+    insertConversationEvent(adapter, { kind: 'tool_use' });
+
+    const result = generateRecent(adapter, 'metadata');
+
+    expect(result).not.toContain('Last prompts:');
+    expect(result).not.toContain('Secret user prompt');
+  });
+
+  // ── 6. No prompts by default (defaults to metadata) ──────────────────
+
+  it('does not show prompts by default', () => {
+    insertConversationEvent(adapter, {
+      kind: 'user_prompt',
+      payload_json: '{"prompt":"Hidden prompt"}',
+    });
+    insertConversationEvent(adapter, { kind: 'tool_use' });
+
+    const result = generateRecent(adapter);
+
+    expect(result).not.toContain('Last prompts:');
+    expect(result).not.toContain('Hidden prompt');
+  });
+
+  // ── 7. Never shows AI responses ──────────────────────────────────────
+
+  it('never shows AI response content', () => {
+    insertConversationEvent(adapter, {
+      kind: 'ai_response',
+      payload_json: '{"response":"This is the AI response that should be hidden"}',
+    });
+    insertConversationEvent(adapter, { kind: 'tool_use' });
+
+    const result = generateRecent(adapter, 'full');
+
+    expect(result).not.toContain('This is the AI response that should be hidden');
+  });
+
+  // ── 8. Backwards compat — works with no conversation events ──────────
+
+  it('works with no conversation events (episodic only)', () => {
+    insertEpisodic(adapter, 'session-1', 'Did something useful');
+
+    const result = generateRecent(adapter);
+
+    expect(result).toContain('Session 1');
+    expect(result).toContain('Did something useful');
+    // No conversation section when no events
+    expect(result).not.toContain('Conversation Activity');
+  });
+
+  // ── 9. Token budget under 1000 with both sections ───────────────────
+
+  it('stays within 1000 token budget with both episodic and conversation', () => {
+    const now = Date.now();
+    for (let i = 0; i < 5; i++) {
+      insertEpisodic(adapter, `session-${i}`, `Session summary ${i}`, now - i * 3600000);
+    }
+    for (let i = 0; i < 20; i++) {
+      insertConversationEvent(adapter, {
+        kind: 'tool_use',
+        timestamp: now - i * 60000,
+      });
+    }
+
+    const result = generateRecent(adapter);
+    expect(estimateTokens(result)).toBeLessThanOrEqual(1000);
+  });
+
+  // ── 10. Shows both episodic and conversation sections ────────────────
+
+  it('shows both episodic sessions and conversation stats', () => {
+    insertEpisodic(adapter, 'session-1', 'Some episodic event');
+    insertConversationEvent(adapter, { kind: 'tool_use' });
+
+    const result = generateRecent(adapter);
+
+    expect(result).toContain('Session 1');
+    expect(result).toContain('Conversation Activity');
+  });
+});

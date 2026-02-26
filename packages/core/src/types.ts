@@ -79,7 +79,7 @@ export interface MemoryEntry {
 // ─── Search ───
 
 export interface SearchResult {
-  layer: 'structural' | 'semantic' | 'episodic';
+  layer: 'structural' | 'semantic' | 'episodic' | 'conversation';
   content: string;
   relevance: number;
   source: string;
@@ -251,12 +251,7 @@ export interface IngestMetrics {
 
 // ─── Time Range (extended search) ───
 
-export type TimeRangeRelative =
-  | 'today'
-  | 'yesterday'
-  | 'this_week'
-  | 'last_7d'
-  | 'last_30d';
+export type TimeRangeRelative = 'today' | 'yesterday' | 'this_week' | 'last_7d' | 'last_30d';
 
 export interface TimeRange {
   from?: number;

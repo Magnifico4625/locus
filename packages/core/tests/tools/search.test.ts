@@ -5,8 +5,8 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SemanticMemory } from '../../src/memory/semantic.js';
 import { runMigrations } from '../../src/storage/migrations.js';
 import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
-import { handleSearch } from '../../src/tools/search.js';
-import type { DatabaseAdapter } from '../../src/types.js';
+import { handleSearch, resolveTimeRange } from '../../src/tools/search.js';
+import type { DatabaseAdapter, EventKind } from '../../src/types.js';
 
 function createAdapter(dir: string): NodeSqliteAdapter {
   // biome-ignore lint/suspicious/noExplicitAny: node:sqlite dynamic require
@@ -225,5 +225,383 @@ describe('handleSearch', () => {
 
     const pathMatch = results.find((r) => r.layer === 'structural' && r.relevance === 0.5);
     expect(pathMatch?.content).toBe('src/authentication/session.ts');
+  });
+});
+
+// ─── Conversation Event Helpers ────────────────────────────────────────────
+
+let ceCounter = 0;
+
+function insertConversationEvent(
+  db: DatabaseAdapter,
+  opts: {
+    event_id?: string;
+    kind?: EventKind;
+    timestamp?: number;
+    payload_json?: string;
+    significance?: string;
+    session_id?: string;
+    source?: string;
+    project_root?: string;
+  },
+): number {
+  ceCounter++;
+  const eventId = opts.event_id ?? `evt-${ceCounter}-${Date.now()}`;
+  const result = db.run(
+    `INSERT INTO conversation_events
+     (event_id, source, source_event_id, project_root, session_id,
+      timestamp, kind, payload_json, significance, tags_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      eventId,
+      opts.source ?? 'test',
+      null,
+      opts.project_root ?? '/test/project',
+      opts.session_id ?? 'test-session',
+      opts.timestamp ?? Date.now(),
+      opts.kind ?? 'tool_use',
+      opts.payload_json ?? '{"tool":"Read","files":["src/test.ts"],"status":"success"}',
+      opts.significance ?? 'medium',
+      null,
+      Date.now(),
+    ],
+  );
+  return result.lastInsertRowid;
+}
+
+function insertConversationFts(db: DatabaseAdapter, rowid: number, content: string): void {
+  db.run('INSERT INTO conversation_fts(rowid, content) VALUES (?, ?)', [rowid, content]);
+}
+
+function insertEventFile(db: DatabaseAdapter, eventId: string, filePath: string): void {
+  db.run('INSERT INTO event_files (event_id, file_path) VALUES (?, ?)', [eventId, filePath]);
+}
+
+// ─── Conversation Search Tests ─────────────────────────────────────────────
+
+describe('handleSearch — conversation events', () => {
+  let tempDir: string;
+  let adapter: NodeSqliteAdapter;
+  let semantic: SemanticMemory;
+
+  beforeEach(() => {
+    tempDir = mkdtempSync(join(tmpdir(), 'locus-search-conv-'));
+    adapter = createAdapter(tempDir);
+    runMigrations(adapter, true);
+    semantic = new SemanticMemory(adapter, true);
+  });
+
+  afterEach(() => {
+    adapter.close();
+    rmSync(tempDir, { recursive: true, force: true });
+  });
+
+  // ── 1. Finds conversation events by FTS query ───────────────────────────
+
+  it('finds conversation events by FTS query', () => {
+    const rowid = insertConversationEvent(adapter, {
+      kind: 'tool_use',
+      payload_json: '{"tool":"Write","files":["src/auth.ts"],"status":"success"}',
+    });
+    insertConversationFts(adapter, rowid, 'tool_use Write src/auth.ts');
+
+    const results = handleSearch('Write', { db: adapter, semantic, fts5: true });
+
+    const conv = results.filter((r) => r.layer === 'conversation');
+    expect(conv.length).toBeGreaterThan(0);
+    expect(conv[0]?.content).toContain('Write');
+  });
+
+  // ── 2. Filters by timeRange.relative ─────────────────────────────────────
+
+  it('filters by timeRange.relative=today', () => {
+    const now = Date.now();
+    const todayRowid = insertConversationEvent(adapter, {
+      event_id: 'evt-today',
+      kind: 'tool_use',
+      timestamp: now,
+      payload_json: '{"tool":"Edit","files":["src/today.ts"],"status":"success"}',
+    });
+    insertConversationFts(adapter, todayRowid, 'tool_use Edit src/today.ts');
+
+    const oldRowid = insertConversationEvent(adapter, {
+      event_id: 'evt-old',
+      kind: 'tool_use',
+      timestamp: now - 7 * 86400 * 1000,
+      payload_json: '{"tool":"Edit","files":["src/old.ts"],"status":"success"}',
+    });
+    insertConversationFts(adapter, oldRowid, 'tool_use Edit src/old.ts');
+
+    const results = handleSearch(
+      'Edit',
+      { db: adapter, semantic, fts5: true },
+      {
+        timeRange: { relative: 'today' },
+      },
+    );
+
+    const conv = results.filter((r) => r.layer === 'conversation');
+    expect(conv.length).toBe(1);
+    expect(conv[0]?.content).toContain('today.ts');
+  });
+
+  // ── 3. Filters by filePath via event_files JOIN ─────────────────────────
+
+  it('filters by filePath via event_files JOIN', () => {
+    const rowid1 = insertConversationEvent(adapter, {
+      event_id: 'evt-auth',
+      kind: 'tool_use',
+      payload_json: '{"tool":"Write","files":["src/auth.ts"],"status":"success"}',
+    });
+    insertConversationFts(adapter, rowid1, 'tool_use Write src/auth.ts');
+    insertEventFile(adapter, 'evt-auth', 'src/auth.ts');
+
+    const rowid2 = insertConversationEvent(adapter, {
+      event_id: 'evt-utils',
+      kind: 'tool_use',
+      payload_json: '{"tool":"Write","files":["src/utils.ts"],"status":"success"}',
+    });
+    insertConversationFts(adapter, rowid2, 'tool_use Write src/utils.ts');
+    insertEventFile(adapter, 'evt-utils', 'src/utils.ts');
+
+    const results = handleSearch(
+      'Write',
+      { db: adapter, semantic, fts5: true },
+      {
+        filePath: 'src/auth.ts',
+      },
+    );
+
+    const conv = results.filter((r) => r.layer === 'conversation');
+    expect(conv.length).toBe(1);
+    expect(conv[0]?.content).toContain('auth.ts');
+  });
+
+  // ── 4. Filters by kind ──────────────────────────────────────────────────
+
+  it('filters by kind', () => {
+    const rowid1 = insertConversationEvent(adapter, {
+      event_id: 'evt-tool',
+      kind: 'tool_use',
+      payload_json: '{"tool":"Read","files":["f.ts"],"status":"success"}',
+    });
+    insertConversationFts(adapter, rowid1, 'tool_use Read f.ts');
+
+    const rowid2 = insertConversationEvent(adapter, {
+      event_id: 'evt-prompt',
+      kind: 'user_prompt',
+      payload_json: '{"prompt":"Read the configuration"}',
+    });
+    insertConversationFts(adapter, rowid2, 'user_prompt Read the configuration');
+
+    const results = handleSearch(
+      'Read',
+      { db: adapter, semantic, fts5: true },
+      {
+        kind: 'tool_use',
+      },
+    );
+
+    const conv = results.filter((r) => r.layer === 'conversation');
+    expect(conv.length).toBe(1);
+    expect(conv[0]?.source).toContain('tool_use');
+  });
+
+  // ── 5. Combines multiple filters ────────────────────────────────────────
+
+  it('combines multiple filters', () => {
+    const now = Date.now();
+
+    const rowid1 = insertConversationEvent(adapter, {
+      event_id: 'evt-match',
+      kind: 'tool_use',
+      timestamp: now,
+      payload_json: '{"tool":"Write","files":["src/target.ts"],"status":"success"}',
+    });
+    insertConversationFts(adapter, rowid1, 'tool_use Write src/target.ts');
+    insertEventFile(adapter, 'evt-match', 'src/target.ts');
+
+    const rowid2 = insertConversationEvent(adapter, {
+      event_id: 'evt-wrong-kind',
+      kind: 'user_prompt',
+      timestamp: now,
+      payload_json: '{"prompt":"Write something about target"}',
+    });
+    insertConversationFts(adapter, rowid2, 'user_prompt Write something about target');
+
+    const rowid3 = insertConversationEvent(adapter, {
+      event_id: 'evt-wrong-file',
+      kind: 'tool_use',
+      timestamp: now,
+      payload_json: '{"tool":"Write","files":["src/other.ts"],"status":"success"}',
+    });
+    insertConversationFts(adapter, rowid3, 'tool_use Write src/other.ts');
+    insertEventFile(adapter, 'evt-wrong-file', 'src/other.ts');
+
+    const results = handleSearch(
+      'Write',
+      { db: adapter, semantic, fts5: true },
+      {
+        kind: 'tool_use',
+        filePath: 'src/target.ts',
+      },
+    );
+
+    const conv = results.filter((r) => r.layer === 'conversation');
+    expect(conv.length).toBe(1);
+    expect(conv[0]?.content).toContain('target.ts');
+  });
+
+  // ── 6. Backwards compat — query-only works ──────────────────────────────
+
+  it('backwards compat: query-only works with no options', () => {
+    insertFile(adapter, 'src/legacy.ts', {
+      exportsJson: JSON.stringify([
+        { name: 'legacyFunction', kind: 'function', isDefault: false, isTypeOnly: false },
+      ]),
+    });
+
+    const results = handleSearch('legacyFunction', { db: adapter, semantic, fts5: true });
+
+    expect(results.length).toBeGreaterThan(0);
+    expect(results[0]?.layer).toBe('structural');
+  });
+
+  // ── 7. bm25 + recency scoring ──────────────────────────────────────────
+
+  it('conversation results have positive relevance scores', () => {
+    const now = Date.now();
+    const rowid = insertConversationEvent(adapter, {
+      kind: 'tool_use',
+      timestamp: now,
+      payload_json: '{"tool":"Bash","files":[],"status":"success"}',
+    });
+    insertConversationFts(adapter, rowid, 'tool_use Bash execute command');
+
+    const results = handleSearch('Bash', { db: adapter, semantic, fts5: true });
+
+    const conv = results.filter((r) => r.layer === 'conversation');
+    expect(conv.length).toBeGreaterThan(0);
+    expect(conv[0]?.relevance).toBeGreaterThan(0);
+  });
+
+  // ── 8. LIKE fallback when fts5=false ────────────────────────────────────
+
+  it('LIKE fallback when fts5 is false', () => {
+    insertConversationEvent(adapter, {
+      kind: 'tool_use',
+      payload_json: '{"tool":"Grep","files":["src/search.ts"],"status":"success"}',
+    });
+
+    const results = handleSearch('Grep', { db: adapter, semantic, fts5: false });
+
+    const conv = results.filter((r) => r.layer === 'conversation');
+    expect(conv.length).toBeGreaterThan(0);
+    expect(conv[0]?.content).toContain('Grep');
+  });
+
+  // ── 9. Respects limit and offset ───────────────────────────────────────
+
+  it('respects limit param', () => {
+    for (let i = 0; i < 5; i++) {
+      const rowid = insertConversationEvent(adapter, {
+        event_id: `evt-lim-${i}`,
+        kind: 'tool_use',
+        payload_json: `{"tool":"Read","files":["src/file${i}.ts"],"status":"success"}`,
+      });
+      insertConversationFts(adapter, rowid, `tool_use Read src/file${i}.ts`);
+    }
+
+    const results = handleSearch(
+      'Read',
+      { db: adapter, semantic, fts5: true },
+      {
+        limit: 2,
+      },
+    );
+
+    const conv = results.filter((r) => r.layer === 'conversation');
+    expect(conv.length).toBeLessThanOrEqual(2);
+  });
+
+  // ── 10. source field in results ────────────────────────────────────────
+
+  it('result source contains event kind and event_id', () => {
+    const rowid = insertConversationEvent(adapter, {
+      event_id: 'evt-source-test',
+      kind: 'file_diff',
+      payload_json: '{"path":"src/module","added":10,"removed":2}',
+    });
+    insertConversationFts(adapter, rowid, 'file_diff src module changes');
+
+    const results = handleSearch('module', { db: adapter, semantic, fts5: true });
+
+    const conv = results.filter((r) => r.layer === 'conversation');
+    expect(conv.length).toBeGreaterThan(0);
+    expect(conv[0]?.source).toContain('evt-source-test');
+  });
+});
+
+// ─── resolveTimeRange Tests ───────────────────────────────────────────────
+
+describe('resolveTimeRange', () => {
+  it('resolves "today" to start of current day', () => {
+    const range = resolveTimeRange({ relative: 'today' });
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+
+    expect(range.from).toBe(startOfDay.getTime());
+    expect(range.to).toBeGreaterThanOrEqual(Date.now() - 1000);
+  });
+
+  it('resolves "yesterday" to the previous day boundaries', () => {
+    const range = resolveTimeRange({ relative: 'yesterday' });
+    const startOfYesterday = new Date();
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+    startOfYesterday.setHours(0, 0, 0, 0);
+
+    expect(range.from).toBe(startOfYesterday.getTime());
+    // to should be end of yesterday (start of today)
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    expect(range.to).toBe(startOfToday.getTime());
+  });
+
+  it('resolves "last_7d" to 7 days back', () => {
+    const before = Date.now();
+    const range = resolveTimeRange({ relative: 'last_7d' });
+    const after = Date.now();
+
+    const sevenDaysMs = 7 * 24 * 3600 * 1000;
+    expect(range.from).toBeGreaterThanOrEqual(before - sevenDaysMs);
+    expect(range.from).toBeLessThanOrEqual(after - sevenDaysMs + 100);
+    expect(range.to).toBeGreaterThanOrEqual(before);
+  });
+
+  it('resolves "last_30d" to 30 days back', () => {
+    const before = Date.now();
+    const range = resolveTimeRange({ relative: 'last_30d' });
+
+    const thirtyDaysMs = 30 * 24 * 3600 * 1000;
+    expect(range.from).toBeGreaterThanOrEqual(before - thirtyDaysMs - 100);
+    expect(range.to).toBeGreaterThanOrEqual(before);
+  });
+
+  it('passes through absolute from/to', () => {
+    const range = resolveTimeRange({ from: 1000, to: 2000 });
+    expect(range.from).toBe(1000);
+    expect(range.to).toBe(2000);
+  });
+
+  it('resolves "this_week" to Monday start', () => {
+    const range = resolveTimeRange({ relative: 'this_week' });
+    const monday = new Date();
+    const dayOfWeek = monday.getDay();
+    const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+    monday.setDate(monday.getDate() - diff);
+    monday.setHours(0, 0, 0, 0);
+
+    expect(range.from).toBe(monday.getTime());
+    expect(range.to).toBeGreaterThanOrEqual(Date.now() - 1000);
   });
 });

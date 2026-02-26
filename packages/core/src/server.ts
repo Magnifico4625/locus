@@ -153,7 +153,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       {
         uri: 'memory://recent',
         mimeType: 'text/plain',
-        text: generateRecent(db),
+        text: generateRecent(db, config.captureLevel),
       },
     ],
   }));
@@ -166,31 +166,73 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   }));
 
   // 2. memory_search (with pre-search inbox processing)
-  server.tool('memory_search', { query: z.string() }, async ({ query }) => {
-    // Process inbox before search (debounced, max 50 events)
-    if (Date.now() - lastIngestTime > INGEST_DEBOUNCE_MS) {
-      try {
-        const metrics = processInbox(inboxDir, db, {
-          batchLimit: 50,
-          captureLevel: config.captureLevel,
-          fts5Available: fts5,
-        });
-        _lastIngestMetrics = metrics;
-        lastIngestTime = Date.now();
-      } catch {
-        // Pre-search ingest failure should not block the search
+  server.tool(
+    'memory_search',
+    {
+      query: z.string(),
+      timeRange: z
+        .object({
+          from: z.number().optional(),
+          to: z.number().optional(),
+          relative: z.enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d']).optional(),
+        })
+        .optional()
+        .describe('Filter by time range (absolute or relative)'),
+      filePath: z.string().optional().describe('Filter by file path (exact match in event_files)'),
+      kind: z
+        .enum([
+          'user_prompt',
+          'ai_response',
+          'tool_use',
+          'file_diff',
+          'session_start',
+          'session_end',
+        ])
+        .optional()
+        .describe('Filter by event kind'),
+      source: z.string().optional().describe('Filter by event source'),
+      limit: z.number().optional().describe('Max conversation results (default 20)'),
+      offset: z.number().optional().describe('Skip N conversation results'),
+    },
+    async ({ query, timeRange, filePath, kind, source, limit, offset }) => {
+      // Process inbox before search (debounced, max 50 events)
+      if (Date.now() - lastIngestTime > INGEST_DEBOUNCE_MS) {
+        try {
+          const metrics = processInbox(inboxDir, db, {
+            batchLimit: 50,
+            captureLevel: config.captureLevel,
+            fts5Available: fts5,
+          });
+          _lastIngestMetrics = metrics;
+          lastIngestTime = Date.now();
+        } catch {
+          // Pre-search ingest failure should not block the search
+        }
       }
-    }
 
-    return {
-      content: [
+      const results = handleSearch(
+        query,
+        { db, semantic, fts5 },
         {
-          type: 'text' as const,
-          text: JSON.stringify(handleSearch(query, { db, semantic, fts5 })),
+          timeRange,
+          filePath,
+          kind,
+          source,
+          limit,
+          offset,
         },
-      ],
-    };
-  });
+      );
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(results),
+          },
+        ],
+      };
+    },
+  );
 
   // 3. memory_remember
   server.tool(

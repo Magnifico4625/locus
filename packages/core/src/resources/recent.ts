@@ -1,4 +1,4 @@
-import type { DatabaseAdapter } from '../types.js';
+import type { CaptureLevel, DatabaseAdapter } from '../types.js';
 import { estimateTokens } from '../utils.js';
 
 // ─── Internal row type matching DB schema ─────────────────────────────────────
@@ -17,6 +17,22 @@ interface SessionData {
   latestTimestamp: number;
   summary: string;
   files: string[];
+}
+
+// ─── Conversation DB rows ─────────────────────────────────────────────────────
+
+interface KindCountRow {
+  kind: string;
+  cnt: number;
+}
+
+interface RecentFileRow {
+  file_path: string;
+}
+
+interface PromptRow {
+  payload_json: string;
+  timestamp: number;
 }
 
 // ─── Relative time ────────────────────────────────────────────────────────────
@@ -43,9 +59,9 @@ function extractFiles(content: string): string[] {
   return matches ?? [];
 }
 
-// ─── Main export ──────────────────────────────────────────────────────────────
+// ─── Episodic sessions section ────────────────────────────────────────────────
 
-export function generateRecent(db: DatabaseAdapter): string {
+function generateEpisodicSection(db: DatabaseAdapter, tokenBudget: number): string {
   const rows = db.all<MemoryRow>(
     `SELECT id, content, created_at, session_id
      FROM memories
@@ -53,9 +69,7 @@ export function generateRecent(db: DatabaseAdapter): string {
      ORDER BY created_at ASC`,
   );
 
-  if (rows.length === 0) {
-    return 'No sessions recorded. Start working and Locus will track.';
-  }
+  if (rows.length === 0) return '';
 
   // Group entries by session_id; keep last entry as summary
   const sessionMap = new Map<string, SessionData>();
@@ -74,10 +88,8 @@ export function generateRecent(db: DatabaseAdapter): string {
         files: rowFiles,
       });
     } else {
-      // Update to latest entry (rows are ASC so later rows overwrite)
       existing.latestTimestamp = row.created_at;
       existing.summary = row.content;
-      // Accumulate files across all entries
       for (const f of rowFiles) {
         if (!existing.files.includes(f)) {
           existing.files.push(f);
@@ -90,7 +102,6 @@ export function generateRecent(db: DatabaseAdapter): string {
   const sessions = [...sessionMap.values()].sort((a, b) => b.latestTimestamp - a.latestTimestamp);
 
   const MAX_SESSIONS = 5;
-  const TOKEN_BUDGET = 1000;
 
   const lines: string[] = [];
   let sessionCount = 0;
@@ -98,14 +109,12 @@ export function generateRecent(db: DatabaseAdapter): string {
   for (const session of sessions) {
     if (sessionCount >= MAX_SESSIONS) break;
 
-    // Truncate summary to 120 chars
     const rawSummary =
       session.summary.length > 120 ? `${session.summary.slice(0, 117)}...` : session.summary;
 
     const time = relativeTime(session.latestTimestamp);
     const summaryLine = `Session ${sessionCount + 1} (${time}): ${rawSummary}`;
 
-    // Format files line
     const MAX_FILES = 5;
     const dedupedFiles = [...new Set(session.files)];
     let filesStr: string;
@@ -121,14 +130,118 @@ export function generateRecent(db: DatabaseAdapter): string {
 
     const block = `${summaryLine}\n${filesStr}`;
 
-    // Check token budget before adding
     const current = lines.join('\n');
     const candidate = current.length > 0 ? `${current}\n${block}` : block;
-    if (estimateTokens(candidate) > TOKEN_BUDGET) break;
+    if (estimateTokens(candidate) > tokenBudget) break;
 
     lines.push(block);
     sessionCount++;
   }
 
   return lines.join('\n');
+}
+
+// ─── Conversation stats section ───────────────────────────────────────────────
+
+function generateConversationSection(
+  db: DatabaseAdapter,
+  captureLevel: CaptureLevel,
+  tokenBudget: number,
+): string {
+  // Check if conversation_events table has any rows
+  let totalCount: number;
+  try {
+    const row = db.get<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM conversation_events');
+    totalCount = row?.cnt ?? 0;
+  } catch {
+    return '';
+  }
+
+  if (totalCount === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('── Conversation Activity ──────────────');
+
+  // Event counts by kind
+  const kindCounts = db.all<KindCountRow>(
+    'SELECT kind, COUNT(*) AS cnt FROM conversation_events GROUP BY kind ORDER BY cnt DESC',
+  );
+
+  const kindParts = kindCounts.map((r) => `${r.cnt} ${r.kind}`);
+  lines.push(`Events: ${totalCount} total (${kindParts.join(', ')})`);
+
+  // Recent files from event_files (max 5 unique)
+  const MAX_RECENT_FILES = 5;
+  const recentFiles = db.all<RecentFileRow>(
+    `SELECT DISTINCT ef.file_path
+     FROM event_files ef
+     JOIN conversation_events ce ON ce.event_id = ef.event_id
+     ORDER BY ce.timestamp DESC
+     LIMIT ?`,
+    [MAX_RECENT_FILES],
+  );
+
+  if (recentFiles.length > 0) {
+    lines.push(`Recent files: ${recentFiles.map((r) => r.file_path).join(', ')}`);
+  }
+
+  // Last 3 prompts (only at full or redacted captureLevel)
+  if (captureLevel === 'full' || captureLevel === 'redacted') {
+    const prompts = db.all<PromptRow>(
+      `SELECT payload_json, timestamp
+       FROM conversation_events
+       WHERE kind = 'user_prompt' AND payload_json IS NOT NULL
+       ORDER BY timestamp DESC
+       LIMIT 3`,
+    );
+
+    if (prompts.length > 0) {
+      lines.push('Last prompts:');
+      for (const p of prompts) {
+        try {
+          const payload = JSON.parse(p.payload_json) as Record<string, unknown>;
+          const prompt = typeof payload.prompt === 'string' ? payload.prompt : '';
+          const truncated = prompt.length > 100 ? `${prompt.slice(0, 97)}...` : prompt;
+          lines.push(`  - "${truncated}"`);
+        } catch {
+          // Skip malformed payload
+        }
+      }
+    }
+  }
+
+  const section = lines.join('\n');
+  if (estimateTokens(section) > tokenBudget) {
+    // Trim to just counts if over budget
+    return lines.slice(0, 2).join('\n');
+  }
+
+  return section;
+}
+
+// ─── Main export ──────────────────────────────────────────────────────────────
+
+export function generateRecent(db: DatabaseAdapter, captureLevel?: CaptureLevel): string {
+  const effectiveCapture = captureLevel ?? 'metadata';
+  const TOKEN_BUDGET = 1000;
+
+  // Part 1: Episodic sessions (allocate ~600 tokens)
+  const episodicSection = generateEpisodicSection(db, 600);
+
+  // Part 2: Conversation stats (allocate remaining budget)
+  const episodicTokens = estimateTokens(episodicSection);
+  const remainingBudget = TOKEN_BUDGET - episodicTokens - 10; // 10 token margin for separator
+  const convSection =
+    remainingBudget > 50 ? generateConversationSection(db, effectiveCapture, remainingBudget) : '';
+
+  // Combine
+  if (!episodicSection && !convSection) {
+    return 'No sessions recorded. Start working and Locus will track.';
+  }
+
+  const parts: string[] = [];
+  if (episodicSection) parts.push(episodicSection);
+  if (convSection) parts.push(convSection);
+
+  return parts.join('\n\n');
 }
