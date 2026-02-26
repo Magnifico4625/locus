@@ -4,7 +4,7 @@ import {
   extractCapture,
   extractDiffStats,
   extractFilePaths,
-} from '../../hooks/post-tool-use.js';
+} from '../../../claude-code/hooks/post-tool-use.js';
 
 // ─── classifyError ────────────────────────────────────────────────────────────
 
@@ -386,7 +386,7 @@ describe('extractCapture — full level', () => {
 
 describe('postToolUse default export', () => {
   it('is an async function that returns undefined without crashing', async () => {
-    const { default: postToolUse } = await import('../../hooks/post-tool-use.js');
+    const { default: postToolUse } = await import('../../../claude-code/hooks/post-tool-use.js');
     // Provide a minimal valid event; hook may fail to open DB in test env but must not throw
     const event = {
       session_id: 'test-session',
@@ -400,7 +400,7 @@ describe('postToolUse default export', () => {
   });
 
   it('silently handles a completely malformed event without throwing', async () => {
-    const { default: postToolUse } = await import('../../hooks/post-tool-use.js');
+    const { default: postToolUse } = await import('../../../claude-code/hooks/post-tool-use.js');
     // biome-ignore lint/suspicious/noExplicitAny: testing defensive null handling
     const result = await postToolUse(null as any);
     expect(result).toBeUndefined();

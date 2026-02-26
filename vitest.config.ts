@@ -3,12 +3,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     globals: true,
-    root: '.',
-    include: ['tests/**/*.test.ts'],
+    include: ['packages/core/tests/**/*.test.ts'],
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.ts'],
-      exclude: ['src/server.ts', 'src/**/*.d.ts'],
+      include: ['packages/core/src/**/*.ts'],
+      exclude: ['packages/core/src/server.ts', 'packages/core/src/**/*.d.ts'],
       thresholds: {
         branches: 80,
         functions: 80,
@@ -20,7 +19,7 @@ export default defineConfig({
   },
   resolve: {
     alias: {
-      '@': new URL('./src', import.meta.url).pathname,
+      '@': new URL('./packages/core/src', import.meta.url).pathname,
     },
   },
 });
