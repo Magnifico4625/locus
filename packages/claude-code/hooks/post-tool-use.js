@@ -1,10 +1,11 @@
-// Locus post-tool-use hook
-// Captures metadata from tool invocations (metadata-only by default)
-// See ARCHITECTURE.md Contract 1 for field specifications
+// Locus post-tool-use hook (v3 — inbox writer)
+// Writes tool invocation events as JSON files to the inbox directory.
+// The MCP server's ingest pipeline processes these into conversation_events.
+// See ARCHITECTURE.md Contract 1 for field specifications.
 
 import { execFileSync } from 'node:child_process';
-import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, normalize, resolve } from 'node:path';
 
@@ -173,7 +174,7 @@ export function extractCapture(event, captureLevel) {
   return capture;
 }
 
-// ─── DB path resolution ──────────────────────────────────────────────────────
+// ─── Project root + inbox path ───────────────────────────────────────────────
 
 function computeProjectHash(projectRoot) {
   const normalized = normalize(projectRoot).replace(/\\/g, '/').toLowerCase();
@@ -196,135 +197,26 @@ function resolveProjectRoot(cwd) {
   return resolve(cwd).replace(/\\/g, '/');
 }
 
-function computeDbPath(projectRoot) {
+/**
+ * Computes the inbox directory path for a given project root.
+ * Inbox is co-located with the DB: ~/.claude/memory/locus-<hash>/inbox/
+ * @param {string} projectRoot
+ * @returns {string}
+ */
+export function computeInboxDir(projectRoot) {
   const hash = computeProjectHash(projectRoot);
-  return join(homedir(), '.claude', 'memory', `locus-${hash}`, 'locus.db');
-}
-
-// ─── DB open helpers ─────────────────────────────────────────────────────────
-
-async function openDb(dbPath) {
-  // Ensure parent directory exists
-  const lastSep = Math.max(dbPath.lastIndexOf('/'), dbPath.lastIndexOf('\\'));
-  const dirPath = lastSep > 0 ? dbPath.substring(0, lastSep) : null;
-  if (dirPath && !existsSync(dirPath)) {
-    mkdirSync(dirPath, { recursive: true });
-  }
-
-  // ── Try node:sqlite (Node 22+) ───────────────────────────────────────────
-  try {
-    const nodeSqlite = await import('node:sqlite');
-    const raw = new nodeSqlite.DatabaseSync(dbPath);
-
-    raw.exec(`CREATE TABLE IF NOT EXISTS hook_captures (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tool_name TEXT,
-      file_paths_json TEXT,
-      status TEXT,
-      exit_code INTEGER,
-      timestamp INTEGER,
-      duration_ms INTEGER,
-      diff_added INTEGER,
-      diff_removed INTEGER,
-      error_kind TEXT,
-      bash_command TEXT
-    )`);
-
-    return {
-      insert(capture) {
-        const stmt = raw.prepare(
-          `INSERT INTO hook_captures
-            (tool_name, file_paths_json, status, exit_code, timestamp, duration_ms,
-             diff_added, diff_removed, error_kind, bash_command)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        );
-        stmt.run(
-          capture.tool_name,
-          capture.file_paths_json,
-          capture.status,
-          capture.exit_code,
-          capture.timestamp,
-          capture.duration_ms,
-          capture.diff_added,
-          capture.diff_removed,
-          capture.error_kind,
-          capture.bash_command,
-        );
-      },
-      close() {
-        raw.close();
-      },
-    };
-  } catch {
-    // node:sqlite not available (Node < 22)
-  }
-
-  // ── Try sql.js fallback ──────────────────────────────────────────────────
-  try {
-    const { readFileSync, writeFileSync } = await import('node:fs');
-    const initSqlJs = (await import('sql.js')).default;
-    const SQL = await initSqlJs();
-
-    let sqlDb;
-    if (existsSync(dbPath)) {
-      const fileData = readFileSync(dbPath);
-      sqlDb = new SQL.Database(new Uint8Array(fileData));
-    } else {
-      sqlDb = new SQL.Database();
-    }
-
-    sqlDb.exec(`CREATE TABLE IF NOT EXISTS hook_captures (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      tool_name TEXT,
-      file_paths_json TEXT,
-      status TEXT,
-      exit_code INTEGER,
-      timestamp INTEGER,
-      duration_ms INTEGER,
-      diff_added INTEGER,
-      diff_removed INTEGER,
-      error_kind TEXT,
-      bash_command TEXT
-    )`);
-
-    return {
-      insert(capture) {
-        sqlDb.run(
-          `INSERT INTO hook_captures
-            (tool_name, file_paths_json, status, exit_code, timestamp, duration_ms,
-             diff_added, diff_removed, error_kind, bash_command)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            capture.tool_name,
-            capture.file_paths_json,
-            capture.status,
-            capture.exit_code,
-            capture.timestamp,
-            capture.duration_ms,
-            capture.diff_added,
-            capture.diff_removed,
-            capture.error_kind,
-            capture.bash_command,
-          ],
-        );
-      },
-      close() {
-        const data = sqlDb.export();
-        writeFileSync(dbPath, Buffer.from(data));
-        sqlDb.close();
-      },
-    };
-  } catch {
-    // sql.js not available either
-  }
-
-  return null;
+  return join(homedir(), '.claude', 'memory', `locus-${hash}`, 'inbox');
 }
 
 // ─── Main hook ───────────────────────────────────────────────────────────────
 
+/**
+ * PostToolUse hook — writes an InboxEvent JSON file to the project inbox.
+ * The MCP server's ingest pipeline picks up and processes these files.
+ *
+ * Contract: NEVER crash. All errors are silently swallowed.
+ */
 export default async function postToolUse(event) {
-  let db = null;
   try {
     const captureLevel = process.env.LOCUS_CAPTURE_LEVEL ?? 'metadata';
     if (captureLevel !== 'metadata' && captureLevel !== 'redacted' && captureLevel !== 'full') {
@@ -333,23 +225,62 @@ export default async function postToolUse(event) {
 
     const cwd = process.env.PWD ?? process.cwd();
     const projectRoot = resolveProjectRoot(cwd);
-    const dbPath = computeDbPath(projectRoot);
+    const inboxDir = computeInboxDir(projectRoot);
 
-    db = await openDb(dbPath);
-    if (!db) return undefined;
-
+    // Build capture data from the tool event
     const capture = extractCapture(event, captureLevel);
-    db.insert(capture);
+    const filePaths = JSON.parse(capture.file_paths_json);
+
+    // Build InboxEvent payload (ToolUsePayload shape)
+    const payload = {
+      tool: capture.tool_name,
+      files: filePaths,
+      status: capture.status,
+    };
+    if (capture.exit_code !== null) {
+      payload.exitCode = capture.exit_code;
+    }
+    if (capture.diff_added !== null) {
+      payload.diffStats = { added: capture.diff_added, removed: capture.diff_removed };
+    }
+    if (capture.duration_ms > 0) {
+      payload.durationMs = capture.duration_ms;
+    }
+    if (capture.error_kind !== null) {
+      payload.errorKind = capture.error_kind;
+    }
+    if (capture.bash_command !== null) {
+      payload.bashCommand = capture.bash_command;
+    }
+
+    // Build the InboxEvent
+    const eventId = randomUUID();
+    const inboxEvent = {
+      version: 1,
+      event_id: eventId,
+      source: 'claude-code',
+      project_root: projectRoot,
+      timestamp: capture.timestamp,
+      kind: 'tool_use',
+      payload,
+    };
+
+    // Add session_id if available
+    if (typeof event.session_id === 'string' && event.session_id.length > 0) {
+      inboxEvent.session_id = event.session_id;
+    }
+
+    // Atomic write: .tmp → rename
+    mkdirSync(inboxDir, { recursive: true });
+    const shortId = eventId.slice(0, 8);
+    const filename = `${capture.timestamp}-${shortId}.json`;
+    const finalPath = join(inboxDir, filename);
+    const tmpPath = `${finalPath}.tmp`;
+
+    writeFileSync(tmpPath, JSON.stringify(inboxEvent), 'utf-8');
+    renameSync(tmpPath, finalPath);
   } catch {
     // NEVER crash — silently swallow all errors
-  } finally {
-    if (db !== null) {
-      try {
-        db.close();
-      } catch {
-        // ignore close errors
-      }
-    }
   }
 
   return undefined;

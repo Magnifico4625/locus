@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -10,8 +10,33 @@ import { createServer } from '../../src/server.js';
 import { handleRemember } from '../../src/tools/remember.js';
 import { handleSearch } from '../../src/tools/search.js';
 import { handleStatus } from '../../src/tools/status.js';
-import type { MemoryStatus, SearchResult } from '../../src/types.js';
+import type {
+  ConversationEventRow,
+  InboxEvent,
+  MemoryStatus,
+  SearchResult,
+} from '../../src/types.js';
 import { LOCUS_DEFAULTS } from '../../src/types.js';
+
+// ─── Test helpers ────────────────────────────────────────────────────────────
+
+function createTestInboxEvent(overrides?: Partial<InboxEvent>): InboxEvent {
+  return {
+    version: 1,
+    event_id: `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    source: 'claude-code',
+    project_root: '/tmp/test-project',
+    session_id: 'test-session-1',
+    timestamp: Date.now(),
+    kind: 'tool_use',
+    payload: {
+      tool: 'Read',
+      files: ['/src/app.ts'],
+      status: 'success',
+    },
+    ...overrides,
+  };
+}
 
 // ─── Shared context ───────────────────────────────────────────────────────────
 
@@ -196,6 +221,117 @@ describe('createServer', () => {
       } else {
         process.env.LOCUS_CAPTURE_LEVEL = original;
       }
+    }
+  });
+
+  it('exposes inboxDir in ServerContext', () => {
+    expect(ctx.inboxDir).toBeDefined();
+    expect(typeof ctx.inboxDir).toBe('string');
+    expect(ctx.inboxDir).toContain('inbox');
+  });
+});
+
+// ─── Ingest Processing Policy (Task 9) ──────────────────────────────────────
+
+describe('ingest processing policy', () => {
+  it('processes inbox events at startup', async () => {
+    // Create a fresh server with an event pre-placed in its inbox
+    const startupDir = mkdtempSync(join(tmpdir(), 'locus-startup-test-'));
+    const dbPath = join(startupDir, 'locus.db');
+    const inboxDir = join(startupDir, 'inbox');
+    mkdirSync(inboxDir, { recursive: true });
+
+    // Write a valid tool_use event to inbox BEFORE server starts
+    const event = createTestInboxEvent({ event_id: 'startup-event-001' });
+    const filename = `${event.timestamp}-${event.event_id.slice(0, 8)}.json`;
+    writeFileSync(join(inboxDir, filename), JSON.stringify(event), 'utf-8');
+
+    // Start server — should process the inbox event
+    const ctx2 = await createServer({ cwd: startupDir, dbPath });
+    try {
+      // Verify the event was stored in conversation_events
+      const row = ctx2.db.get<ConversationEventRow>(
+        'SELECT * FROM conversation_events WHERE event_id = ?',
+        ['startup-event-001'],
+      );
+      expect(row).toBeDefined();
+      expect(row?.kind).toBe('tool_use');
+      expect(row?.source).toBe('claude-code');
+    } finally {
+      ctx2.cleanup();
+      rmSync(startupDir, { recursive: true, force: true });
+    }
+  });
+
+  it('processInbox can be called with batchLimit to incrementally ingest', async () => {
+    // Create server, write events AFTER startup, call processInbox with batchLimit
+    const searchDir = mkdtempSync(join(tmpdir(), 'locus-search-test-'));
+    const dbPath = join(searchDir, 'locus.db');
+
+    const ctx2 = await createServer({ cwd: searchDir, dbPath });
+    try {
+      // Write an event to inbox AFTER server is running
+      const inboxDir = ctx2.inboxDir;
+      mkdirSync(inboxDir, { recursive: true });
+
+      const event = createTestInboxEvent({
+        event_id: 'incremental-event-001',
+        kind: 'tool_use',
+        payload: { tool: 'Write', files: ['/src/main.ts'], status: 'success' },
+      });
+      const filename = `${event.timestamp}-${event.event_id.slice(0, 8)}.json`;
+      writeFileSync(join(inboxDir, filename), JSON.stringify(event), 'utf-8');
+
+      // Process inbox with batchLimit (simulates pre-search processing)
+      const { processInbox } = await import('../../src/ingest/pipeline.js');
+      const metrics = processInbox(inboxDir, ctx2.db, {
+        batchLimit: 50,
+        captureLevel: ctx2.config.captureLevel,
+        fts5Available: ctx2.fts5,
+      });
+      expect(metrics.processed).toBe(1);
+
+      // Verify the event was ingested
+      const row = ctx2.db.get<ConversationEventRow>(
+        'SELECT * FROM conversation_events WHERE event_id = ?',
+        ['incremental-event-001'],
+      );
+      expect(row).toBeDefined();
+      expect(row?.kind).toBe('tool_use');
+    } finally {
+      ctx2.cleanup();
+      rmSync(searchDir, { recursive: true, force: true });
+    }
+  });
+
+  it('startup processes all events (batchLimit=0)', async () => {
+    // Write multiple events to inbox, verify all are processed at startup
+    const allDir = mkdtempSync(join(tmpdir(), 'locus-all-test-'));
+    const dbPath = join(allDir, 'locus.db');
+    const inboxDir = join(allDir, 'inbox');
+    mkdirSync(inboxDir, { recursive: true });
+
+    const eventIds: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const event = createTestInboxEvent({ event_id: `batch-event-${i}` });
+      const filename = `${event.timestamp + i}-${event.event_id.slice(0, 8)}.json`;
+      writeFileSync(join(inboxDir, filename), JSON.stringify(event), 'utf-8');
+      eventIds.push(event.event_id);
+    }
+
+    const ctx2 = await createServer({ cwd: allDir, dbPath });
+    try {
+      // All 5 events should be in DB
+      for (const id of eventIds) {
+        const row = ctx2.db.get<ConversationEventRow>(
+          'SELECT * FROM conversation_events WHERE event_id = ?',
+          [id],
+        );
+        expect(row).toBeDefined();
+      }
+    } finally {
+      ctx2.cleanup();
+      rmSync(allDir, { recursive: true, force: true });
     }
   });
 });

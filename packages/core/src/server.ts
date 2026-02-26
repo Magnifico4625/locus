@@ -1,8 +1,9 @@
 import { homedir } from 'node:os';
-import { basename, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
+import { processInbox } from './ingest/pipeline.js';
 import { log, setLogLevel } from './logger.js';
 import { MemoryCompressor } from './memory/compressor.js';
 import { EpisodicMemory } from './memory/episodic.js';
@@ -24,7 +25,7 @@ import { handleRemember } from './tools/remember.js';
 import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
-import type { DatabaseAdapter, LocusConfig, ProjectRootMethod } from './types.js';
+import type { DatabaseAdapter, IngestMetrics, LocusConfig, ProjectRootMethod } from './types.js';
 import { LOCUS_DEFAULTS } from './types.js';
 import { projectHash } from './utils.js';
 
@@ -43,6 +44,7 @@ export interface ServerContext {
   fts5: boolean;
   projectRoot: string;
   projectRootMethod: ProjectRootMethod;
+  inboxDir: string;
   semantic: SemanticMemory;
   episodic: EpisodicMemory;
   cleanup: () => void;
@@ -65,6 +67,9 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
   // 3. Initialise storage
   const { db, backend, fts5 } = await initStorage(dbPath);
+
+  // 3b. Compute inbox directory (sibling to DB file)
+  const inboxDir = join(dirname(dbPath), 'inbox');
 
   // 4. Config (defaults + env overrides)
   const config: LocusConfig = { ...LOCUS_DEFAULTS };
@@ -95,7 +100,30 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     );
   }
 
-  // 8. MCP server
+  // 8. Process inbox at startup (all events, no batch limit)
+  let _lastIngestMetrics: IngestMetrics | null = null;
+  let lastIngestTime = 0;
+  const INGEST_DEBOUNCE_MS = 30_000;
+
+  try {
+    const startupMetrics = processInbox(inboxDir, db, {
+      batchLimit: 0,
+      captureLevel: config.captureLevel,
+      fts5Available: fts5,
+    });
+    _lastIngestMetrics = startupMetrics;
+    lastIngestTime = Date.now();
+    if (startupMetrics.processed > 0) {
+      log(
+        'info',
+        `Inbox startup: processed=${startupMetrics.processed} errors=${startupMetrics.errors}`,
+      );
+    }
+  } catch (err: unknown) {
+    log('error', `Inbox startup error: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  // 9. MCP server
   const server = new McpServer({ name: 'locus', version: '0.2.0' });
 
   // ─── Resources ───────────────────────────────────────────────────────────────
@@ -137,15 +165,32 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     content: [{ type: 'text' as const, text: handleExplore(path, { db }) }],
   }));
 
-  // 2. memory_search
-  server.tool('memory_search', { query: z.string() }, async ({ query }) => ({
-    content: [
-      {
-        type: 'text' as const,
-        text: JSON.stringify(handleSearch(query, { db, semantic, fts5 })),
-      },
-    ],
-  }));
+  // 2. memory_search (with pre-search inbox processing)
+  server.tool('memory_search', { query: z.string() }, async ({ query }) => {
+    // Process inbox before search (debounced, max 50 events)
+    if (Date.now() - lastIngestTime > INGEST_DEBOUNCE_MS) {
+      try {
+        const metrics = processInbox(inboxDir, db, {
+          batchLimit: 50,
+          captureLevel: config.captureLevel,
+          fts5Available: fts5,
+        });
+        _lastIngestMetrics = metrics;
+        lastIngestTime = Date.now();
+      } catch {
+        // Pre-search ingest failure should not block the search
+      }
+    }
+
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(handleSearch(query, { db, semantic, fts5 })),
+        },
+      ],
+    };
+  });
 
   // 3. memory_remember
   server.tool(
@@ -257,6 +302,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     fts5,
     projectRoot: root,
     projectRootMethod: method,
+    inboxDir,
     semantic,
     episodic,
     cleanup: () => db.close(),

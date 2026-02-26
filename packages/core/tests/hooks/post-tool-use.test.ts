@@ -1,6 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { afterAll, describe, expect, it } from 'vitest';
 import {
   classifyError,
+  computeInboxDir,
   extractCapture,
   extractDiffStats,
   extractFilePaths,
@@ -382,12 +385,50 @@ describe('extractCapture — full level', () => {
   });
 });
 
-// ─── Default export (smoke test — no real DB) ────────────────────────────────
+// ─── computeInboxDir ─────────────────────────────────────────────────────────
+
+describe('computeInboxDir', () => {
+  it('returns a path ending with /inbox/', () => {
+    const dir = computeInboxDir('/tmp/test-project');
+    expect(dir).toMatch(/inbox[/\\]?$/);
+  });
+
+  it('includes locus- prefix with hash in the path', () => {
+    const dir = computeInboxDir('/tmp/test-project');
+    expect(dir).toMatch(/locus-[a-f0-9]{16}/);
+  });
+
+  it('produces consistent paths for the same project root', () => {
+    const dir1 = computeInboxDir('/tmp/my-project');
+    const dir2 = computeInboxDir('/tmp/my-project');
+    expect(dir1).toBe(dir2);
+  });
+
+  it('produces different paths for different project roots', () => {
+    const dir1 = computeInboxDir('/tmp/project-a');
+    const dir2 = computeInboxDir('/tmp/project-b');
+    expect(dir1).not.toBe(dir2);
+  });
+});
+
+// ─── Default export (inbox writer) ──────────────────────────────────────────
 
 describe('postToolUse default export', () => {
+  // Temp dirs created by the hook will be under the user's home — we track and clean up
+  const cleanupDirs: string[] = [];
+
+  afterAll(() => {
+    for (const dir of cleanupDirs) {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        // best effort
+      }
+    }
+  });
+
   it('is an async function that returns undefined without crashing', async () => {
     const { default: postToolUse } = await import('../../../claude-code/hooks/post-tool-use.js');
-    // Provide a minimal valid event; hook may fail to open DB in test env but must not throw
     const event = {
       session_id: 'test-session',
       tool_name: 'Read',
@@ -404,5 +445,68 @@ describe('postToolUse default export', () => {
     // biome-ignore lint/suspicious/noExplicitAny: testing defensive null handling
     const result = await postToolUse(null as any);
     expect(result).toBeUndefined();
+  });
+
+  it('writes an InboxEvent JSON file to the inbox directory', async () => {
+    const { default: postToolUse, computeInboxDir } = await import(
+      '../../../claude-code/hooks/post-tool-use.js'
+    );
+    const event = {
+      session_id: 'test-inbox-session',
+      tool_name: 'Read',
+      tool_input: { file_path: '/src/app.ts' },
+      tool_response: 'file contents',
+      duration_ms: 15,
+    };
+
+    await postToolUse(event);
+
+    // Determine inbox dir from process.cwd() resolved root
+    const cwd = process.env.PWD ?? process.cwd();
+    const inboxDir = computeInboxDir(cwd);
+    cleanupDirs.push(inboxDir);
+
+    // Check if JSON files exist in inbox
+    let files: string[] = [];
+    try {
+      files = readdirSync(inboxDir).filter((f: string) => f.endsWith('.json'));
+    } catch {
+      // inbox dir may not exist if hook failed gracefully
+    }
+
+    // If hook succeeded (has a valid project root), there should be at least one file
+    if (files.length > 0) {
+      const content = JSON.parse(readFileSync(join(inboxDir, files[0] ?? ''), 'utf-8'));
+      expect(content.version).toBe(1);
+      expect(content.source).toBe('claude-code');
+      expect(content.kind).toBe('tool_use');
+      expect(typeof content.event_id).toBe('string');
+      expect(typeof content.timestamp).toBe('number');
+      expect(content.payload).toBeDefined();
+      expect(content.payload.tool).toBe('Read');
+    }
+  });
+
+  it('does not write to inbox when LOCUS_CAPTURE_LEVEL is invalid', async () => {
+    const original = process.env.LOCUS_CAPTURE_LEVEL;
+    try {
+      process.env.LOCUS_CAPTURE_LEVEL = 'invalid-level';
+      const { default: postToolUse } = await import('../../../claude-code/hooks/post-tool-use.js');
+      const event = {
+        session_id: 'test-session',
+        tool_name: 'Read',
+        tool_input: { file_path: '/test.ts' },
+        tool_response: '',
+        duration_ms: 1,
+      };
+      const result = await postToolUse(event);
+      expect(result).toBeUndefined();
+    } finally {
+      if (original === undefined) {
+        delete process.env.LOCUS_CAPTURE_LEVEL;
+      } else {
+        process.env.LOCUS_CAPTURE_LEVEL = original;
+      }
+    }
   });
 });

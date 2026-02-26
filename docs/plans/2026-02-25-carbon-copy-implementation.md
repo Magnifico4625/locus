@@ -342,9 +342,11 @@ Message: `feat: ingest pipeline store phase with redaction and FTS indexing`
 
 ---
 
-## Task 9: Ingest Processing Policy
+## Task 9: Ingest Processing Policy ✅ DONE
 
 **Goal:** Wire inbox processing into MCP server (startup + before search + debounce).
+**Status:** Completed. 3 new tests. 622/622 total tests pass. Typecheck OK. Biome OK.
+**Note:** inboxDir derived from dirname(dbPath) + '/inbox'. Startup processes all events (batchLimit: 0). Pre-search processes max 50 with 30s debounce. lastIngestMetrics stored internally (prefixed _ until consumed by memory_status in later task).
 
 **Files:**
 - Modify: `packages/core/src/server.ts`
@@ -374,9 +376,11 @@ Message: `feat: integrate ingest pipeline into MCP server lifecycle`
 
 ---
 
-## Task 10: PostToolUse Hook Refactor
+## Task 10: PostToolUse Hook Refactor ✅ DONE
 
 **Goal:** Refactor existing hook: inbox JSON files instead of direct SQLite.
+**Status:** Completed. 7 new tests (4 computeInboxDir + 2 inbox writing + 1 invalid captureLevel). 622/622 total tests pass. Typecheck OK. Biome OK.
+**Note:** Removed ~120 lines of SQLite code (openDb, computeDbPath, node:sqlite/sql.js fallback). Hook now writes InboxEvent JSON files atomically. All extractCapture/extractFilePaths/classifyError/extractDiffStats functions preserved unchanged. Added computeInboxDir export for testability.
 
 **Files:**
 - Modify: `packages/claude-code/hooks/post-tool-use.js`
