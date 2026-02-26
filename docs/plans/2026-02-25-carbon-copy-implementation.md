@@ -207,9 +207,10 @@ Message: `feat: add DB migration v2 for conversation events tables`
 
 ---
 
-## Task 5: Inbox Writer Utility
+## Task 5: Inbox Writer Utility ✅ DONE
 
 **Goal:** Shared utility for atomically writing events to the project inbox (`~/.claude/memory/locus-<hash>/inbox/`).
+**Status:** Completed (commit `265a6e9`). 5 tests. 525/525 total tests pass. Typecheck OK. Biome OK.
 
 **Files:**
 - Create: `packages/core/src/ingest/inbox-writer.ts`
@@ -235,9 +236,11 @@ Message: `feat: add atomic inbox writer utility for event protocol`
 
 ---
 
-## Task 6: Ingest Pipeline Core (Schema + Dedup + Intake)
+## Task 6: Ingest Pipeline Core (Schema + Dedup + Intake) ✅ DONE
 
 **Goal:** Pipeline that reads inbox, validates schema, dedup checks, respects batch limits.
+**Status:** Completed. 41 new tests (19 schema + 8 dedup + 14 pipeline). 566/566 total tests pass. Typecheck OK. Biome OK.
+**Note:** Zod v4 requires `z.record(z.string(), z.unknown())` instead of `z.record(z.unknown())` — single-arg record is broken in v4.
 
 **Files:**
 - Create: `packages/core/src/ingest/schema.ts`
