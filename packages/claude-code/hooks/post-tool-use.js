@@ -3,11 +3,15 @@
 // The MCP server's ingest pipeline processes these into conversation_events.
 // See ARCHITECTURE.md Contract 1 for field specifications.
 
-import { execFileSync } from 'node:child_process';
-import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { join, normalize, resolve } from 'node:path';
+import {
+  computeInboxDir,
+  generateEventId,
+  resolveProjectRoot,
+  writeAtomicInboxEvent,
+} from './shared.js';
+
+// Re-export computeInboxDir for backward compatibility with tests
+export { computeInboxDir } from './shared.js';
 
 // ─── Error classification ────────────────────────────────────────────────────
 
@@ -174,40 +178,6 @@ export function extractCapture(event, captureLevel) {
   return capture;
 }
 
-// ─── Project root + inbox path ───────────────────────────────────────────────
-
-function computeProjectHash(projectRoot) {
-  const normalized = normalize(projectRoot).replace(/\\/g, '/').toLowerCase();
-  return createHash('sha256').update(normalized).digest('hex').slice(0, 16);
-}
-
-function resolveProjectRoot(cwd) {
-  try {
-    // execFileSync with an array of args is safe from shell injection
-    const result = execFileSync('git', ['rev-parse', '--show-toplevel'], {
-      cwd,
-      timeout: 5000,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-    if (result) return resolve(result).replace(/\\/g, '/');
-  } catch {
-    // fall through to cwd
-  }
-  return resolve(cwd).replace(/\\/g, '/');
-}
-
-/**
- * Computes the inbox directory path for a given project root.
- * Inbox is co-located with the DB: ~/.claude/memory/locus-<hash>/inbox/
- * @param {string} projectRoot
- * @returns {string}
- */
-export function computeInboxDir(projectRoot) {
-  const hash = computeProjectHash(projectRoot);
-  return join(homedir(), '.claude', 'memory', `locus-${hash}`, 'inbox');
-}
-
 // ─── Main hook ───────────────────────────────────────────────────────────────
 
 /**
@@ -254,7 +224,7 @@ export default async function postToolUse(event) {
     }
 
     // Build the InboxEvent
-    const eventId = randomUUID();
+    const eventId = generateEventId();
     const inboxEvent = {
       version: 1,
       event_id: eventId,
@@ -270,15 +240,8 @@ export default async function postToolUse(event) {
       inboxEvent.session_id = event.session_id;
     }
 
-    // Atomic write: .tmp → rename
-    mkdirSync(inboxDir, { recursive: true });
-    const shortId = eventId.slice(0, 8);
-    const filename = `${capture.timestamp}-${shortId}.json`;
-    const finalPath = join(inboxDir, filename);
-    const tmpPath = `${finalPath}.tmp`;
-
-    writeFileSync(tmpPath, JSON.stringify(inboxEvent), 'utf-8');
-    renameSync(tmpPath, finalPath);
+    // Atomic write to inbox
+    writeAtomicInboxEvent(inboxDir, inboxEvent);
   } catch {
     // NEVER crash — silently swallow all errors
   }

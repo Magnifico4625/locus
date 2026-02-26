@@ -406,13 +406,17 @@ Message: `refactor: PostToolUse hook writes to inbox instead of direct SQLite`
 
 ---
 
-## Task 11: UserPromptSubmit Hook
+## Task 11: UserPromptSubmit Hook ✅ DONE
 
 **Goal:** New hook capturing user prompts to inbox.
+**Status:** Completed. 13 tests (4 shared helpers + 9 hook tests). 656/656 total tests pass. Typecheck OK. Biome OK.
+**Note:** Extracted shared helpers (resolveProjectRoot, computeProjectHash, computeInboxDir, computeLocusDir, writeAtomicInboxEvent, generateEventId) from post-tool-use.js into shared.js. post-tool-use.js re-exports computeInboxDir for backward compatibility. CaptureLevel gate: metadata = skip (prompts only at redacted/full).
 
 **Files:**
+- Create: `packages/claude-code/hooks/shared.js`
 - Create: `packages/claude-code/hooks/user-prompt.js`
 - Create: `packages/core/tests/hooks/user-prompt.test.ts`
+- Modify: `packages/claude-code/hooks/post-tool-use.js` (import from shared.js)
 - Modify: `hooks/hooks.json` and `packages/claude-code/hooks/hooks.json`
 
 **Step 1: Write failing tests**
@@ -435,9 +439,11 @@ Message: `feat: add UserPromptSubmit hook for Carbon Copy prompt capture`
 
 ---
 
-## Task 12: Stop Hook (Transcript Parser)
+## Task 12: Stop Hook (Transcript Parser) ✅ DONE
 
 **Goal:** New hook parsing transcript JSONL for AI response capture.
+**Status:** Completed. 21 tests (8 parseTranscriptLines + 4 tailer state + 9 hook tests). 656/656 total tests pass. Typecheck OK. Biome OK.
+**Note:** Uses tailer-state.json for byte offset tracking per session. Parses JSONL to extract assistant messages (supports both string and array content formats). Unique session IDs per test run to avoid stale state interference. Accepts optional `cwd` in event for testability.
 
 **Files:**
 - Create: `packages/claude-code/hooks/stop.js`
