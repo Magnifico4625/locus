@@ -27,9 +27,11 @@
 
 ---
 
-## Task 1: Monorepo Scaffold
+## Task 1: Monorepo Scaffold ✅ DONE
 
 **Goal:** Restructure flat repo into npm workspaces monorepo without breaking anything.
+**Status:** Completed (commit `2b9c798`). 506/506 tests pass. Build OK. Typecheck OK.
+**Note:** Used root `vitest.config.ts` instead of `vitest.workspace.ts` due to vitest v4 workspace mode not propagating `testTimeout` from child configs.
 
 **Files:**
 - Modify: `package.json` (add workspaces)
@@ -90,9 +92,10 @@ Message: `refactor: restructure to npm workspaces monorepo`
 
 ---
 
-## Task 2: Compat Shims
+## Task 2: Compat Shims ✅ DONE
 
 **Goal:** Root-level shim files so `claude plugin add` and `.mcp.json` work unchanged.
+**Status:** Completed. Root esbuild.config.ts builds to dist/server.js. Root hooks/hooks.json shim created. 506/506 tests pass. Build OK.
 
 **Files:**
 - Create: root `esbuild.config.ts` (builds from packages/core/src/server.ts to dist/server.js)

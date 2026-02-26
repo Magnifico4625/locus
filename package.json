@@ -14,7 +14,7 @@
     "README.md"
   ],
   "scripts": {
-    "build": "npm -w @locus/core run build",
+    "build": "node esbuild.config.ts",
     "dev": "node --watch packages/core/src/server.ts",
     "test": "vitest run",
     "test:watch": "vitest",
