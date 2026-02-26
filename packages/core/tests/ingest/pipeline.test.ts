@@ -249,12 +249,14 @@ describe('processInbox', () => {
     const event1 = makeEvent({
       event_id: 'evt-00000001-0000-0000-0000-000000000000',
       timestamp: 1000000000001,
-      kind: 'user_prompt',
+      kind: 'tool_use',
+      payload: { tool: 'Read', files: ['src/a.ts'], status: 'success' },
     });
     const event2 = makeEvent({
       event_id: 'evt-00000002-0000-0000-0000-000000000000',
       timestamp: 1000000000002,
       kind: 'tool_use',
+      payload: { tool: 'Write', files: ['src/b.ts'], status: 'success' },
     });
 
     writeEventFile(inboxDir, event1);

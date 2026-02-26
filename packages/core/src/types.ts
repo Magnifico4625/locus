@@ -243,6 +243,7 @@ export interface IngestMetrics {
   processed: number;
   skipped: number;
   duplicates: number;
+  filtered: number;
   errors: number;
   durationMs: number;
   remaining: number;

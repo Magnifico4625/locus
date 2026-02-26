@@ -118,9 +118,7 @@ function migrationV2(db: DatabaseAdapter, fts5: boolean): void {
 
   if (fts5) {
     db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS conversation_fts USING fts5(
-      content,
-      content=conversation_events,
-      content_rowid=id
+      content
     )`);
   }
 

@@ -282,9 +282,11 @@ Message: `feat: ingest pipeline intake with schema validation and dedup`
 
 ---
 
-## Task 7: Ingest Filters (3-level)
+## Task 7: Ingest Filters (3-level) ✅ DONE
 
 **Goal:** CaptureLevel gate, significance classification, similarity dedup.
+**Status:** Completed. 28 tests. 612/612 total tests pass. Typecheck OK. Biome OK.
+**Note:** Similarity dedup uses LIKE queries within 5-minute window for user_prompt and file_diff. conversation_fts changed from external content table to standalone FTS5 table (content= removed) to avoid column name mismatch with conversation_events.
 
 **Files:**
 - Create: `packages/core/src/ingest/filters.ts`
@@ -308,12 +310,16 @@ Message: `feat: 3-level ingest filters for captureLevel, significance, dedup`
 
 ---
 
-## Task 8: Ingest Pipeline Store Phase
+## Task 8: Ingest Pipeline Store Phase ✅ DONE
 
 **Goal:** Redact, normalize, store in conversation_events + event_files + FTS. Delete processed files.
+**Status:** Completed. 18 tests. 612/612 total tests pass. Typecheck OK. Biome OK.
+**Note:** Pipeline now implements full 4-phase flow: Intake → Filter → Transform → Store. Added `filtered` field to IngestMetrics. Default captureLevel is 'metadata'. FTS content is built from event kind + payload text, redacted before indexing.
 
 **Files:**
 - Modify: `packages/core/src/ingest/pipeline.ts`
+- Modify: `packages/core/src/types.ts` (IngestMetrics + filtered field)
+- Modify: `packages/core/src/storage/migrations.ts` (standalone FTS5)
 - Test: `packages/core/tests/ingest/pipeline-store.test.ts`
 
 **Step 1: Write failing tests**
