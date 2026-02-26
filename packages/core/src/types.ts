@@ -314,6 +314,8 @@ export interface MemoryStatus {
   skippedFiles: number;
   totalMemories: number;
   totalEpisodes: number;
+  totalConversationEvents: number;
+  inboxPending: number;
   lastScan: number;
   scanStrategy: string;
   nodeVersion: string;

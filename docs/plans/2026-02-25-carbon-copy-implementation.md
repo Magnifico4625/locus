@@ -472,9 +472,11 @@ Message: `feat: add Stop hook with transcript parser for AI response capture`
 
 ---
 
-## Task 13: Extended memory_search
+## Task 13: Extended memory_search ✅ DONE
 
 **Goal:** Add optional timeRange, filePath, kind params. Backwards compatible.
+**Status:** Completed (commit `2156a0d`). 16 new tests (10 conversation search + 6 resolveTimeRange). 682/682 total tests pass. Typecheck OK. Biome OK.
+**Note:** FTS5 query sanitization wraps each term in double quotes to avoid hyphen/special char issues. BM25 scoring = normalized_fts + 0.2 * recency. LIKE fallback for non-FTS5 environments. SearchResult.layer extended with 'conversation'.
 
 **Files:**
 - Modify: `packages/core/src/tools/search.ts`
@@ -505,9 +507,11 @@ Message: `feat: extend memory_search with timeRange, filePath, kind filters`
 
 ---
 
-## Task 14: Enhanced locus://recent
+## Task 14: Enhanced locus://recent ✅ DONE
 
 **Goal:** Show conversation event stats with captureLevel gate.
+**Status:** Completed (commit `2156a0d`). 10 new tests. 682/682 total tests pass. Typecheck OK. Biome OK.
+**Note:** generateRecent() now accepts optional captureLevel param (default: 'metadata'). Token budget split: 600 for episodic, remainder for conversation. Prompts shown only at full/redacted. AI responses never shown. Conversation section includes event counts by kind, recent files (max 5), optional prompts (max 3).
 
 **Files:**
 - Modify: `packages/core/src/resources/recent.ts`
@@ -532,9 +536,11 @@ Message: `feat: enhance locus://recent with conversation event stats`
 
 ---
 
-## Task 15: memory_timeline Tool (Should)
+## Task 15: memory_timeline Tool (Should) ✅ DONE
 
 **Goal:** Chronological event feed with summary mode.
+**Status:** Completed. 12 tests. 699/699 total tests pass. Typecheck OK. Biome OK.
+**Note:** Reuses `resolveTimeRange` and `summarizePayload` (exported) from search.ts. Summary mode returns only kind+timestamp+significance (no payload/files). N+1 file queries acceptable at limit=20. Registered as 12th MCP tool.
 
 **Files:**
 - Create: `packages/core/src/tools/timeline.ts`
@@ -555,9 +561,11 @@ Message: `feat: add memory_timeline tool for chronological event feed`
 
 ---
 
-## Task 16: memory_status Update
+## Task 16: memory_status Update ✅ DONE
 
 **Goal:** Add inbox metrics to status.
+**Status:** Completed. 5 new tests. 699/699 total tests pass. Typecheck OK. Biome OK.
+**Note:** `inboxDir` is optional in StatusDeps for backwards compatibility. `totalConversationEvents` from conversation_events COUNT. `inboxPending` from readdirSync filtered by .json extension. Both wrapped in try/catch for graceful degradation.
 
 **Files:**
 - Modify: `packages/core/src/tools/status.ts`

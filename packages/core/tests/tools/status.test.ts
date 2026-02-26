@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -213,5 +213,67 @@ describe('handleStatus', () => {
 
     expect(status.totalFiles).toBe(3);
     expect(status.skippedFiles).toBe(1);
+  });
+
+  // ── Conversation events count ───────────────────────────────────────────
+
+  it('returns totalConversationEvents count from conversation_events table', () => {
+    const now = Date.now();
+    for (let i = 0; i < 3; i++) {
+      adapter.run(
+        `INSERT INTO conversation_events
+         (event_id, source, source_event_id, project_root, session_id,
+          timestamp, kind, payload_json, significance, tags_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          `evt-status-${i}`,
+          'test',
+          null,
+          '/test',
+          'session-1',
+          now,
+          'tool_use',
+          '{}',
+          'medium',
+          null,
+          now,
+        ],
+      );
+    }
+
+    const status = handleStatus(makeStatusDeps(adapter, tempDir));
+
+    expect(status.totalConversationEvents).toBe(3);
+  });
+
+  it('returns totalConversationEvents=0 when no events exist', () => {
+    const status = handleStatus(makeStatusDeps(adapter, tempDir));
+    expect(status.totalConversationEvents).toBe(0);
+  });
+
+  // ── Inbox pending count ───────────────────────────────────────────────────
+
+  it('returns inboxPending count of JSON files in inboxDir', () => {
+    const inboxDir = join(tempDir, 'inbox');
+    mkdirSync(inboxDir, { recursive: true });
+    writeFileSync(join(inboxDir, '001-abc.json'), '{}');
+    writeFileSync(join(inboxDir, '002-def.json'), '{}');
+    writeFileSync(join(inboxDir, '003-ghi.tmp'), '{}'); // not .json
+
+    const status = handleStatus(makeStatusDeps(adapter, tempDir, { inboxDir }));
+
+    expect(status.inboxPending).toBe(2);
+  });
+
+  it('returns inboxPending=0 when inboxDir does not exist', () => {
+    const status = handleStatus(
+      makeStatusDeps(adapter, tempDir, { inboxDir: '/nonexistent/inbox/dir' }),
+    );
+    expect(status.inboxPending).toBe(0);
+  });
+
+  it('returns inboxPending=0 when inboxDir is not provided', () => {
+    const status = handleStatus(makeStatusDeps(adapter, tempDir));
+    expect(status.inboxPending).toBe(0);
   });
 });

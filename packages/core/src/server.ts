@@ -25,6 +25,7 @@ import { handleRemember } from './tools/remember.js';
 import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
+import { handleTimeline } from './tools/timeline.js';
 import type { DatabaseAdapter, IngestMetrics, LocusConfig, ProjectRootMethod } from './types.js';
 import { LOCUS_DEFAULTS } from './types.js';
 import { projectHash } from './utils.js';
@@ -273,6 +274,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       config,
       backend,
       fts5,
+      inboxDir,
     });
     return { content: [{ type: 'text' as const, text: JSON.stringify(status) }] };
   });
@@ -333,6 +335,43 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     async (params) => {
       const result = handleCompact(db, params);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  // 12. memory_timeline
+  server.tool(
+    'memory_timeline',
+    {
+      timeRange: z
+        .object({
+          from: z.number().optional(),
+          to: z.number().optional(),
+          relative: z.enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d']).optional(),
+        })
+        .optional()
+        .describe('Filter by time range (absolute or relative)'),
+      kind: z
+        .enum([
+          'user_prompt',
+          'ai_response',
+          'tool_use',
+          'file_diff',
+          'session_start',
+          'session_end',
+        ])
+        .optional()
+        .describe('Filter by event kind'),
+      filePath: z.string().optional().describe('Filter by file path (exact match in event_files)'),
+      summary: z
+        .boolean()
+        .optional()
+        .describe('When true, returns headers only (kind + timestamp, no payload)'),
+      limit: z.number().optional().describe('Max entries (default 20)'),
+      offset: z.number().optional().describe('Skip N entries for pagination'),
+    },
+    async ({ timeRange, kind, filePath, summary, limit, offset }) => {
+      const entries = handleTimeline({ db }, { timeRange, kind, filePath, summary, limit, offset });
+      return { content: [{ type: 'text' as const, text: JSON.stringify(entries) }] };
     },
   );
 

@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs';
+import { readdirSync, statSync } from 'node:fs';
 import type {
   CaptureLevel,
   DatabaseAdapter,
@@ -16,6 +16,7 @@ export interface StatusDeps {
   config: LocusConfig;
   backend: 'node:sqlite' | 'sql.js';
   fts5: boolean;
+  inboxDir?: string;
 }
 
 interface CountRow {
@@ -65,6 +66,28 @@ export function handleStatus(deps: StatusDeps): MemoryStatus {
   );
   const scanStrategy = lastStrategyRow?.value ?? 'unknown';
 
+  // ── Conversation events ───────────────────────────────────────────────────────
+
+  let totalConversationEvents = 0;
+  try {
+    const ceRow = db.get<CountRow>('SELECT COUNT(*) AS cnt FROM conversation_events');
+    totalConversationEvents = ceRow?.cnt ?? 0;
+  } catch {
+    totalConversationEvents = 0;
+  }
+
+  // ── Inbox pending ─────────────────────────────────────────────────────────────
+
+  let inboxPending = 0;
+  if (deps.inboxDir) {
+    try {
+      const entries = readdirSync(deps.inboxDir);
+      inboxPending = entries.filter((f) => f.endsWith('.json')).length;
+    } catch {
+      inboxPending = 0;
+    }
+  }
+
   // ── DB file size ─────────────────────────────────────────────────────────────
 
   let dbSizeBytes = 0;
@@ -85,6 +108,8 @@ export function handleStatus(deps: StatusDeps): MemoryStatus {
     skippedFiles,
     totalMemories,
     totalEpisodes,
+    totalConversationEvents,
+    inboxPending,
     lastScan,
     scanStrategy,
     nodeVersion: process.version,

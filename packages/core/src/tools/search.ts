@@ -89,7 +89,7 @@ function sanitizeFtsQuery(query: string): string {
 /**
  * Extracts a human-readable summary from the conversation event payload.
  */
-function summarizePayload(kind: string, payloadJson: string | null): string {
+export function summarizePayload(kind: string, payloadJson: string | null): string {
   if (!payloadJson) return kind;
   try {
     const payload = JSON.parse(payloadJson) as Record<string, unknown>;
