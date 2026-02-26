@@ -145,6 +145,124 @@ export interface HookCaptureFull extends HookCaptureRedacted {
 
 export type HookCapture = HookCaptureMetadata | HookCaptureRedacted | HookCaptureFull;
 
+// ─── Conversation Events (v3 Carbon Copy) ───
+
+export type EventKind =
+  | 'user_prompt'
+  | 'ai_response'
+  | 'tool_use'
+  | 'file_diff'
+  | 'session_start'
+  | 'session_end';
+
+export type EventSignificance = 'high' | 'medium' | 'low';
+
+// ─── Event Payloads ───
+
+export interface UserPromptPayload {
+  prompt: string;
+}
+
+export interface AiResponsePayload {
+  response: string;
+  model?: string;
+}
+
+export interface ToolUsePayload {
+  tool: string;
+  files: string[];
+  status: string;
+  exitCode?: number;
+  diffStats?: { added: number; removed: number };
+}
+
+export interface FileDiffPayload {
+  path: string;
+  added: number;
+  removed: number;
+  diff?: string;
+}
+
+export interface SessionStartPayload {
+  tool: string;
+  model?: string;
+}
+
+export interface SessionEndPayload {
+  summary?: string;
+}
+
+// ─── Inbox Event (JSON file protocol) ───
+
+export interface InboxEvent {
+  version: number;
+  event_id: string;
+  source: string;
+  source_event_id?: string;
+  project_root: string;
+  session_id?: string;
+  timestamp: number;
+  kind: EventKind;
+  payload: Record<string, unknown>;
+}
+
+// ─── Conversation Event DB Rows ───
+
+export interface ConversationEventRow {
+  id: number;
+  event_id: string;
+  source: string;
+  source_event_id: string | null;
+  project_root: string;
+  session_id: string | null;
+  timestamp: number;
+  kind: string;
+  payload_json: string | null;
+  significance: string | null;
+  tags_json: string | null;
+  created_at: number;
+}
+
+export interface EventFileRow {
+  id: number;
+  event_id: string;
+  file_path: string;
+}
+
+export interface IngestLogRow {
+  id: number;
+  event_id: string;
+  source: string;
+  source_event_id: string | null;
+  processed_at: number;
+}
+
+// ─── Ingest Pipeline ───
+
+export interface IngestMetrics {
+  processed: number;
+  skipped: number;
+  duplicates: number;
+  errors: number;
+  durationMs: number;
+  remaining: number;
+}
+
+// ─── Time Range (extended search) ───
+
+export type TimeRangeRelative =
+  | 'today'
+  | 'yesterday'
+  | 'this_week'
+  | 'last_7d'
+  | 'last_30d';
+
+export interface TimeRange {
+  from?: number;
+  to?: number;
+  relative?: TimeRangeRelative;
+}
+
 // ─── Configuration ───
 
 export type CaptureLevel = 'metadata' | 'redacted' | 'full';
