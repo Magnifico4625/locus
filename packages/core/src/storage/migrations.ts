@@ -73,10 +73,83 @@ function migrationV1(db: DatabaseAdapter, fts5: boolean): void {
   db.run('INSERT INTO schema_version (version) VALUES (?)', [1]);
 }
 
+function migrationV2(db: DatabaseAdapter, fts5: boolean): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS conversation_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    source_event_id TEXT,
+    project_root TEXT NOT NULL,
+    session_id TEXT,
+    timestamp INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    payload_json TEXT,
+    significance TEXT,
+    tags_json TEXT,
+    created_at INTEGER NOT NULL
+  )`);
+
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_ce_event_id ON conversation_events(event_id)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_ce_timestamp ON conversation_events(timestamp)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_ce_kind ON conversation_events(kind)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_ce_session ON conversation_events(session_id)',
+  );
+
+  db.exec(`CREATE TABLE IF NOT EXISTS event_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    FOREIGN KEY (event_id) REFERENCES conversation_events(event_id)
+  )`);
+
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_ef_file_path ON event_files(file_path)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_ef_event_id ON event_files(event_id)',
+  );
+
+  if (fts5) {
+    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS conversation_fts USING fts5(
+      content,
+      content=conversation_events,
+      content_rowid=id
+    )`);
+  }
+
+  db.exec(`CREATE TABLE IF NOT EXISTS ingest_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    source_event_id TEXT,
+    processed_at INTEGER NOT NULL
+  )`);
+
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_il_event_id ON ingest_log(event_id)',
+  );
+  db.exec(
+    'CREATE UNIQUE INDEX IF NOT EXISTS idx_il_source ON ingest_log(source, source_event_id)',
+  );
+
+  db.run('UPDATE schema_version SET version = ?', [2]);
+}
+
 export function runMigrations(db: DatabaseAdapter, fts5: boolean): void {
   const currentVersion = getCurrentVersion(db);
 
   if (currentVersion < 1) {
     migrationV1(db, fts5);
+  }
+
+  if (currentVersion < 2) {
+    migrationV2(db, fts5);
   }
 }

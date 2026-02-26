@@ -135,12 +135,21 @@ Message: `feat: add compat shims for monorepo migration`
 
 ---
 
-## Task 3: Conversation Event Types
+## Task 3: Conversation Event Types ✅ DONE
 
 **Goal:** Define TypeScript types for event protocol, inbox events, and new DB rows.
+**Status:** Completed (commit `15be273`). Typecheck OK. 506/506 tests pass.
 
 **Files:**
 - Modify: `packages/core/src/types.ts`
+
+**Types added:**
+- `EventKind` (6 event kinds), `EventSignificance` (3 levels)
+- Payload interfaces: `UserPromptPayload`, `AiResponsePayload`, `ToolUsePayload`, `FileDiffPayload`, `SessionStartPayload`, `SessionEndPayload`
+- `InboxEvent` (JSON file protocol schema)
+- DB rows: `ConversationEventRow`, `EventFileRow`, `IngestLogRow`
+- `IngestMetrics` (pipeline output with remaining count)
+- `TimeRange` + `TimeRangeRelative` (for extended search)
 
 **Step 1: Add types**
 
@@ -157,9 +166,10 @@ Message: `feat: add conversation event types for Carbon Copy protocol`
 
 ---
 
-## Task 4: Database Migration v2
+## Task 4: Database Migration v2 ✅ DONE
 
 **Goal:** Add conversation_events, event_files, conversation_fts, and ingest_log tables.
+**Status:** Completed. 520/520 tests pass. Schema version updated to 2. All 4 tables + indexes created. FTS5 conditional. Idempotent. v1 data preserved.
 
 **Files:**
 - Modify: `packages/core/src/storage/migrations.ts`
