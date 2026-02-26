@@ -190,9 +190,7 @@ describe('migrationV2', () => {
   it('conversation_events has expected columns', async () => {
     const { runMigrations } = await import('../../src/storage/migrations.js');
     runMigrations(adapter, false);
-    const columns = adapter.all<{ name: string }>(
-      "PRAGMA table_info('conversation_events')",
-    );
+    const columns = adapter.all<{ name: string }>("PRAGMA table_info('conversation_events')");
     const colNames = columns.map((c) => c.name);
     expect(colNames).toContain('id');
     expect(colNames).toContain('event_id');
@@ -211,9 +209,7 @@ describe('migrationV2', () => {
   it('event_files has expected columns', async () => {
     const { runMigrations } = await import('../../src/storage/migrations.js');
     runMigrations(adapter, false);
-    const columns = adapter.all<{ name: string }>(
-      "PRAGMA table_info('event_files')",
-    );
+    const columns = adapter.all<{ name: string }>("PRAGMA table_info('event_files')");
     const colNames = columns.map((c) => c.name);
     expect(colNames).toContain('id');
     expect(colNames).toContain('event_id');
@@ -223,9 +219,7 @@ describe('migrationV2', () => {
   it('ingest_log has expected columns', async () => {
     const { runMigrations } = await import('../../src/storage/migrations.js');
     runMigrations(adapter, false);
-    const columns = adapter.all<{ name: string }>(
-      "PRAGMA table_info('ingest_log')",
-    );
+    const columns = adapter.all<{ name: string }>("PRAGMA table_info('ingest_log')");
     const colNames = columns.map((c) => c.name);
     expect(colNames).toContain('id');
     expect(colNames).toContain('event_id');
@@ -281,15 +275,17 @@ describe('migrationV2', () => {
     runMigrations(adapter, false);
 
     const now = Date.now();
-    adapter.run(
-      'INSERT INTO ingest_log (event_id, source, processed_at) VALUES (?, ?, ?)',
-      ['evt-1', 'claude-code', now],
-    );
+    adapter.run('INSERT INTO ingest_log (event_id, source, processed_at) VALUES (?, ?, ?)', [
+      'evt-1',
+      'claude-code',
+      now,
+    ]);
     expect(() =>
-      adapter.run(
-        'INSERT INTO ingest_log (event_id, source, processed_at) VALUES (?, ?, ?)',
-        ['evt-1', 'claude-code', now],
-      ),
+      adapter.run('INSERT INTO ingest_log (event_id, source, processed_at) VALUES (?, ?, ?)', [
+        'evt-1',
+        'claude-code',
+        now,
+      ]),
     ).toThrow();
 
     const rows = adapter.all<{ event_id: string }>(
@@ -325,15 +321,11 @@ describe('migrationV2', () => {
 
     // V2 migration already ran (fresh DB runs both v1+v2)
     // Verify v1 data survived
-    const memories = adapter.all<{ content: string }>(
-      'SELECT content FROM memories',
-    );
+    const memories = adapter.all<{ content: string }>('SELECT content FROM memories');
     expect(memories).toHaveLength(1);
     expect(memories[0]?.content).toBe('test memory');
 
-    const files = adapter.all<{ relative_path: string }>(
-      'SELECT relative_path FROM files',
-    );
+    const files = adapter.all<{ relative_path: string }>('SELECT relative_path FROM files');
     expect(files).toHaveLength(1);
     expect(files[0]?.relative_path).toBe('src/index.ts');
   });

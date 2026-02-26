@@ -138,9 +138,7 @@ describe('tailer state management', () => {
   });
 
   it('saveTailerState persists and loadTailerState reads back', async () => {
-    const { loadTailerState, saveTailerState } = await import(
-      '../../../claude-code/hooks/stop.js'
-    );
+    const { loadTailerState, saveTailerState } = await import('../../../claude-code/hooks/stop.js');
     const stateDir = join(tmpdir(), `locus-test-tailer-rw-${Date.now()}`);
     cleanupDirs.push(stateDir);
     mkdirSync(stateDir, { recursive: true });
@@ -162,9 +160,7 @@ describe('tailer state management', () => {
   });
 
   it('saveTailerState preserves other sessions', async () => {
-    const { loadTailerState, saveTailerState } = await import(
-      '../../../claude-code/hooks/stop.js'
-    );
+    const { loadTailerState, saveTailerState } = await import('../../../claude-code/hooks/stop.js');
     const stateDir = join(tmpdir(), `locus-test-tailer-multi-${Date.now()}`);
     cleanupDirs.push(stateDir);
     mkdirSync(stateDir, { recursive: true });
@@ -184,7 +180,10 @@ describe('stop hook', () => {
   let testDir: string;
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `locus-test-stop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    testDir = join(
+      tmpdir(),
+      `locus-test-stop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
     mkdirSync(testDir, { recursive: true });
     cleanupDirs.push(testDir);
   });
@@ -213,7 +212,7 @@ describe('stop hook', () => {
       const explicitCwd = process.cwd();
       const projectRoot = resolveProjectRoot(explicitCwd);
       const inboxDir = computeInboxDir(projectRoot);
-      const locusDir = computeLocusDir(projectRoot);
+      const _locusDir = computeLocusDir(projectRoot);
       cleanupDirs.push(inboxDir);
 
       // Use unique session_id to avoid stale tailer-state from previous runs
@@ -225,10 +224,13 @@ describe('stop hook', () => {
         JSON.stringify({ type: 'human', message: { content: 'Hello' } }),
         JSON.stringify({
           type: 'assistant',
-          message: { content: [{ type: 'text', text: 'Hello! How can I help?' }], model: 'claude-opus-4-6' },
+          message: {
+            content: [{ type: 'text', text: 'Hello! How can I help?' }],
+            model: 'claude-opus-4-6',
+          },
         }),
       ];
-      writeFileSync(transcriptPath, lines.join('\n') + '\n', 'utf-8');
+      writeFileSync(transcriptPath, `${lines.join('\n')}\n`, 'utf-8');
 
       await stop({
         session_id: uniqueSessionId,
@@ -272,10 +274,10 @@ describe('stop hook', () => {
       const transcriptPath = join(testDir, 'transcript-skip.jsonl');
       writeFileSync(
         transcriptPath,
-        JSON.stringify({
+        `${JSON.stringify({
           type: 'assistant',
           message: { content: 'Should not be captured' },
-        }) + '\n',
+        })}\n`,
         'utf-8',
       );
 
@@ -353,9 +355,7 @@ describe('stop hook', () => {
   });
 
   it('uses session cursor to read only new lines', async () => {
-    const { default: stop, loadTailerState } = await import(
-      '../../../claude-code/hooks/stop.js'
-    );
+    const { default: stop, loadTailerState } = await import('../../../claude-code/hooks/stop.js');
     const { computeInboxDir, computeLocusDir, resolveProjectRoot } = await import(
       '../../../claude-code/hooks/shared.js'
     );
@@ -377,10 +377,10 @@ describe('stop hook', () => {
 
       // Create a transcript with an initial assistant message
       const transcriptPath = join(testDir, 'transcript-cursor.jsonl');
-      const line1 = JSON.stringify({
+      const line1 = `${JSON.stringify({
         type: 'assistant',
         message: { content: 'First response' },
-      }) + '\n';
+      })}\n`;
       writeFileSync(transcriptPath, line1, 'utf-8');
 
       // First call processes line1
@@ -395,10 +395,10 @@ describe('stop hook', () => {
       expect(offset).toBeGreaterThan(0);
 
       // Now append a second line
-      const line2 = JSON.stringify({
+      const line2 = `${JSON.stringify({
         type: 'assistant',
         message: { content: 'Second response' },
-      }) + '\n';
+      })}\n`;
       writeFileSync(transcriptPath, line1 + line2, 'utf-8');
 
       // Count files before second call
@@ -484,7 +484,7 @@ describe('stop hook', () => {
         JSON.stringify({ type: 'human', message: { content: 'Hello' } }),
         JSON.stringify({ type: 'tool_use', message: { content: 'tool call' } }),
       ];
-      writeFileSync(transcriptPath, lines.join('\n') + '\n', 'utf-8');
+      writeFileSync(transcriptPath, `${lines.join('\n')}\n`, 'utf-8');
 
       const cwd = process.env.PWD ?? process.cwd();
       const projectRoot = resolveProjectRoot(cwd);

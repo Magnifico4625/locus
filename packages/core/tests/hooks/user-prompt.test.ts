@@ -1,7 +1,7 @@
-import { mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 // ─── shared.js exports ──────────────────────────────────────────────────────
 
@@ -68,7 +68,10 @@ describe('userPromptSubmit hook', () => {
   let testInboxDir: string;
 
   beforeEach(() => {
-    testInboxDir = join(tmpdir(), `locus-test-prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+    testInboxDir = join(
+      tmpdir(),
+      `locus-test-prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
     cleanupDirs.push(testInboxDir);
   });
 
