@@ -586,9 +586,11 @@ Message: `feat: add conversation event metrics to memory_status`
 
 ---
 
-## Task 17: Integration Tests
+## Task 17: Integration Tests ✅ DONE
 
 **Goal:** End-to-end Carbon Copy flow test.
+**Status:** Completed. 22 tests covering full flow (inbox → ingest → search/timeline/status/recent), captureLevel gates, dedup, and secret redaction. 721/721 total tests pass. Typecheck OK. Biome OK.
+**Note:** FTS5 hyphen trap prevents searching raw secret strings through SemanticMemory.search(); test verifies absence via direct DB query instead.
 
 **Files:**
 - Create: `packages/core/tests/integration/carbon-copy.test.ts`
@@ -608,9 +610,10 @@ Message: `test: add Carbon Copy end-to-end integration tests`
 
 ---
 
-## Task 18: Version Bump and README
+## Task 18: Version Bump and README ✅ DONE
 
 **Goal:** Update to v3.0.0, document new features.
+**Status:** Completed. Version bumped to 3.0.0 in root package.json and plugin.json (@locus/core already at 3.0.0). README updated with Carbon Copy docs, 12 tools, capture levels table, extended search params, updated architecture diagram, 721 test count.
 
 **Files:**
 - Modify: `package.json`, `packages/core/package.json`, `.claude-plugin/plugin.json`

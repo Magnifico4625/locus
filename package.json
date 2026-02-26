@@ -1,6 +1,6 @@
 {
   "name": "locus-memory",
-  "version": "0.2.0",
+  "version": "3.0.0",
   "description": "Persistent memory plugin for Claude Code. Knows your project, remembers your decisions, costs almost nothing.",
   "type": "module",
   "private": true,
