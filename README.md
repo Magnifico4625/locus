@@ -226,6 +226,57 @@ Locus uses a 4-layer security model:
 - **FTS5**: full-text search across all layers, auto-detected at startup
 - **Monorepo**: `@locus/core` (memory engine + MCP server) + `@locus/claude-code` (hooks)
 
+## FAQ
+
+### What works without hooks (Cursor, Windsurf, Cline, Zed)?
+
+The MCP server is fully functional without hooks. Here's what you get:
+
+**Works out of the box:**
+
+| Tool | What it does |
+|------|-------------|
+| `memory_scan` | Scans your project, builds a structural map of files, exports, and imports |
+| `memory_explore` | Navigate the project structure interactively |
+| `memory_search` | Full-text search across project structure and saved decisions |
+| `memory_remember` | Store architecture decisions ("why Redis not Memcached?") |
+| `memory_forget` | Delete stored decisions |
+| `memory_doctor` | 10-point health check of the environment |
+| `memory_status` | Runtime stats, DB info, configuration |
+| `memory_config` | Show current settings and their sources |
+| `memory_audit` | Data inventory and security review |
+| `memory_purge` | Wipe all project memory (two-step safety) |
+
+These 10 tools cover the structural and semantic memory layers — your AI assistant will remember your project structure and decisions between sessions without any hooks.
+
+**Requires hooks (Claude Code only in v3.0):**
+
+| Tool | What it needs |
+|------|--------------|
+| `memory_timeline` | Conversation events captured by hooks |
+| `memory_search` with `timeRange`, `filePath`, `kind` filters | Conversation event data |
+| `memory://recent` resource (conversation stats section) | Activity data from hooks |
+
+The conversation layer (Carbon Copy) passively records what files you touched, what tools were used, and optionally what you asked — but this requires hooks to write events into the inbox. Without hooks, these features return empty results.
+
+**Bottom line:** ~75% of tools work fully without hooks. The core value — "AI remembers your project between sessions" — works everywhere. Passive conversation history is the part that needs hooks, and IDE adapter support is coming in v3.2.
+
+### How is Locus different from CLAUDE.md?
+
+They complement each other. `CLAUDE.md` is for static rules — coding conventions, architecture constraints, things that rarely change. Locus is for dynamic knowledge — current project state, evolving decisions, session history. Put "always use single quotes" in `CLAUDE.md`. Use `memory_remember` for "we chose JWT over sessions because the API is stateless".
+
+### Does Locus send my code anywhere?
+
+No. Locus runs entirely locally. Your data is stored in `~/.claude/memory/locus-{hash}/` on your machine. No network requests, no telemetry, no cloud storage. The MCP server communicates only with the AI client via stdio.
+
+### What about secrets and sensitive files?
+
+Locus has 4 layers of protection: (1) metadata-only storage by default — no file content stored, (2) file denylist — `.env`, `*.key`, credentials are never indexed, (3) automatic secret redaction — API keys and passwords are stripped before storage, (4) `memory_audit` tool to review what's stored. See the [Security](#security) section for details.
+
+### When will Cursor / Windsurf get full hook support?
+
+Version 3.2 will include `@locus/log-tailer` — an adapter that reads IDE log files and writes events to the same inbox that the Claude Code hooks use. The ingest pipeline is already built and ready; only the event source adapter is needed. See the [Roadmap](#roadmap) below.
+
 ## Roadmap
 
 | Version | Status | Highlights |
