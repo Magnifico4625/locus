@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/locus-memory)](https://www.npmjs.com/package/locus-memory)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-721%20passed-brightgreen)](https://github.com/Magnifico4625/locus)
+[![Tests](https://img.shields.io/badge/tests-789%20passed-brightgreen)](https://github.com/Magnifico4625/locus)
 
 ## What is Locus?
 
@@ -61,7 +61,9 @@ Use `memory_scan` to index your project structure on first run, then `memory_sea
 By default, Locus captures tool use metadata (files read/written, tools used). To enable full conversation capture including prompts and AI responses:
 
 ```bash
-export LOCUS_CAPTURE_LEVEL=full    # or 'redacted' for auto-redacted content
+export LOCUS_CAPTURE_LEVEL=full      # prompts + AI responses (secrets redacted)
+# or
+export LOCUS_CAPTURE_LEVEL=redacted  # prompts as keywords only, no AI responses
 ```
 
 ## Tools Reference
@@ -115,13 +117,13 @@ Three resources are auto-injected at the start of every Claude Code session. The
 
 **Capture Levels:**
 
-| Level | Tool Use | File Diffs | User Prompts | AI Responses |
-|-------|----------|------------|-------------|-------------|
-| `metadata` | Captured | Captured | Filtered | Filtered |
-| `redacted` | Captured | Captured | Captured (secrets redacted) | Captured (secrets redacted) |
-| `full` | Captured | Captured | Captured (secrets redacted) | Captured (secrets redacted) |
+| Level | Tool Use | User Prompts | AI Responses | File Diffs |
+|-------|----------|-------------|-------------|------------|
+| `metadata` (default) | stats only | Filtered | Filtered | stats only |
+| `redacted` | + error kind, command name | keywords only (RAKE) | Filtered | stats only |
+| `full` | + full command (redacted) | full text (redacted) | full text (redacted) | full diff (redacted) |
 
-> **Note:** Secrets are always redacted before storage regardless of capture level. The difference between `redacted` and `full` is reserved for future fine-grained control.
+> **Note:** Secrets are always redacted before storage regardless of capture level. At `redacted` level, user prompts are processed through RAKE keyword extraction — only statistically significant phrases are stored, not the full text. AI responses are never captured below `full` level. Defense-in-depth: hooks apply the captureLevel gate *before* writing to disk, and the ingest pipeline enforces it again as a second defense layer.
 
 **Default Configuration:**
 
@@ -142,7 +144,7 @@ minScanInterval:      10 sec       # Minimum interval between any scans
 Locus uses a 4-layer security model:
 
 1. **Metadata-only** — by default, only file paths, exports, and imports are stored. No raw file content is written to disk.
-2. **File denylist** — `.env`, `*.key`, `credentials.*`, and other sensitive patterns are never indexed.
+2. **File denylist** — `.env`, `*.key`, `credentials.*`, and other sensitive patterns are never indexed — enforced in both the structural scanner and the conversation ingest pipeline.
 3. **Content redaction** — passwords, API keys, and tokens are automatically stripped from any content before storage. Redaction is applied twice: once in hooks before writing to disk, and again in the ingest pipeline before database storage.
 4. **Audit UX** — the `memory_audit` tool shows exactly what is stored for the current project and flags any security concerns.
 
@@ -188,7 +190,7 @@ git clone https://github.com/Magnifico4625/locus.git
 cd locus
 npm install
 
-npm test            # 721 tests (vitest)
+npm test            # 789 tests (vitest)
 npm run typecheck   # TypeScript strict mode
 npm run lint        # Biome linter
 npm run build       # Bundle -> dist/server.js (~1.1 MB)
