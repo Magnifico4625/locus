@@ -27,9 +27,11 @@
 
 ---
 
-## Task 1: Monorepo Scaffold
+## Task 1: Monorepo Scaffold ✅ DONE
 
 **Goal:** Restructure flat repo into npm workspaces monorepo without breaking anything.
+**Status:** Completed (commit `2b9c798`). 506/506 tests pass. Build OK. Typecheck OK.
+**Note:** Used root `vitest.config.ts` instead of `vitest.workspace.ts` due to vitest v4 workspace mode not propagating `testTimeout` from child configs.
 
 **Files:**
 - Modify: `package.json` (add workspaces)
@@ -90,9 +92,10 @@ Message: `refactor: restructure to npm workspaces monorepo`
 
 ---
 
-## Task 2: Compat Shims
+## Task 2: Compat Shims ✅ DONE
 
 **Goal:** Root-level shim files so `claude plugin add` and `.mcp.json` work unchanged.
+**Status:** Completed. Root esbuild.config.ts builds to dist/server.js. Root hooks/hooks.json shim created. 506/506 tests pass. Build OK.
 
 **Files:**
 - Create: root `esbuild.config.ts` (builds from packages/core/src/server.ts to dist/server.js)
@@ -132,12 +135,21 @@ Message: `feat: add compat shims for monorepo migration`
 
 ---
 
-## Task 3: Conversation Event Types
+## Task 3: Conversation Event Types ✅ DONE
 
 **Goal:** Define TypeScript types for event protocol, inbox events, and new DB rows.
+**Status:** Completed (commit `15be273`). Typecheck OK. 506/506 tests pass.
 
 **Files:**
 - Modify: `packages/core/src/types.ts`
+
+**Types added:**
+- `EventKind` (6 event kinds), `EventSignificance` (3 levels)
+- Payload interfaces: `UserPromptPayload`, `AiResponsePayload`, `ToolUsePayload`, `FileDiffPayload`, `SessionStartPayload`, `SessionEndPayload`
+- `InboxEvent` (JSON file protocol schema)
+- DB rows: `ConversationEventRow`, `EventFileRow`, `IngestLogRow`
+- `IngestMetrics` (pipeline output with remaining count)
+- `TimeRange` + `TimeRangeRelative` (for extended search)
 
 **Step 1: Add types**
 
@@ -154,9 +166,10 @@ Message: `feat: add conversation event types for Carbon Copy protocol`
 
 ---
 
-## Task 4: Database Migration v2
+## Task 4: Database Migration v2 ✅ DONE
 
 **Goal:** Add conversation_events, event_files, conversation_fts, and ingest_log tables.
+**Status:** Completed. 520/520 tests pass. Schema version updated to 2. All 4 tables + indexes created. FTS5 conditional. Idempotent. v1 data preserved.
 
 **Files:**
 - Modify: `packages/core/src/storage/migrations.ts`
@@ -194,9 +207,10 @@ Message: `feat: add DB migration v2 for conversation events tables`
 
 ---
 
-## Task 5: Inbox Writer Utility
+## Task 5: Inbox Writer Utility ✅ DONE
 
 **Goal:** Shared utility for atomically writing events to the project inbox (`~/.claude/memory/locus-<hash>/inbox/`).
+**Status:** Completed (commit `265a6e9`). 5 tests. 525/525 total tests pass. Typecheck OK. Biome OK.
 
 **Files:**
 - Create: `packages/core/src/ingest/inbox-writer.ts`
@@ -222,9 +236,11 @@ Message: `feat: add atomic inbox writer utility for event protocol`
 
 ---
 
-## Task 6: Ingest Pipeline Core (Schema + Dedup + Intake)
+## Task 6: Ingest Pipeline Core (Schema + Dedup + Intake) ✅ DONE
 
 **Goal:** Pipeline that reads inbox, validates schema, dedup checks, respects batch limits.
+**Status:** Completed. 41 new tests (19 schema + 8 dedup + 14 pipeline). 566/566 total tests pass. Typecheck OK. Biome OK.
+**Note:** Zod v4 requires `z.record(z.string(), z.unknown())` instead of `z.record(z.unknown())` — single-arg record is broken in v4.
 
 **Files:**
 - Create: `packages/core/src/ingest/schema.ts`
@@ -266,9 +282,11 @@ Message: `feat: ingest pipeline intake with schema validation and dedup`
 
 ---
 
-## Task 7: Ingest Filters (3-level)
+## Task 7: Ingest Filters (3-level) ✅ DONE
 
 **Goal:** CaptureLevel gate, significance classification, similarity dedup.
+**Status:** Completed. 28 tests. 612/612 total tests pass. Typecheck OK. Biome OK.
+**Note:** Similarity dedup uses LIKE queries within 5-minute window for user_prompt and file_diff. conversation_fts changed from external content table to standalone FTS5 table (content= removed) to avoid column name mismatch with conversation_events.
 
 **Files:**
 - Create: `packages/core/src/ingest/filters.ts`
@@ -292,12 +310,16 @@ Message: `feat: 3-level ingest filters for captureLevel, significance, dedup`
 
 ---
 
-## Task 8: Ingest Pipeline Store Phase
+## Task 8: Ingest Pipeline Store Phase ✅ DONE
 
 **Goal:** Redact, normalize, store in conversation_events + event_files + FTS. Delete processed files.
+**Status:** Completed. 18 tests. 612/612 total tests pass. Typecheck OK. Biome OK.
+**Note:** Pipeline now implements full 4-phase flow: Intake → Filter → Transform → Store. Added `filtered` field to IngestMetrics. Default captureLevel is 'metadata'. FTS content is built from event kind + payload text, redacted before indexing.
 
 **Files:**
 - Modify: `packages/core/src/ingest/pipeline.ts`
+- Modify: `packages/core/src/types.ts` (IngestMetrics + filtered field)
+- Modify: `packages/core/src/storage/migrations.ts` (standalone FTS5)
 - Test: `packages/core/tests/ingest/pipeline-store.test.ts`
 
 **Step 1: Write failing tests**
@@ -320,9 +342,11 @@ Message: `feat: ingest pipeline store phase with redaction and FTS indexing`
 
 ---
 
-## Task 9: Ingest Processing Policy
+## Task 9: Ingest Processing Policy ✅ DONE
 
 **Goal:** Wire inbox processing into MCP server (startup + before search + debounce).
+**Status:** Completed. 3 new tests. 622/622 total tests pass. Typecheck OK. Biome OK.
+**Note:** inboxDir derived from dirname(dbPath) + '/inbox'. Startup processes all events (batchLimit: 0). Pre-search processes max 50 with 30s debounce. lastIngestMetrics stored internally (prefixed _ until consumed by memory_status in later task).
 
 **Files:**
 - Modify: `packages/core/src/server.ts`
@@ -352,9 +376,11 @@ Message: `feat: integrate ingest pipeline into MCP server lifecycle`
 
 ---
 
-## Task 10: PostToolUse Hook Refactor
+## Task 10: PostToolUse Hook Refactor ✅ DONE
 
 **Goal:** Refactor existing hook: inbox JSON files instead of direct SQLite.
+**Status:** Completed. 7 new tests (4 computeInboxDir + 2 inbox writing + 1 invalid captureLevel). 622/622 total tests pass. Typecheck OK. Biome OK.
+**Note:** Removed ~120 lines of SQLite code (openDb, computeDbPath, node:sqlite/sql.js fallback). Hook now writes InboxEvent JSON files atomically. All extractCapture/extractFilePaths/classifyError/extractDiffStats functions preserved unchanged. Added computeInboxDir export for testability.
 
 **Files:**
 - Modify: `packages/claude-code/hooks/post-tool-use.js`
@@ -380,13 +406,17 @@ Message: `refactor: PostToolUse hook writes to inbox instead of direct SQLite`
 
 ---
 
-## Task 11: UserPromptSubmit Hook
+## Task 11: UserPromptSubmit Hook ✅ DONE
 
 **Goal:** New hook capturing user prompts to inbox.
+**Status:** Completed. 13 tests (4 shared helpers + 9 hook tests). 656/656 total tests pass. Typecheck OK. Biome OK.
+**Note:** Extracted shared helpers (resolveProjectRoot, computeProjectHash, computeInboxDir, computeLocusDir, writeAtomicInboxEvent, generateEventId) from post-tool-use.js into shared.js. post-tool-use.js re-exports computeInboxDir for backward compatibility. CaptureLevel gate: metadata = skip (prompts only at redacted/full).
 
 **Files:**
+- Create: `packages/claude-code/hooks/shared.js`
 - Create: `packages/claude-code/hooks/user-prompt.js`
 - Create: `packages/core/tests/hooks/user-prompt.test.ts`
+- Modify: `packages/claude-code/hooks/post-tool-use.js` (import from shared.js)
 - Modify: `hooks/hooks.json` and `packages/claude-code/hooks/hooks.json`
 
 **Step 1: Write failing tests**
@@ -409,9 +439,11 @@ Message: `feat: add UserPromptSubmit hook for Carbon Copy prompt capture`
 
 ---
 
-## Task 12: Stop Hook (Transcript Parser)
+## Task 12: Stop Hook (Transcript Parser) ✅ DONE
 
 **Goal:** New hook parsing transcript JSONL for AI response capture.
+**Status:** Completed. 21 tests (8 parseTranscriptLines + 4 tailer state + 9 hook tests). 656/656 total tests pass. Typecheck OK. Biome OK.
+**Note:** Uses tailer-state.json for byte offset tracking per session. Parses JSONL to extract assistant messages (supports both string and array content formats). Unique session IDs per test run to avoid stale state interference. Accepts optional `cwd` in event for testability.
 
 **Files:**
 - Create: `packages/claude-code/hooks/stop.js`
@@ -440,9 +472,11 @@ Message: `feat: add Stop hook with transcript parser for AI response capture`
 
 ---
 
-## Task 13: Extended memory_search
+## Task 13: Extended memory_search ✅ DONE
 
 **Goal:** Add optional timeRange, filePath, kind params. Backwards compatible.
+**Status:** Completed (commit `2156a0d`). 16 new tests (10 conversation search + 6 resolveTimeRange). 682/682 total tests pass. Typecheck OK. Biome OK.
+**Note:** FTS5 query sanitization wraps each term in double quotes to avoid hyphen/special char issues. BM25 scoring = normalized_fts + 0.2 * recency. LIKE fallback for non-FTS5 environments. SearchResult.layer extended with 'conversation'.
 
 **Files:**
 - Modify: `packages/core/src/tools/search.ts`
@@ -473,9 +507,11 @@ Message: `feat: extend memory_search with timeRange, filePath, kind filters`
 
 ---
 
-## Task 14: Enhanced locus://recent
+## Task 14: Enhanced locus://recent ✅ DONE
 
 **Goal:** Show conversation event stats with captureLevel gate.
+**Status:** Completed (commit `2156a0d`). 10 new tests. 682/682 total tests pass. Typecheck OK. Biome OK.
+**Note:** generateRecent() now accepts optional captureLevel param (default: 'metadata'). Token budget split: 600 for episodic, remainder for conversation. Prompts shown only at full/redacted. AI responses never shown. Conversation section includes event counts by kind, recent files (max 5), optional prompts (max 3).
 
 **Files:**
 - Modify: `packages/core/src/resources/recent.ts`
@@ -500,9 +536,11 @@ Message: `feat: enhance locus://recent with conversation event stats`
 
 ---
 
-## Task 15: memory_timeline Tool (Should)
+## Task 15: memory_timeline Tool (Should) ✅ DONE
 
 **Goal:** Chronological event feed with summary mode.
+**Status:** Completed. 12 tests. 699/699 total tests pass. Typecheck OK. Biome OK.
+**Note:** Reuses `resolveTimeRange` and `summarizePayload` (exported) from search.ts. Summary mode returns only kind+timestamp+significance (no payload/files). N+1 file queries acceptable at limit=20. Registered as 12th MCP tool.
 
 **Files:**
 - Create: `packages/core/src/tools/timeline.ts`
@@ -523,9 +561,11 @@ Message: `feat: add memory_timeline tool for chronological event feed`
 
 ---
 
-## Task 16: memory_status Update
+## Task 16: memory_status Update ✅ DONE
 
 **Goal:** Add inbox metrics to status.
+**Status:** Completed. 5 new tests. 699/699 total tests pass. Typecheck OK. Biome OK.
+**Note:** `inboxDir` is optional in StatusDeps for backwards compatibility. `totalConversationEvents` from conversation_events COUNT. `inboxPending` from readdirSync filtered by .json extension. Both wrapped in try/catch for graceful degradation.
 
 **Files:**
 - Modify: `packages/core/src/tools/status.ts`
@@ -546,9 +586,11 @@ Message: `feat: add conversation event metrics to memory_status`
 
 ---
 
-## Task 17: Integration Tests
+## Task 17: Integration Tests ✅ DONE
 
 **Goal:** End-to-end Carbon Copy flow test.
+**Status:** Completed. 22 tests covering full flow (inbox → ingest → search/timeline/status/recent), captureLevel gates, dedup, and secret redaction. 721/721 total tests pass. Typecheck OK. Biome OK.
+**Note:** FTS5 hyphen trap prevents searching raw secret strings through SemanticMemory.search(); test verifies absence via direct DB query instead.
 
 **Files:**
 - Create: `packages/core/tests/integration/carbon-copy.test.ts`
@@ -568,9 +610,10 @@ Message: `test: add Carbon Copy end-to-end integration tests`
 
 ---
 
-## Task 18: Version Bump and README
+## Task 18: Version Bump and README ✅ DONE
 
 **Goal:** Update to v3.0.0, document new features.
+**Status:** Completed. Version bumped to 3.0.0 in root package.json and plugin.json (@locus/core already at 3.0.0). README updated with Carbon Copy docs, 12 tools, capture levels table, extended search params, updated architecture diagram, 721 test count.
 
 **Files:**
 - Modify: `package.json`, `packages/core/package.json`, `.claude-plugin/plugin.json`

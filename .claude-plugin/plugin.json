@@ -1,6 +1,6 @@
 {
   "name": "locus",
-  "version": "0.2.0",
+  "version": "3.0.0",
   "description": "Persistent project-aware memory for Claude Code. Structural map, decisions, session history — zero native deps.",
   "author": {
     "name": "Magnifico4625",
