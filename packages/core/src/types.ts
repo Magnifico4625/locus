@@ -346,7 +346,13 @@ export interface PurgeResponsePending {
   status: 'pending_confirmation';
   confirmToken: string;
   message: string;
-  stats: { files: number; memories: number; episodes: number; dbSizeBytes: number };
+  stats: {
+    files: number;
+    memories: number;
+    episodes: number;
+    conversationEvents: number;
+    dbSizeBytes: number;
+  };
 }
 
 export interface PurgeResponseDone {

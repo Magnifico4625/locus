@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -60,6 +60,45 @@ function seedData(adapter: NodeSqliteAdapter): void {
      VALUES ('Write', '[]', 'success', ?, 50)`,
     [Date.now()],
   );
+}
+
+function seedV3Data(adapter: NodeSqliteAdapter): void {
+  // 3 conversation events
+  for (let i = 0; i < 3; i++) {
+    adapter.run(
+      `INSERT INTO conversation_events
+       (event_id, source, project_root, timestamp, kind, payload_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        `conv-event-${i}`,
+        'claude-code',
+        '/my/project',
+        Date.now() - i * 1000,
+        'tool_use',
+        JSON.stringify({ tool: 'Bash', files: [], status: 'success' }),
+        Date.now(),
+      ],
+    );
+  }
+
+  // 2 event_files
+  adapter.run('INSERT INTO event_files (event_id, file_path) VALUES (?, ?)', [
+    'conv-event-0',
+    'src/app.ts',
+  ]);
+  adapter.run('INSERT INTO event_files (event_id, file_path) VALUES (?, ?)', [
+    'conv-event-1',
+    'src/lib.ts',
+  ]);
+
+  // 2 ingest_log entries
+  for (let i = 0; i < 2; i++) {
+    adapter.run('INSERT INTO ingest_log (event_id, source, processed_at) VALUES (?, ?, ?)', [
+      `conv-event-${i}`,
+      'claude-code',
+      Date.now(),
+    ]);
+  }
 }
 
 describe('handlePurge', () => {
@@ -226,5 +265,101 @@ describe('handlePurge', () => {
       expect(result.message).toContain('preserved');
       expect(result.message).toContain(dbPath);
     }
+  });
+
+  // ── Test 10: purge cleans conversation_events table ───────────────────────
+
+  it('purge cleans conversation_events table', () => {
+    seedData(adapter);
+    seedV3Data(adapter);
+
+    const pending = handlePurge(deps);
+    expect(pending.status).toBe('pending_confirmation');
+    if (pending.status !== 'pending_confirmation') return;
+
+    handlePurge(deps, pending.confirmToken);
+
+    interface CntRow {
+      cnt: number;
+    }
+    const count = adapter.get<CntRow>('SELECT COUNT(*) AS cnt FROM conversation_events')?.cnt ?? -1;
+    expect(count).toBe(0);
+  });
+
+  // ── Test 11: purge cleans event_files table ───────────────────────────────
+
+  it('purge cleans event_files table', () => {
+    seedData(adapter);
+    seedV3Data(adapter);
+
+    const pending = handlePurge(deps);
+    if (pending.status !== 'pending_confirmation') return;
+    handlePurge(deps, pending.confirmToken);
+
+    interface CntRow {
+      cnt: number;
+    }
+    const count = adapter.get<CntRow>('SELECT COUNT(*) AS cnt FROM event_files')?.cnt ?? -1;
+    expect(count).toBe(0);
+  });
+
+  // ── Test 12: purge cleans ingest_log table ────────────────────────────────
+
+  it('purge cleans ingest_log table', () => {
+    seedData(adapter);
+    seedV3Data(adapter);
+
+    const pending = handlePurge(deps);
+    if (pending.status !== 'pending_confirmation') return;
+    handlePurge(deps, pending.confirmToken);
+
+    interface CntRow {
+      cnt: number;
+    }
+    const count = adapter.get<CntRow>('SELECT COUNT(*) AS cnt FROM ingest_log')?.cnt ?? -1;
+    expect(count).toBe(0);
+  });
+
+  // ── Test 13: stats include conversationEvents count ───────────────────────
+
+  it('stats include conversationEvents count', () => {
+    seedData(adapter);
+    seedV3Data(adapter);
+
+    const result = handlePurge(deps);
+    expect(result.status).toBe('pending_confirmation');
+    if (result.status !== 'pending_confirmation') return;
+
+    expect(result.stats.conversationEvents).toBe(3);
+  });
+
+  // ── Test 14: purge cleans inbox JSON files ────────────────────────────────
+
+  it('purge cleans inbox JSON files', () => {
+    const inboxDir = join(tempDir, 'inbox');
+    mkdirSync(inboxDir, { recursive: true });
+    writeFileSync(join(inboxDir, '1234-test.json'), '{}', 'utf-8');
+    writeFileSync(join(inboxDir, '5678-test.json'), '{}', 'utf-8');
+
+    const localDeps: PurgeDeps = { ...deps, inboxDir };
+
+    const pending = handlePurge(localDeps);
+    if (pending.status !== 'pending_confirmation') return;
+    handlePurge(localDeps, pending.confirmToken);
+
+    const remaining = readdirSync(inboxDir).filter((f) => f.endsWith('.json'));
+    expect(remaining).toHaveLength(0);
+  });
+
+  // ── Test 15: purge works without inboxDir (backward compat) ───────────────
+
+  it('purge works without inboxDir (backward compat)', () => {
+    seedData(adapter);
+
+    const pending = handlePurge(deps);
+    if (pending.status !== 'pending_confirmation') return;
+
+    const result = handlePurge(deps, pending.confirmToken);
+    expect(result.status).toBe('purged');
   });
 });

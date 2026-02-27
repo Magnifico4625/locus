@@ -1,4 +1,5 @@
-import { statSync } from 'node:fs';
+import { readdirSync, statSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
 import type { DatabaseAdapter, PurgeResponse } from '../types.js';
 import type { ConfirmationTokenStore } from './confirmation-token.js';
 
@@ -7,6 +8,7 @@ export interface PurgeDeps {
   dbPath: string;
   projectPath: string;
   tokenStore: ConfirmationTokenStore;
+  inboxDir?: string;
 }
 
 interface CountRow {
@@ -55,20 +57,24 @@ export function handlePurge(deps: PurgeDeps, confirmToken?: string): PurgeRespon
     );
     const episodes = episodeRow?.cnt ?? 0;
 
+    const convRow = deps.db.get<CountRow>('SELECT COUNT(*) AS cnt FROM conversation_events');
+    const conversationEvents = convRow?.cnt ?? 0;
+
     const dbSizeBytes = getDbSizeBytes(deps.dbPath);
 
     const token = deps.tokenStore.generate();
 
     const message =
       `This will delete ALL memory for ${deps.projectPath}. ` +
-      `${files} files, ${memories} decisions, ${episodes} episodes. ` +
+      `${files} files, ${memories} decisions, ${episodes} episodes, ` +
+      `${conversationEvents} conversation events. ` +
       `This cannot be undone.`;
 
     return {
       status: 'pending_confirmation',
       confirmToken: token,
       message,
-      stats: { files, memories, episodes, dbSizeBytes },
+      stats: { files, memories, episodes, conversationEvents, dbSizeBytes },
     };
   }
 
@@ -82,6 +88,32 @@ export function handlePurge(deps: PurgeDeps, confirmToken?: string): PurgeRespon
   deps.db.run('DELETE FROM memories');
   deps.db.run('DELETE FROM hook_captures');
   deps.db.run('DELETE FROM scan_state');
+
+  // v3 Carbon Copy tables — child tables first to satisfy FK constraints
+  deps.db.run('DELETE FROM event_files');
+  deps.db.run('DELETE FROM ingest_log');
+  deps.db.run('DELETE FROM conversation_events');
+  try {
+    deps.db.run('DELETE FROM conversation_fts');
+  } catch {
+    // conversation_fts may not exist if FTS5 is not available
+  }
+
+  // Clean inbox directory
+  if (deps.inboxDir) {
+    try {
+      const inboxFiles = readdirSync(deps.inboxDir).filter((f) => f.endsWith('.json'));
+      for (const f of inboxFiles) {
+        try {
+          unlinkSync(join(deps.inboxDir, f));
+        } catch {
+          // best effort
+        }
+      }
+    } catch {
+      // Inbox dir may not exist
+    }
+  }
 
   return {
     status: 'purged',

@@ -310,7 +310,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   // 9. memory_purge
   server.tool('memory_purge', { confirmToken: z.string().optional() }, async ({ confirmToken }) => {
     const result = handlePurge(
-      { db, dbPath, projectPath: cwd, tokenStore: purgeTokenStore },
+      { db, dbPath, projectPath: cwd, tokenStore: purgeTokenStore, inboxDir },
       confirmToken,
     );
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
