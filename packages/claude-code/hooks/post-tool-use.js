@@ -3,6 +3,7 @@
 // The MCP server's ingest pipeline processes these into conversation_events.
 // See ARCHITECTURE.md Contract 1 for field specifications.
 
+import { redact } from './redact.js';
 import {
   computeInboxDir,
   generateEventId,
@@ -172,7 +173,7 @@ export function extractCapture(event, captureLevel) {
   // ── full level ──────────────────────────────────────────────────────────────
   if (toolName === 'Bash') {
     const cmd = typeof toolInput.command === 'string' ? toolInput.command : '';
-    capture.bash_command = cmd;
+    capture.bash_command = redact(cmd);
   }
 
   return capture;

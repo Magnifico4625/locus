@@ -3,6 +3,7 @@
 // Only writes at captureLevel=redacted or captureLevel=full (never at metadata).
 // Contract: NEVER crash. All errors are silently swallowed.
 
+import { redact } from './redact.js';
 import {
   computeInboxDir,
   generateEventId,
@@ -41,7 +42,7 @@ export default async function userPromptSubmit(event) {
     const projectRoot = resolveProjectRoot(cwd);
     const inboxDir = computeInboxDir(projectRoot);
 
-    // Build InboxEvent
+    // Build InboxEvent — redact secrets before writing to disk
     const eventId = generateEventId();
     const inboxEvent = {
       version: 1,
@@ -51,7 +52,7 @@ export default async function userPromptSubmit(event) {
       timestamp: Date.now(),
       kind: 'user_prompt',
       payload: {
-        prompt,
+        prompt: redact(prompt),
       },
     };
 

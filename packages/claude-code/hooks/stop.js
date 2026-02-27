@@ -7,6 +7,7 @@
 import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { redact } from './redact.js';
 import {
   computeInboxDir,
   computeLocusDir,
@@ -209,7 +210,7 @@ export default async function stop(event) {
     const newLines = newContent.split('\n').filter((l) => l.trim().length > 0);
     const assistantMessages = parseTranscriptLines(newLines);
 
-    // Write each assistant message as an ai_response event
+    // Write each assistant message as an ai_response event — redact secrets
     for (const msg of assistantMessages) {
       const eventId = generateEventId();
       const inboxEvent = {
@@ -220,7 +221,7 @@ export default async function stop(event) {
         timestamp: Date.now(),
         kind: 'ai_response',
         payload: {
-          response: msg.text,
+          response: redact(msg.text),
         },
       };
 
