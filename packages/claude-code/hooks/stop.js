@@ -156,8 +156,9 @@ export default async function stop(event) {
       return undefined;
     }
 
-    // CaptureLevel gate: AI responses are NOT captured at metadata level
-    if (captureLevel === 'metadata') {
+    // CaptureLevel gate: AI responses are NOT captured at metadata or redacted level
+    // Design doc: redacted level = "NO" for ai_response
+    if (captureLevel === 'metadata' || captureLevel === 'redacted') {
       return undefined;
     }
 

@@ -3,6 +3,7 @@
 // Only writes at captureLevel=redacted or captureLevel=full (never at metadata).
 // Contract: NEVER crash. All errors are silently swallowed.
 
+import { extractKeywords } from './keywords.js';
 import { redact } from './redact.js';
 import {
   computeInboxDir,
@@ -47,6 +48,15 @@ export default async function userPromptSubmit(event) {
     const sessionId = typeof event?.session_id === 'string' ? event.session_id : '';
     const eventId = generateEventId();
     const ts = Date.now();
+
+    // Build payload based on captureLevel:
+    // - redacted: keywords only (RAKE extraction) + redacted marker
+    // - full: redacted full text
+    const payload =
+      captureLevel === 'redacted'
+        ? { prompt: extractKeywords(redact(prompt)), redacted: true }
+        : { prompt: redact(prompt) };
+
     const inboxEvent = {
       version: 1,
       event_id: eventId,
@@ -55,9 +65,7 @@ export default async function userPromptSubmit(event) {
       project_root: projectRoot,
       timestamp: ts,
       kind: 'user_prompt',
-      payload: {
-        prompt: redact(prompt),
-      },
+      payload,
     };
 
     // Add session_id if available

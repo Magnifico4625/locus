@@ -319,6 +319,65 @@ describe('stop hook', () => {
     }
   });
 
+  it('does NOT write ai_response at captureLevel=redacted', async () => {
+    const { default: stop } = await import('../../../claude-code/hooks/stop.js');
+    const { computeInboxDir, resolveProjectRoot } = await import(
+      '../../../claude-code/hooks/shared.js'
+    );
+
+    const original = process.env.LOCUS_CAPTURE_LEVEL;
+    try {
+      process.env.LOCUS_CAPTURE_LEVEL = 'redacted';
+
+      const transcriptPath = join(testDir, 'transcript-redacted.jsonl');
+      writeFileSync(
+        transcriptPath,
+        `${JSON.stringify({
+          type: 'assistant',
+          message: { content: 'This response should not be captured at redacted level' },
+        })}\n`,
+        'utf-8',
+      );
+
+      const cwd = process.env.PWD ?? process.cwd();
+      const projectRoot = resolveProjectRoot(cwd);
+      const inboxDir = computeInboxDir(projectRoot);
+      cleanupDirs.push(inboxDir);
+
+      let filesBefore: string[] = [];
+      try {
+        filesBefore = readdirSync(inboxDir).filter((f: string) => f.endsWith('.json'));
+      } catch {
+        // inbox may not exist
+      }
+
+      await stop({
+        session_id: 'stop-redacted-session',
+        transcript_path: transcriptPath,
+      });
+
+      let filesAfter: string[] = [];
+      try {
+        filesAfter = readdirSync(inboxDir).filter((f: string) => f.endsWith('.json'));
+      } catch {
+        // inbox may not exist
+      }
+
+      // No new ai_response files should have been created
+      const newFiles = filesAfter.filter((f: string) => !filesBefore.includes(f));
+      for (const file of newFiles) {
+        const content = JSON.parse(readFileSync(join(inboxDir, file), 'utf-8'));
+        expect(content.kind).not.toBe('ai_response');
+      }
+    } finally {
+      if (original === undefined) {
+        delete process.env.LOCUS_CAPTURE_LEVEL;
+      } else {
+        process.env.LOCUS_CAPTURE_LEVEL = original;
+      }
+    }
+  });
+
   it('handles missing transcript_path gracefully', async () => {
     const { default: stop } = await import('../../../claude-code/hooks/stop.js');
     const original = process.env.LOCUS_CAPTURE_LEVEL;

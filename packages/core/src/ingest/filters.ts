@@ -8,11 +8,18 @@ import type { CaptureLevel, DatabaseAdapter, EventSignificance, InboxEvent } fro
  * ai_response) are blocked — they should never reach the inbox at
  * metadata level, but this catches hook malfunctions.
  *
- * At `redacted` and `full` levels, all event kinds pass through.
+ * At `redacted` level, ai_response is blocked (second defense —
+ * the stop hook should already skip at redacted, but this catches
+ * hook malfunctions). user_prompt is allowed (contains keywords only).
+ *
+ * At `full` level, all event kinds pass through.
  */
 export function captureLevelGate(event: InboxEvent, captureLevel: CaptureLevel): boolean {
   if (captureLevel === 'metadata') {
     return event.kind !== 'user_prompt' && event.kind !== 'ai_response';
+  }
+  if (captureLevel === 'redacted') {
+    return event.kind !== 'ai_response';
   }
   return true;
 }

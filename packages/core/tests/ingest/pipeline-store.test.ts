@@ -331,7 +331,11 @@ describe('processInbox — store phase', () => {
     const { processInbox } = await import('../../src/ingest/pipeline.js');
     const event = makeEvent({
       event_id: 'denylist-001-0000-0000-000000000000',
-      payload: { tool: 'Bash', files: ['.env', 'src/app.ts', 'secrets/key.pem'], status: 'success' },
+      payload: {
+        tool: 'Bash',
+        files: ['.env', 'src/app.ts', 'secrets/key.pem'],
+        status: 'success',
+      },
     });
     writeEventFile(inboxDir, event);
 
@@ -530,7 +534,7 @@ describe('processInbox — FTS5 store', () => {
 
     // .env must not appear in FTS index
     const ftsRow = adapter.get<{ content: string }>(
-      "SELECT content FROM conversation_fts WHERE conversation_fts MATCH '\"env\"'",
+      'SELECT content FROM conversation_fts WHERE conversation_fts MATCH \'"env"\'',
     );
     expect(ftsRow).toBeUndefined();
   });

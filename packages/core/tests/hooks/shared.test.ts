@@ -109,9 +109,18 @@ describe('resolveProjectRoot — project markers', () => {
   it('recognizes all 12 project markers without crashing', async () => {
     const { resolveProjectRoot } = await import('../../../claude-code/hooks/shared.js');
     const markers = [
-      'package.json', 'pyproject.toml', 'Cargo.toml', 'go.mod',
-      'pom.xml', 'build.gradle', 'build.gradle.kts', 'test.sln',
-      'composer.json', 'Gemfile', 'deno.json', 'bun.lockb',
+      'package.json',
+      'pyproject.toml',
+      'Cargo.toml',
+      'go.mod',
+      'pom.xml',
+      'build.gradle',
+      'build.gradle.kts',
+      'test.sln',
+      'composer.json',
+      'Gemfile',
+      'deno.json',
+      'bun.lockb',
     ];
     for (const marker of markers) {
       const dir = join(tmpdir(), `locus-test-marker-${marker.replace(/[.*]/g, '_')}-${Date.now()}`);

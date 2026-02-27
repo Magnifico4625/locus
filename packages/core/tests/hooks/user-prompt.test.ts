@@ -187,7 +187,7 @@ describe('userPromptSubmit hook', () => {
     }
   });
 
-  it('writes at captureLevel=redacted', async () => {
+  it('writes keywords at captureLevel=redacted', async () => {
     const { default: userPromptSubmit } = await import('../../../claude-code/hooks/user-prompt.js');
     const { computeInboxDir, resolveProjectRoot } = await import(
       '../../../claude-code/hooks/shared.js'
@@ -198,7 +198,7 @@ describe('userPromptSubmit hook', () => {
       process.env.LOCUS_CAPTURE_LEVEL = 'redacted';
 
       const event = {
-        prompt: 'Refactor the database layer',
+        prompt: 'Refactor the database layer in the authentication module',
         session_id: 'test-session-redacted',
       };
       await userPromptSubmit(event);
@@ -213,7 +213,60 @@ describe('userPromptSubmit hook', () => {
       for (const file of files) {
         const content = JSON.parse(readFileSync(join(inboxDir, file), 'utf-8'));
         if (content.kind === 'user_prompt' && content.session_id === 'test-session-redacted') {
-          expect(content.payload.prompt).toBe('Refactor the database layer');
+          // At redacted level: keywords extracted via RAKE, not full text
+          expect(content.payload.prompt).not.toBe(
+            'Refactor the database layer in the authentication module',
+          );
+          expect(content.payload.prompt).toContain('database layer');
+          expect(content.payload.prompt).toContain('authentication module');
+          // redacted marker should be set
+          expect(content.payload.redacted).toBe(true);
+          foundPromptEvent = true;
+          break;
+        }
+      }
+      expect(foundPromptEvent).toBe(true);
+    } finally {
+      if (original === undefined) {
+        delete process.env.LOCUS_CAPTURE_LEVEL;
+      } else {
+        process.env.LOCUS_CAPTURE_LEVEL = original;
+      }
+    }
+  });
+
+  it('writes full redacted text at captureLevel=full (no redacted marker)', async () => {
+    const { default: userPromptSubmit } = await import('../../../claude-code/hooks/user-prompt.js');
+    const { computeInboxDir, resolveProjectRoot } = await import(
+      '../../../claude-code/hooks/shared.js'
+    );
+
+    const original = process.env.LOCUS_CAPTURE_LEVEL;
+    try {
+      process.env.LOCUS_CAPTURE_LEVEL = 'full';
+
+      const event = {
+        prompt: 'Check the login handler module',
+        session_id: 'test-session-full-no-redacted',
+      };
+      await userPromptSubmit(event);
+
+      const cwd = process.env.PWD ?? process.cwd();
+      const projectRoot = resolveProjectRoot(cwd);
+      const inboxDir = computeInboxDir(projectRoot);
+      cleanupDirs.push(inboxDir);
+
+      const files = readdirSync(inboxDir).filter((f: string) => f.endsWith('.json'));
+      let foundPromptEvent = false;
+      for (const file of files) {
+        const content = JSON.parse(readFileSync(join(inboxDir, file), 'utf-8'));
+        if (
+          content.kind === 'user_prompt' &&
+          content.session_id === 'test-session-full-no-redacted'
+        ) {
+          // At full level: full redacted text, no redacted marker
+          expect(content.payload.prompt).toBe('Check the login handler module');
+          expect(content.payload.redacted).toBeUndefined();
           foundPromptEvent = true;
           break;
         }

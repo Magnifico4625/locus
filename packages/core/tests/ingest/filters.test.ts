@@ -79,9 +79,30 @@ describe('captureLevelGate', () => {
     expect(captureLevelGate(event, 'full')).toBe(true);
   });
 
-  it('allows user_prompt at redacted level', async () => {
+  it('allows user_prompt at redacted level (keywords already extracted)', async () => {
     const { captureLevelGate } = await import('../../src/ingest/filters.js');
     const event = makeEvent({ kind: 'user_prompt', payload: { prompt: 'hello' } });
+    expect(captureLevelGate(event, 'redacted')).toBe(true);
+  });
+
+  it('drops ai_response at redacted level (second defense)', async () => {
+    const { captureLevelGate } = await import('../../src/ingest/filters.js');
+    const event = makeEvent({ kind: 'ai_response', payload: { response: 'sure thing' } });
+    expect(captureLevelGate(event, 'redacted')).toBe(false);
+  });
+
+  it('allows tool_use at redacted level', async () => {
+    const { captureLevelGate } = await import('../../src/ingest/filters.js');
+    const event = makeEvent({ kind: 'tool_use' });
+    expect(captureLevelGate(event, 'redacted')).toBe(true);
+  });
+
+  it('allows file_diff at redacted level', async () => {
+    const { captureLevelGate } = await import('../../src/ingest/filters.js');
+    const event = makeEvent({
+      kind: 'file_diff',
+      payload: { path: 'src/a.ts', added: 5, removed: 2 },
+    });
     expect(captureLevelGate(event, 'redacted')).toBe(true);
   });
 
