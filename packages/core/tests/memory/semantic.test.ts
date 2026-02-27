@@ -110,6 +110,32 @@ describe('SemanticMemory (FTS5 enabled)', () => {
     expect(results).toHaveLength(3);
   });
 
+  it('search handles dots in query without FTS5 syntax error', () => {
+    mem.add('Upgrade to version v3.0.1 of the library', ['version']);
+    const results = mem.search('v3.0.1');
+    expect(results).toHaveLength(1);
+    expect(results[0]?.content).toContain('v3.0.1');
+  });
+
+  it('search handles hyphens in query without FTS5 syntax error', () => {
+    mem.add('Use sk-abc-123 as the API key prefix', ['security']);
+    const results = mem.search('sk-abc-123');
+    expect(results).toHaveLength(1);
+    expect(results[0]?.content).toContain('sk-abc');
+  });
+
+  it('search handles mixed special chars (dots, hyphens, asterisks)', () => {
+    mem.add('File pattern: src/**/*.test.ts', ['patterns']);
+    const results = mem.search('*.test.ts');
+    expect(results).toHaveLength(1);
+  });
+
+  it('search returns empty array for empty query', () => {
+    mem.add('Some content', []);
+    const results = mem.search('   ');
+    expect(results).toEqual([]);
+  });
+
   it('search only returns semantic layer entries (FTS5)', () => {
     mem.add('Zod semantic decision', ['zod']);
     // Insert an episodic row directly to verify it's excluded

@@ -1,4 +1,5 @@
 import type { DatabaseAdapter, MemoryEntry } from '../types.js';
+import { sanitizeFtsQuery } from '../utils.js';
 
 interface MemoryRow {
   id: number;
@@ -63,9 +64,11 @@ export class SemanticMemory {
 
   search(query: string, limit = 20): MemoryEntry[] {
     if (this.fts5) {
+      const sanitized = sanitizeFtsQuery(query);
+      if (!sanitized) return [];
       const rows = this.db.all<MemoryRow>(
         "SELECT * FROM memories WHERE layer='semantic' AND id IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?) ORDER BY updated_at DESC LIMIT ?",
-        [query, limit],
+        [sanitized, limit],
       );
       return rows.map(rowToEntry);
     }

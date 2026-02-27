@@ -1,5 +1,6 @@
 import type { SemanticMemory } from '../memory/semantic.js';
 import type { DatabaseAdapter, EventKind, ExportEntry, SearchResult, TimeRange } from '../types.js';
+import { sanitizeFtsQuery } from '../utils.js';
 
 // ─── Public interfaces ────────────────────────────────────────────────────────
 
@@ -76,15 +77,7 @@ function parseExports(json: string | null): ExportEntry[] {
   }
 }
 
-/**
- * Sanitizes a user query for FTS5 MATCH syntax.
- * Wraps each word in double quotes to treat special chars as literals.
- */
-function sanitizeFtsQuery(query: string): string {
-  const terms = query.trim().split(/\s+/).filter(Boolean);
-  if (terms.length === 0) return '';
-  return terms.map((t) => `"${t.replace(/"/g, '')}"`).join(' ');
-}
+// sanitizeFtsQuery imported from ../utils.js
 
 /**
  * Extracts a human-readable summary from the conversation event payload.
