@@ -469,6 +469,130 @@ describe('stop hook', () => {
     }
   });
 
+  it('handles Cyrillic (2-byte UTF-8) correctly with byte offset', async () => {
+    const { default: stop, loadTailerState } = await import('../../../claude-code/hooks/stop.js');
+    const { computeInboxDir, computeLocusDir, resolveProjectRoot } = await import(
+      '../../../claude-code/hooks/shared.js'
+    );
+
+    const original = process.env.LOCUS_CAPTURE_LEVEL;
+    try {
+      process.env.LOCUS_CAPTURE_LEVEL = 'full';
+
+      const explicitCwd = process.cwd();
+      const projectRoot = resolveProjectRoot(explicitCwd);
+      const inboxDir = computeInboxDir(projectRoot);
+      const locusDir = computeLocusDir(projectRoot);
+      cleanupDirs.push(inboxDir);
+      cleanupDirs.push(locusDir);
+
+      const uniqueSessionId = `cyrillic-${Date.now()}`;
+      const transcriptPath = join(testDir, 'transcript-cyrillic.jsonl');
+
+      // "Привет мир" is 10 chars but 19 bytes in UTF-8 (Cyrillic = 2 bytes per char)
+      const line1 = `${JSON.stringify({
+        type: 'assistant',
+        message: { content: 'Привет мир — первый ответ' },
+      })}\n`;
+      writeFileSync(transcriptPath, line1, 'utf-8');
+
+      // First call
+      await stop({
+        session_id: uniqueSessionId,
+        transcript_path: transcriptPath,
+        cwd: explicitCwd,
+      });
+
+      // Verify offset is saved as byte count, not char count
+      const offset = loadTailerState(locusDir, uniqueSessionId);
+      const byteLength = Buffer.byteLength(line1, 'utf-8');
+      expect(offset).toBe(byteLength);
+
+      // Append a second Cyrillic line
+      const line2 = `${JSON.stringify({
+        type: 'assistant',
+        message: { content: 'Второй ответ с кириллицей' },
+      })}\n`;
+      writeFileSync(transcriptPath, line1 + line2, 'utf-8');
+
+      // Count files before second call
+      const filesBefore = readdirSync(inboxDir).filter((f: string) => f.endsWith('.json'));
+
+      // Second call should correctly read only line2
+      await stop({
+        session_id: uniqueSessionId,
+        transcript_path: transcriptPath,
+        cwd: explicitCwd,
+      });
+
+      const filesAfter = readdirSync(inboxDir).filter((f: string) => f.endsWith('.json'));
+      const newFiles = filesAfter.filter((f: string) => !filesBefore.includes(f));
+
+      // Find the new ai_response event
+      const aiResponseFiles = [];
+      for (const file of newFiles) {
+        const content = JSON.parse(readFileSync(join(inboxDir, file), 'utf-8'));
+        if (content.kind === 'ai_response' && content.session_id === uniqueSessionId) {
+          aiResponseFiles.push(content);
+        }
+      }
+      expect(aiResponseFiles).toHaveLength(1);
+      expect(aiResponseFiles[0].payload.response).toContain('Второй ответ');
+    } finally {
+      if (original === undefined) {
+        delete process.env.LOCUS_CAPTURE_LEVEL;
+      } else {
+        process.env.LOCUS_CAPTURE_LEVEL = original;
+      }
+    }
+  });
+
+  it('handles emoji (4-byte UTF-8) correctly with byte offset', async () => {
+    const { default: stop, loadTailerState } = await import('../../../claude-code/hooks/stop.js');
+    const { computeLocusDir, resolveProjectRoot } = await import(
+      '../../../claude-code/hooks/shared.js'
+    );
+
+    const original = process.env.LOCUS_CAPTURE_LEVEL;
+    try {
+      process.env.LOCUS_CAPTURE_LEVEL = 'full';
+
+      const explicitCwd = process.cwd();
+      const locusDir = computeLocusDir(resolveProjectRoot(explicitCwd));
+      cleanupDirs.push(locusDir);
+
+      const uniqueSessionId = `emoji-${Date.now()}`;
+      const transcriptPath = join(testDir, 'transcript-emoji.jsonl');
+
+      // Emoji are 4 bytes each in UTF-8
+      const line1 = `${JSON.stringify({
+        type: 'assistant',
+        message: { content: 'Hello 🎉🚀 World' },
+      })}\n`;
+      writeFileSync(transcriptPath, line1, 'utf-8');
+
+      await stop({
+        session_id: uniqueSessionId,
+        transcript_path: transcriptPath,
+        cwd: explicitCwd,
+      });
+
+      // Verify offset = byte length (not string length)
+      const offset = loadTailerState(locusDir, uniqueSessionId);
+      const byteLength = Buffer.byteLength(line1, 'utf-8');
+      expect(offset).toBe(byteLength);
+
+      // String length would be different from byte length due to emoji
+      expect(byteLength).toBeGreaterThan(line1.length);
+    } finally {
+      if (original === undefined) {
+        delete process.env.LOCUS_CAPTURE_LEVEL;
+      } else {
+        process.env.LOCUS_CAPTURE_LEVEL = original;
+      }
+    }
+  });
+
   it('handles transcript with only non-assistant messages', async () => {
     const { default: stop } = await import('../../../claude-code/hooks/stop.js');
     const { computeInboxDir, resolveProjectRoot } = await import(

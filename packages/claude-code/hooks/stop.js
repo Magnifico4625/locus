@@ -192,17 +192,17 @@ export default async function stop(event) {
       return undefined;
     }
 
-    // Read new content from offset
-    // We read the entire file and skip to offset since Node.js fs doesn't have
-    // a simple "read from byte offset" for text files. For transcript files
-    // (typically <1MB), this is efficient enough.
-    const fullContent = readFileSync(transcriptPath, 'utf-8');
-    const newContent = fullContent.slice(lastOffset);
+    // Read new content from byte offset (Buffer-based for multi-byte UTF-8 safety)
+    // Using Buffer ensures byte offset from statSync().size matches the slice position.
+    // Without this, Cyrillic (2 bytes) or emoji (4 bytes) cause offset drift.
+    const buffer = readFileSync(transcriptPath);
+    const newBytes = buffer.subarray(lastOffset);
+    const newContent = newBytes.toString('utf-8');
 
     if (newContent.trim().length === 0) {
       // Update offset even if no content (file might have trailing whitespace)
       if (sessionId.length > 0) {
-        saveTailerState(locusDir, sessionId, fileSize);
+        saveTailerState(locusDir, sessionId, buffer.length);
       }
       return undefined;
     }
@@ -238,9 +238,9 @@ export default async function stop(event) {
       writeAtomicInboxEvent(inboxDir, inboxEvent);
     }
 
-    // Update cursor
+    // Update cursor — use buffer.length (bytes) for consistency with byte-based reads
     if (sessionId.length > 0) {
-      saveTailerState(locusDir, sessionId, fileSize);
+      saveTailerState(locusDir, sessionId, buffer.length);
     }
   } catch {
     // NEVER crash — silently swallow all errors
