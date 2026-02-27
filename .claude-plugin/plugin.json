@@ -1,7 +1,7 @@
 {
   "name": "locus",
   "version": "3.0.0",
-  "description": "Persistent project-aware memory for Claude Code. Structural map, decisions, session history — zero native deps.",
+  "description": "Persistent project-aware memory for AI coding tools. Built on MCP. Structural map, decisions, session history — zero native deps.",
   "author": {
     "name": "Magnifico4625",
     "email": "vozol81@mail.ru"
