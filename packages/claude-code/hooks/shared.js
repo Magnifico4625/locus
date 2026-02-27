@@ -154,3 +154,15 @@ export function writeAtomicInboxEvent(inboxDir, inboxEvent) {
 export function generateEventId() {
   return randomUUID();
 }
+
+// ─── Deterministic source event ID ──────────────────────────────────────────
+
+/**
+ * Computes a deterministic source_event_id from stable event data.
+ * Used for idempotent ingestion — the ingest_log unique index catches duplicates.
+ * @param {...string} parts — stable values identifying the event
+ * @returns {string} first 16 hex chars of SHA-256
+ */
+export function computeSourceEventId(...parts) {
+  return createHash('sha256').update(parts.join(':')).digest('hex').slice(0, 16);
+}

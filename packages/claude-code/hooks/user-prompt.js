@@ -6,6 +6,7 @@
 import { redact } from './redact.js';
 import {
   computeInboxDir,
+  computeSourceEventId,
   generateEventId,
   resolveProjectRoot,
   writeAtomicInboxEvent,
@@ -43,13 +44,16 @@ export default async function userPromptSubmit(event) {
     const inboxDir = computeInboxDir(projectRoot);
 
     // Build InboxEvent — redact secrets before writing to disk
+    const sessionId = typeof event?.session_id === 'string' ? event.session_id : '';
     const eventId = generateEventId();
+    const ts = Date.now();
     const inboxEvent = {
       version: 1,
       event_id: eventId,
       source: 'claude-code',
+      source_event_id: computeSourceEventId(sessionId, String(ts), prompt.slice(0, 200)),
       project_root: projectRoot,
-      timestamp: Date.now(),
+      timestamp: ts,
       kind: 'user_prompt',
       payload: {
         prompt: redact(prompt),
@@ -57,8 +61,8 @@ export default async function userPromptSubmit(event) {
     };
 
     // Add session_id if available
-    if (typeof event?.session_id === 'string' && event.session_id.length > 0) {
-      inboxEvent.session_id = event.session_id;
+    if (sessionId.length > 0) {
+      inboxEvent.session_id = sessionId;
     }
 
     // Atomic write to inbox

@@ -11,6 +11,7 @@ import { redact } from './redact.js';
 import {
   computeInboxDir,
   computeLocusDir,
+  computeSourceEventId,
   generateEventId,
   resolveProjectRoot,
   writeAtomicInboxEvent,
@@ -217,6 +218,7 @@ export default async function stop(event) {
         version: 1,
         event_id: eventId,
         source: 'claude-code',
+        source_event_id: computeSourceEventId(sessionId, transcriptPath, String(lastOffset)),
         project_root: projectRoot,
         timestamp: Date.now(),
         kind: 'ai_response',

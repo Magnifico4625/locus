@@ -156,3 +156,40 @@ describe('computeProjectHash', () => {
     expect(hashForward).toBe(hashBackward);
   });
 });
+
+// ─── computeSourceEventId ────────────────────────────────────────────────────
+
+describe('computeSourceEventId', () => {
+  it('returns 16 hex chars', async () => {
+    const { computeSourceEventId } = await import('../../../claude-code/hooks/shared.js');
+    const id = computeSourceEventId('session-1', '1708876543210', 'hello');
+    expect(id).toMatch(/^[a-f0-9]{16}$/);
+  });
+
+  it('is deterministic — same inputs produce same output', async () => {
+    const { computeSourceEventId } = await import('../../../claude-code/hooks/shared.js');
+    const id1 = computeSourceEventId('session-1', '1708876543210', 'hello world');
+    const id2 = computeSourceEventId('session-1', '1708876543210', 'hello world');
+    expect(id1).toBe(id2);
+  });
+
+  it('different inputs produce different outputs', async () => {
+    const { computeSourceEventId } = await import('../../../claude-code/hooks/shared.js');
+    const id1 = computeSourceEventId('session-1', '1708876543210', 'prompt A');
+    const id2 = computeSourceEventId('session-1', '1708876543210', 'prompt B');
+    expect(id1).not.toBe(id2);
+  });
+
+  it('different sessions produce different outputs', async () => {
+    const { computeSourceEventId } = await import('../../../claude-code/hooks/shared.js');
+    const id1 = computeSourceEventId('session-1', '1708876543210', 'same prompt');
+    const id2 = computeSourceEventId('session-2', '1708876543210', 'same prompt');
+    expect(id1).not.toBe(id2);
+  });
+
+  it('handles empty parts gracefully', async () => {
+    const { computeSourceEventId } = await import('../../../claude-code/hooks/shared.js');
+    const id = computeSourceEventId('', '', '');
+    expect(id).toMatch(/^[a-f0-9]{16}$/);
+  });
+});

@@ -6,6 +6,7 @@
 import { redact } from './redact.js';
 import {
   computeInboxDir,
+  computeSourceEventId,
   generateEventId,
   resolveProjectRoot,
   writeAtomicInboxEvent,
@@ -225,11 +226,18 @@ export default async function postToolUse(event) {
     }
 
     // Build the InboxEvent
+    const sessionId = typeof event.session_id === 'string' ? event.session_id : '';
     const eventId = generateEventId();
     const inboxEvent = {
       version: 1,
       event_id: eventId,
       source: 'claude-code',
+      source_event_id: computeSourceEventId(
+        sessionId,
+        String(capture.timestamp),
+        capture.tool_name,
+        capture.file_paths_json,
+      ),
       project_root: projectRoot,
       timestamp: capture.timestamp,
       kind: 'tool_use',
@@ -237,8 +245,8 @@ export default async function postToolUse(event) {
     };
 
     // Add session_id if available
-    if (typeof event.session_id === 'string' && event.session_id.length > 0) {
-      inboxEvent.session_id = event.session_id;
+    if (sessionId.length > 0) {
+      inboxEvent.session_id = sessionId;
     }
 
     // Atomic write to inbox
