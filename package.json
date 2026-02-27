@@ -50,6 +50,9 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "overrides": {
+    "rollup": ">=4.59.0"
+  },
   "devDependencies": {
     "@biomejs/biome": "^2.4.2",
     "@vitest/coverage-v8": "^4.0.18",
