@@ -351,4 +351,87 @@ describe('shouldDedup', () => {
     });
     expect(shouldDedup(event, adapter)).toBe(true);
   });
+
+  it('does not false-positive dedup prompts containing underscores', async () => {
+    const { shouldDedup } = await import('../../src/ingest/filters.js');
+    const now = Date.now();
+
+    // Insert event with underscore in prompt
+    adapter.run(
+      `INSERT INTO conversation_events
+       (event_id, source, project_root, timestamp, kind, payload_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'like-esc-001',
+        'claude-code',
+        '/home/user/myapp',
+        now - 60000,
+        'user_prompt',
+        JSON.stringify({ prompt: 'my_var is broken' }),
+        now - 60000,
+      ],
+    );
+
+    // Different prompt that would match if _ is a wildcard
+    const event = makeEvent({
+      kind: 'user_prompt',
+      timestamp: now,
+      payload: { prompt: 'myXvar is broken' },
+    });
+    expect(shouldDedup(event, adapter)).toBe(false);
+  });
+
+  it('does not false-positive dedup prompts containing percent signs', async () => {
+    const { shouldDedup } = await import('../../src/ingest/filters.js');
+    const now = Date.now();
+
+    adapter.run(
+      `INSERT INTO conversation_events
+       (event_id, source, project_root, timestamp, kind, payload_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'like-esc-002',
+        'claude-code',
+        '/home/user/myapp',
+        now - 60000,
+        'user_prompt',
+        JSON.stringify({ prompt: '100% done' }),
+        now - 60000,
+      ],
+    );
+
+    const event = makeEvent({
+      kind: 'user_prompt',
+      timestamp: now,
+      payload: { prompt: '100xyz done' },
+    });
+    expect(shouldDedup(event, adapter)).toBe(false);
+  });
+
+  it('exact match with underscores still deduplicates', async () => {
+    const { shouldDedup } = await import('../../src/ingest/filters.js');
+    const now = Date.now();
+
+    adapter.run(
+      `INSERT INTO conversation_events
+       (event_id, source, project_root, timestamp, kind, payload_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'like-esc-003',
+        'claude-code',
+        '/home/user/myapp',
+        now - 60000,
+        'user_prompt',
+        JSON.stringify({ prompt: 'fix my_component.ts' }),
+        now - 60000,
+      ],
+    );
+
+    const event = makeEvent({
+      kind: 'user_prompt',
+      timestamp: now,
+      payload: { prompt: 'fix my_component.ts' },
+    });
+    expect(shouldDedup(event, adapter)).toBe(true);
+  });
 });

@@ -106,7 +106,7 @@ function dedupPrompt(event: InboxEvent, db: DatabaseAdapter): boolean {
     `SELECT id FROM conversation_events
      WHERE kind = 'user_prompt'
        AND timestamp >= ?
-       AND payload_json LIKE ?
+       AND payload_json LIKE ? ESCAPE '\\'
      LIMIT 1`,
     [windowStart, `%${escapeForLike(prompt)}%`],
   );
@@ -124,7 +124,7 @@ function dedupFileDiff(event: InboxEvent, db: DatabaseAdapter): boolean {
     `SELECT id FROM conversation_events
      WHERE kind = 'file_diff'
        AND timestamp >= ?
-       AND payload_json LIKE ?
+       AND payload_json LIKE ? ESCAPE '\\'
      LIMIT 1`,
     [windowStart, `%${escapeForLike(path)}%`],
   );
@@ -134,5 +134,5 @@ function dedupFileDiff(event: InboxEvent, db: DatabaseAdapter): boolean {
 
 /** Escape special LIKE characters to prevent injection. */
 function escapeForLike(value: string): string {
-  return value.replace(/%/g, '%%').replace(/_/g, '__');
+  return value.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
 }
