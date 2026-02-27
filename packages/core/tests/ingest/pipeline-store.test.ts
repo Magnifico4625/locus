@@ -326,6 +326,102 @@ describe('processInbox — store phase', () => {
     const remaining = readdirSync(inboxDir).filter((f) => f.endsWith('.json'));
     expect(remaining).toHaveLength(0);
   });
+
+  it('filters denylisted files from event_files', async () => {
+    const { processInbox } = await import('../../src/ingest/pipeline.js');
+    const event = makeEvent({
+      event_id: 'denylist-001-0000-0000-000000000000',
+      payload: { tool: 'Bash', files: ['.env', 'src/app.ts', 'secrets/key.pem'], status: 'success' },
+    });
+    writeEventFile(inboxDir, event);
+
+    processInbox(inboxDir, adapter, { captureLevel: 'full' });
+
+    const rows = adapter.all<EventFileRow>('SELECT * FROM event_files WHERE event_id = ?', [
+      event.event_id,
+    ]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.file_path).toBe('src/app.ts');
+  });
+
+  it('filters denylisted file_diff path from event_files', async () => {
+    const { processInbox } = await import('../../src/ingest/pipeline.js');
+    const event = makeEvent({
+      event_id: 'denylist-002-0000-0000-000000000000',
+      kind: 'file_diff',
+      payload: { path: '.env.production', added: 5, removed: 0 },
+    });
+    writeEventFile(inboxDir, event);
+
+    processInbox(inboxDir, adapter, { captureLevel: 'full' });
+
+    const rows = adapter.all<EventFileRow>('SELECT * FROM event_files WHERE event_id = ?', [
+      event.event_id,
+    ]);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('isolates store errors per file — other events still processed', async () => {
+    const { processInbox } = await import('../../src/ingest/pipeline.js');
+
+    // Event 1 — normal
+    const event1 = makeEvent({
+      event_id: 'iso-ok-001-0000-0000-0000-000000000000',
+      timestamp: 1000000000001,
+    });
+    // Event 2 — will cause a UNIQUE constraint violation (pre-inserted in conversation_events)
+    const event2Id = 'iso-dup-002-0000-0000-000000000000';
+    adapter.run(
+      `INSERT INTO conversation_events
+       (event_id, source, project_root, timestamp, kind, payload_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [event2Id, 'claude-code', '/home/user/myapp', 1000000000002, 'tool_use', '{}', Date.now()],
+    );
+    // NOT in ingest_log so isDuplicate returns false — the INSERT will fail on unique event_id
+    const event2 = makeEvent({
+      event_id: event2Id,
+      timestamp: 1000000000002,
+    });
+    // Event 3 — normal
+    const event3 = makeEvent({
+      event_id: 'iso-ok-003-0000-0000-0000-000000000000',
+      timestamp: 1000000000003,
+    });
+
+    writeEventFile(inboxDir, event1);
+    writeEventFile(inboxDir, event2);
+    writeEventFile(inboxDir, event3);
+
+    const metrics = processInbox(inboxDir, adapter, { captureLevel: 'full' });
+
+    expect(metrics.processed).toBe(2);
+    expect(metrics.errors).toBe(1);
+  });
+
+  it('failed event inbox file remains on disk for retry', async () => {
+    const { processInbox } = await import('../../src/ingest/pipeline.js');
+
+    const failId = 'iso-fail-004-0000-0000-000000000000';
+    // Pre-insert to cause unique constraint violation
+    adapter.run(
+      `INSERT INTO conversation_events
+       (event_id, source, project_root, timestamp, kind, payload_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [failId, 'claude-code', '/home/user/myapp', 1000000000001, 'tool_use', '{}', Date.now()],
+    );
+
+    const event = makeEvent({
+      event_id: failId,
+      timestamp: 1000000000001,
+    });
+    writeEventFile(inboxDir, event);
+
+    processInbox(inboxDir, adapter, { captureLevel: 'full' });
+
+    // File should remain in inbox
+    const remaining = readdirSync(inboxDir).filter((f) => f.endsWith('.json'));
+    expect(remaining).toHaveLength(1);
+  });
 });
 
 describe('processInbox — FTS5 store', () => {
@@ -410,5 +506,32 @@ describe('processInbox — FTS5 store', () => {
       fts5Available: false,
     });
     expect(metrics.processed).toBe(1);
+  });
+
+  it('does not include denylisted paths in FTS content', async () => {
+    if (!fts5Available) return;
+
+    const { processInbox } = await import('../../src/ingest/pipeline.js');
+    const event = makeEvent({
+      event_id: 'denylist-fts-001-0000-000000000000',
+      kind: 'tool_use',
+      payload: { tool: 'Read', files: ['.env', 'src/app.ts'], status: 'success' },
+    });
+    writeEventFile(inboxDir, event);
+
+    processInbox(inboxDir, adapter, { captureLevel: 'full', fts5Available: true });
+
+    // The event should be stored (tool_use is allowed)
+    const row = adapter.get<ConversationEventRow>(
+      'SELECT * FROM conversation_events WHERE event_id = ?',
+      [event.event_id],
+    );
+    expect(row).toBeDefined();
+
+    // .env must not appear in FTS index
+    const ftsRow = adapter.get<{ content: string }>(
+      "SELECT content FROM conversation_fts WHERE conversation_fts MATCH '\"env\"'",
+    );
+    expect(ftsRow).toBeUndefined();
   });
 });

@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { isDenylisted } from '../security/file-ignore.js';
 import { redact } from '../security/redact.js';
 import type { CaptureLevel, DatabaseAdapter, InboxEvent, IngestMetrics } from '../types.js';
 import { isDuplicate, recordProcessed } from './dedup.js';
@@ -115,58 +116,64 @@ export function processInbox(
     // Phase 2: FILTER — classify significance
     const significance = classifySignificance(event);
 
-    // Phase 3: TRANSFORM — redact secrets in payload
-    const payloadJson = redact(JSON.stringify(event.payload));
+    // Phase 3-4: TRANSFORM + STORE — isolated per file
+    try {
+      // Phase 3: TRANSFORM — redact secrets in payload
+      const payloadJson = redact(JSON.stringify(event.payload));
 
-    // Phase 4: STORE — write to conversation_events
-    const result = db.run(
-      `INSERT INTO conversation_events
-       (event_id, source, source_event_id, project_root, session_id,
-        timestamp, kind, payload_json, significance, tags_json, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        event.event_id,
-        event.source,
-        event.source_event_id ?? null,
-        event.project_root,
-        event.session_id ?? null,
-        event.timestamp,
-        event.kind,
-        payloadJson,
-        significance,
-        null, // tags_json — Phase 2 (RAKE/TF-IDF)
-        Date.now(),
-      ],
-    );
+      // Phase 4: STORE — write to conversation_events
+      const result = db.run(
+        `INSERT INTO conversation_events
+         (event_id, source, source_event_id, project_root, session_id,
+          timestamp, kind, payload_json, significance, tags_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          event.event_id,
+          event.source,
+          event.source_event_id ?? null,
+          event.project_root,
+          event.session_id ?? null,
+          event.timestamp,
+          event.kind,
+          payloadJson,
+          significance,
+          null, // tags_json — Phase 2 (RAKE/TF-IDF)
+          Date.now(),
+        ],
+      );
 
-    // Phase 4: STORE — write to event_files (join table)
-    const filePaths = extractFilePaths(event);
-    for (const fp of filePaths) {
-      db.run('INSERT INTO event_files (event_id, file_path) VALUES (?, ?)', [event.event_id, fp]);
-    }
+      // Phase 4: STORE — write to event_files (join table)
+      const filePaths = extractFilePaths(event).filter((fp) => !isDenylisted(fp));
+      for (const fp of filePaths) {
+        db.run('INSERT INTO event_files (event_id, file_path) VALUES (?, ?)', [event.event_id, fp]);
+      }
 
-    // Phase 4: STORE — update FTS index (if available)
-    if (fts5) {
-      const ftsContent = extractFtsContent(event);
-      if (ftsContent) {
-        try {
-          db.run('INSERT INTO conversation_fts(rowid, content) VALUES (?, ?)', [
-            result.lastInsertRowid,
-            redact(ftsContent),
-          ]);
-        } catch {
-          // FTS insert failure should not block pipeline
+      // Phase 4: STORE — update FTS index (if available)
+      if (fts5) {
+        const ftsContent = extractFtsContent(event);
+        if (ftsContent) {
+          try {
+            db.run('INSERT INTO conversation_fts(rowid, content) VALUES (?, ?)', [
+              result.lastInsertRowid,
+              redact(ftsContent),
+            ]);
+          } catch {
+            // FTS insert failure should not block pipeline
+          }
         }
       }
+
+      // Phase 4: STORE — record in ingest_log
+      recordProcessed(db, event);
+
+      // Phase 4: STORE — delete processed inbox file
+      tryDelete(filePath);
+
+      metrics.processed++;
+    } catch {
+      metrics.errors++;
+      // File stays in inbox for retry on next processInbox() run
     }
-
-    // Phase 4: STORE — record in ingest_log
-    recordProcessed(db, event);
-
-    // Phase 4: STORE — delete processed inbox file
-    tryDelete(filePath);
-
-    metrics.processed++;
   }
 
   metrics.durationMs = Date.now() - start;
@@ -224,14 +231,14 @@ function extractFtsContent(event: InboxEvent): string {
       const files = payload.files;
       if (Array.isArray(files)) {
         for (const f of files) {
-          if (typeof f === 'string') parts.push(f);
+          if (typeof f === 'string' && !isDenylisted(f)) parts.push(f);
         }
       }
       break;
     }
     case 'file_diff': {
       const path = typeof payload.path === 'string' ? payload.path : '';
-      if (path) parts.push(path);
+      if (path && !isDenylisted(path)) parts.push(path);
       break;
     }
     case 'session_start': {
