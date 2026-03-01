@@ -1,11 +1,9 @@
 {
-  "mcpServers": {
-    "locus": {
-      "command": "node",
-      "args": ["dist/server.js"],
-      "env": {
-        "LOCUS_LOG": "error"
-      }
+  "locus": {
+    "command": "node",
+    "args": ["dist/server.js"],
+    "env": {
+      "LOCUS_LOG": "error"
     }
   }
 }
