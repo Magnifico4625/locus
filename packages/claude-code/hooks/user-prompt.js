@@ -3,6 +3,8 @@
 // Only writes at captureLevel=redacted or captureLevel=full (never at metadata).
 // Contract: NEVER crash. All errors are silently swallowed.
 
+import { fileURLToPath } from 'node:url';
+
 import { extractKeywords } from './keywords.js';
 import { redact } from './redact.js';
 import {
@@ -80,4 +82,24 @@ export default async function userPromptSubmit(event) {
   }
 
   return undefined;
+}
+
+// ─── CLI entry point (Claude Code subprocess) ───────────────────────────────
+// Claude Code runs hooks as subprocesses, passing the event JSON via stdin.
+// When tests `await import()` this module, process.argv[1] is the test runner,
+// so the stdin reader is NOT activated — the exported function remains testable.
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  let data = '';
+  process.stdin.setEncoding('utf-8');
+  process.stdin.on('data', (chunk) => {
+    data += chunk;
+  });
+  process.stdin.on('end', async () => {
+    try {
+      await userPromptSubmit(JSON.parse(data));
+    } catch {
+      // NEVER crash — Claude Code hook contract
+    }
+  });
 }

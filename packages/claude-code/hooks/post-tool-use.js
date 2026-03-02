@@ -3,6 +3,8 @@
 // The MCP server's ingest pipeline processes these into conversation_events.
 // See ARCHITECTURE.md Contract 1 for field specifications.
 
+import { fileURLToPath } from 'node:url';
+
 import { redact } from './redact.js';
 import {
   computeInboxDir,
@@ -195,7 +197,7 @@ export default async function postToolUse(event) {
       return undefined;
     }
 
-    const cwd = process.env.PWD ?? process.cwd();
+    const cwd = event?.cwd ?? process.env.PWD ?? process.cwd();
     const projectRoot = resolveProjectRoot(cwd);
     const inboxDir = computeInboxDir(projectRoot);
 
@@ -256,4 +258,24 @@ export default async function postToolUse(event) {
   }
 
   return undefined;
+}
+
+// ─── CLI entry point (Claude Code subprocess) ───────────────────────────────
+// Claude Code runs hooks as subprocesses, passing the event JSON via stdin.
+// When tests `await import()` this module, process.argv[1] is the test runner,
+// so the stdin reader is NOT activated — the exported function remains testable.
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  let data = '';
+  process.stdin.setEncoding('utf-8');
+  process.stdin.on('data', (chunk) => {
+    data += chunk;
+  });
+  process.stdin.on('end', async () => {
+    try {
+      await postToolUse(JSON.parse(data));
+    } catch {
+      // NEVER crash — Claude Code hook contract
+    }
+  });
 }

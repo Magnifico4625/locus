@@ -451,8 +451,10 @@ describe('postToolUse default export', () => {
     const { default: postToolUse, computeInboxDir } = await import(
       '../../../claude-code/hooks/post-tool-use.js'
     );
+    const { resolveProjectRoot } = await import('../../../claude-code/hooks/shared.js');
+    const uniqueSession = `test-inbox-session-${Date.now()}`;
     const event = {
-      session_id: 'test-inbox-session',
+      session_id: uniqueSession,
       tool_name: 'Read',
       tool_input: { file_path: '/src/app.ts' },
       tool_response: 'file contents',
@@ -461,9 +463,10 @@ describe('postToolUse default export', () => {
 
     await postToolUse(event);
 
-    // Determine inbox dir from process.cwd() resolved root
+    // Use resolveProjectRoot to match the hook's actual inbox path
     const cwd = process.env.PWD ?? process.cwd();
-    const inboxDir = computeInboxDir(cwd);
+    const projectRoot = resolveProjectRoot(cwd);
+    const inboxDir = computeInboxDir(projectRoot);
     cleanupDirs.push(inboxDir);
 
     // Check if JSON files exist in inbox
@@ -474,16 +477,24 @@ describe('postToolUse default export', () => {
       // inbox dir may not exist if hook failed gracefully
     }
 
-    // If hook succeeded (has a valid project root), there should be at least one file
+    // Find our specific file by session_id to avoid race conditions with parallel tests
     if (files.length > 0) {
-      const content = JSON.parse(readFileSync(join(inboxDir, files[0] ?? ''), 'utf-8'));
-      expect(content.version).toBe(1);
-      expect(content.source).toBe('claude-code');
-      expect(content.kind).toBe('tool_use');
-      expect(typeof content.event_id).toBe('string');
-      expect(typeof content.timestamp).toBe('number');
-      expect(content.payload).toBeDefined();
-      expect(content.payload.tool).toBe('Read');
+      let found = false;
+      for (const file of files) {
+        const content = JSON.parse(readFileSync(join(inboxDir, file), 'utf-8'));
+        if (content.session_id === uniqueSession) {
+          expect(content.version).toBe(1);
+          expect(content.source).toBe('claude-code');
+          expect(content.kind).toBe('tool_use');
+          expect(typeof content.event_id).toBe('string');
+          expect(typeof content.timestamp).toBe('number');
+          expect(content.payload).toBeDefined();
+          expect(content.payload.tool).toBe('Read');
+          found = true;
+          break;
+        }
+      }
+      expect(found).toBe(true);
     }
   });
 
