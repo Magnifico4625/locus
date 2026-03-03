@@ -142,4 +142,36 @@ describe('initStorage', () => {
     expect(result.db).toBeDefined();
     result.db.close();
   });
+
+  it('enables WAL journal mode for concurrent access', async () => {
+    const { initStorage } = await import('../../src/storage/init.js');
+    const dbPath = join(tempDir, 'wal-test.db');
+    const result = await initStorage(dbPath);
+
+    const row = result.db.get<{ journal_mode: string }>('PRAGMA journal_mode');
+    expect(row?.journal_mode).toBe('wal');
+    result.db.close();
+  });
+
+  it('sets busy_timeout for multi-session resilience', async () => {
+    const { initStorage } = await import('../../src/storage/init.js');
+    const dbPath = join(tempDir, 'timeout-test.db');
+    const result = await initStorage(dbPath);
+
+    // node:sqlite returns PRAGMA busy_timeout as { timeout: N }
+    const row = result.db.get<{ timeout: number }>('PRAGMA busy_timeout');
+    expect(row?.timeout).toBe(5000);
+    result.db.close();
+  });
+
+  it('sets synchronous=NORMAL for WAL performance', async () => {
+    const { initStorage } = await import('../../src/storage/init.js');
+    const dbPath = join(tempDir, 'sync-test.db');
+    const result = await initStorage(dbPath);
+
+    const row = result.db.get<{ synchronous: number }>('PRAGMA synchronous');
+    // synchronous=NORMAL is value 1
+    expect(row?.synchronous).toBe(1);
+    result.db.close();
+  });
 });
