@@ -49,6 +49,9 @@ export async function initStorage(dbPath: string): Promise<StorageInit> {
     // Cast through unknown: DatabaseSync returns number|bigint for changes,
     // but NodeSqliteAdapter's private interface expects number. Safe at runtime.
     const raw = new nodeSqlite.DatabaseSync(dbPath) as unknown as NodeSqliteDb;
+    raw.exec('PRAGMA journal_mode = WAL');
+    raw.exec('PRAGMA synchronous = NORMAL');
+    raw.exec('PRAGMA busy_timeout = 5000');
     const db = new NodeSqliteAdapter(raw);
     const fts5 = detectFts5(db);
     runMigrations(db, fts5);
