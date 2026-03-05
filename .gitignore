@@ -1,8 +1,9 @@
 # Dependencies
 node_modules/
 
-# Build output
-dist/
+# Build output — root dist/ is tracked for plugin distribution (Claude Code caches via git clone)
+# Package-level dist/ remains ignored (intermediate tsc output)
+packages/*/dist/
 
 # Test coverage
 coverage/

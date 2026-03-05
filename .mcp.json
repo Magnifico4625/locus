@@ -1,7 +1,7 @@
 {
   "locus": {
     "command": "node",
-    "args": ["dist/server.js"],
+    "args": ["${CLAUDE_PLUGIN_ROOT}/dist/server.js"],
     "env": {
       "LOCUS_LOG": "error"
     }
