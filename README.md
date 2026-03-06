@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/locus-memory)](https://www.npmjs.com/package/locus-memory)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-789%20passed-brightgreen)](https://github.com/Magnifico4625/locus)
+[![Tests](https://img.shields.io/badge/tests-819%20passed-brightgreen)](https://github.com/Magnifico4625/locus)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)](https://modelcontextprotocol.io)
 
 ## What is Locus?
@@ -115,7 +115,7 @@ export LOCUS_CAPTURE_LEVEL=redacted  # prompts as keywords only, no AI responses
 | `memory_forget` | `query: string, confirmToken?: string` | Delete matching memories (bulk-delete safety) |
 | `memory_scan` | — | Scan project and index code structure |
 | `memory_status` | — | Runtime stats, config, inbox metrics, and DB info |
-| `memory_doctor` | — | 10-point environment health check |
+| `memory_doctor` | — | 12-point environment health check |
 | `memory_audit` | — | Data inventory and security audit |
 | `memory_config` | — | Show current configuration and sources |
 | `memory_compact` | `maxAgeDays?, keepSessions?` | Clean up old episodic memory entries |
@@ -178,7 +178,7 @@ fullRescanCooldown:   5 min        # Minimum interval between full rescans
 minScanInterval:      10 sec       # Minimum interval between any scans
 ```
 
-**Search Engine:** Locus uses SQLite FTS5 for full-text search when available. If your Node.js build doesn't include FTS5, search automatically falls back to LIKE queries (slower, less accurate). Run `memory_doctor` to check your search engine status.
+**Search Engine:** Locus uses SQLite FTS5 for full-text search when available. FTS5 indexes are self-healing — if the database was created without FTS5 and later opened with FTS5 available, indexes are auto-created and populated on startup. If your Node.js build doesn't include FTS5, search automatically falls back to LIKE queries (slower, less accurate). Run `memory_doctor` to check your search engine status.
 
 ## Security
 
@@ -241,7 +241,7 @@ The MCP server is fully functional without hooks. Here's what you get:
 | `memory_search` | Full-text search across project structure and saved decisions |
 | `memory_remember` | Store architecture decisions ("why Redis not Memcached?") |
 | `memory_forget` | Delete stored decisions |
-| `memory_doctor` | 10-point health check of the environment |
+| `memory_doctor` | 12-point health check of the environment |
 | `memory_status` | Runtime stats, DB info, configuration |
 | `memory_config` | Show current settings and their sources |
 | `memory_audit` | Data inventory and security review |
@@ -282,6 +282,7 @@ Version 3.2 will include `@locus/log-tailer` — an adapter that reads IDE log f
 | Version | Status | Highlights |
 |---------|--------|------------|
 | v3.0 | Current | Carbon Copy capture, 4-phase ingest, FTS5 conversation search, 12 MCP tools |
+| v3.0.5 | Latest | FTS5 self-healing indexes, 12-point doctor, FTS health audit |
 | v3.1 | Planned | hook_captures migration, decision detector |
 | v3.2 | Planned | `@locus/log-tailer` (Cursor IDE adapter), `@locus/cli-wrapper` |
 | v4.0 | Planned | HTML dashboard for memory visualization |
@@ -293,7 +294,7 @@ git clone https://github.com/Magnifico4625/locus.git
 cd locus
 npm install
 
-npm test            # 789 tests (vitest)
+npm test            # 819 tests (vitest)
 npm run typecheck   # TypeScript strict mode
 npm run lint        # Biome linter
 npm run build       # Bundle -> dist/server.js (~1.1 MB)
