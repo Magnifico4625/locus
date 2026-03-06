@@ -1,0 +1,13 @@
+{
+  "name": "@locus/codex",
+  "version": "3.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Codex CLI adapter for Locus memory — skill definitions and config examples",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@locus/shared-runtime": "*"
+  }
+}

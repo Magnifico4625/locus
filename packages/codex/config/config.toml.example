@@ -1,0 +1,24 @@
+# Locus Memory -- MCP server configuration for Codex CLI
+# Copy the relevant block into ~/.codex/config.toml
+
+# Option A: Direct path (after git clone)
+[mcp_servers.locus]
+command = "node"
+args = ["/path/to/locus/dist/server.js"]
+
+[mcp_servers.locus.env]
+LOCUS_LOG = "error"
+CODEX_HOME = "~/.codex"
+
+# Option B: npx (after npm publish -- coming soon)
+# [mcp_servers.locus]
+# command = "npx"
+# args = ["-y", "@locus-memory/mcp-server"]
+#
+# [mcp_servers.locus.env]
+# LOCUS_LOG = "error"
+
+# Option C: Windows (use npx.cmd instead of npx)
+# [mcp_servers.locus]
+# command = "npx.cmd"
+# args = ["-y", "@locus-memory/mcp-server"]
