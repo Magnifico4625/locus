@@ -39,7 +39,7 @@ describe('handleDoctor', () => {
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'locus-doctor-'));
     adapter = createAdapter(tempDir);
-    runMigrations(adapter, false);
+    runMigrations(adapter, true);
   });
 
   afterEach(() => {
@@ -65,8 +65,8 @@ describe('handleDoctor', () => {
 
     expect(report.failures).toBe(0);
     expect(report.warnings).toBe(0);
-    expect(report.passed).toBe(10);
-    expect(report.checks).toHaveLength(10);
+    expect(report.passed).toBe(12);
+    expect(report.checks).toHaveLength(12);
     for (const check of report.checks) {
       expect(check.status).toBe('ok');
     }

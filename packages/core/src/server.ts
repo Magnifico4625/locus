@@ -303,6 +303,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       dbPath,
       logPath,
       captureLevel: config.captureLevel,
+      fts5,
     });
     return { content: [{ type: 'text' as const, text: report }] };
   });

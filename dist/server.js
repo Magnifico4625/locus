@@ -31046,6 +31046,13 @@ function getCurrentVersion(db) {
     return 0;
   }
 }
+function tableExists(db, name) {
+  const row = db.get(
+    "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
+    [name]
+  );
+  return (row?.cnt ?? 0) > 0;
+}
 function migrationV1(db, fts5) {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
@@ -31144,6 +31151,61 @@ function migrationV2(db, fts5) {
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_il_source ON ingest_log(source, source_event_id)");
   db.run("UPDATE schema_version SET version = ?", [2]);
 }
+function extractFtsFromRow(kind, payloadJson) {
+  const parts = [kind];
+  if (!payloadJson) return parts.join(" ");
+  try {
+    const payload = JSON.parse(payloadJson);
+    if (typeof payload.prompt === "string" && payload.prompt) parts.push(payload.prompt);
+    if (typeof payload.response === "string" && payload.response) parts.push(payload.response);
+    if (typeof payload.tool === "string" && payload.tool) parts.push(payload.tool);
+    if (typeof payload.command === "string" && payload.command) parts.push(payload.command);
+    if (typeof payload.path === "string" && payload.path) parts.push(payload.path);
+    if (typeof payload.summary === "string" && payload.summary) parts.push(payload.summary);
+    if (Array.isArray(payload.files)) {
+      for (const f of payload.files) {
+        if (typeof f === "string") parts.push(f);
+      }
+    }
+  } catch {
+  }
+  return parts.join(" ");
+}
+function rebuildConversationFts(db) {
+  const rows = db.all(
+    "SELECT id, kind, payload_json FROM conversation_events"
+  );
+  for (const row of rows) {
+    const content = extractFtsFromRow(row.kind, row.payload_json);
+    if (content.length > row.kind.length) {
+      try {
+        db.run("INSERT INTO conversation_fts(rowid, content) VALUES (?, ?)", [row.id, content]);
+      } catch {
+      }
+    }
+  }
+}
+function ensureFts(db, fts5) {
+  if (!fts5) return;
+  if (!tableExists(db, "memories_fts")) {
+    db.exec(`CREATE VIRTUAL TABLE memories_fts USING fts5(
+      content,
+      content=memories,
+      content_rowid=id
+    )`);
+  }
+  db.exec("INSERT INTO memories_fts(memories_fts) VALUES ('rebuild')");
+  if (!tableExists(db, "conversation_fts")) {
+    db.exec("CREATE VIRTUAL TABLE conversation_fts USING fts5(content)");
+    rebuildConversationFts(db);
+  } else {
+    const ceCount = db.get("SELECT COUNT(*) as cnt FROM conversation_events")?.cnt ?? 0;
+    const cftsCount = db.get("SELECT COUNT(*) as cnt FROM conversation_fts")?.cnt ?? 0;
+    if (ceCount > 0 && cftsCount === 0) {
+      rebuildConversationFts(db);
+    }
+  }
+}
 function runMigrations(db, fts5) {
   const currentVersion = getCurrentVersion(db);
   if (currentVersion < 1) {
@@ -31152,6 +31214,7 @@ function runMigrations(db, fts5) {
   if (currentVersion < 2) {
     migrationV2(db, fts5);
   }
+  ensureFts(db, fts5);
 }
 
 // packages/core/src/storage/node-sqlite.ts
@@ -31319,6 +31382,13 @@ async function initStorage(dbPath) {
 
 // packages/core/src/tools/audit.ts
 import { statSync as statSync2 } from "node:fs";
+function tableExists2(db, name) {
+  const row = db.get(
+    "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
+    [name]
+  );
+  return (row?.cnt ?? 0) > 0;
+}
 function formatSize(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1048576) return `${Math.round(bytes / 1024)} KB`;
@@ -31342,7 +31412,7 @@ function countArrayEntries(json2) {
   }
 }
 function handleAudit(deps) {
-  const { db, projectPath, dbPath, logPath, captureLevel } = deps;
+  const { db, projectPath, dbPath, logPath, captureLevel, fts5 } = deps;
   const fileCount = db.get("SELECT COUNT(*) as cnt FROM files")?.cnt ?? 0;
   const exportRows = db.all(
     "SELECT exports_json FROM files WHERE exports_json IS NOT NULL"
@@ -31395,6 +31465,33 @@ function handleAudit(deps) {
     `Log size: ${formatSize(logBytes)} at ${logPath}`,
     ""
   ];
+  if (fts5) {
+    const hasMemoFts = tableExists2(db, "memories_fts");
+    const hasConvFts = tableExists2(db, "conversation_fts");
+    if (hasMemoFts) {
+      const ftsCount = db.get("SELECT COUNT(*) as cnt FROM memories_fts")?.cnt ?? 0;
+      const totalMemories = semanticCount + episodicCount;
+      if (totalMemories > 0 && ftsCount === 0) {
+        lines.push(`WARNING: FTS5 index for memories is empty (${totalMemories} memories exist but 0 indexed). Run memory_doctor for repair.`);
+      } else {
+        lines.push(`FTS5 index: ${ftsCount} memories indexed (semantic+episodic).`);
+      }
+    } else {
+      lines.push("WARNING: memories_fts table missing. Restart MCP server to auto-create.");
+    }
+    if (hasConvFts) {
+      const convEventCount = db.get("SELECT COUNT(*) as cnt FROM conversation_events")?.cnt ?? 0;
+      const convFtsCount = db.get("SELECT COUNT(*) as cnt FROM conversation_fts")?.cnt ?? 0;
+      if (convEventCount > 0 && convFtsCount === 0) {
+        lines.push(`WARNING: FTS5 index for conversation events is empty (${convEventCount} events exist but 0 indexed).`);
+      } else {
+        lines.push(`FTS5 conversation index: ${convFtsCount}/${convEventCount} events indexed.`);
+      }
+    } else {
+      lines.push("WARNING: conversation_fts table missing. Restart MCP server to auto-create.");
+    }
+    lines.push("");
+  }
   if (secretsFound > 0) {
     lines.push(
       `WARNING: ${secretsFound} memory ${secretsFound === 1 ? "entry contains" : "entries contain"} potential secrets \u2014 run memory_purge() to clear.`
@@ -31538,6 +31635,13 @@ var ConfirmationTokenStore = class {
 };
 
 // packages/core/src/tools/doctor.ts
+function tableExistsCheck(db, name) {
+  const row = db.get(
+    "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
+    [name]
+  );
+  return (row?.cnt ?? 0) > 0;
+}
 function handleDoctor(deps) {
   const checks = [];
   const nodeVer = deps.nodeVersion;
@@ -31572,14 +31676,68 @@ function handleDoctor(deps) {
       fix: "Upgrade to Node.js 22+"
     });
   }
-  checks.push(
-    deps.fts5 ? { name: "FTS5", status: "ok", message: "available (full-text search enabled)" } : {
+  if (deps.fts5) {
+    checks.push({ name: "FTS5", status: "ok", message: "available (full-text search enabled)" });
+    const hasMemoFts = tableExistsCheck(deps.db, "memories_fts");
+    const memoCount = deps.db.get("SELECT COUNT(*) as cnt FROM memories")?.cnt ?? 0;
+    if (!hasMemoFts) {
+      checks.push({
+        name: "FTS5 memories index",
+        status: "fail",
+        message: "memories_fts table missing",
+        fix: "Restart MCP server \u2014 ensureFts() will auto-create and rebuild"
+      });
+    } else {
+      const ftsCount = deps.db.get("SELECT COUNT(*) as cnt FROM memories_fts")?.cnt ?? 0;
+      if (memoCount > 0 && ftsCount === 0) {
+        checks.push({
+          name: "FTS5 memories index",
+          status: "fail",
+          message: `index empty (${memoCount} memories exist but 0 indexed)`,
+          fix: "Restart MCP server \u2014 ensureFts() will auto-rebuild"
+        });
+      } else {
+        checks.push({
+          name: "FTS5 memories index",
+          status: "ok",
+          message: `${ftsCount} entries indexed (${memoCount} total memories)`
+        });
+      }
+    }
+    const hasConvFts = tableExistsCheck(deps.db, "conversation_fts");
+    const ceCount = deps.db.get("SELECT COUNT(*) as cnt FROM conversation_events")?.cnt ?? 0;
+    if (!hasConvFts) {
+      checks.push({
+        name: "FTS5 conversation index",
+        status: "fail",
+        message: "conversation_fts table missing",
+        fix: "Restart MCP server \u2014 ensureFts() will auto-create and rebuild"
+      });
+    } else {
+      const cftsCount = deps.db.get("SELECT COUNT(*) as cnt FROM conversation_fts")?.cnt ?? 0;
+      if (ceCount > 0 && cftsCount === 0) {
+        checks.push({
+          name: "FTS5 conversation index",
+          status: "warn",
+          message: `index empty (${ceCount} events exist but 0 indexed)`,
+          fix: "Restart MCP server \u2014 ensureFts() will auto-rebuild"
+        });
+      } else {
+        checks.push({
+          name: "FTS5 conversation index",
+          status: "ok",
+          message: `${cftsCount}/${ceCount} events indexed`
+        });
+      }
+    }
+  } else {
+    checks.push({
       name: "FTS5",
       status: "warn",
       message: "not available (using LIKE fallback)",
       fix: "Depends on Node.js SQLite build. Search still works via LIKE fallback."
-    }
-  );
+    });
+  }
   const dbWritable = deps.checkDbWritable ? deps.checkDbWritable() : true;
   if (dbWritable) {
     checks.push({ name: "DB writable", status: "ok", message: `${deps.dbPath}` });
@@ -33306,7 +33464,8 @@ async function createServer(options) {
       projectPath: cwd,
       dbPath,
       logPath,
-      captureLevel: config2.captureLevel
+      captureLevel: config2.captureLevel,
+      fts5
     });
     return { content: [{ type: "text", text: report }] };
   });

@@ -9,6 +9,7 @@ export interface AuditDeps {
   dbPath: string;
   logPath: string;
   captureLevel: CaptureLevel;
+  fts5: boolean;
 }
 
 interface CountRow {
@@ -30,6 +31,14 @@ interface ContentRow {
 
 interface HookCountRow {
   cnt: number;
+}
+
+function tableExists(db: DatabaseAdapter, name: string): boolean {
+  const row = db.get<CountRow>(
+    "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
+    [name],
+  );
+  return (row?.cnt ?? 0) > 0;
 }
 
 function formatSize(bytes: number): string {
@@ -58,7 +67,7 @@ function countArrayEntries(json: string | null): number {
 }
 
 export function handleAudit(deps: AuditDeps): string {
-  const { db, projectPath, dbPath, logPath, captureLevel } = deps;
+  const { db, projectPath, dbPath, logPath, captureLevel, fts5 } = deps;
 
   // File count
   const fileCount = db.get<CountRow>('SELECT COUNT(*) as cnt FROM files')?.cnt ?? 0;
@@ -141,6 +150,36 @@ export function handleAudit(deps: AuditDeps): string {
     `Log size: ${formatSize(logBytes)} at ${logPath}`,
     '',
   ];
+
+  // FTS5 health check
+  if (fts5) {
+    const hasMemoFts = tableExists(db, 'memories_fts');
+    const hasConvFts = tableExists(db, 'conversation_fts');
+    if (hasMemoFts) {
+      const ftsCount = db.get<CountRow>('SELECT COUNT(*) as cnt FROM memories_fts')?.cnt ?? 0;
+      const totalMemories = semanticCount + episodicCount;
+      if (totalMemories > 0 && ftsCount === 0) {
+        lines.push(`WARNING: FTS5 index for memories is empty (${totalMemories} memories exist but 0 indexed). Run memory_doctor for repair.`);
+      } else {
+        lines.push(`FTS5 index: ${ftsCount} memories indexed (semantic+episodic).`);
+      }
+    } else {
+      lines.push('WARNING: memories_fts table missing. Restart MCP server to auto-create.');
+    }
+
+    if (hasConvFts) {
+      const convEventCount = db.get<CountRow>('SELECT COUNT(*) as cnt FROM conversation_events')?.cnt ?? 0;
+      const convFtsCount = db.get<CountRow>('SELECT COUNT(*) as cnt FROM conversation_fts')?.cnt ?? 0;
+      if (convEventCount > 0 && convFtsCount === 0) {
+        lines.push(`WARNING: FTS5 index for conversation events is empty (${convEventCount} events exist but 0 indexed).`);
+      } else {
+        lines.push(`FTS5 conversation index: ${convFtsCount}/${convEventCount} events indexed.`);
+      }
+    } else {
+      lines.push('WARNING: conversation_fts table missing. Restart MCP server to auto-create.');
+    }
+    lines.push('');
+  }
 
   if (secretsFound > 0) {
     lines.push(

@@ -9,6 +9,14 @@ function getCurrentVersion(db: DatabaseAdapter): number {
   }
 }
 
+function tableExists(db: DatabaseAdapter, name: string): boolean {
+  const row = db.get<{ cnt: number }>(
+    "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
+    [name],
+  );
+  return (row?.cnt ?? 0) > 0;
+}
+
 function migrationV1(db: DatabaseAdapter, fts5: boolean): void {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
@@ -124,6 +132,101 @@ function migrationV2(db: DatabaseAdapter, fts5: boolean): void {
   db.run('UPDATE schema_version SET version = ?', [2]);
 }
 
+// ─── FTS repair ──────────────────────────────────────────────────────────────
+
+interface ConversationRow {
+  id: number;
+  kind: string;
+  payload_json: string | null;
+}
+
+/**
+ * Extracts searchable text from a conversation_events row for FTS indexing.
+ * Simplified version of pipeline's extractFtsContent, adapted for DB row format.
+ * payload_json is already redacted during ingest, so no extra redaction needed.
+ */
+function extractFtsFromRow(kind: string, payloadJson: string | null): string {
+  const parts: string[] = [kind];
+  if (!payloadJson) return parts.join(' ');
+
+  try {
+    const payload = JSON.parse(payloadJson) as Record<string, unknown>;
+    if (typeof payload.prompt === 'string' && payload.prompt) parts.push(payload.prompt);
+    if (typeof payload.response === 'string' && payload.response) parts.push(payload.response);
+    if (typeof payload.tool === 'string' && payload.tool) parts.push(payload.tool);
+    if (typeof payload.command === 'string' && payload.command) parts.push(payload.command);
+    if (typeof payload.path === 'string' && payload.path) parts.push(payload.path);
+    if (typeof payload.summary === 'string' && payload.summary) parts.push(payload.summary);
+    if (Array.isArray(payload.files)) {
+      for (const f of payload.files) {
+        if (typeof f === 'string') parts.push(f);
+      }
+    }
+  } catch {
+    // Ignore malformed JSON
+  }
+
+  return parts.join(' ');
+}
+
+function rebuildConversationFts(db: DatabaseAdapter): void {
+  const rows = db.all<ConversationRow>(
+    'SELECT id, kind, payload_json FROM conversation_events',
+  );
+  for (const row of rows) {
+    const content = extractFtsFromRow(row.kind, row.payload_json);
+    if (content.length > row.kind.length) {
+      try {
+        db.run('INSERT INTO conversation_fts(rowid, content) VALUES (?, ?)', [row.id, content]);
+      } catch {
+        // Skip duplicates or other FTS errors
+      }
+    }
+  }
+}
+
+/**
+ * Ensures FTS5 virtual tables exist and are populated.
+ * Fixes the "migration gap" where DB was created without FTS5 and later
+ * opened with FTS5 available — versioned migrations don't re-run, so
+ * FTS tables are never created.
+ *
+ * Also handles the case where FTS tables exist but index is empty
+ * (e.g., memories added when fts5=false, or index corruption).
+ */
+export function ensureFts(db: DatabaseAdapter, fts5: boolean): void {
+  if (!fts5) return;
+
+  // 1. Ensure memories_fts exists and is populated
+  if (!tableExists(db, 'memories_fts')) {
+    db.exec(`CREATE VIRTUAL TABLE memories_fts USING fts5(
+      content,
+      content=memories,
+      content_rowid=id
+    )`);
+  }
+  // Always rebuild: memories_fts is an external content table, so
+  // SELECT COUNT(*) reads from the content table (memories), not the FTS index.
+  // We can't detect an empty index without querying shadow tables.
+  // Rebuild is idempotent and O(N) where N = number of memories (typically <100).
+  db.exec("INSERT INTO memories_fts(memories_fts) VALUES ('rebuild')");
+
+  // 2. Ensure conversation_fts exists and is populated
+  if (!tableExists(db, 'conversation_fts')) {
+    db.exec('CREATE VIRTUAL TABLE conversation_fts USING fts5(content)');
+    rebuildConversationFts(db);
+  } else {
+    // Check if index is empty while events exist
+    const ceCount =
+      db.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM conversation_events')?.cnt ?? 0;
+    const cftsCount =
+      db.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM conversation_fts')?.cnt ?? 0;
+    if (ceCount > 0 && cftsCount === 0) {
+      rebuildConversationFts(db);
+    }
+  }
+}
+
 export function runMigrations(db: DatabaseAdapter, fts5: boolean): void {
   const currentVersion = getCurrentVersion(db);
 
@@ -134,4 +237,7 @@ export function runMigrations(db: DatabaseAdapter, fts5: boolean): void {
   if (currentVersion < 2) {
     migrationV2(db, fts5);
   }
+
+  // Always ensure FTS tables exist and are populated (fixes migration gap)
+  ensureFts(db, fts5);
 }

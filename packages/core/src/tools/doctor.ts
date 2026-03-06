@@ -23,6 +23,14 @@ export interface DoctorDeps {
   checkLogWritable?: () => boolean;
 }
 
+function tableExistsCheck(db: DatabaseAdapter, name: string): boolean {
+  const row = db.get<{ cnt: number }>(
+    "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
+    [name],
+  );
+  return (row?.cnt ?? 0) > 0;
+}
+
 export function handleDoctor(deps: DoctorDeps): DoctorReport {
   const checks: DoctorCheck[] = [];
 
@@ -63,16 +71,76 @@ export function handleDoctor(deps: DoctorDeps): DoctorReport {
   }
 
   // 3. FTS5
-  checks.push(
-    deps.fts5
-      ? { name: 'FTS5', status: 'ok', message: 'available (full-text search enabled)' }
-      : {
-          name: 'FTS5',
+  if (deps.fts5) {
+    checks.push({ name: 'FTS5', status: 'ok', message: 'available (full-text search enabled)' });
+
+    // 3a. Check memories_fts index health
+    const hasMemoFts = tableExistsCheck(deps.db, 'memories_fts');
+    const memoCount =
+      deps.db.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM memories')?.cnt ?? 0;
+    if (!hasMemoFts) {
+      checks.push({
+        name: 'FTS5 memories index',
+        status: 'fail',
+        message: 'memories_fts table missing',
+        fix: 'Restart MCP server — ensureFts() will auto-create and rebuild',
+      });
+    } else {
+      const ftsCount =
+        deps.db.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM memories_fts')?.cnt ?? 0;
+      if (memoCount > 0 && ftsCount === 0) {
+        checks.push({
+          name: 'FTS5 memories index',
+          status: 'fail',
+          message: `index empty (${memoCount} memories exist but 0 indexed)`,
+          fix: 'Restart MCP server — ensureFts() will auto-rebuild',
+        });
+      } else {
+        checks.push({
+          name: 'FTS5 memories index',
+          status: 'ok',
+          message: `${ftsCount} entries indexed (${memoCount} total memories)`,
+        });
+      }
+    }
+
+    // 3b. Check conversation_fts index health
+    const hasConvFts = tableExistsCheck(deps.db, 'conversation_fts');
+    const ceCount =
+      deps.db.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM conversation_events')?.cnt ?? 0;
+    if (!hasConvFts) {
+      checks.push({
+        name: 'FTS5 conversation index',
+        status: 'fail',
+        message: 'conversation_fts table missing',
+        fix: 'Restart MCP server — ensureFts() will auto-create and rebuild',
+      });
+    } else {
+      const cftsCount =
+        deps.db.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM conversation_fts')?.cnt ?? 0;
+      if (ceCount > 0 && cftsCount === 0) {
+        checks.push({
+          name: 'FTS5 conversation index',
           status: 'warn',
-          message: 'not available (using LIKE fallback)',
-          fix: 'Depends on Node.js SQLite build. Search still works via LIKE fallback.',
-        },
-  );
+          message: `index empty (${ceCount} events exist but 0 indexed)`,
+          fix: 'Restart MCP server — ensureFts() will auto-rebuild',
+        });
+      } else {
+        checks.push({
+          name: 'FTS5 conversation index',
+          status: 'ok',
+          message: `${cftsCount}/${ceCount} events indexed`,
+        });
+      }
+    }
+  } else {
+    checks.push({
+      name: 'FTS5',
+      status: 'warn',
+      message: 'not available (using LIKE fallback)',
+      fix: 'Depends on Node.js SQLite build. Search still works via LIKE fallback.',
+    });
+  }
 
   // 4. DB writable
   const dbWritable = deps.checkDbWritable ? deps.checkDbWritable() : true;
