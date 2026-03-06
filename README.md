@@ -1,11 +1,11 @@
 # Locus
 
-> Persistent project-aware memory for AI coding tools. Built on [MCP](https://modelcontextprotocol.io). Works with Claude Code, Cursor, Windsurf, and any MCP-compatible client.
+> Persistent project-aware memory for AI coding tools. Built on [MCP](https://modelcontextprotocol.io). Works with Claude Code, Codex CLI, Cursor, Windsurf, and any MCP-compatible client.
 
 [![npm version](https://img.shields.io/npm/v/locus-memory)](https://www.npmjs.com/package/locus-memory)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-819%20passed-brightgreen)](https://github.com/Magnifico4625/locus)
+[![Tests](https://img.shields.io/badge/tests-860%20passed-brightgreen)](https://github.com/Magnifico4625/locus)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)](https://modelcontextprotocol.io)
 
 ## What is Locus?
@@ -26,11 +26,11 @@ Locus stores metadata only by default. No raw file content is ever written to di
 
 Locus is an MCP server. It works with any tool that supports the [Model Context Protocol](https://modelcontextprotocol.io).
 
-| Feature | Claude Code | Cursor / Windsurf / Cline / Zed |
-|---------|-------------|----------------------------------|
-| 12 MCP tools (search, explore, remember...) | Full support | Full support |
-| 3 MCP resources (project-map, decisions, recent) | Auto-injected | Manual config |
-| Carbon Copy capture (hooks) | Full support (v3.0) | Planned for v3.2 via adapters |
+| Feature | Claude Code | Codex CLI | Cursor / Windsurf / Cline / Zed |
+|---------|-------------|-----------|----------------------------------|
+| 12 MCP tools (search, explore, remember...) | Full support | Full support | Full support |
+| 3 MCP resources (project-map, decisions, recent) | Auto-injected | On demand | Manual config |
+| Carbon Copy capture (hooks) | Full support (v3.0) | Planned (v3.2) | Planned for v3.2 via adapters |
 
 **How it works:** The MCP server provides 12 tools and 3 resources to any connected client. In Claude Code, three native hooks (UserPromptSubmit, Stop, PostToolUse) additionally capture conversation events into a local inbox for passive memory. Adapter support for Cursor and other IDEs is planned for v3.2 via `@locus/log-tailer`.
 
@@ -61,6 +61,27 @@ claude --plugin-dir /path/to/locus
 ```
 
 Once installed, Locus auto-injects 3 resources into every conversation — no configuration required. Three hooks automatically capture conversation events into a local inbox.
+
+### Codex CLI
+
+Add Locus as an MCP server:
+
+```bash
+codex mcp add locus -- node /path/to/locus/dist/server.js
+```
+
+Or add directly to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.locus]
+command = "node"
+args = ["/path/to/locus/dist/server.js"]
+
+[mcp_servers.locus.env]
+LOCUS_LOG = "error"
+```
+
+> **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 12 MCP tools and 3 resources work immediately. Passive conversation capture requires a Codex adapter (planned for v3.2).
 
 ### Any MCP Client (Cursor, Windsurf, Cline, Zed, etc.)
 

@@ -350,7 +350,22 @@ const logPath = join(homedir(), '.claude', 'memory', 'locus.log');
 
 Storage is hardcoded to `~/.claude/memory/`. This is wrong for Codex users.
 
-### Proposed Solution: Client-Aware Path Resolution
+### Implemented Solution: `@locus/shared-runtime`
+
+Path resolution is now in `packages/shared-runtime/resolve-storage.js` — a shared plain ESM module
+with zero dependencies beyond Node.js stdlib. Both `@locus/core` and `@locus/claude-code` import
+from it via npm workspace symlinks. 41 contract + regression tests cover all paths.
+
+**API:**
+- `detectClientEnv()` -> `'claude-code' | 'codex' | 'generic'`
+- `resolveStorageRoot()` -> base storage directory
+- `resolveProjectStorageDir(projectRoot)` -> per-project directory
+- `resolveDbPath(projectRoot)` -> SQLite DB path
+- `resolveInboxDir(projectRoot)` -> inbox directory
+- `resolveLogPath()` -> log file path
+- `projectHash(projectRoot)` -> 16-char hex hash
+
+### Original Proposed Solution (superseded): Client-Aware Path Resolution
 
 ```typescript
 function resolveStorageRoot(): string {
@@ -530,11 +545,11 @@ codex mcp add locus -- npx -y @locus-memory/mcp-server
 
 ### Phase 1 — "Works with Codex" (Target: v3.1.0, ~1 day)
 
-- [ ] **Client-aware storage path** — `resolveStorageRoot()` with env detection
-- [ ] **README update** — add "Codex CLI" to Quick Start with `config.toml` example
-- [ ] **Codex skill** — `.agents/skills/locus-memory/SKILL.md` + `agents/openai.yaml`
-- [ ] **Compatibility table update** — add Codex CLI column
-- [ ] **Test** — verify `dist/server.js` launches via `codex mcp add`
+- [x] **Client-aware storage path** — `@locus/shared-runtime` with `resolveStorageRoot()` priority chain
+- [x] **README update** — Codex CLI added to Quick Start with `config.toml` example
+- [x] **Codex skill** — `packages/codex/skills/locus-memory/SKILL.md`
+- [x] **Compatibility table update** — Codex CLI column added to README
+- [ ] **Test** — verify `dist/server.js` launches via `codex mcp add` (manual verification)
 
 ### Phase 2 — "npm Package" (Target: v3.1.x, ~1-2 days)
 
