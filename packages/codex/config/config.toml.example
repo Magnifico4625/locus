@@ -8,7 +8,7 @@ args = ["/path/to/locus/dist/server.js"]
 
 [mcp_servers.locus.env]
 LOCUS_LOG = "error"
-CODEX_HOME = "~/.codex"
+# CODEX_HOME is auto-detected by Codex CLI -- no need to set it manually
 
 # Option B: npx (after npm publish -- coming soon)
 # [mcp_servers.locus]

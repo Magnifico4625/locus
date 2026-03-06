@@ -6821,14 +6821,21 @@ function projectHash(projectRoot) {
 }
 
 // packages/shared-runtime/resolve-storage.js
+function expandTilde(p) {
+  if (p === "~") return homedir();
+  if (p.startsWith("~/") || p.startsWith("~\\")) {
+    return join(homedir(), p.slice(2));
+  }
+  return p;
+}
 function resolveStorageRoot() {
   if (process.env.LOCUS_STORAGE_ROOT) {
-    return process.env.LOCUS_STORAGE_ROOT;
+    return expandTilde(process.env.LOCUS_STORAGE_ROOT);
   }
   const client = detectClientEnv();
   const home = homedir();
   if (client === "codex") {
-    return join(process.env.CODEX_HOME, "memory");
+    return join(expandTilde(process.env.CODEX_HOME), "memory");
   }
   if (client === "claude-code") {
     return join(home, ".claude", "memory");

@@ -4,20 +4,35 @@ import { projectHash } from './project-hash.js';
 import { detectClientEnv } from './detect-client.js';
 
 /**
+ * Expands a leading ~ to the user's home directory.
+ * Shells expand ~ before passing to processes, but env vars set in config
+ * files (e.g. Codex config.toml) may contain a literal "~".
+ * @param {string} p
+ * @returns {string}
+ */
+function expandTilde(p) {
+  if (p === '~') return homedir();
+  if (p.startsWith('~/') || p.startsWith('~\\')) {
+    return join(homedir(), p.slice(2));
+  }
+  return p;
+}
+
+/**
  * Resolves the base storage directory for Locus databases.
  * Priority: LOCUS_STORAGE_ROOT > CODEX_HOME/memory > ~/.claude/memory > ~/.locus/memory
  * @returns {string}
  */
 export function resolveStorageRoot() {
   if (process.env.LOCUS_STORAGE_ROOT) {
-    return process.env.LOCUS_STORAGE_ROOT;
+    return expandTilde(process.env.LOCUS_STORAGE_ROOT);
   }
 
   const client = detectClientEnv();
   const home = homedir();
 
   if (client === 'codex') {
-    return join(process.env.CODEX_HOME, 'memory');
+    return join(expandTilde(process.env.CODEX_HOME), 'memory');
   }
 
   if (client === 'claude-code') {

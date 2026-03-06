@@ -60,6 +60,23 @@ describe('resolveStorageRoot', () => {
     process.env.CLAUDE_PLUGIN_ROOT = '';
     expect(resolveStorageRoot()).toBe(join(homedir(), '.locus', 'memory'));
   });
+
+  it('expands ~ in CODEX_HOME to homedir', () => {
+    delete process.env.LOCUS_STORAGE_ROOT;
+    process.env.CODEX_HOME = '~/.codex';
+    delete process.env.CLAUDE_PLUGIN_ROOT;
+    expect(resolveStorageRoot()).toBe(join(homedir(), '.codex', 'memory'));
+  });
+
+  it('expands ~ in LOCUS_STORAGE_ROOT to homedir', () => {
+    process.env.LOCUS_STORAGE_ROOT = '~/locus-data';
+    expect(resolveStorageRoot()).toBe(join(homedir(), 'locus-data'));
+  });
+
+  it('does not expand ~ in the middle of a path', () => {
+    process.env.LOCUS_STORAGE_ROOT = '/some/~/path';
+    expect(resolveStorageRoot()).toBe('/some/~/path');
+  });
 });
 
 describe('resolveProjectStorageDir', () => {
