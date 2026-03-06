@@ -5,8 +5,12 @@
 import { execFileSync } from 'node:child_process';
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
-import { dirname, join, normalize, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
+import {
+  projectHash,
+  resolveInboxDir as _resolveInboxDir,
+  resolveProjectStorageDir as _resolveProjectStorageDir,
+} from '@locus/shared-runtime';
 
 // ─── Project root resolution ────────────────────────────────────────────────
 
@@ -54,12 +58,12 @@ function hasAnyMarker(dir) {
 
 /**
  * Computes a stable hash of the project root path.
+ * Re-exported from @locus/shared-runtime (single source of truth).
  * @param {string} projectRoot
  * @returns {string} first 16 hex chars of SHA-256
  */
 export function computeProjectHash(projectRoot) {
-  const normalized = normalize(projectRoot).replace(/\\/g, '/').toLowerCase();
-  return createHash('sha256').update(normalized).digest('hex').slice(0, 16);
+  return projectHash(projectRoot);
 }
 
 /**
@@ -106,24 +110,22 @@ export function resolveProjectRoot(cwd) {
 
 /**
  * Computes the inbox directory path for a given project root.
- * Inbox is co-located with the DB: ~/.claude/memory/locus-<hash>/inbox/
+ * Delegates to @locus/shared-runtime (single source of truth).
  * @param {string} projectRoot
  * @returns {string}
  */
 export function computeInboxDir(projectRoot) {
-  const hash = computeProjectHash(projectRoot);
-  return join(homedir(), '.claude', 'memory', `locus-${hash}`, 'inbox');
+  return _resolveInboxDir(projectRoot);
 }
 
 /**
  * Computes the Locus data directory path for a given project root.
- * ~/.claude/memory/locus-<hash>/
+ * Delegates to @locus/shared-runtime (single source of truth).
  * @param {string} projectRoot
  * @returns {string}
  */
 export function computeLocusDir(projectRoot) {
-  const hash = computeProjectHash(projectRoot);
-  return join(homedir(), '.claude', 'memory', `locus-${hash}`);
+  return _resolveProjectStorageDir(projectRoot);
 }
 
 // ─── Atomic inbox writer ─────────────────────────────────────────────────────

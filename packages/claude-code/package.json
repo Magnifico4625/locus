@@ -6,5 +6,8 @@
   "description": "Claude Code hooks adapter for Locus memory plugin",
   "engines": {
     "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@locus/shared-runtime": "*"
   }
 }

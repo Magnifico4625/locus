@@ -26,21 +26,8 @@ const STOP_HOOK = join(HOOKS_DIR, 'stop.js');
 
 const TEST_PROJECT_DIR = join(tmpdir(), `locus-subprocess-test-${Date.now()}`);
 
-// Compute the expected inbox dir for our test project
-// We replicate the same hash logic as shared.js to know where to look
-import { createHash } from 'node:crypto';
-import { homedir } from 'node:os';
-import { normalize } from 'node:path';
-
-function computeProjectHash(projectRoot: string): string {
-  const normalized = normalize(projectRoot).replace(/\\/g, '/').toLowerCase();
-  return createHash('sha256').update(normalized).digest('hex').slice(0, 16);
-}
-
-function computeInboxDir(projectRoot: string): string {
-  const hash = computeProjectHash(projectRoot);
-  return join(homedir(), '.claude', 'memory', `locus-${hash}`, 'inbox');
-}
+// Use shared-runtime for consistent path resolution
+import { resolveInboxDir } from '@locus/shared-runtime';
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
@@ -64,13 +51,13 @@ function runHook(
 }
 
 function getInboxFiles(projectRoot: string): string[] {
-  const inboxDir = computeInboxDir(projectRoot);
+  const inboxDir = resolveInboxDir(projectRoot);
   if (!existsSync(inboxDir)) return [];
   return readdirSync(inboxDir).filter((f) => f.endsWith('.json'));
 }
 
 function readInboxEvent(projectRoot: string, filename: string): Record<string, unknown> {
-  const inboxDir = computeInboxDir(projectRoot);
+  const inboxDir = resolveInboxDir(projectRoot);
   return JSON.parse(readFileSync(join(inboxDir, filename), 'utf-8'));
 }
 
@@ -88,7 +75,7 @@ afterAll(() => {
   rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
 
   // Remove inbox files created during tests
-  const inboxDir = computeInboxDir(TEST_PROJECT_DIR);
+  const inboxDir = resolveInboxDir(TEST_PROJECT_DIR);
   if (existsSync(inboxDir)) {
     rmSync(inboxDir, { recursive: true, force: true });
   }
@@ -141,7 +128,7 @@ describe('Hook subprocess E2E — stdin bootstrap', () => {
       expect(result.status).toBe(0);
 
       // Inbox should be under the test project hash, not the monorepo hash
-      const inboxDir = computeInboxDir(TEST_PROJECT_DIR);
+      const inboxDir = resolveInboxDir(TEST_PROJECT_DIR);
       expect(existsSync(inboxDir)).toBe(true);
     });
   });
@@ -178,7 +165,7 @@ describe('Hook subprocess E2E — stdin bootstrap', () => {
 
     it('exits cleanly at captureLevel=metadata without writing', () => {
       // Clear inbox first to get a clean count
-      const inboxDir = computeInboxDir(TEST_PROJECT_DIR);
+      const inboxDir = resolveInboxDir(TEST_PROJECT_DIR);
       const beforeFiles = getInboxFiles(TEST_PROJECT_DIR);
       const beforePromptCount = beforeFiles.filter((f) => {
         const evt = readInboxEvent(TEST_PROJECT_DIR, f);

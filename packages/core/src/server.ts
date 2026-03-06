@@ -1,5 +1,5 @@
-import { homedir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
+import { resolveDbPath, resolveLogPath } from '@locus/shared-runtime';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
@@ -28,8 +28,6 @@ import { handleStatus } from './tools/status.js';
 import { handleTimeline } from './tools/timeline.js';
 import type { DatabaseAdapter, IngestMetrics, LocusConfig, ProjectRootMethod } from './types.js';
 import { LOCUS_DEFAULTS } from './types.js';
-import { projectHash } from './utils.js';
-
 // ─── Public interfaces ────────────────────────────────────────────────────────
 
 export interface CreateServerOptions {
@@ -61,10 +59,8 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   const projectName = basename(root);
 
   // 2. Compute DB path (skip hash when caller supplies explicit path)
-  const dbPath =
-    options?.dbPath ??
-    join(homedir(), '.claude', 'memory', `locus-${projectHash(root)}`, 'locus.db');
-  const logPath = join(homedir(), '.claude', 'memory', 'locus.log');
+  const dbPath = options?.dbPath ?? resolveDbPath(root);
+  const logPath = resolveLogPath();
 
   // 3. Initialise storage
   const { db, backend, fts5 } = await initStorage(dbPath);
