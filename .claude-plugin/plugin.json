@@ -1,6 +1,6 @@
 {
   "name": "locus",
-  "version": "3.0.5",
+  "version": "3.1.0",
   "description": "Persistent project-aware memory for AI coding tools. Built on MCP. Structural map, decisions, session history — zero native deps.",
   "author": {
     "name": "Magnifico4625",

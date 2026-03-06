@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/locus-memory)](https://www.npmjs.com/package/locus-memory)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-860%20passed-brightgreen)](https://github.com/Magnifico4625/locus)
+[![Tests](https://img.shields.io/badge/tests-863%20passed-brightgreen)](https://github.com/Magnifico4625/locus)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)](https://modelcontextprotocol.io)
 
 ## What is Locus?
@@ -20,6 +20,8 @@ Locus solves this with three persistent memory layers:
 
 **New in v3.0 — Carbon Copy:** Zero-cost passive capture of prompts, AI responses, and file changes via an inbox-based event protocol. A 4-phase ingest pipeline processes events into searchable conversation history — no tokens consumed on write, only on recall.
 
+**New in v3.1 — Multi-Client Architecture:** Client-aware storage with automatic detection of Claude Code and Codex CLI environments. One MCP server, every client, your data stays on your machine.
+
 Locus stores metadata only by default. No raw file content is ever written to disk unless you explicitly opt in.
 
 ## Compatibility
@@ -32,7 +34,7 @@ Locus is an MCP server. It works with any tool that supports the [Model Context 
 | 3 MCP resources (project-map, decisions, recent) | Auto-injected | On demand | Manual config |
 | Carbon Copy capture (hooks) | Full support (v3.0) | Planned (v3.2) | Planned for v3.2 via adapters |
 
-**How it works:** The MCP server provides 12 tools and 3 resources to any connected client. In Claude Code, three native hooks (UserPromptSubmit, Stop, PostToolUse) additionally capture conversation events into a local inbox for passive memory. Adapter support for Cursor and other IDEs is planned for v3.2 via `@locus/log-tailer`.
+**How it works:** The MCP server provides 12 tools and 3 resources to any connected client. Storage location is auto-detected per client (`~/.claude/memory/` for Claude Code, `$CODEX_HOME/memory/` for Codex CLI, `~/.locus/memory/` for others). In Claude Code, three native hooks additionally capture conversation events into a local inbox for passive memory. Codex CLI gets full MCP tool support; passive capture via session JSONL adapter is planned for v3.2.
 
 ## Features
 
@@ -215,7 +217,7 @@ Locus uses a 4-layer security model:
 ```
 +------------------------------------------+
 |         AI Coding Tool Session           |
-|    (Claude Code / Cursor / Windsurf)     |
+|  (Claude Code / Codex CLI / Cursor / ..) |
 +------------+------------+----------------+
 | Resource   | Resource   | Resource       |
 | project    | decisions  | recent         |
@@ -227,13 +229,17 @@ Locus uses a 4-layer security model:
 |    git-diff -> mtime -> full rescan      |
 +------------------------------------------+
 |     Storage: node:sqlite | sql.js        |
-|     ~/.claude/memory/locus-{hash}/       |
+|     Client-aware path resolution:        |
+|     Claude: ~/.claude/memory/locus-{h}/  |
+|     Codex:  $CODEX_HOME/memory/locus-{h}/|
+|     Other:  ~/.locus/memory/locus-{h}/   |
 +------------------------------------------+
 |   4-Phase Ingest Pipeline                |
 |   Intake -> Filter -> Transform -> Store |
 +------------------------------------------+
 |   Adapters (event sources):              |
 |   Claude Code hooks (v3.0)               |
+|   Codex JSONL adapter (v3.2)             |
 |   log-tailer / cli-wrapper (v3.2)        |
 |   -> inbox/ (atomic JSON events)         |
 +------------------------------------------+
@@ -245,7 +251,7 @@ Locus uses a 4-layer security model:
 - **Conversation events**: passively captured via adapters and indexed for search
 - **Storage**: node:sqlite (Node 22+) primary, sql.js fallback
 - **FTS5**: full-text search across all layers, auto-detected at startup
-- **Monorepo**: `@locus/core` (memory engine + MCP server) + `@locus/claude-code` (hooks)
+- **Monorepo**: `@locus/core` (MCP server) + `@locus/shared-runtime` (path resolution) + `@locus/claude-code` (hooks) + `@locus/codex` (skill + config)
 
 ## FAQ
 
@@ -288,7 +294,7 @@ They complement each other. `CLAUDE.md` is for static rules — coding conventio
 
 ### Does Locus send my code anywhere?
 
-No. Locus runs entirely locally. Your data is stored in `~/.claude/memory/locus-{hash}/` on your machine. No network requests, no telemetry, no cloud storage. The MCP server communicates only with the AI client via stdio.
+No. Locus runs entirely locally. Your data is stored on your machine in a client-specific directory (`~/.claude/memory/` for Claude Code, `$CODEX_HOME/memory/` for Codex CLI, or `~/.locus/memory/` for other tools). Override with `LOCUS_STORAGE_ROOT` to share memory across clients. No network requests, no telemetry, no cloud storage. The MCP server communicates only with the AI client via stdio.
 
 ### What about secrets and sensitive files?
 
@@ -302,10 +308,10 @@ Version 3.2 will include `@locus/log-tailer` — an adapter that reads IDE log f
 
 | Version | Status | Highlights |
 |---------|--------|------------|
-| v3.0 | Current | Carbon Copy capture, 4-phase ingest, FTS5 conversation search, 12 MCP tools |
-| v3.0.5 | Latest | FTS5 self-healing indexes, 12-point doctor, FTS health audit |
-| v3.1 | Planned | hook_captures migration, decision detector |
-| v3.2 | Planned | `@locus/log-tailer` (Cursor IDE adapter), `@locus/cli-wrapper` |
+| v3.0 | Released | Carbon Copy capture, 4-phase ingest, FTS5 conversation search, 12 MCP tools |
+| v3.0.5 | Released | FTS5 self-healing indexes, 12-point doctor, FTS health audit |
+| v3.1 | **Current** | Multi-client architecture: `@locus/shared-runtime` (client-aware paths), `@locus/codex` (Codex CLI skill + config), 863 tests |
+| v3.2 | Planned | Codex session JSONL adapter, `@locus/log-tailer` (Cursor/Windsurf), npm package for `npx` install |
 | v4.0 | Planned | HTML dashboard for memory visualization |
 
 ## Development
@@ -315,7 +321,7 @@ git clone https://github.com/Magnifico4625/locus.git
 cd locus
 npm install
 
-npm test            # 819 tests (vitest)
+npm test            # 863 tests (vitest)
 npm run typecheck   # TypeScript strict mode
 npm run lint        # Biome linter
 npm run build       # Bundle -> dist/server.js (~1.1 MB)
