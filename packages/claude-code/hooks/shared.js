@@ -10,7 +10,7 @@ import {
   projectHash,
   resolveInboxDir as _resolveInboxDir,
   resolveProjectStorageDir as _resolveProjectStorageDir,
-} from '@locus/shared-runtime';
+} from '../../shared-runtime/index.js';
 
 // ─── Project root resolution ────────────────────────────────────────────────
 
