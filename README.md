@@ -310,7 +310,8 @@ Version 3.2 will include `@locus/log-tailer` — an adapter that reads IDE log f
 |---------|--------|------------|
 | v3.0 | Released | Carbon Copy capture, 4-phase ingest, FTS5 conversation search, 12 MCP tools |
 | v3.0.5 | Released | FTS5 self-healing indexes, 12-point doctor, FTS health audit |
-| v3.1 | **Current** | Multi-client architecture: `@locus/shared-runtime` (client-aware paths), `@locus/codex` (Codex CLI skill + config), 863 tests |
+| v3.1 | Released | Multi-client architecture: `@locus/shared-runtime` (client-aware paths), `@locus/codex` (Codex CLI skill + config), 863 tests |
+| v3.1.1 | **Current** | Fix: hooks failed in plugin cache due to bare module import of `@locus/shared-runtime` |
 | v3.2 | Planned | Codex session JSONL adapter, `@locus/log-tailer` (Cursor/Windsurf), npm package for `npx` install |
 | v4.0 | Planned | HTML dashboard for memory visualization |
 

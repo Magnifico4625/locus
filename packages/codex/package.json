@@ -1,6 +1,6 @@
 {
   "name": "@locus/codex",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "private": true,
   "type": "module",
   "description": "Codex CLI adapter for Locus memory — skill definitions and config examples",

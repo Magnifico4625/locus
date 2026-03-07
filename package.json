@@ -1,6 +1,6 @@
 {
   "name": "locus-memory",
-  "version": "3.1.0",
+  "version": "3.1.1",
   "description": "Persistent project-aware memory for AI coding tools. Built on MCP. Knows your project, remembers your decisions, costs almost nothing.",
   "type": "module",
   "private": true,
