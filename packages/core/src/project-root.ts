@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type { ProjectRootMethod } from './types.js';
 
@@ -26,6 +27,7 @@ export interface ProjectRootDeps {
   tryGitRoot(cwd: string): string | null;
   fileExists(path: string): boolean;
   readDir(path: string): string[];
+  resolveHomeDir(): string | null;
 }
 
 export const defaultProjectRootDeps: ProjectRootDeps = {
@@ -52,6 +54,14 @@ export const defaultProjectRootDeps: ProjectRootDeps = {
       return readdirSync(path);
     } catch {
       return [];
+    }
+  },
+
+  resolveHomeDir(): string | null {
+    try {
+      return homedir();
+    } catch {
+      return null;
     }
   },
 };
@@ -89,11 +99,20 @@ export function resolveProjectRoot(
   if (gitRoot) return { root: normalizePath(gitRoot), method: 'git-root' };
 
   // 2. Walk up, find highest marker directory (closest to filesystem root)
+  const normalizedCwd = normalizePath(cwd);
+  const homeDir = deps.resolveHomeDir();
+  const normalizedHomeDir = homeDir ? normalizePath(homeDir) : null;
   let highestMarkerDir: string | null = null;
   let dir = resolve(cwd);
 
   for (;;) {
-    if (hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
+    const normalizedDir = normalizePath(dir);
+    const isAncestorHomeDir =
+      normalizedHomeDir !== null &&
+      normalizedDir === normalizedHomeDir &&
+      normalizedDir !== normalizedCwd;
+
+    if (!isAncestorHomeDir && hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
       highestMarkerDir = dir;
     }
     const parent = dirname(dir);

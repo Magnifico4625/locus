@@ -30770,6 +30770,7 @@ var SemanticMemory = class {
 // packages/core/src/project-root.ts
 import { execFileSync } from "node:child_process";
 import { existsSync as existsSync2, readdirSync as readdirSync2 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
 import { dirname as dirname2, join as join3, resolve } from "node:path";
 var PROJECT_MARKERS = [
   "package.json",
@@ -30808,6 +30809,13 @@ var defaultProjectRootDeps = {
     } catch {
       return [];
     }
+  },
+  resolveHomeDir() {
+    try {
+      return homedir2();
+    } catch {
+      return null;
+    }
   }
 };
 function normalizePath(p) {
@@ -30830,10 +30838,15 @@ function hasAnyMarker(dir, markers, deps) {
 function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
   const gitRoot = deps.tryGitRoot(cwd);
   if (gitRoot) return { root: normalizePath(gitRoot), method: "git-root" };
+  const normalizedCwd = normalizePath(cwd);
+  const homeDir = deps.resolveHomeDir();
+  const normalizedHomeDir = homeDir ? normalizePath(homeDir) : null;
   let highestMarkerDir = null;
   let dir = resolve(cwd);
   for (; ; ) {
-    if (hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
+    const normalizedDir = normalizePath(dir);
+    const isAncestorHomeDir = normalizedHomeDir !== null && normalizedDir === normalizedHomeDir && normalizedDir !== normalizedCwd;
+    if (!isAncestorHomeDir && hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
       highestMarkerDir = dir;
     }
     const parent = dirname2(dir);
