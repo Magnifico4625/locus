@@ -3,7 +3,18 @@
   "version": "3.1.1",
   "private": true,
   "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "description": "Codex CLI adapter for Locus memory — skill definitions and config examples",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "engines": {
     "node": ">=22.0.0"
   },
