@@ -7,9 +7,9 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import {
-  projectHash,
   resolveInboxDir as _resolveInboxDir,
   resolveProjectStorageDir as _resolveProjectStorageDir,
+  projectHash,
 } from '../../shared-runtime/index.js';
 
 // ─── Project root resolution ────────────────────────────────────────────────

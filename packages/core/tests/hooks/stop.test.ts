@@ -1,7 +1,7 @@
 import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // ─── Transcript parsing helpers ──────────────────────────────────────────────
 
@@ -178,14 +178,25 @@ describe('tailer state management', () => {
 describe('stop hook', () => {
   const cleanupDirs: string[] = [];
   let testDir: string;
+  let originalStorageRoot: string | undefined;
 
   beforeEach(() => {
+    originalStorageRoot = process.env.LOCUS_STORAGE_ROOT;
     testDir = join(
       tmpdir(),
       `locus-test-stop-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     );
     mkdirSync(testDir, { recursive: true });
+    process.env.LOCUS_STORAGE_ROOT = join(testDir, 'storage');
     cleanupDirs.push(testDir);
+  });
+
+  afterEach(() => {
+    if (originalStorageRoot === undefined) {
+      delete process.env.LOCUS_STORAGE_ROOT;
+    } else {
+      process.env.LOCUS_STORAGE_ROOT = originalStorageRoot;
+    }
   });
 
   afterAll(() => {

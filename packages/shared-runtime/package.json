@@ -9,7 +9,10 @@
       "import": "./index.js"
     }
   },
-  "files": ["*.js", "*.d.ts"],
+  "files": [
+    "*.js",
+    "*.d.ts"
+  ],
   "engines": {
     "node": ">=22.0.0"
   }

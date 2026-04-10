@@ -1,14 +1,13 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
 import {
-  projectHash,
-  resolveStorageRoot,
-  resolveProjectStorageDir,
   resolveDbPath,
   resolveInboxDir,
   resolveLogPath,
+  resolveProjectStorageDir,
+  resolveStorageRoot,
 } from '@locus/shared-runtime';
+import { afterEach, describe, expect, it } from 'vitest';
 
 const savedEnv = { ...process.env };
 afterEach(() => {

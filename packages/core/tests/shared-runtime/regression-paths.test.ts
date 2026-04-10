@@ -1,15 +1,14 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
 import {
   detectClientEnv,
-  resolveStorageRoot,
-  resolveProjectStorageDir,
+  projectHash,
   resolveDbPath,
   resolveInboxDir,
   resolveLogPath,
-  projectHash,
+  resolveStorageRoot,
 } from '@locus/shared-runtime';
+import { afterEach, describe, expect, it } from 'vitest';
 
 const savedEnv = { ...process.env };
 afterEach(() => {
@@ -111,9 +110,7 @@ describe('regression: explicit override beats everything', () => {
     process.env.CODEX_HOME = '/home/user/.codex';
     const root = '/home/user/my-project';
     const hash = projectHash(root);
-    expect(resolveDbPath(root)).toBe(
-      join('/mnt/shared/locus-data', `locus-${hash}`, 'locus.db'),
-    );
+    expect(resolveDbPath(root)).toBe(join('/mnt/shared/locus-data', `locus-${hash}`, 'locus.db'));
   });
 
   it('LOCUS_STORAGE_ROOT is used for log path', () => {
@@ -148,8 +145,6 @@ describe('regression: Windows path normalization', () => {
   });
 
   it('project hash is case-insensitive', () => {
-    expect(projectHash('C:/Users/Admin/MyProject')).toBe(
-      projectHash('c:/users/admin/myproject'),
-    );
+    expect(projectHash('C:/Users/Admin/MyProject')).toBe(projectHash('c:/users/admin/myproject'));
   });
 });

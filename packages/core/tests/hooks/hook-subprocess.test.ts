@@ -66,7 +66,10 @@ function readInboxEvent(projectRoot: string, filename: string): Record<string, u
 // Create a temp project dir with git init so resolveProjectRoot works
 mkdirSync(TEST_PROJECT_DIR, { recursive: true });
 spawnSync('git', ['init'], { cwd: TEST_PROJECT_DIR, stdio: 'pipe' });
-spawnSync('git', ['config', 'user.email', 'test@test.com'], { cwd: TEST_PROJECT_DIR, stdio: 'pipe' });
+spawnSync('git', ['config', 'user.email', 'test@test.com'], {
+  cwd: TEST_PROJECT_DIR,
+  stdio: 'pipe',
+});
 spawnSync('git', ['config', 'user.name', 'Test'], { cwd: TEST_PROJECT_DIR, stdio: 'pipe' });
 
 // Clean up after all tests
@@ -165,7 +168,6 @@ describe('Hook subprocess E2E — stdin bootstrap', () => {
 
     it('exits cleanly at captureLevel=metadata without writing', () => {
       // Clear inbox first to get a clean count
-      const inboxDir = resolveInboxDir(TEST_PROJECT_DIR);
       const beforeFiles = getInboxFiles(TEST_PROJECT_DIR);
       const beforePromptCount = beforeFiles.filter((f) => {
         const evt = readInboxEvent(TEST_PROJECT_DIR, f);
@@ -208,7 +210,7 @@ describe('Hook subprocess E2E — stdin bootstrap', () => {
           },
         }),
       ];
-      writeFileSync(transcriptPath, transcriptLines.join('\n') + '\n', 'utf-8');
+      writeFileSync(transcriptPath, `${transcriptLines.join('\n')}\n`, 'utf-8');
 
       const event = {
         hook_event_name: 'Stop',
@@ -239,10 +241,10 @@ describe('Hook subprocess E2E — stdin bootstrap', () => {
       const transcriptPath = join(TEST_PROJECT_DIR, `transcript-meta-${Date.now()}.jsonl`);
       writeFileSync(
         transcriptPath,
-        JSON.stringify({
+        `${JSON.stringify({
           type: 'assistant',
           message: { content: 'Should not be captured' },
-        }) + '\n',
+        })}\n`,
         'utf-8',
       );
 

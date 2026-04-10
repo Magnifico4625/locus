@@ -170,9 +170,7 @@ function extractFtsFromRow(kind: string, payloadJson: string | null): string {
 }
 
 function rebuildConversationFts(db: DatabaseAdapter): void {
-  const rows = db.all<ConversationRow>(
-    'SELECT id, kind, payload_json FROM conversation_events',
-  );
+  const rows = db.all<ConversationRow>('SELECT id, kind, payload_json FROM conversation_events');
   for (const row of rows) {
     const content = extractFtsFromRow(row.kind, row.payload_json);
     if (content.length > row.kind.length) {

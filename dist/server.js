@@ -6808,10 +6808,6 @@ function detectClientEnv() {
   return "generic";
 }
 
-// packages/shared-runtime/resolve-storage.js
-import { homedir } from "node:os";
-import { join } from "node:path";
-
 // packages/shared-runtime/project-hash.js
 import { createHash } from "node:crypto";
 import { normalize } from "node:path";
@@ -6821,6 +6817,8 @@ function projectHash(projectRoot) {
 }
 
 // packages/shared-runtime/resolve-storage.js
+import { homedir } from "node:os";
+import { join } from "node:path";
 function expandTilde(p) {
   if (p === "~") return homedir();
   if (p.startsWith("~/") || p.startsWith("~\\")) {
@@ -31370,9 +31368,7 @@ function extractFtsFromRow(kind, payloadJson) {
   return parts.join(" ");
 }
 function rebuildConversationFts(db) {
-  const rows = db.all(
-    "SELECT id, kind, payload_json FROM conversation_events"
-  );
+  const rows = db.all("SELECT id, kind, payload_json FROM conversation_events");
   for (const row of rows) {
     const content = extractFtsFromRow(row.kind, row.payload_json);
     if (content.length > row.kind.length) {
@@ -31670,7 +31666,9 @@ function handleAudit(deps) {
       const ftsCount = db.get("SELECT COUNT(*) as cnt FROM memories_fts")?.cnt ?? 0;
       const totalMemories = semanticCount + episodicCount;
       if (totalMemories > 0 && ftsCount === 0) {
-        lines.push(`WARNING: FTS5 index for memories is empty (${totalMemories} memories exist but 0 indexed). Run memory_doctor for repair.`);
+        lines.push(
+          `WARNING: FTS5 index for memories is empty (${totalMemories} memories exist but 0 indexed). Run memory_doctor for repair.`
+        );
       } else {
         lines.push(`FTS5 index: ${ftsCount} memories indexed (semantic+episodic).`);
       }
@@ -31681,7 +31679,9 @@ function handleAudit(deps) {
       const convEventCount = db.get("SELECT COUNT(*) as cnt FROM conversation_events")?.cnt ?? 0;
       const convFtsCount = db.get("SELECT COUNT(*) as cnt FROM conversation_fts")?.cnt ?? 0;
       if (convEventCount > 0 && convFtsCount === 0) {
-        lines.push(`WARNING: FTS5 index for conversation events is empty (${convEventCount} events exist but 0 indexed).`);
+        lines.push(
+          `WARNING: FTS5 index for conversation events is empty (${convEventCount} events exist but 0 indexed).`
+        );
       } else {
         lines.push(`FTS5 conversation index: ${convFtsCount}/${convEventCount} events indexed.`);
       }

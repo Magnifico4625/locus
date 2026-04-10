@@ -159,7 +159,9 @@ export function handleAudit(deps: AuditDeps): string {
       const ftsCount = db.get<CountRow>('SELECT COUNT(*) as cnt FROM memories_fts')?.cnt ?? 0;
       const totalMemories = semanticCount + episodicCount;
       if (totalMemories > 0 && ftsCount === 0) {
-        lines.push(`WARNING: FTS5 index for memories is empty (${totalMemories} memories exist but 0 indexed). Run memory_doctor for repair.`);
+        lines.push(
+          `WARNING: FTS5 index for memories is empty (${totalMemories} memories exist but 0 indexed). Run memory_doctor for repair.`,
+        );
       } else {
         lines.push(`FTS5 index: ${ftsCount} memories indexed (semantic+episodic).`);
       }
@@ -168,10 +170,14 @@ export function handleAudit(deps: AuditDeps): string {
     }
 
     if (hasConvFts) {
-      const convEventCount = db.get<CountRow>('SELECT COUNT(*) as cnt FROM conversation_events')?.cnt ?? 0;
-      const convFtsCount = db.get<CountRow>('SELECT COUNT(*) as cnt FROM conversation_fts')?.cnt ?? 0;
+      const convEventCount =
+        db.get<CountRow>('SELECT COUNT(*) as cnt FROM conversation_events')?.cnt ?? 0;
+      const convFtsCount =
+        db.get<CountRow>('SELECT COUNT(*) as cnt FROM conversation_fts')?.cnt ?? 0;
       if (convEventCount > 0 && convFtsCount === 0) {
-        lines.push(`WARNING: FTS5 index for conversation events is empty (${convEventCount} events exist but 0 indexed).`);
+        lines.push(
+          `WARNING: FTS5 index for conversation events is empty (${convEventCount} events exist but 0 indexed).`,
+        );
       } else {
         lines.push(`FTS5 conversation index: ${convFtsCount}/${convEventCount} events indexed.`);
       }

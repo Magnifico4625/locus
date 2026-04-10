@@ -1,7 +1,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { projectHash } from './project-hash.js';
 import { detectClientEnv } from './detect-client.js';
+import { projectHash } from './project-hash.js';
 
 /**
  * Expands a leading ~ to the user's home directory.

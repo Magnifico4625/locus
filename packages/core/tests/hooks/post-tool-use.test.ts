@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   classifyError,
   computeInboxDir,
@@ -416,6 +417,26 @@ describe('computeInboxDir', () => {
 describe('postToolUse default export', () => {
   // Temp dirs created by the hook will be under the user's home — we track and clean up
   const cleanupDirs: string[] = [];
+  let testStorageRoot: string;
+  let originalStorageRoot: string | undefined;
+
+  beforeEach(() => {
+    originalStorageRoot = process.env.LOCUS_STORAGE_ROOT;
+    testStorageRoot = join(
+      tmpdir(),
+      `locus-test-post-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    );
+    process.env.LOCUS_STORAGE_ROOT = testStorageRoot;
+    cleanupDirs.push(testStorageRoot);
+  });
+
+  afterEach(() => {
+    if (originalStorageRoot === undefined) {
+      delete process.env.LOCUS_STORAGE_ROOT;
+    } else {
+      process.env.LOCUS_STORAGE_ROOT = originalStorageRoot;
+    }
+  });
 
   afterAll(() => {
     for (const dir of cleanupDirs) {

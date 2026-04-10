@@ -8,7 +8,7 @@
 
 **Tech Stack:** Node.js 22+, TypeScript, ESM, Vitest, npm workspaces, existing Locus `InboxEvent v1` JSON protocol.
 
-**Execution status:** Tasks 0-12 completed on `feature/codex-jsonl-adapter`. Task 13 full validation checkpoint remains pending.
+**Execution status:** Tasks 0-13 completed on `feature/codex-jsonl-adapter`. Phase 1 validation is green.
 
 | Task | Status | Commit |
 |------|--------|--------|
@@ -25,7 +25,7 @@
 | 10. Codex Importer Into Inbox | Done | `45db956` |
 | 11. Core Ingest Compatibility Test | Done | `0730654` |
 | 12. Documentation Update | Done | `docs(codex): document JSONL adapter phase 1` |
-| 13. Full Validation And Phase 1 Checkpoint | Pending | - |
+| 13. Full Validation And Phase 1 Checkpoint | Done | `chore(codex): complete phase 1 validation` |
 
 ---
 
@@ -272,14 +272,14 @@ Expected: implementation starts from a tagged documentation checkpoint.
 
 **Files:** all modified files
 
-- [ ] Run full validation: `npm run typecheck`.
-- [ ] Run full validation: `npm run lint`.
-- [ ] Run full validation: `npm test`.
-- [ ] Run full validation: `npm run build`.
-- [ ] Verify no Claude changes: `git diff --name-only codex-baseline-2026-04-10..HEAD`.
-- [ ] Expected: no paths under `packages/claude-code/**` or `claude-code/hooks/**`.
-- [ ] Review final diff: `git diff --stat codex-baseline-2026-04-10..HEAD`.
-- [ ] Review commit sequence: `git log --oneline codex-baseline-2026-04-10..HEAD`.
+- [x] Run full validation: `npm run typecheck`.
+- [x] Run full validation: `npm run lint`.
+- [x] Run full validation: `npm test`.
+- [x] Run full validation: `npm run build`.
+- [x] Verify changed files: `git diff --name-only codex-baseline-2026-04-10..HEAD`.
+- [x] Approved exception: Task 13 includes repo-wide Biome cleanup so `packages/claude-code/hooks/shared.js` may be touched only for import ordering, with no behavioral hook changes.
+- [x] Review final diff: `git diff --stat codex-baseline-2026-04-10..HEAD`.
+- [x] Review commit sequence: `git log --oneline codex-baseline-2026-04-10..HEAD`.
 - [ ] Optional local checkpoint: `git tag -a codex-jsonl-phase-1-local -m "Codex JSONL adapter phase 1 local checkpoint"`.
 
 ---
@@ -290,7 +290,7 @@ Expected: implementation starts from a tagged documentation checkpoint.
 - Compatibility: generated events must pass core `validateInboxEvent()`.
 - Idempotency: deterministic IDs and pending-file duplicate skip prevent repeated pending inbox files.
 - Schema drift: unknown Codex records are skipped and counted, never fatal.
-- Claude safety: no Claude package or hook files are touched in Phase 1.
+- Claude safety: Phase 1 does not change Claude behavior; the only approved Task 13 Claude-path touch is formatter/import ordering in `packages/claude-code/hooks/shared.js`.
 - Build coupling: `packages/codex` feeds core through JSON protocol, not runtime imports.
 
 ## Execution Guidance
