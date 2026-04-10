@@ -37,3 +37,5 @@ export interface CodexNormalizeResult {
   events: CodexNormalizedEvent[];
   skipped: number;
 }
+
+export type CodexCaptureMode = 'off' | 'metadata' | 'redacted' | 'full';
