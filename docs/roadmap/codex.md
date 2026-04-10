@@ -78,6 +78,16 @@ Goal: import Codex session history into the existing Locus inbox pipeline.
 
 Implementation plan: `docs/superpowers/plans/2026-04-10-codex-jsonl-adapter-phase-1.md`
 
+Status: implemented as a library foundation on `feature/codex-jsonl-adapter`. The MCP-facing `memory_import_codex` tool is still Phase 2.
+
+Implemented:
+
+- `packages/codex` parses tolerant Codex JSONL records.
+- `packages/codex` discovers `$CODEX_HOME/sessions/**/rollout-*.jsonl`, with fallback to `~/.codex/sessions`.
+- `importCodexSessionsToInbox()` converts rollout sessions into existing `InboxEvent v1` JSON files.
+- `LOCUS_CODEX_CAPTURE` supports `off`, `metadata`, `redacted`, and `full`.
+- Core compatibility is proven programmatically by importing Codex fixtures into a temp inbox and passing them through `processInbox()`.
+
 Tasks:
 
 - Add a Codex JSONL parser in `packages/codex`.

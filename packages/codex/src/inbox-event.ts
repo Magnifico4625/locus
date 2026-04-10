@@ -1,10 +1,6 @@
 import { redactCodexText, shouldImportCodexEvent } from './capture.js';
 import { createCodexEventId, createCodexSourceEventId } from './ids.js';
-import type {
-  CodexCaptureMode,
-  CodexNormalizedEvent,
-  CodexNormalizedKind,
-} from './types.js';
+import type { CodexCaptureMode, CodexNormalizedEvent, CodexNormalizedKind } from './types.js';
 
 export interface LocusInboxEventV1 {
   version: 1;

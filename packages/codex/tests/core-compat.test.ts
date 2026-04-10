@@ -1,11 +1,11 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { processInbox } from '../../core/src/ingest/pipeline.js';
-import { NodeSqliteAdapter } from '../../core/src/storage/node-sqlite.js';
 import { runMigrations } from '../../core/src/storage/migrations.js';
+import { NodeSqliteAdapter } from '../../core/src/storage/node-sqlite.js';
 import type { ConversationEventRow } from '../../core/src/types.js';
 import { importCodexSessionsToInbox } from '../src/importer.js';
 

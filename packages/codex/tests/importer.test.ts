@@ -21,7 +21,11 @@ function tempRoot(): string {
   return dir;
 }
 
-function copyFixtureAsRollout(sessionsDir: string, fixtureName: string, rolloutName: string): string {
+function copyFixtureAsRollout(
+  sessionsDir: string,
+  fixtureName: string,
+  rolloutName: string,
+): string {
   const target = join(sessionsDir, rolloutName);
   cpSync(join(fixturesDir, fixtureName), target);
   return target;

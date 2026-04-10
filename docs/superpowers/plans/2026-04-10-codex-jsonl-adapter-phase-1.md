@@ -8,6 +8,25 @@
 
 **Tech Stack:** Node.js 22+, TypeScript, ESM, Vitest, npm workspaces, existing Locus `InboxEvent v1` JSON protocol.
 
+**Execution status:** Tasks 0-12 completed on `feature/codex-jsonl-adapter`. Task 13 full validation checkpoint remains pending.
+
+| Task | Status | Commit |
+|------|--------|--------|
+| 0. Git Baseline And Documentation Checkpoint | Done | `d87350b` |
+| 1. Codex Package Test And Typecheck Harness | Done | `8b3aac2` |
+| 2. Sanitized Codex JSONL Fixtures | Done | `cc2beb2` |
+| 3. Tolerant JSONL Parser | Done | `ceaf0a4` |
+| 4. Stable IDs And Source Event Identity | Done | `440984c` |
+| 5. Normalize Codex Records | Done | `6a13e0b` |
+| 6. Capture Mode Gate | Done | `324c9fe` |
+| 7. Map Normalized Events To InboxEvent V1 | Done | `03137e7` |
+| 8. Codex Path Resolution And Session File Discovery | Done | `f286a62` |
+| 9. Atomic Codex Inbox Writer | Done | `6c19517` |
+| 10. Codex Importer Into Inbox | Done | `45db956` |
+| 11. Core Ingest Compatibility Test | Done | `0730654` |
+| 12. Documentation Update | Done | `docs(codex): document JSONL adapter phase 1` |
+| 13. Full Validation And Phase 1 Checkpoint | Pending | - |
+
 ---
 
 ## Scope

@@ -1,9 +1,4 @@
-import {
-  mkdirSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -32,9 +27,7 @@ describe('resolveCodexHome', () => {
   });
 
   it('expands leading tilde in CODEX_HOME', () => {
-    expect(resolveCodexHome({ CODEX_HOME: '~/.codex-alt' })).toBe(
-      join(homedir(), '.codex-alt'),
-    );
+    expect(resolveCodexHome({ CODEX_HOME: '~/.codex-alt' })).toBe(join(homedir(), '.codex-alt'));
   });
 
   it('falls back to ~/.codex when CODEX_HOME is missing or empty', () => {

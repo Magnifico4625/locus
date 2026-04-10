@@ -9,10 +9,7 @@ export function getCodexCaptureMode(
   return isCodexCaptureMode(value) ? value : 'metadata';
 }
 
-export function shouldImportCodexEvent(
-  mode: CodexCaptureMode,
-  kind: CodexNormalizedKind,
-): boolean {
+export function shouldImportCodexEvent(mode: CodexCaptureMode, kind: CodexNormalizedKind): boolean {
   if (mode === 'off') {
     return false;
   }

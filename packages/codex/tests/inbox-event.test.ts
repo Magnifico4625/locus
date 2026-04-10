@@ -1,11 +1,11 @@
-import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { validateInboxEvent } from '../../core/src/ingest/schema.js';
+import { toInboxEvent } from '../src/inbox-event.js';
 import { parseCodexJsonl } from '../src/jsonl.js';
 import { normalizeCodexRecords } from '../src/normalize.js';
-import { toInboxEvent } from '../src/inbox-event.js';
 import type { CodexNormalizedEvent } from '../src/types.js';
 
 const fixturesDir = join(import.meta.dirname, 'fixtures');
@@ -50,13 +50,21 @@ describe('toInboxEvent', () => {
 
   it('creates deterministic event ids from stable source_event_id', () => {
     const [event] = normalizedFromFixture('basic-session.jsonl');
-    const inboxEvent = toInboxEvent(event!, 'full');
+    expect(event).toBeDefined();
+    if (!event) {
+      throw new Error('Expected basic fixture to produce at least one normalized event');
+    }
+    const inboxEvent = toInboxEvent(event, 'full');
+    expect(inboxEvent).not.toBeNull();
+    if (!inboxEvent) {
+      throw new Error('Expected full capture to produce an inbox event');
+    }
 
-    expect(inboxEvent?.source_event_id).toBe(
+    expect(inboxEvent.source_event_id).toBe(
       'codex:sess_basic_001:basic-session.jsonl:1:session_start:no-item',
     );
-    expect(inboxEvent?.event_id).toBe(
-      createHash('sha256').update(inboxEvent!.source_event_id!).digest('hex'),
+    expect(inboxEvent.event_id).toBe(
+      createHash('sha256').update(inboxEvent.source_event_id).digest('hex'),
     );
   });
 
@@ -109,7 +117,8 @@ describe('toInboxEvent', () => {
       sourceFile: 'inline.jsonl',
       sourceLine: 2,
       payload: {
-        prompt: 'Use Authorization: Bearer safeexampletoken123 and OPENAI_API_KEY=sk-safeexample1234567890',
+        prompt:
+          'Use Authorization: Bearer safeexampletoken123 and OPENAI_API_KEY=sk-safeexample1234567890',
       },
     };
     const assistant: CodexNormalizedEvent = {

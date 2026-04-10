@@ -2,16 +2,16 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { writeCodexInboxEvent } from '../src/inbox-writer.js';
 import type { LocusInboxEventV1 } from '../src/inbox-event.js';
+import { writeCodexInboxEvent } from '../src/inbox-writer.js';
 
 const tempRoots: string[] = [];
 
@@ -64,9 +64,7 @@ describe('writeCodexInboxEvent', () => {
       timestamp: 1770000000123,
     });
 
-    expect(writeCodexInboxEvent(inboxDir, event).filename).toBe(
-      '1770000000123-12345678.json',
-    );
+    expect(writeCodexInboxEvent(inboxDir, event).filename).toBe('1770000000123-12345678.json');
   });
 
   it('renames through a tmp file without leaving tmp files behind', () => {

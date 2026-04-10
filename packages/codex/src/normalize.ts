@@ -1,8 +1,4 @@
-import type {
-  CodexJsonlRecord,
-  CodexNormalizeResult,
-  CodexNormalizedEvent,
-} from './types.js';
+import type { CodexJsonlRecord, CodexNormalizedEvent, CodexNormalizeResult } from './types.js';
 
 const UNKNOWN_SESSION = 'unknown-session';
 

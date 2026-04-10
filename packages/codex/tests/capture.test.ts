@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  getCodexCaptureMode,
-  redactCodexText,
-  shouldImportCodexEvent,
-} from '../src/capture.js';
+import { getCodexCaptureMode, redactCodexText, shouldImportCodexEvent } from '../src/capture.js';
 import type { CodexCaptureMode, CodexNormalizedKind } from '../src/types.js';
 
 const allKinds: CodexNormalizedKind[] = [
@@ -15,12 +11,9 @@ const allKinds: CodexNormalizedKind[] = [
 ];
 
 describe('getCodexCaptureMode', () => {
-  it.each([
-    ['off'],
-    ['metadata'],
-    ['redacted'],
-    ['full'],
-  ] satisfies [CodexCaptureMode][])('accepts %s', (mode) => {
+  it.each([['off'], ['metadata'], ['redacted'], ['full']] satisfies [
+    CodexCaptureMode,
+  ][])('accepts %s', (mode) => {
     expect(getCodexCaptureMode({ LOCUS_CODEX_CAPTURE: mode })).toBe(mode);
   });
 

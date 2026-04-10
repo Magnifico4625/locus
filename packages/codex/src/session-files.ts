@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { type Dirent, readdirSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 
 export function findCodexRolloutFiles(sessionsDir: string): string[] {
@@ -6,7 +6,7 @@ export function findCodexRolloutFiles(sessionsDir: string): string[] {
 }
 
 function collectRolloutFiles(dir: string): string[] {
-  let entries;
+  let entries: Dirent[];
   try {
     entries = readdirSync(dir, { withFileTypes: true });
   } catch {
