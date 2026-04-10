@@ -1,0 +1,5 @@
+{"type":"session_meta","timestamp":"2026-04-10T10:00:00.000Z","session_id":"sess_bad_001","cwd":"C:\\Projects\\SampleApp","model":"gpt-5.4"}
+{this is not json}
+{"type":"event_msg","subtype":"user_message","timestamp":"2026-04-10T10:00:01.000Z","message":"Continue parsing after a bad line."}
+42
+{"type":"event_msg","subtype":"task_complete","timestamp":"2026-04-10T10:00:02.000Z","message":"Malformed fixture completed."}

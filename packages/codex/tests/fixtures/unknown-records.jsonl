@@ -1,0 +1,3 @@
+{"type":"unknown_future_type","timestamp":"2026-04-10T11:00:00.000Z","payload":{"safe":true}}
+{"type":"event_msg","subtype":"future_subtype","timestamp":"2026-04-10T11:00:01.000Z","message":"Unknown subtype should be skipped."}
+{"type":"response_item","timestamp":"2026-04-10T11:00:02.000Z","item":{"type":"future_item","content":[]}}
