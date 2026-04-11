@@ -389,3 +389,51 @@ export interface ForgetResponseError {
 }
 
 export type ForgetResponse = ForgetResponseDeleted | ForgetResponsePending | ForgetResponseError;
+
+// ─── Codex Import ───
+
+export type CodexImportCaptureMode = 'off' | CaptureLevel;
+
+export interface MemoryImportCodexResponseOk {
+  status: 'ok';
+  captureMode: Exclude<CodexImportCaptureMode, 'off'>;
+  imported: number;
+  skipped: number;
+  duplicates: number;
+  errors: number;
+  filesScanned: number;
+  latestSession?: string;
+  processed: number;
+  remaining: number;
+  message: string;
+}
+
+export interface MemoryImportCodexResponseDisabled {
+  status: 'disabled';
+  captureMode: 'off';
+  imported: 0;
+  skipped: 0;
+  duplicates: 0;
+  errors: 0;
+  filesScanned: 0;
+  message: string;
+}
+
+export interface MemoryImportCodexResponseError {
+  status: 'error';
+  captureMode: CodexImportCaptureMode;
+  imported: number;
+  skipped: number;
+  duplicates: number;
+  errors: number;
+  filesScanned: number;
+  latestSession?: string;
+  processed?: number;
+  remaining?: number;
+  message: string;
+}
+
+export type MemoryImportCodexResponse =
+  | MemoryImportCodexResponseOk
+  | MemoryImportCodexResponseDisabled
+  | MemoryImportCodexResponseError;
