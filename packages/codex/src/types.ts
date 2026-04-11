@@ -39,3 +39,29 @@ export interface CodexNormalizeResult {
 }
 
 export type CodexCaptureMode = 'off' | 'metadata' | 'redacted' | 'full';
+
+export interface CodexImportOptions {
+  inboxDir: string;
+  sessionsDir?: string;
+  captureMode?: CodexCaptureMode;
+  latestOnly?: boolean;
+  projectRoot?: string;
+  sessionId?: string;
+  since?: number;
+  shouldSkipEventId?: (eventId: string) => boolean;
+  env?: Record<string, string | undefined>;
+}
+
+export interface CodexImportMetrics {
+  filesScanned: number;
+  recordsParsed: number;
+  parseErrors: number;
+  normalized: number;
+  written: number;
+  duplicatePending: number;
+  skippedUnknown: number;
+  skippedByCapture: number;
+  skippedByFilter: number;
+  errors: number;
+  latestSession?: string;
+}

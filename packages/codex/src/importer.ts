@@ -6,27 +6,7 @@ import { parseCodexJsonl } from './jsonl.js';
 import { normalizeCodexRecords } from './normalize.js';
 import { resolveCodexSessionsDir } from './paths.js';
 import { findCodexRolloutFiles } from './session-files.js';
-import type { CodexCaptureMode, CodexNormalizedEvent } from './types.js';
-
-export interface CodexImportOptions {
-  inboxDir: string;
-  sessionsDir?: string;
-  captureMode?: CodexCaptureMode;
-  env?: Record<string, string | undefined>;
-}
-
-export interface CodexImportMetrics {
-  filesScanned: number;
-  recordsParsed: number;
-  parseErrors: number;
-  normalized: number;
-  written: number;
-  duplicatePending: number;
-  skippedUnknown: number;
-  skippedByCapture: number;
-  errors: number;
-  latestSession?: string;
-}
+import type { CodexImportMetrics, CodexImportOptions, CodexNormalizedEvent } from './types.js';
 
 export function importCodexSessionsToInbox(options: CodexImportOptions): CodexImportMetrics {
   const captureMode = options.captureMode ?? getCodexCaptureMode(options.env);
@@ -35,8 +15,9 @@ export function importCodexSessionsToInbox(options: CodexImportOptions): CodexIm
     env: options.env,
   });
   const metrics = createEmptyMetrics();
-  const files = findCodexRolloutFiles(sessionsDir);
+  const files = selectFiles(findCodexRolloutFiles(sessionsDir), options);
   metrics.filesScanned = files.length;
+  let latestTimestamp = Number.NEGATIVE_INFINITY;
 
   for (const filePath of files) {
     let raw: string;
@@ -52,11 +33,13 @@ export function importCodexSessionsToInbox(options: CodexImportOptions): CodexIm
     metrics.parseErrors += parsed.errors.length;
 
     const normalized = normalizeCodexRecords(parsed.records);
-    metrics.normalized += normalized.events.length;
     metrics.skippedUnknown += normalized.skipped;
-    updateLatestSession(metrics, normalized.events);
+    const filteredEvents = normalized.events.filter((event) => matchesFilters(event, options));
+    metrics.normalized += filteredEvents.length;
+    metrics.skippedByFilter += normalized.events.length - filteredEvents.length;
+    latestTimestamp = updateLatestSession(metrics, filteredEvents, latestTimestamp);
 
-    for (const event of normalized.events) {
+    for (const event of filteredEvents) {
       const inboxEvent = toInboxEvent(event, captureMode);
       if (!inboxEvent) {
         metrics.skippedByCapture++;
@@ -89,20 +72,49 @@ function createEmptyMetrics(): CodexImportMetrics {
     duplicatePending: 0,
     skippedUnknown: 0,
     skippedByCapture: 0,
+    skippedByFilter: 0,
     errors: 0,
+    latestSession: undefined,
   };
 }
 
 function updateLatestSession(
   metrics: CodexImportMetrics,
   events: readonly CodexNormalizedEvent[],
-): void {
-  let latestTimestamp = Number.NEGATIVE_INFINITY;
-
+  latestTimestamp: number,
+): number {
+  let nextLatestTimestamp = latestTimestamp;
   for (const event of events) {
-    if (event.timestamp >= latestTimestamp) {
-      latestTimestamp = event.timestamp;
+    if (event.timestamp >= nextLatestTimestamp) {
+      nextLatestTimestamp = event.timestamp;
       metrics.latestSession = event.sessionId;
     }
   }
+
+  return nextLatestTimestamp;
+}
+
+function selectFiles(files: readonly string[], options: CodexImportOptions): string[] {
+  if (options.latestOnly) {
+    const latestFile = files.at(-1);
+    return latestFile === undefined ? [] : [latestFile];
+  }
+
+  return [...files];
+}
+
+function matchesFilters(event: CodexNormalizedEvent, options: CodexImportOptions): boolean {
+  if (options.projectRoot !== undefined && event.projectRoot !== options.projectRoot) {
+    return false;
+  }
+
+  if (options.sessionId !== undefined && event.sessionId !== options.sessionId) {
+    return false;
+  }
+
+  if (options.since !== undefined && event.timestamp < options.since) {
+    return false;
+  }
+
+  return true;
 }
