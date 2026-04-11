@@ -12,6 +12,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
+    "@locus/codex": "*",
     "@locus/shared-runtime": "*",
     "@modelcontextprotocol/sdk": "^1.26.0",
     "zod": "^3.25 || ^4.0"
