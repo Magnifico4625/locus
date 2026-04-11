@@ -316,4 +316,24 @@ describe('importCodexSessionsToInbox', () => {
     expect(metrics.written).toBe(2);
     expect(metrics.latestSession).toBe('sess_new_001');
   });
+
+  it('counts shouldSkipEventId matches as duplicates without writing inbox files', () => {
+    const root = tempRoot();
+    const sessionsDir = join(root, 'sessions');
+    const inboxDir = join(root, 'inbox');
+    mkdirSync(sessionsDir, { recursive: true });
+    copyFixtureAsRollout(sessionsDir, 'basic-session.jsonl', 'rollout-basic.jsonl');
+
+    const metrics = importCodexSessionsToInbox({
+      sessionsDir,
+      inboxDir,
+      captureMode: 'full',
+      shouldSkipEventId: () => true,
+    });
+
+    expect(metrics.written).toBe(0);
+    expect(metrics.duplicatePending).toBe(4);
+    expect(metrics.latestSession).toBe('sess_basic_001');
+    expect(existsSync(inboxDir)).toBe(false);
+  });
 });

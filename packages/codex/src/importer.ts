@@ -46,6 +46,11 @@ export function importCodexSessionsToInbox(options: CodexImportOptions): CodexIm
         continue;
       }
 
+      if (options.shouldSkipEventId?.(inboxEvent.event_id) === true) {
+        metrics.duplicatePending++;
+        continue;
+      }
+
       try {
         const writeResult = writeCodexInboxEvent(options.inboxDir, inboxEvent);
         if (writeResult.status === 'written') {
