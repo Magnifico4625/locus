@@ -21,6 +21,10 @@ import { ConfirmationTokenStore } from './tools/confirmation-token.js';
 import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';
+import {
+  CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+  coordinateCodexAutoImport,
+} from './tools/auto-import-codex.js';
 import { handleImportCodex } from './tools/import-codex.js';
 import { handlePurge } from './tools/purge.js';
 import { handleRemember } from './tools/remember.js';
@@ -28,7 +32,13 @@ import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
 import { handleTimeline } from './tools/timeline.js';
-import type { DatabaseAdapter, IngestMetrics, LocusConfig, ProjectRootMethod } from './types.js';
+import type {
+  CodexAutoImportSnapshot,
+  DatabaseAdapter,
+  IngestMetrics,
+  LocusConfig,
+  ProjectRootMethod,
+} from './types.js';
 import { LOCUS_DEFAULTS } from './types.js';
 // ─── Public interfaces ────────────────────────────────────────────────────────
 
@@ -103,6 +113,14 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   let _lastIngestMetrics: IngestMetrics | null = null;
   let lastIngestTime = 0;
   const INGEST_DEBOUNCE_MS = 30_000;
+  let codexAutoImportSnapshot: CodexAutoImportSnapshot = {
+    clientDetected: false,
+    debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+    lastStatus: 'idle',
+    lastImported: 0,
+    lastDuplicates: 0,
+    lastErrors: 0,
+  };
 
   try {
     const startupMetrics = processInbox(inboxDir, db, {
@@ -164,7 +182,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     content: [{ type: 'text' as const, text: handleExplore(path, { db }) }],
   }));
 
-  // 2. memory_search (with pre-search inbox processing)
+  // 2. memory_search (with Codex auto-import + pre-search inbox processing)
   server.tool(
     'memory_search',
     {
@@ -194,8 +212,28 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       offset: z.number().optional().describe('Skip N conversation results'),
     },
     async ({ query, timeRange, filePath, kind, source, limit, offset }) => {
-      // Process inbox before search (debounced, max 50 events)
-      if (Date.now() - lastIngestTime > INGEST_DEBOUNCE_MS) {
+      const now = Date.now();
+      const autoImport = coordinateCodexAutoImport({
+        now,
+        snapshot: codexAutoImportSnapshot,
+        runImport: () =>
+          handleImportCodex(
+            { latestOnly: true },
+            {
+              db,
+              inboxDir,
+              captureLevel: config.captureLevel,
+              fts5Available: fts5,
+              env: process.env,
+              processInbox,
+              importCodexSessionsToInbox,
+            },
+          ),
+      });
+      codexAutoImportSnapshot = autoImport.snapshot;
+
+      // Process any remaining inbox events before search (debounced, max 50 events)
+      if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
         try {
           const metrics = processInbox(inboxDir, db, {
             batchLimit: 50,
@@ -203,7 +241,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
             fts5Available: fts5,
           });
           _lastIngestMetrics = metrics;
-          lastIngestTime = Date.now();
+          lastIngestTime = now;
         } catch {
           // Pre-search ingest failure should not block the search
         }
