@@ -276,4 +276,17 @@ describe('handleStatus', () => {
     const status = handleStatus(makeStatusDeps(adapter, tempDir));
     expect(status.inboxPending).toBe(0);
   });
+
+  it('exposes a codexAutoImport snapshot with a stable default shape', () => {
+    const status = handleStatus(makeStatusDeps(adapter, tempDir));
+
+    expect(status.codexAutoImport).toEqual({
+      clientDetected: false,
+      debounceMs: 45000,
+      lastStatus: 'idle',
+      lastImported: 0,
+      lastDuplicates: 0,
+      lastErrors: 0,
+    });
+  });
 });

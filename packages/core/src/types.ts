@@ -303,6 +303,28 @@ export interface ProjectIdentity {
 
 // ─── Status ───
 
+export type CodexAutoImportStatus =
+  | 'idle'
+  | 'skipped_not_codex'
+  | 'debounced'
+  | 'disabled'
+  | 'imported'
+  | 'duplicates_only'
+  | 'error';
+
+export interface CodexAutoImportSnapshot {
+  clientDetected: boolean;
+  debounceMs: number;
+  lastStatus: CodexAutoImportStatus;
+  lastAttemptAt?: number;
+  lastRunAt?: number;
+  lastImported: number;
+  lastDuplicates: number;
+  lastErrors: number;
+  latestSession?: string;
+  message?: string;
+}
+
 export interface MemoryStatus {
   projectPath: string;
   projectRoot: string;
@@ -322,6 +344,7 @@ export interface MemoryStatus {
   storageBackend: 'node:sqlite' | 'sql.js';
   fts5Available: boolean;
   searchEngine: 'FTS5' | 'LIKE fallback';
+  codexAutoImport?: CodexAutoImportSnapshot;
 }
 
 // ─── Doctor ───
