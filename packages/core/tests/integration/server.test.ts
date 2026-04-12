@@ -38,6 +38,11 @@ function createTestInboxEvent(overrides?: Partial<InboxEvent>): InboxEvent {
   };
 }
 
+function getRegisteredToolNames(server: ServerContext['server']): string[] {
+  const registry = (server as { _registeredTools?: Record<string, unknown> })._registeredTools;
+  return registry ? Object.keys(registry) : [];
+}
+
 // ─── Shared context ───────────────────────────────────────────────────────────
 
 let tempDir: string;
@@ -73,6 +78,17 @@ describe('createServer', () => {
     expect(ctx.projectRoot.length).toBeGreaterThan(0);
     // projectRootMethod is one of the three known values
     expect(['git-root', 'project-marker', 'cwd-fallback']).toContain(ctx.projectRootMethod);
+  });
+
+  it('registers memory_import_codex without breaking startup', async () => {
+    const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'codex-tool.db') });
+    try {
+      expect(getRegisteredToolNames(ctx2.server)).toContain('memory_import_codex');
+      expect(ctx2.db).toBeDefined();
+      expect(ctx2.server).toBeDefined();
+    } finally {
+      ctx2.cleanup();
+    }
   });
 
   it('resources return formatted strings — not stub text', () => {
