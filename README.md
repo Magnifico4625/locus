@@ -30,17 +30,17 @@ Locus is an MCP server. It works with any tool that supports the [Model Context 
 
 | Feature | Claude Code | Codex CLI | Cursor / Windsurf / Cline / Zed |
 |---------|-------------|-----------|----------------------------------|
-| 12 MCP tools (search, explore, remember...) | Full support | Full support | Full support |
+| 13 MCP tools (search, explore, remember...) | Full support | Full support | Full support |
 | 3 MCP resources (project-map, decisions, recent) | Auto-injected | On demand | Manual config |
-| Carbon Copy capture (hooks) | Full support (v3.0) | Planned (v3.2) | Planned for v3.2 via adapters |
+| Carbon Copy capture | Full support via hooks (v3.0) | Manual import via `memory_import_codex` | Planned for v3.2 via adapters |
 
-**How it works:** The MCP server provides 12 tools and 3 resources to any connected client. Storage location is auto-detected per client (`~/.claude/memory/` for Claude Code, `$CODEX_HOME/memory/` for Codex CLI, `~/.locus/memory/` for others). In Claude Code, three native hooks additionally capture conversation events into a local inbox for passive memory. Codex CLI gets full MCP tool support; passive capture via session JSONL adapter is planned for v3.2.
+**How it works:** The MCP server provides 13 tools and 3 resources to any connected client. Storage location is auto-detected per client (`~/.claude/memory/` for Claude Code, `$CODEX_HOME/memory/` for Codex CLI, `~/.locus/memory/` for others). In Claude Code, three native hooks additionally capture conversation events into a local inbox for passive memory. In Codex CLI, the `memory_import_codex` tool can manually import rollout JSONL sessions into the same inbox and storage pipeline. Automatic pre-search import remains Phase 3 work.
 
 ## Features
 
 - 3 memory layers: structural (auto-parsed), semantic (user-curated), episodic (auto-captured)
 - **Carbon Copy**: passive conversation capture via inbox-based event protocol
-- 12 MCP tools for exploring, searching, remembering, and managing memory
+- 13 MCP tools for exploring, searching, remembering, and managing memory
 - 3 auto-injected MCP resources (<3.5k tokens total)
 - Incremental scanning: git-diff → mtime → full rescan strategies
 - 4-layer security: metadata-only → file denylist → content redaction → audit UX
@@ -83,7 +83,21 @@ args = ["/path/to/locus/dist/server.js"]
 LOCUS_LOG = "error"
 ```
 
-> **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 12 MCP tools and 3 resources work immediately. Passive conversation capture requires a Codex adapter (planned for v3.2).
+> **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 13 MCP tools and 3 resources work immediately. Manual Codex session import is available through `memory_import_codex`; automatic import before search remains future work for Phase 3 / v3.2.
+
+Import the latest Codex rollout session on demand:
+
+```text
+memory_import_codex({"latestOnly":true})
+```
+
+Import only sessions for one project or session id:
+
+```text
+memory_import_codex({"projectRoot":"C:\\Users\\Admin\\my-project"})
+memory_import_codex({"sessionId":"sess_abc123"})
+memory_import_codex({"since":1710000000000})
+```
 
 ### Any MCP Client (Cursor, Windsurf, Cline, Zed, etc.)
 
@@ -112,7 +126,7 @@ Add this server entry:
 }
 ```
 
-> **Note:** When using Locus outside Claude Code, the MCP tools and resources work fully, but passive conversation capture (Carbon Copy hooks) is not yet available. Adapter support for IDE log files is planned for v3.2.
+> **Note:** When using Locus outside Claude Code, the MCP tools and resources work fully. Codex CLI additionally supports manual session import via `memory_import_codex`. Adapter support for IDE log files in Cursor, Windsurf, and similar clients is planned for v3.2.
 
 ### First Use
 
@@ -144,6 +158,7 @@ export LOCUS_CAPTURE_LEVEL=redacted  # prompts as keywords only, no AI responses
 | `memory_compact` | `maxAgeDays?, keepSessions?` | Clean up old episodic memory entries |
 | `memory_purge` | `confirmToken?: string` | Clear all project memory (two-step confirmation) |
 | `memory_timeline` | `timeRange?, kind?, filePath?, summary?` | Chronological event feed with optional summary mode |
+| `memory_import_codex` | `latestOnly?, projectRoot?, sessionId?, since?` | Manually import Codex rollout JSONL sessions into inbox and storage |
 
 ### Extended Search Parameters (v3.0)
 
@@ -178,6 +193,7 @@ Three MCP resources provide lightweight context at the start of every session (<
 |----------|--------|---------|-------------|
 | `LOCUS_LOG` | `error`, `info`, `debug` | `error` | Logging verbosity |
 | `LOCUS_CAPTURE_LEVEL` | `metadata`, `redacted`, `full` | `metadata` | Capture detail level (hooks + MCP server) |
+| `LOCUS_CODEX_CAPTURE` | `off`, `metadata`, `redacted`, `full` | `metadata` | Codex JSONL import behavior for `memory_import_codex` |
 
 **Capture Levels:**
 
@@ -239,7 +255,7 @@ Locus uses a 4-layer security model:
 +------------------------------------------+
 |   Adapters (event sources):              |
 |   Claude Code hooks (v3.0)               |
-|   Codex JSONL adapter (v3.2)             |
+|   Codex JSONL adapter + manual import    |
 |   log-tailer / cli-wrapper (v3.2)        |
 |   -> inbox/ (atomic JSON events)         |
 +------------------------------------------+
@@ -251,7 +267,7 @@ Locus uses a 4-layer security model:
 - **Conversation events**: passively captured via adapters and indexed for search
 - **Storage**: node:sqlite (Node 22+) primary, sql.js fallback
 - **FTS5**: full-text search across all layers, auto-detected at startup
-- **Monorepo**: `@locus/core` (MCP server) + `@locus/shared-runtime` (path resolution) + `@locus/claude-code` (hooks) + `@locus/codex` (skill + config)
+- **Monorepo**: `@locus/core` (MCP server) + `@locus/shared-runtime` (path resolution) + `@locus/claude-code` (hooks) + `@locus/codex` (skill + JSONL adapter + config)
 
 ## FAQ
 

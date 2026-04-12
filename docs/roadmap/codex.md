@@ -78,7 +78,7 @@ Goal: import Codex session history into the existing Locus inbox pipeline.
 
 Implementation plan: `docs/superpowers/plans/2026-04-10-codex-jsonl-adapter-phase-1.md`
 
-Status: implemented as a library foundation on `feature/codex-jsonl-adapter`. The MCP-facing `memory_import_codex` tool is still Phase 2.
+Status: implemented as the library foundation on `feature/codex-jsonl-adapter`. The MCP-facing `memory_import_codex` tool was added in Phase 2 on `feature/codex-manual-import`.
 
 Implemented:
 
@@ -114,7 +114,7 @@ Exit criteria:
 
 - Codex session JSONL can be imported into Locus inbox.
 - Existing `processInbox()` stores imported events in SQLite and FTS5.
-- Programmatic compatibility with `memory_timeline` storage is proven through core ingest tests. User-visible manual timeline inspection is completed in Phase 2 after `memory_import_codex` exists.
+- Programmatic compatibility with `memory_timeline` storage is proven through core ingest tests. User-visible manual timeline inspection is enabled in Phase 2 through `memory_import_codex`.
 - Claude Code hooks remain unchanged and tests still pass.
 
 ---
@@ -122,6 +122,17 @@ Exit criteria:
 ## Phase 2 — Manual Import Tool
 
 Goal: expose Codex import through MCP so users and Codex itself can trigger it.
+
+Status: implemented locally on `feature/codex-manual-import` with green targeted tests. This phase adds the MCP-facing manual import path; Phase 3 is now the next execution step.
+
+Implemented:
+
+- `memory_import_codex` MCP tool in `packages/core`.
+- Support for `latestOnly`, `projectRoot`, `sessionId`, and `since` filters.
+- Respect for `LOCUS_CODEX_CAPTURE`, including explicit disabled responses when capture is `off`.
+- Bulk dedup against `ingest_log` so repeated imports do not re-ingest the same Codex events.
+- Immediate `processInbox()` after import so imported Codex dialogue is searchable right away.
+- Regression and integration coverage proving startup stability, exact import metrics, immediate searchability, and repeated-import idempotency.
 
 Tasks:
 
@@ -137,6 +148,8 @@ Exit criteria:
 - User can run `memory_import_codex` from Codex.
 - Imported Codex conversations become searchable through `memory_search`.
 - No repeated imports on repeated tool calls.
+
+Next step: Phase 3 — Auto Import Before Search.
 
 ---
 
@@ -276,10 +289,7 @@ Release gates:
 
 ## Immediate Next Steps
 
-1. Create the stable checkpoint tag.
-2. Create `feature/codex-jsonl-adapter`.
-3. Add JSONL fixture samples.
-4. Implement parser-only tests.
-5. Add inbox writer integration.
-6. Add `memory_import_codex`.
-7. Run full validation before any push.
+1. Finish Phase 2 full validation and checkpointing on `feature/codex-manual-import`.
+2. Start Phase 3 auto-import design with strict debounce and bounded scan scope.
+3. Extend `memory_status` / `memory_config` with last Codex import visibility.
+4. Keep Claude Code behavior unchanged while Codex-specific work continues.

@@ -24,15 +24,38 @@ codex "Search memory for recent decisions"
 
 ## What Works
 
-- All 12 MCP tools (memory_search, memory_remember, memory_explore, etc.)
+- All 13 MCP tools (including `memory_import_codex`)
 - All 3 MCP resources (project-map, decisions, recent)
 - SQLite storage with FTS5 full-text search
 - Client-aware storage: data stored in `$CODEX_HOME/memory/`
-- Library JSONL importer for Codex session rollout files
+- Manual and library JSONL import for Codex session rollout files
 
-## Codex JSONL Importer
+## Codex JSONL Import
 
-Phase 1 provides a library importer:
+Phase 1 built the adapter foundation. Phase 2 exposes it through MCP.
+
+### Manual import from Codex
+
+Run the tool from Codex when you want recent session history ingested immediately:
+
+```text
+memory_import_codex({"latestOnly":true})
+```
+
+Available filters:
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `latestOnly` | `boolean` | Import only the newest rollout file in the discovered session set |
+| `projectRoot` | `string` | Keep only events whose normalized Codex project root matches |
+| `sessionId` | `string` | Keep only one Codex session id |
+| `since` | `number` | Keep only events at or after the given Unix timestamp in milliseconds |
+
+After the tool writes inbox events, core immediately runs `processInbox()`, so imported Codex dialogue is searchable through `memory_search` in the same session.
+
+### Library API
+
+The lower-level library API remains available:
 
 ```ts
 import { importCodexSessionsToInbox } from '@locus/codex';
@@ -44,9 +67,7 @@ const metrics = importCodexSessionsToInbox({
 });
 ```
 
-The importer reads `rollout-*.jsonl` files from `$CODEX_HOME/sessions` by default, normalizes Codex session records, writes Locus `InboxEvent v1` files, and lets the existing core ingest pipeline store them.
-
-Important Phase 1 limitation: this is a library API only. There is not yet a `memory_import_codex` MCP tool, and Codex conversations are not auto-imported before `memory_search`. Phase 2 should expose this importer through MCP by calling `importCodexSessionsToInbox()`.
+The importer reads `rollout-*.jsonl` files from `$CODEX_HOME/sessions` by default, normalizes Codex session records, writes Locus `InboxEvent v1` files, and lets the existing core ingest pipeline store them. It also supports optional filters and a dedup callback for already-ingested `event_id` values.
 
 ## Capture Modes
 
@@ -69,11 +90,12 @@ Supported values:
 | `full` | Import user prompt and assistant response text after redaction |
 
 `LOCUS_CODEX_CAPTURE` controls the Codex adapter before events are written to inbox. `LOCUS_CAPTURE_LEVEL` remains the core ingest pipeline's second-defense gate.
+If `LOCUS_CODEX_CAPTURE=off`, `memory_import_codex` returns a disabled response and performs no import work.
 
-Phase 1 proves `memory_timeline` compatibility programmatically through core ingest tests. User-visible manual timeline inspection comes in Phase 2 after `memory_import_codex` exists.
+Redaction is best-effort by design: obvious API keys, bearer tokens, and similar secrets are stripped before storage, but arbitrary free-form text can never be guaranteed perfectly secret-free.
 
 ## What's Coming
 
-- `memory_import_codex` MCP tool for manual imports
 - Auto-import before search
+- Codex-aware doctor/status diagnostics
 - npm package for `npx` one-liner install
