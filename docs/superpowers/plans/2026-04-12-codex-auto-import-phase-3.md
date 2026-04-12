@@ -37,9 +37,11 @@ Out of scope:
 - Auto-import runs only when Codex is the detected client environment.
 - Auto-import uses `latestOnly: true` to keep search latency bounded.
 - Auto-import debounce is explicit and local to the server process: `45_000ms`.
+- Debounce applies to failed attempts too: `lastAttemptAt` must advance even when import returns `error` or throws.
 - `LOCUS_CODEX_CAPTURE=off` remains the master kill switch. Phase 3 does not introduce a separate auto-import env toggle.
 - `memory_status` is the Phase 3 surface for last import state; `memory_config` stays unchanged.
 - Search continues even if auto-import returns `error`, `disabled`, or throws internally.
+- Auto-import snapshot updates should be replace-style (`snapshot = nextSnapshot`), not ad-hoc mutation of one shared object across helpers.
 
 ## File Structure
 
@@ -124,6 +126,7 @@ This preserves Codex auto-import while keeping the generic inbox path intact for
 - Do not regress non-Codex search behavior.
 - Do not surface Codex auto-import state through ad-hoc logs only; it must be visible in `memory_status`.
 - Keep server-local debounce state simple and explicit; no persistent scheduler state in SQLite for Phase 3.
+- Do not add lock / singleflight machinery unless the real implementation becomes asynchronous enough for a race to exist before debounce state is recorded.
 
 ### Task 0: Branch From Phase 2 Checkpoint
 
@@ -217,10 +220,14 @@ git commit -m "test(core): define codex auto import status shape"
   - if Codex import returns `ok` with `imported > 0`: set `lastStatus='imported'`
   - if Codex import returns `ok` with `duplicates > 0` and `imported === 0`: set `lastStatus='duplicates_only'`
   - if Codex import returns `error` or throws: set `lastStatus='error'`
+  - update `lastAttemptAt` before the import attempt starts, not only on success
+  - update `lastRunAt` after the attempt finishes, including error outcomes
+  - return a fresh snapshot object; do not rely on in-place mutation of an existing shared reference
 
 - [ ] Hardcode Phase 3 policy in this helper:
   - `latestOnly: true`
   - debounce `45_000ms`
+  - no mandatory singleflight / lock unless the implementation introduces a real async gap before debounce state is recorded; keep the current sync path simple unless tests prove otherwise
 
 - [ ] Write failing tests for:
   - non-Codex environment skips import
@@ -228,6 +235,7 @@ git commit -m "test(core): define codex auto import status shape"
   - success updates snapshot from import result
   - duplicates-only result is not treated as error
   - thrown import error is swallowed into snapshot and returned as best-effort failure
+  - failed import still advances debounce state, so repeated immediate search attempts do not thrash the same broken rollout file
 
 - [ ] Run:
 
@@ -267,6 +275,7 @@ git commit -m "feat(core): add codex auto import coordinator"
   - existing `_lastIngestMetrics`
   - existing `lastIngestTime`
   - new `codexAutoImportSnapshot`
+  - prefer whole-object replacement for `codexAutoImportSnapshot`, not piecemeal cross-helper mutation
 
 - [ ] Do not change `handleSearch()` itself. Phase 3 belongs on the tool/server layer, not in the pure search function.
 
