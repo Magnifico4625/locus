@@ -1,6 +1,6 @@
 # Codex Manual Import Phase 2 Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Expose Codex session import as a first-class MCP tool so Codex users can import rollout JSONL history into Locus on demand and search it immediately.
 
@@ -111,16 +111,16 @@ Semantics:
 
 **Files:** none
 
-- [ ] Verify clean baseline: `git status --short --branch`
-- [ ] Verify current checkpoint tag exists: `git tag --list codex-jsonl-phase-1-local`
-- [ ] Create Phase 2 branch from the stable checkpoint:
+- [x] Verify clean baseline: `git status --short --branch`
+- [x] Verify current checkpoint tag exists: `git tag --list codex-jsonl-phase-1-local`
+- [x] Create Phase 2 branch from the stable checkpoint:
 
 ```bash
 git checkout codex-jsonl-phase-1-local
 git checkout -b feature/codex-manual-import
 ```
 
-- [ ] Verify branch base:
+- [x] Verify branch base:
 
 ```bash
 git log --oneline -3
@@ -134,14 +134,14 @@ Expected: `9a440d0 chore(codex): complete phase 1 validation` is at or near `HEA
 - Modify: `packages/core/src/types.ts`
 - Test: `packages/core/tests/tools/import-codex.test.ts`
 
-- [ ] Add result types in `packages/core/src/types.ts`:
+- [x] Add result types in `packages/core/src/types.ts`:
   - `MemoryImportCodexResponseOk`
   - `MemoryImportCodexResponseDisabled`
   - `MemoryImportCodexResponseError`
   - union `MemoryImportCodexResponse`
-- [ ] Create `packages/core/tests/tools/import-codex.test.ts`
-- [ ] Write the first failing test for disabled mode response shape.
-- [ ] Run the single test:
+- [x] Create `packages/core/tests/tools/import-codex.test.ts`
+- [x] Write the first failing test for disabled mode response shape.
+- [x] Run the single test:
 
 ```bash
 npm test -- packages/core/tests/tools/import-codex.test.ts
@@ -149,7 +149,7 @@ npm test -- packages/core/tests/tools/import-codex.test.ts
 
 Expected: FAIL because handler does not exist yet.
 
-- [ ] Commit scaffolding:
+- [x] Commit scaffolding:
 
 ```bash
 git add packages/core/src/types.ts packages/core/tests/tools/import-codex.test.ts
@@ -163,30 +163,30 @@ git commit -m "test(core): add codex import response contract"
 - Modify: `packages/codex/src/importer.ts`
 - Modify: `packages/codex/tests/importer.test.ts`
 
-- [ ] Extend importer options in `packages/codex/src/types.ts` or `importer.ts`:
+- [x] Extend importer options in `packages/codex/src/types.ts` or `importer.ts`:
   - `latestOnly?: boolean`
   - `projectRoot?: string`
   - `sessionId?: string`
   - `since?: number`
   - `shouldSkipEventId?: (eventId: string) => boolean`
-- [ ] Extend importer metrics so they can be collapsed cleanly into:
+- [x] Extend importer metrics so they can be collapsed cleanly into:
   - `imported`
   - `skipped`
   - `duplicates`
   - `errors`
   - `filesScanned`
   - `latestSession`
-- [ ] Make `latestSession` deterministic across the whole import run:
+- [x] Make `latestSession` deterministic across the whole import run:
   - track one global max timestamp across all files/events in scope
   - do not reset that max timestamp per file or per helper call
   - when `latestOnly=true`, `latestSession` must still reflect the newest imported session in that filtered scope
-- [ ] Add failing tests in `packages/codex/tests/importer.test.ts` for:
+- [x] Add failing tests in `packages/codex/tests/importer.test.ts` for:
   - `latestOnly` imports only newest rollout file
   - `sessionId` keeps one session
   - `since` ignores older events
   - `projectRoot` filters mismatched project roots
   - `latestSession` reflects the session with the maximum event timestamp across all scanned files
-- [ ] Run targeted tests:
+- [x] Run targeted tests:
 
 ```bash
 npm test -- packages/codex/tests/importer.test.ts
@@ -194,9 +194,9 @@ npm test -- packages/codex/tests/importer.test.ts
 
 Expected: FAIL on new filter cases.
 
-- [ ] Implement the minimal importer changes to pass those cases.
-- [ ] Re-run targeted tests until green.
-- [ ] Commit:
+- [x] Implement the minimal importer changes to pass those cases.
+- [x] Re-run targeted tests until green.
+- [x] Commit:
 
 ```bash
 git add packages/codex/src/types.ts packages/codex/src/importer.ts packages/codex/tests/importer.test.ts
@@ -209,8 +209,8 @@ git commit -m "feat(codex): add filtered import options"
 - Modify: `packages/codex/src/importer.ts`
 - Modify: `packages/codex/tests/importer.test.ts`
 
-- [ ] Add a failing importer test showing `shouldSkipEventId()` increments duplicates and avoids writing inbox files.
-- [ ] Run:
+- [x] Add a failing importer test showing `shouldSkipEventId()` increments duplicates and avoids writing inbox files.
+- [x] Run:
 
 ```bash
 npm test -- packages/codex/tests/importer.test.ts
@@ -218,10 +218,10 @@ npm test -- packages/codex/tests/importer.test.ts
 
 Expected: FAIL on duplicate-skip callback behavior.
 
-- [ ] Implement callback-based skip before inbox write.
-- [ ] Keep existing pending-file duplicate protection unchanged.
-- [ ] Re-run targeted tests.
-- [ ] Commit:
+- [x] Implement callback-based skip before inbox write.
+- [x] Keep existing pending-file duplicate protection unchanged.
+- [x] Re-run targeted tests.
+- [x] Commit:
 
 ```bash
 git add packages/codex/src/importer.ts packages/codex/tests/importer.test.ts
@@ -235,10 +235,10 @@ git commit -m "feat(codex): skip already ingested event ids"
 - Modify: `packages/core/src/types.ts`
 - Test: `packages/core/tests/tools/import-codex.test.ts`
 
-- [ ] Implement a pure handler function in `packages/core/src/tools/import-codex.ts`, for example:
+- [x] Implement a pure handler function in `packages/core/src/tools/import-codex.ts`, for example:
   - inputs: tool params + deps (`db`, `inboxDir`, `captureLevel`, `env`, `processInbox`, `importCodexSessionsToInbox`)
   - outputs: `MemoryImportCodexResponse`
-- [ ] Handler responsibilities:
+- [x] Handler responsibilities:
   - resolve `LOCUS_CODEX_CAPTURE`
   - return `"disabled"` when capture is `off`
   - compute already-ingested `event_id` set from `ingest_log` with one bulk read before import, then use an in-memory `Set<string>` for `shouldSkipEventId`
@@ -246,14 +246,14 @@ git commit -m "feat(codex): skip already ingested event ids"
   - run `processInbox()` immediately after successful writes
   - collapse raw importer + ingest metrics into the public response
   - calculate `imported` from events of the current run that actually reached `ingest_log` / storage after `processInbox()`, not by blindly returning importer `written` and not by blindly returning total `processInbox().processed`
-- [ ] Write failing handler tests in `packages/core/tests/tools/import-codex.test.ts` for:
+- [x] Write failing handler tests in `packages/core/tests/tools/import-codex.test.ts` for:
   - disabled mode
   - importer metrics mapping
   - duplicate counting from `shouldSkipEventId`
   - no-write / no-process behavior when importer returns zero writes
   - final `errors` includes importer `parseErrors`
   - final `imported` reflects only current-run events accepted into storage
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/tools/import-codex.test.ts
@@ -261,9 +261,9 @@ npm test -- packages/core/tests/tools/import-codex.test.ts
 
 Expected: FAIL until handler is implemented.
 
-- [ ] Implement minimal code to make the tests pass.
-- [ ] Re-run targeted tests.
-- [ ] Commit:
+- [x] Implement minimal code to make the tests pass.
+- [x] Re-run targeted tests.
+- [x] Commit:
 
 ```bash
 git add packages/core/src/tools/import-codex.ts packages/core/src/types.ts packages/core/tests/tools/import-codex.test.ts
@@ -276,14 +276,14 @@ git commit -m "feat(core): add codex import handler"
 - Modify: `packages/core/package.json`
 - Modify: `packages/core/src/server.ts`
 
-- [ ] Add workspace dependency on `@locus/codex` in `packages/core/package.json`.
-- [ ] Import the Codex importer and new handler in `packages/core/src/server.ts`.
-- [ ] Register MCP tool:
+- [x] Add workspace dependency on `@locus/codex` in `packages/core/package.json`.
+- [x] Import the Codex importer and new handler in `packages/core/src/server.ts`.
+- [x] Register MCP tool:
   - name: `memory_import_codex`
   - params: `latestOnly`, `projectRoot`, `sessionId`, `since`
   - output: `JSON.stringify(result)`
-- [ ] Keep the tool registration near other memory tools, not in a Codex-only side file.
-- [ ] Run typecheck:
+- [x] Keep the tool registration near other memory tools, not in a Codex-only side file.
+- [x] Run typecheck:
 
 ```bash
 npm run typecheck
@@ -291,7 +291,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/package.json packages/core/src/server.ts
@@ -303,16 +303,16 @@ git commit -m "feat(core): expose memory_import_codex tool"
 **Files:**
 - Create: `packages/core/tests/integration/codex-import-tool.test.ts`
 
-- [ ] Create an integration test that:
+- [x] Create an integration test that:
   - builds a temp server with temp DB/inbox
   - creates a temp Codex sessions tree with rollout JSONL fixtures
   - runs the import handler or tool path
   - verifies imported data lands in SQLite
   - verifies `handleSearch()` can find imported content immediately
-- [ ] Add a second integration case for repeated import:
+- [x] Add a second integration case for repeated import:
   - first call imports data
   - second call reports duplicates and does not increase conversation row count
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/integration/codex-import-tool.test.ts
@@ -320,9 +320,9 @@ npm test -- packages/core/tests/integration/codex-import-tool.test.ts
 
 Expected: FAIL before the integration path is complete.
 
-- [ ] Make only the minimal code changes needed for green tests.
-- [ ] Re-run the integration suite.
-- [ ] Commit:
+- [x] Make only the minimal code changes needed for green tests.
+- [x] Re-run the integration suite.
+- [x] Commit:
 
 ```bash
 git add packages/core/tests/integration/codex-import-tool.test.ts
@@ -334,9 +334,9 @@ git commit -m "test(core): cover codex import integration"
 **Files:**
 - Modify: `packages/core/tests/integration/server.test.ts`
 
-- [ ] Add one focused regression test in `packages/core/tests/integration/server.test.ts` proving `createServer()` still initializes cleanly with the new tool code path present.
-- [ ] Keep this test small: do not duplicate the integration suite from Task 6.
-- [ ] Run:
+- [x] Add one focused regression test in `packages/core/tests/integration/server.test.ts` proving `createServer()` still initializes cleanly with the new tool code path present.
+- [x] Keep this test small: do not duplicate the integration suite from Task 6.
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/integration/server.test.ts
@@ -344,7 +344,7 @@ npm test -- packages/core/tests/integration/server.test.ts
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/tests/integration/server.test.ts
@@ -358,24 +358,24 @@ git commit -m "test(core): keep server stable with codex import tool"
 - Modify: `README.md`
 - Modify: `docs/roadmap/codex.md`
 
-- [ ] Update `packages/codex/README.md`:
+- [x] Update `packages/codex/README.md`:
   - Phase 1 note becomes historical
   - show `memory_import_codex` usage example
   - explain filters and capture behavior
-- [ ] Update `README.md`:
+- [x] Update `README.md`:
   - Codex CLI section should say passive import is now available manually
   - add `memory_import_codex` to tools reference
   - keep auto-import marked as future work
-- [ ] Update `docs/roadmap/codex.md`:
+- [x] Update `docs/roadmap/codex.md`:
   - mark Phase 2 as implemented only when code/tests are green
   - set Phase 3 as next step
-- [ ] Run docs sanity search:
+- [x] Run docs sanity search:
 
 ```bash
 rg -n "planned for v3.2|memory_import_codex|Passive conversation capture requires a Codex adapter" README.md packages/codex/README.md docs/roadmap/codex.md
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/codex/README.md README.md docs/roadmap/codex.md
@@ -386,7 +386,7 @@ git commit -m "docs(codex): document manual import tool"
 
 **Files:** all modified files
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run lint
@@ -394,7 +394,7 @@ npm run lint
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run typecheck
@@ -402,7 +402,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test
@@ -410,7 +410,7 @@ npm test
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run build
@@ -418,25 +418,25 @@ npm run build
 
 Expected: PASS.
 
-- [ ] Review final branch diff:
+- [x] Review final branch diff:
 
 ```bash
 git diff --stat codex-jsonl-phase-1-local..HEAD
 ```
 
-- [ ] Review commit sequence:
+- [x] Review commit sequence:
 
 ```bash
 git log --oneline codex-jsonl-phase-1-local..HEAD
 ```
 
-- [ ] Create local checkpoint tag:
+- [x] Create local checkpoint tag:
 
 ```bash
 git tag -a codex-manual-import-phase-2-local -m "Codex manual import phase 2 local checkpoint"
 ```
 
-- [ ] Final checkpoint commit if needed:
+- [x] Final checkpoint commit if needed:
 
 ```bash
 git commit -m "chore(codex): complete phase 2 validation"

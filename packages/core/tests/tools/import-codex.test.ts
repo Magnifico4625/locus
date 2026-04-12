@@ -201,7 +201,11 @@ describe('handleImportCodex', () => {
     const inboxDir = createTempDir();
     const ingested = new Set<string>();
 
-    writeFileSync(join(inboxDir, 'preexisting.json'), JSON.stringify({ event_id: 'old-pending' }), 'utf-8');
+    writeFileSync(
+      join(inboxDir, 'preexisting.json'),
+      JSON.stringify({ event_id: 'old-pending' }),
+      'utf-8',
+    );
 
     const result = handleImportCodex(
       {},

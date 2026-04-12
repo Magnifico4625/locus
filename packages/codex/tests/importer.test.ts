@@ -184,12 +184,7 @@ describe('importCodexSessionsToInbox', () => {
     expect(metrics.normalized).toBe(4);
     expect(metrics.written).toBe(4);
     expect(metrics.latestSession).toBe('sess_tool_001');
-    expect(readInboxKinds(inboxDir)).toEqual([
-      'session_start',
-      'tool_use',
-      'tool_use',
-      'tool_use',
-    ]);
+    expect(readInboxKinds(inboxDir)).toEqual(['session_start', 'tool_use', 'tool_use', 'tool_use']);
   });
 
   it('keeps only events for the requested sessionId', () => {
@@ -236,12 +231,7 @@ describe('importCodexSessionsToInbox', () => {
     expect(metrics.written).toBe(4);
     expect(metrics.skippedByFilter).toBe(4);
     expect(metrics.latestSession).toBe('sess_tool_001');
-    expect(readInboxKinds(inboxDir)).toEqual([
-      'session_start',
-      'tool_use',
-      'tool_use',
-      'tool_use',
-    ]);
+    expect(readInboxKinds(inboxDir)).toEqual(['session_start', 'tool_use', 'tool_use', 'tool_use']);
   });
 
   it('filters out events whose projectRoot does not match', () => {

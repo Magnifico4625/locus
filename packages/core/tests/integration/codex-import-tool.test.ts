@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { importCodexSessionsToInbox } from '../../../codex/src/importer.js';
 import { processInbox } from '../../src/ingest/pipeline.js';
 import { createServer } from '../../src/server.js';
-import { handleSearch } from '../../src/tools/search.js';
 import { handleImportCodex } from '../../src/tools/import-codex.js';
+import { handleSearch } from '../../src/tools/search.js';
 
 const fixturesDir = join(import.meta.dirname, '..', '..', '..', 'codex', 'tests', 'fixtures');
 const tempRoots: string[] = [];
@@ -83,7 +83,8 @@ describe('handleImportCodex integration', () => {
       const conversationMatch = results.find(
         (entry) =>
           entry.layer === 'conversation' &&
-          (entry.content.includes('parser test') || entry.content.includes('Create a simple parser test')),
+          (entry.content.includes('parser test') ||
+            entry.content.includes('Create a simple parser test')),
       );
       expect(conversationMatch).toBeDefined();
     } finally {

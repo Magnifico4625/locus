@@ -128,8 +128,9 @@ export function handleImportCodex(
         fts5Available: deps.fts5Available,
       });
       const storedEventIds = loadIngestedCodexEventIds(deps.db);
-      imported = Array.from(currentRunEventIds).filter((eventId) => storedEventIds.has(eventId))
-        .length;
+      imported = Array.from(currentRunEventIds).filter((eventId) =>
+        storedEventIds.has(eventId),
+      ).length;
     }
 
     const skipped =
