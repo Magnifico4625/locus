@@ -341,6 +341,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       backend,
       fts5,
       inboxDir,
+      codexAutoImportSnapshot,
     });
     return { content: [{ type: 'text' as const, text: JSON.stringify(status) }] };
   });

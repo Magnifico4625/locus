@@ -289,4 +289,36 @@ describe('handleStatus', () => {
       lastErrors: 0,
     });
   });
+
+  it('returns the latest codexAutoImport snapshot when provided by the server', () => {
+    const status = handleStatus(
+      makeStatusDeps(adapter, tempDir, {
+        codexAutoImportSnapshot: {
+          clientDetected: true,
+          debounceMs: 45000,
+          lastStatus: 'imported',
+          lastAttemptAt: 1700000000000,
+          lastRunAt: 1700000000500,
+          lastImported: 4,
+          lastDuplicates: 1,
+          lastErrors: 0,
+          latestSession: 'session-123',
+          message: 'Imported latest Codex session',
+        },
+      }),
+    );
+
+    expect(status.codexAutoImport).toEqual({
+      clientDetected: true,
+      debounceMs: 45000,
+      lastStatus: 'imported',
+      lastAttemptAt: 1700000000000,
+      lastRunAt: 1700000000500,
+      lastImported: 4,
+      lastDuplicates: 1,
+      lastErrors: 0,
+      latestSession: 'session-123',
+      message: 'Imported latest Codex session',
+    });
+  });
 });
