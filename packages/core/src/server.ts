@@ -15,16 +15,16 @@ import { generateProjectMap } from './resources/project-map.js';
 import { generateRecent } from './resources/recent.js';
 import { initStorage } from './storage/init.js';
 import { handleAudit } from './tools/audit.js';
+import {
+  CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+  coordinateCodexAutoImport,
+} from './tools/auto-import-codex.js';
 import { handleCompact } from './tools/compact.js';
 import { handleConfig } from './tools/config.js';
 import { ConfirmationTokenStore } from './tools/confirmation-token.js';
 import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';
-import {
-  CODEX_AUTO_IMPORT_DEBOUNCE_MS,
-  coordinateCodexAutoImport,
-} from './tools/auto-import-codex.js';
 import { handleImportCodex } from './tools/import-codex.js';
 import { handlePurge } from './tools/purge.js';
 import { handleRemember } from './tools/remember.js';

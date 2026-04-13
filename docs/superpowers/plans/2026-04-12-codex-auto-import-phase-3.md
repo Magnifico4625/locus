@@ -132,7 +132,7 @@ This preserves Codex auto-import while keeping the generic inbox path intact for
 
 **Files:** none
 
-- [ ] Verify clean baseline:
+- [x] Verify clean baseline:
 
 ```bash
 git status --short --branch
@@ -140,7 +140,7 @@ git status --short --branch
 
 Expected: clean working tree on the current branch.
 
-- [ ] Verify Phase 2 checkpoint tag exists:
+- [x] Verify Phase 2 checkpoint tag exists:
 
 ```bash
 git tag --list codex-manual-import-phase-2-local
@@ -148,14 +148,14 @@ git tag --list codex-manual-import-phase-2-local
 
 Expected: prints `codex-manual-import-phase-2-local`.
 
-- [ ] Create the Phase 3 branch from the stable checkpoint:
+- [x] Create the Phase 3 branch from the stable checkpoint:
 
 ```bash
 git checkout codex-manual-import-phase-2-local
 git checkout -b feature/codex-auto-import
 ```
 
-- [ ] Verify branch base:
+- [x] Verify branch base:
 
 ```bash
 git log --oneline -3
@@ -169,12 +169,12 @@ Expected: `2793212 chore(codex): complete phase 2 validation` at or near `HEAD`.
 - Modify: `packages/core/src/types.ts`
 - Test: `packages/core/tests/tools/status.test.ts`
 
-- [ ] Add types in `packages/core/src/types.ts`:
+- [x] Add types in `packages/core/src/types.ts`:
   - `CodexAutoImportStatus`
   - `CodexAutoImportSnapshot`
   - extend `MemoryStatus` with optional or required `codexAutoImport`
 
-- [ ] Keep the snapshot compact:
+- [x] Keep the snapshot compact:
   - `clientDetected: boolean`
   - `debounceMs: number`
   - `lastStatus`
@@ -186,9 +186,9 @@ Expected: `2793212 chore(codex): complete phase 2 validation` at or near `HEAD`.
   - `latestSession?: string`
   - `message?: string`
 
-- [ ] Add a failing `memory_status` test showing the new field shape.
+- [x] Add a failing `memory_status` test showing the new field shape.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/tools/status.test.ts
@@ -196,7 +196,7 @@ npm test -- packages/core/tests/tools/status.test.ts
 
 Expected: FAIL because the status shape does not include Codex auto-import info yet.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/src/types.ts packages/core/tests/tools/status.test.ts
@@ -209,11 +209,11 @@ git commit -m "test(core): define codex auto import status shape"
 - Create: `packages/core/src/tools/auto-import-codex.ts`
 - Test: `packages/core/tests/tools/auto-import-codex.test.ts`
 
-- [ ] Create a pure coordinator that wraps Phase 2 import behavior, for example:
+- [x] Create a pure coordinator that wraps Phase 2 import behavior, for example:
   - input: current snapshot, `now`, server deps, `handleImportCodex`, `detectClientEnv`
   - output: `{ snapshot, ranImport, processedInbox }`
 
-- [ ] Coordinator rules:
+- [x] Coordinator rules:
   - if detected client is not Codex: set `lastStatus='skipped_not_codex'`
   - if within debounce window: set `lastStatus='debounced'`
   - if Codex import returns `disabled`: set `lastStatus='disabled'`
@@ -224,12 +224,12 @@ git commit -m "test(core): define codex auto import status shape"
   - update `lastRunAt` after the attempt finishes, including error outcomes
   - return a fresh snapshot object; do not rely on in-place mutation of an existing shared reference
 
-- [ ] Hardcode Phase 3 policy in this helper:
+- [x] Hardcode Phase 3 policy in this helper:
   - `latestOnly: true`
   - debounce `45_000ms`
   - no mandatory singleflight / lock unless the implementation introduces a real async gap before debounce state is recorded; keep the current sync path simple unless tests prove otherwise
 
-- [ ] Write failing tests for:
+- [x] Write failing tests for:
   - non-Codex environment skips import
   - debounce suppresses repeated import
   - success updates snapshot from import result
@@ -237,7 +237,7 @@ git commit -m "test(core): define codex auto import status shape"
   - thrown import error is swallowed into snapshot and returned as best-effort failure
   - failed import still advances debounce state, so repeated immediate search attempts do not thrash the same broken rollout file
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/tools/auto-import-codex.test.ts
@@ -245,11 +245,11 @@ npm test -- packages/core/tests/tools/auto-import-codex.test.ts
 
 Expected: FAIL until the coordinator exists.
 
-- [ ] Implement the minimal coordinator to pass the tests.
+- [x] Implement the minimal coordinator to pass the tests.
 
-- [ ] Re-run targeted tests until green.
+- [x] Re-run targeted tests until green.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/src/tools/auto-import-codex.ts packages/core/tests/tools/auto-import-codex.test.ts
@@ -261,25 +261,25 @@ git commit -m "feat(core): add codex auto import coordinator"
 **Files:**
 - Modify: `packages/core/src/server.ts`
 
-- [ ] Replace the inline pre-search logic in `memory_search` with a two-stage flow:
+- [x] Replace the inline pre-search logic in `memory_search` with a two-stage flow:
   - run Codex auto-import coordinator first
   - then run generic `processInbox()` only if the coordinator did not already process inbox
 
-- [ ] Reuse existing imports:
+- [x] Reuse existing imports:
   - `handleImportCodex`
   - `importCodexSessionsToInbox`
   - `processInbox`
   - `@locus/shared-runtime` `detectClientEnv`
 
-- [ ] Keep server-local state in closures near existing ingest state:
+- [x] Keep server-local state in closures near existing ingest state:
   - existing `_lastIngestMetrics`
   - existing `lastIngestTime`
   - new `codexAutoImportSnapshot`
   - prefer whole-object replacement for `codexAutoImportSnapshot`, not piecemeal cross-helper mutation
 
-- [ ] Do not change `handleSearch()` itself. Phase 3 belongs on the tool/server layer, not in the pure search function.
+- [x] Do not change `handleSearch()` itself. Phase 3 belongs on the tool/server layer, not in the pure search function.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run typecheck
@@ -287,7 +287,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/src/server.ts
@@ -299,23 +299,23 @@ git commit -m "feat(core): trigger codex auto import before search"
 **Files:**
 - Create: `packages/core/tests/integration/codex-auto-import-search.test.ts`
 
-- [ ] Add an integration case that:
+- [x] Add an integration case that:
   - creates temp `CODEX_HOME/sessions`
   - creates a temp server
   - does not call `memory_import_codex`
   - calls the same search path used by the server tool
   - verifies Codex conversation content is searchable after search-triggered auto-import
 
-- [ ] Add a second integration case that:
+- [x] Add a second integration case that:
   - runs search twice within the debounce window
   - verifies conversation row count does not grow on the second call
   - verifies the second call still returns search results
 
-- [ ] Add a third integration case that:
+- [x] Add a third integration case that:
   - forces the Codex import path to fail
   - verifies search still returns structural or semantic results instead of failing
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/integration/codex-auto-import-search.test.ts
@@ -323,11 +323,11 @@ npm test -- packages/core/tests/integration/codex-auto-import-search.test.ts
 
 Expected: FAIL before server wiring is complete.
 
-- [ ] Make only the minimal code changes needed for green tests.
+- [x] Make only the minimal code changes needed for green tests.
 
-- [ ] Re-run the integration suite.
+- [x] Re-run the integration suite.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/tests/integration/codex-auto-import-search.test.ts packages/core/src/server.ts
@@ -342,21 +342,21 @@ git commit -m "test(core): cover codex auto import search flow"
 - Modify: `packages/core/src/server.ts`
 - Test: `packages/core/tests/tools/status.test.ts`
 
-- [ ] Extend `handleStatus()` dependencies to accept the current `codexAutoImportSnapshot`.
+- [x] Extend `handleStatus()` dependencies to accept the current `codexAutoImportSnapshot`.
 
-- [ ] Return the snapshot in `MemoryStatus`.
+- [x] Return the snapshot in `MemoryStatus`.
 
-- [ ] Keep status behavior stable for non-Codex clients:
+- [x] Keep status behavior stable for non-Codex clients:
   - `clientDetected=false`
   - `lastStatus='idle'` or `skipped_not_codex`
   - zeroed counters
 
-- [ ] Add / update tests proving:
+- [x] Add / update tests proving:
   - status includes `codexAutoImport`
   - last import values are surfaced correctly
   - non-Codex default status stays well-defined
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/tools/status.test.ts
@@ -364,7 +364,7 @@ npm test -- packages/core/tests/tools/status.test.ts
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/src/tools/status.ts packages/core/src/types.ts packages/core/src/server.ts packages/core/tests/tools/status.test.ts
@@ -376,13 +376,13 @@ git commit -m "feat(core): expose codex auto import status"
 **Files:**
 - Modify: `packages/core/tests/integration/server.test.ts`
 
-- [ ] Add one focused regression test proving `createServer()` still initializes cleanly with the Phase 3 Codex auto-import state present.
+- [x] Add one focused regression test proving `createServer()` still initializes cleanly with the Phase 3 Codex auto-import state present.
 
-- [ ] Add one small regression case proving non-Codex startup/search paths do not require `CODEX_HOME`.
+- [x] Add one small regression case proving non-Codex startup/search paths do not require `CODEX_HOME`.
 
-- [ ] Keep this suite small. Do not duplicate Task 4 integration scenarios.
+- [x] Keep this suite small. Do not duplicate Task 4 integration scenarios.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/integration/server.test.ts
@@ -390,7 +390,7 @@ npm test -- packages/core/tests/integration/server.test.ts
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/tests/integration/server.test.ts
@@ -404,27 +404,27 @@ git commit -m "test(core): keep server stable with codex auto import"
 - Modify: `packages/codex/README.md`
 - Modify: `docs/roadmap/codex.md`
 
-- [ ] Update `README.md`:
+- [x] Update `README.md`:
   - Codex section should say recent rollout history is auto-imported before `memory_search`
   - keep `memory_import_codex` documented for manual catch-up / explicit control
   - describe bounded behavior: newest rollout only, debounced, best-effort
 
-- [ ] Update `packages/codex/README.md`:
+- [x] Update `packages/codex/README.md`:
   - explain manual import vs auto-import roles
   - clarify that auto-import is search-triggered, not a background watcher
   - mention `LOCUS_CODEX_CAPTURE=off` disables both manual and auto Codex import behavior
 
-- [ ] Update `docs/roadmap/codex.md`:
+- [x] Update `docs/roadmap/codex.md`:
   - mark Phase 3 implemented only after tests are green
   - set Phase 4 as the next step
 
-- [ ] Run docs sanity search:
+- [x] Run docs sanity search:
 
 ```bash
 rg -n "auto-import before search|memory_import_codex|latestOnly|LOCUS_CODEX_CAPTURE" README.md packages/codex/README.md docs/roadmap/codex.md
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add README.md packages/codex/README.md docs/roadmap/codex.md
@@ -435,7 +435,7 @@ git commit -m "docs(codex): describe auto import before search"
 
 **Files:** all modified files
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run lint
@@ -443,7 +443,7 @@ npm run lint
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run typecheck
@@ -451,7 +451,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test
@@ -459,7 +459,7 @@ npm test
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run build
@@ -467,25 +467,25 @@ npm run build
 
 Expected: PASS.
 
-- [ ] Review final branch diff:
+- [x] Review final branch diff:
 
 ```bash
 git diff --stat codex-manual-import-phase-2-local..HEAD
 ```
 
-- [ ] Review commit sequence:
+- [x] Review commit sequence:
 
 ```bash
 git log --oneline codex-manual-import-phase-2-local..HEAD
 ```
 
-- [ ] Create local checkpoint tag:
+- [x] Create local checkpoint tag:
 
 ```bash
 git tag -a codex-auto-import-phase-3-local -m "Codex auto import phase 3 local checkpoint"
 ```
 
-- [ ] Final checkpoint commit if needed:
+- [x] Final checkpoint commit if needed:
 
 ```bash
 git commit -m "chore(codex): complete phase 3 validation"
@@ -518,4 +518,4 @@ Expected:
 
 - If a reviewer suggests adding a second auto-import implementation path, reject that suggestion unless a concrete Phase 2 gap is demonstrated by tests.
 - If a reviewer suggests background watchers, defer that to a future phase; it is intentionally out of scope here.
-- If full `npm test` shows timeouts under parallel local validation, rerun `npm test` serially and document that the failure was caused by validation strategy rather than by product code.
+- If full `npm test` shows timeouts under parallel local validation, rerun `npm test` serially and document that the failure was caused by validation strategy rather than by product code. During Task 8 validation, one full-suite run timed out in `project-map.test.ts`; the isolated suite passed immediately and the next fresh full `npm test` run passed with 73 files / 940 tests green, so no product-code fix was required.

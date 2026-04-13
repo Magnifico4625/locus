@@ -1,5 +1,4 @@
 import { readdirSync, statSync } from 'node:fs';
-import { CODEX_AUTO_IMPORT_DEBOUNCE_MS } from './auto-import-codex.js';
 import type {
   CaptureLevel,
   CodexAutoImportSnapshot,
@@ -8,6 +7,7 @@ import type {
   MemoryStatus,
   ProjectRootMethod,
 } from '../types.js';
+import { CODEX_AUTO_IMPORT_DEBOUNCE_MS } from './auto-import-codex.js';
 
 export interface StatusDeps {
   projectPath: string;

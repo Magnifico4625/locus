@@ -32254,6 +32254,97 @@ function handleAudit(deps) {
   return lines.join("\n");
 }
 
+// packages/core/src/tools/auto-import-codex.ts
+var CODEX_AUTO_IMPORT_DEBOUNCE_MS = 45e3;
+function coordinateCodexAutoImport(params) {
+  const debounceMs = params.debounceMs ?? CODEX_AUTO_IMPORT_DEBOUNCE_MS;
+  const client = (params.detectClientEnv ?? detectClientEnv)();
+  if (client !== "codex") {
+    return {
+      snapshot: {
+        ...params.snapshot,
+        clientDetected: false,
+        debounceMs,
+        lastStatus: "skipped_not_codex"
+      },
+      ranImport: false,
+      processedInbox: false
+    };
+  }
+  if (params.snapshot.lastAttemptAt !== void 0 && params.now - params.snapshot.lastAttemptAt < debounceMs) {
+    return {
+      snapshot: {
+        ...params.snapshot,
+        clientDetected: true,
+        debounceMs,
+        lastStatus: "debounced"
+      },
+      ranImport: false,
+      processedInbox: false
+    };
+  }
+  const baseSnapshot = {
+    ...params.snapshot,
+    clientDetected: true,
+    debounceMs,
+    lastAttemptAt: params.now
+  };
+  try {
+    const result = params.runImport();
+    const nextSnapshot = applyImportResult(baseSnapshot, result, params.now);
+    return {
+      snapshot: nextSnapshot,
+      ranImport: true,
+      processedInbox: result.status === "ok" && result.processed > 0
+    };
+  } catch (error48) {
+    return {
+      snapshot: {
+        ...baseSnapshot,
+        lastRunAt: params.now,
+        lastStatus: "error",
+        lastImported: 0,
+        lastDuplicates: 0,
+        lastErrors: 1,
+        latestSession: void 0,
+        message: error48 instanceof Error ? error48.message : String(error48)
+      },
+      ranImport: true,
+      processedInbox: false
+    };
+  }
+}
+function applyImportResult(snapshot, result, now) {
+  return {
+    ...snapshot,
+    lastRunAt: now,
+    lastStatus: classifyStatus(result),
+    lastImported: result.imported,
+    lastDuplicates: result.duplicates,
+    lastErrors: result.errors,
+    latestSession: "latestSession" in result ? result.latestSession : void 0,
+    message: result.message
+  };
+}
+function classifyStatus(result) {
+  if (result.status === "disabled") {
+    return "disabled";
+  }
+  if (result.status === "error") {
+    return "error";
+  }
+  if (result.imported > 0) {
+    return "imported";
+  }
+  if (result.duplicates > 0 && result.errors === 0) {
+    return "duplicates_only";
+  }
+  if (result.errors > 0) {
+    return "error";
+  }
+  return "imported";
+}
+
 // packages/core/src/tools/compact.ts
 function handleCompact(db, params) {
   const maxAgeDays = params.maxAgeDays ?? 30;
@@ -34026,6 +34117,16 @@ function handleSearch(query, deps, options) {
 
 // packages/core/src/tools/status.ts
 import { readdirSync as readdirSync7, statSync as statSync5 } from "node:fs";
+function getDefaultCodexAutoImportSnapshot() {
+  return {
+    clientDetected: false,
+    debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+    lastStatus: "idle",
+    lastImported: 0,
+    lastDuplicates: 0,
+    lastErrors: 0
+  };
+}
 function handleStatus(deps) {
   const { db, dbPath, config: config2 } = deps;
   const totalFilesRow = db.get("SELECT COUNT(*) AS cnt FROM files");
@@ -34088,7 +34189,8 @@ function handleStatus(deps) {
     nodeVersion: process.version,
     storageBackend: deps.backend,
     fts5Available: deps.fts5,
-    searchEngine: deps.fts5 ? "FTS5" : "LIKE fallback"
+    searchEngine: deps.fts5 ? "FTS5" : "LIKE fallback",
+    codexAutoImport: deps.codexAutoImportSnapshot ? { ...deps.codexAutoImportSnapshot } : getDefaultCodexAutoImportSnapshot()
   };
 }
 
@@ -34179,6 +34281,14 @@ async function createServer(options) {
   let _lastIngestMetrics = null;
   let lastIngestTime = 0;
   const INGEST_DEBOUNCE_MS = 3e4;
+  let codexAutoImportSnapshot = {
+    clientDetected: false,
+    debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+    lastStatus: "idle",
+    lastImported: 0,
+    lastDuplicates: 0,
+    lastErrors: 0
+  };
   try {
     const startupMetrics = processInbox(inboxDir, db, {
       batchLimit: 0,
@@ -34250,7 +34360,25 @@ async function createServer(options) {
       offset: external_exports3.number().optional().describe("Skip N conversation results")
     },
     async ({ query, timeRange, filePath, kind, source, limit, offset }) => {
-      if (Date.now() - lastIngestTime > INGEST_DEBOUNCE_MS) {
+      const now = Date.now();
+      const autoImport = coordinateCodexAutoImport({
+        now,
+        snapshot: codexAutoImportSnapshot,
+        runImport: () => handleImportCodex(
+          { latestOnly: true },
+          {
+            db,
+            inboxDir,
+            captureLevel: config2.captureLevel,
+            fts5Available: fts5,
+            env: process.env,
+            processInbox,
+            importCodexSessionsToInbox
+          }
+        )
+      });
+      codexAutoImportSnapshot = autoImport.snapshot;
+      if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
         try {
           const metrics = processInbox(inboxDir, db, {
             batchLimit: 50,
@@ -34258,7 +34386,7 @@ async function createServer(options) {
             fts5Available: fts5
           });
           _lastIngestMetrics = metrics;
-          lastIngestTime = Date.now();
+          lastIngestTime = now;
         } catch {
         }
       }
@@ -34340,7 +34468,8 @@ async function createServer(options) {
       config: config2,
       backend,
       fts5,
-      inboxDir
+      inboxDir,
+      codexAutoImportSnapshot
     });
     return { content: [{ type: "text", text: JSON.stringify(status) }] };
   });

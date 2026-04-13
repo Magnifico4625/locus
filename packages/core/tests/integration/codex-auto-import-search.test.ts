@@ -18,7 +18,10 @@ function makeTempRoot(): string {
 function getRegisteredTool(ctx: ServerContext, name: string) {
   const registry = (
     ctx.server as {
-      _registeredTools?: Record<string, { handler: (args: unknown) => Promise<{ content: Array<{ text: string }> }> }>;
+      _registeredTools?: Record<
+        string,
+        { handler: (args: unknown) => Promise<{ content: Array<{ text: string }> }> }
+      >;
     }
   )._registeredTools;
   const tool = registry?.[name];
@@ -199,7 +202,8 @@ describe('memory_search auto-import integration', () => {
       expect(codexRows).toBe(0);
       expect(
         results.some(
-          (entry) => entry.layer === 'semantic' && entry.content.includes('Search fallback still works'),
+          (entry) =>
+            entry.layer === 'semantic' && entry.content.includes('Search fallback still works'),
         ),
       ).toBe(true);
     } finally {

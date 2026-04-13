@@ -46,7 +46,10 @@ function getRegisteredToolNames(server: ServerContext['server']): string[] {
 function getRegisteredTool(ctx: ServerContext, name: string) {
   const registry = (
     ctx.server as {
-      _registeredTools?: Record<string, { handler: (args: unknown) => Promise<{ content: Array<{ text: string }> }> }>;
+      _registeredTools?: Record<
+        string,
+        { handler: (args: unknown) => Promise<{ content: Array<{ text: string }> }> }
+      >;
     }
   )._registeredTools;
   const tool = registry?.[name];
