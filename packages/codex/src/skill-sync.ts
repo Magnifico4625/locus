@@ -24,9 +24,7 @@ export interface SkillSyncResult {
 }
 
 export function resolveCanonicalCodexSkillPath(): string {
-  return resolve(
-    fileURLToPath(new URL('../skills/locus-memory/SKILL.md', import.meta.url)),
-  );
+  return resolve(fileURLToPath(new URL('../skills/locus-memory/SKILL.md', import.meta.url)));
 }
 
 export function resolveInstalledCodexSkillPath(

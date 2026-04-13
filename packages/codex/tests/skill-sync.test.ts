@@ -1,7 +1,7 @@
-import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   copyCodexSkill,
@@ -31,9 +31,9 @@ describe('skill sync helpers', () => {
   it('resolves the canonical repo skill path', () => {
     const skillPath = resolveCanonicalCodexSkillPath();
 
-    expect(withForwardSlashes(skillPath).endsWith('packages/codex/skills/locus-memory/SKILL.md')).toBe(
-      true,
-    );
+    expect(
+      withForwardSlashes(skillPath).endsWith('packages/codex/skills/locus-memory/SKILL.md'),
+    ).toBe(true);
   });
 
   it('resolves the installed skill path from CODEX_HOME', () => {
@@ -125,6 +125,8 @@ describe('skill sync helpers', () => {
 
     const installedSkillPath = join(codexHome, 'skills', 'locus-memory', 'SKILL.md');
     expect(output).toContain('Installed skill:');
-    expect(readFileSync(installedSkillPath, 'utf8')).toContain('# Locus -- Persistent Project Memory');
+    expect(readFileSync(installedSkillPath, 'utf8')).toContain(
+      '# Locus -- Persistent Project Memory',
+    );
   });
 });
