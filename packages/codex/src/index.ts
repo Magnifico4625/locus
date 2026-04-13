@@ -7,4 +7,5 @@ export * from './jsonl.js';
 export * from './normalize.js';
 export * from './paths.js';
 export * from './session-files.js';
+export * from './skill-sync.js';
 export * from './types.js';
