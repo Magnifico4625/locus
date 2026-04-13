@@ -84,8 +84,22 @@ LOCUS_LOG = "error"
 ```
 
 > **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 13 MCP tools and 3 resources work immediately. Before `memory_search`, Locus auto-imports the newest Codex rollout session with a local debounce window. `memory_import_codex` remains available when you want explicit control, filtered import, or manual catch-up across older sessions.
+> Validated against the current Codex docs generation and Codex CLI `0.120.0` surface as of April 13, 2026.
 
 Recent Codex history becomes searchable automatically when you use `memory_search`.
+
+Recommended Codex workflow:
+
+- use `memory_search` first when recalling recent work, prior decisions, or recent Codex dialogue
+- use `memory_status` if recent dialogue does not appear as expected
+- use `memory_import_codex` only for older sessions, filtered imports, or explicit manual catch-up
+- use `memory_remember` for important architectural decisions and why they were made
+
+To keep the locally installed Codex skill aligned with the repo copy:
+
+```bash
+npm run sync:codex-skill
+```
 
 Import the latest Codex rollout session on demand:
 
@@ -100,6 +114,12 @@ memory_import_codex({"projectRoot":"C:\\Users\\Admin\\my-project"})
 memory_import_codex({"sessionId":"sess_abc123"})
 memory_import_codex({"since":1710000000000})
 ```
+
+### Codex VS Code Extension
+
+The Codex VS Code extension uses the same MCP server configuration model when the extension surface exposes MCP tools and resources. In practice, this means Locus can work there through the same server setup, but MCP visibility in the extension may still depend on upstream Codex preview behavior.
+
+Treat Codex CLI as the primary validated path. If the extension does not expose Locus tools in a given build, that is an IDE integration boundary, not a separate Locus skill format.
 
 ### Any MCP Client (Cursor, Windsurf, Cline, Zed, etc.)
 
@@ -129,6 +149,8 @@ Add this server entry:
 ```
 
 > **Note:** When using Locus outside Claude Code, the MCP tools and resources work fully. Codex CLI additionally supports auto-import before `memory_search` plus manual session import via `memory_import_codex`. Adapter support for IDE log files in Cursor, Windsurf, and similar clients is planned for v3.2.
+
+For other MCP IDEs, Locus works through MCP tools/resources. The Codex-specific skill is not the primary integration mechanism there.
 
 ### First Use
 

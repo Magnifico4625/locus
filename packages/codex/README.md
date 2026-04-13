@@ -14,7 +14,13 @@ Or edit `~/.codex/config.toml` directly (see `config/config.toml.example`).
 
 ### 2. Install Skill (optional)
 
-Copy `skills/locus-memory/` to `$CODEX_HOME/skills/locus-memory/`, usually `~/.codex/skills/locus-memory/`.
+Sync the canonical repo skill into your local Codex skills directory:
+
+```bash
+npm run sync:codex-skill
+```
+
+This writes `packages/codex/skills/locus-memory/SKILL.md` into `$CODEX_HOME/skills/locus-memory/SKILL.md`, usually `~/.codex/skills/locus-memory/SKILL.md`.
 
 ### 3. Verify
 
@@ -29,6 +35,9 @@ codex "Search memory for recent decisions"
 - SQLite storage with FTS5 full-text search
 - Client-aware storage: data stored in `$CODEX_HOME/memory/`
 - Auto-import before `memory_search`, plus manual and library JSONL import for Codex session rollout files
+- Canonical Codex skill workflow for `memory_search`, `memory_status`, `memory_remember`, and manual `memory_import_codex`
+
+Validated against the current Codex docs generation and Codex CLI `0.120.0` surface as of April 13, 2026.
 
 ## Codex JSONL Import
 
@@ -46,6 +55,18 @@ Behavior:
 - best-effort: if import is disabled or fails, search still runs
 
 Use `memory_status` to inspect the last auto-import snapshot.
+
+### Skill workflow
+
+The canonical Locus Codex skill assumes this workflow:
+
+- `memory_search` first for project recall and recent Codex dialogue
+- `memory_status` when recent history does not appear as expected
+- `memory_import_codex` only for manual catch-up, filtered imports, or older sessions
+- `memory_remember` for architectural decisions, trade-offs, and reasons behind the chosen path
+- `memory_scan` after large project-structure changes
+
+This workflow is optimized for Codex CLI. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
 
 ### Manual import from Codex
 

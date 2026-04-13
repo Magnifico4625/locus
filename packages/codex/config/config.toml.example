@@ -8,7 +8,10 @@ args = ["/path/to/locus/dist/server.js"]
 
 [mcp_servers.locus.env]
 LOCUS_LOG = "error"
+LOCUS_CODEX_CAPTURE = "metadata"
+LOCUS_CAPTURE_LEVEL = "metadata"
 # CODEX_HOME is auto-detected by Codex CLI -- no need to set it manually
+# After cloning the repo, run `npm run sync:codex-skill` to install/update the local Codex skill
 
 # Option B: npx (after npm publish -- coming soon)
 # [mcp_servers.locus]
