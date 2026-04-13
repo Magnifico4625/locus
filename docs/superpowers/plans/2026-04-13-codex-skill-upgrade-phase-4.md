@@ -34,7 +34,10 @@ Out of scope:
 - The skill must assume Phase 3 exists: recent Codex history reaches memory through auto-import before `memory_search`.
 - The skill should instruct Codex to use `memory_status` when history does not appear, instead of blindly retrying import.
 - `memory_import_codex` stays in the workflow, but only for explicit catch-up, older sessions, or filtered/manual control.
+- `memory_remember` should be framed as a semantic decision log, not only an end-of-task summary tool.
+- Privacy guidance in the skill should be conditional: remind users about capture sensitivity only when the task clearly involves secrets or highly sensitive data.
 - Local installed skill state must be reproducible from the repo via a sync command, not by undocumented manual copying.
+- The sync command must not silently destroy local user edits in the installed skill.
 - VS Code Codex extension and similar IDEs should be documented honestly as MCP-dependent surfaces, not as guaranteed equivalents of CLI skill execution.
 
 ## File Structure
@@ -69,7 +72,7 @@ Phase 4 should make the Codex-facing workflow explicit:
 - `memory_search` is the first tool for recalling project history and recent Codex dialogue.
 - `memory_status` is the diagnostic tool when recent dialogue is missing.
 - `memory_import_codex` is a manual catch-up tool, not the default first step.
-- `memory_remember` is the persistence tool for important decisions after task completion.
+- `memory_remember` is the persistence tool for important decisions, trade-offs, and architectural reasoning after task completion.
 - `memory_scan` is used after structural project changes.
 - `npm run sync:codex-skill` copies the repo skill into the local installed Codex skill directory.
 
@@ -87,6 +90,7 @@ This avoids making promises the project cannot enforce from inside the repo.
 
 - Do not reintroduce “run `memory_import_codex` before every history search” as the default skill instruction.
 - Do not write a sync helper that guesses arbitrary unsafe paths; it must resolve `CODEX_HOME` or a documented fallback deterministically.
+- Do not let the sync helper silently overwrite a locally modified installed skill without an explicit overwrite path.
 - Do not let docs imply that a VS Code extension limitation is fixed by the repo if the limitation is upstream.
 - Do not let local sync steps mutate repo files or user files silently without an explicit command.
 - Keep the skill compact and directive; avoid turning `SKILL.md` into general documentation prose.
@@ -170,6 +174,9 @@ git commit -m "test(codex): define skill workflow contract"
   - resolves the installed Codex skill directory from `CODEX_HOME` or fallback `~/.codex`
   - creates the target directory when missing
   - copies `SKILL.md` into `skills/locus-memory/SKILL.md`
+  - detects when the target `SKILL.md` already exists with different content
+  - refuses silent overwrite by default when a local diff is detected
+  - supports an explicit overwrite path with backup creation such as `SKILL.md.bak`
   - returns the source and target paths for logging/debugging
 
 - [ ] Run:
@@ -183,6 +190,8 @@ Expected: FAIL because the sync helper does not exist yet.
 - [ ] Implement the minimal helper in `packages/codex/src/skill-sync.ts`:
   - pure path resolver functions
   - one copy function for the canonical skill
+  - local-diff detection before overwrite
+  - explicit overwrite option plus backup creation for replaced local skill content
   - no repo writes, only explicit user target writes
 
 - [ ] Export the helper from `packages/codex/src/index.ts`.
@@ -230,7 +239,12 @@ git commit -m "feat(codex): add skill sync helper"
   - inspect `memory_status` if recent dialogue is missing or stale
   - use `memory_import_codex` only for older sessions, filtered imports, or explicit catch-up
   - call `memory_remember` after important decisions or major task completion
+  - use `memory_remember` specifically for architectural choices, trade-offs, and reasons behind decisions so later `memory_search` can explain why a path was chosen
   - call `memory_scan` after large file-structure changes
+
+- [ ] Add one conditional privacy instruction:
+  - when the task clearly involves secrets, tokens, passwords, or highly sensitive material, Codex should remind the user that `LOCUS_CODEX_CAPTURE=full` or similar settings may store redacted-but-local memory content
+  - keep this reminder contextual, not a generic banner on every task
 
 - [ ] Keep the skill concise and operational. Prefer imperative guidance over large explanatory paragraphs.
 
@@ -260,12 +274,14 @@ git commit -m "docs(codex): upgrade locus memory skill workflow"
   - add or refine a Codex CLI workflow section around Phase 3 + Phase 4 behavior
   - add a short Codex VS Code extension note explaining that it uses Codex MCP configuration when the extension surface exposes MCP tools
   - explain that other MCP IDEs use Locus through MCP, not through the Codex-specific skill
+  - note which current Codex docs / CLI generation this skill workflow was validated against
 
 - [ ] Update `packages/codex/README.md`:
   - describe canonical skill behavior after Phase 3
   - document `npm run sync:codex-skill`
   - clarify manual import versus search-time auto-import
   - keep wording honest about VS Code extension / preview dependencies
+  - note which current Codex docs / CLI generation the skill format was validated against
 
 - [ ] Update `packages/codex/config/config.toml.example`:
   - include the recommended `LOCUS_CODEX_CAPTURE` / `LOCUS_CAPTURE_LEVEL` block
@@ -429,4 +445,5 @@ Optional IDE verification:
 
 - If a reviewer suggests adding new `packages/core` behavior in Phase 4, defer that to Phase 5 unless a concrete bug is demonstrated.
 - If the local sync command needs to support non-default skill roots later, add that through explicit arguments or env overrides, not through heuristic filesystem scanning.
+- If the installed skill differs from the repo copy during manual testing, prefer warning + explicit overwrite over silent replacement.
 - If VS Code extension behavior differs from CLI in manual smoke testing, document the limitation; do not “fix” it by promising unsupported behavior in the skill text.
