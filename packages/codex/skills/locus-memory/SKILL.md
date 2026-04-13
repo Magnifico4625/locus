@@ -25,7 +25,12 @@ project context across sessions.
 ## Key Behaviors
 
 - Always search memory before re-asking questions the user already answered
+- In Codex, recent dialogue is auto-imported before `memory_search`, so use `memory_search` first for recent history and prior decisions
+- If recent Codex history does not appear, inspect `memory_status` before trying manual recovery steps
+- Use `memory_import_codex` only for manual catch-up, older sessions, or filtered imports
 - Save important decisions when the user makes architecture choices
+- Use `memory_remember` for architectural choices, trade-offs, and why a path was chosen, not only for end-of-task summaries
 - Use `memory_scan` after significant file structure changes
 - Prefer `memory_search` over re-reading files when looking for past context
-- After completing a major task, call `memory_remember` with a summary
+- After completing a major task, call `memory_remember` with a concise summary when the outcome should persist across sessions
+- If the task clearly involves secrets, tokens, passwords, or highly sensitive material, remind the user that capture settings such as `LOCUS_CODEX_CAPTURE=full` may store redacted local memory content
