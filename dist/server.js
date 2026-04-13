@@ -2980,7 +2980,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve4.call(this, root, ref);
+      let _sch = resolve5.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a2 = root.localRefs) === null || _a2 === void 0 ? void 0 : _a2[ref];
         const { schemaId } = this.opts;
@@ -3007,7 +3007,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve4(root, ref) {
+    function resolve5(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3582,7 +3582,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve4(baseURI, relativeURI, options) {
+    function resolve5(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse3(baseURI, schemelessOptions), parse3(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3809,7 +3809,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve4,
+      resolve: resolve5,
       resolveComponent,
       equal,
       serialize,
@@ -6799,7 +6799,7 @@ var require_dist = __commonJS({
 });
 
 // packages/core/src/server.ts
-import { basename as basename4, dirname as dirname4, join as join10 } from "node:path";
+import { basename as basename4, dirname as dirname5, join as join11 } from "node:path";
 
 // packages/codex/src/capture.ts
 var VALID_CAPTURE_MODES = /* @__PURE__ */ new Set(["off", "metadata", "redacted", "full"]);
@@ -7346,6 +7346,12 @@ function matchesFilters(event, options) {
   return true;
 }
 
+// packages/codex/src/skill-sync.ts
+import { copyFileSync, existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { dirname, join as join4, resolve as resolve3 } from "node:path";
+import { fileURLToPath } from "node:url";
+
 // packages/shared-runtime/detect-client.js
 function detectClientEnv() {
   if (process.env.CODEX_HOME) return "codex";
@@ -7362,12 +7368,12 @@ function projectHash(projectRoot) {
 }
 
 // packages/shared-runtime/resolve-storage.js
-import { homedir as homedir2 } from "node:os";
-import { join as join4 } from "node:path";
+import { homedir as homedir3 } from "node:os";
+import { join as join5 } from "node:path";
 function expandTilde2(p) {
-  if (p === "~") return homedir2();
+  if (p === "~") return homedir3();
   if (p.startsWith("~/") || p.startsWith("~\\")) {
-    return join4(homedir2(), p.slice(2));
+    return join5(homedir3(), p.slice(2));
   }
   return p;
 }
@@ -7376,23 +7382,23 @@ function resolveStorageRoot() {
     return expandTilde2(process.env.LOCUS_STORAGE_ROOT);
   }
   const client = detectClientEnv();
-  const home = homedir2();
+  const home = homedir3();
   if (client === "codex") {
-    return join4(expandTilde2(process.env.CODEX_HOME), "memory");
+    return join5(expandTilde2(process.env.CODEX_HOME), "memory");
   }
   if (client === "claude-code") {
-    return join4(home, ".claude", "memory");
+    return join5(home, ".claude", "memory");
   }
-  return join4(home, ".locus", "memory");
+  return join5(home, ".locus", "memory");
 }
 function resolveProjectStorageDir(projectRoot) {
-  return join4(resolveStorageRoot(), `locus-${projectHash(projectRoot)}`);
+  return join5(resolveStorageRoot(), `locus-${projectHash(projectRoot)}`);
 }
 function resolveDbPath(projectRoot) {
-  return join4(resolveProjectStorageDir(projectRoot), "locus.db");
+  return join5(resolveProjectStorageDir(projectRoot), "locus.db");
 }
 function resolveLogPath() {
-  return join4(resolveStorageRoot(), "locus.log");
+  return join5(resolveStorageRoot(), "locus.log");
 }
 
 // node_modules/zod/v3/helpers/util.js
@@ -28570,7 +28576,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve4) => setTimeout(resolve4, pollInterval));
+        await new Promise((resolve5) => setTimeout(resolve5, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error48) {
@@ -28587,7 +28593,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve4, reject) => {
+    return new Promise((resolve5, reject) => {
       const earlyReject = (error48) => {
         reject(error48);
       };
@@ -28665,7 +28671,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve4(parseResult.data);
+            resolve5(parseResult.data);
           }
         } catch (error48) {
           reject(error48);
@@ -28926,12 +28932,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve4, reject) => {
+    return new Promise((resolve5, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve4, interval);
+      const timeoutId = setTimeout(resolve5, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -30031,7 +30037,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve4) => setTimeout(resolve4, pollInterval));
+      await new Promise((resolve5) => setTimeout(resolve5, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -30674,20 +30680,20 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve4) => {
+    return new Promise((resolve5) => {
       const json2 = serializeMessage(message);
       if (this._stdout.write(json2)) {
-        resolve4();
+        resolve5();
       } else {
-        this._stdout.once("drain", resolve4);
+        this._stdout.once("drain", resolve5);
       }
     });
   }
 };
 
 // packages/core/src/ingest/pipeline.ts
-import { readdirSync as readdirSync2, readFileSync as readFileSync2, unlinkSync } from "node:fs";
-import { join as join5 } from "node:path";
+import { readdirSync as readdirSync2, readFileSync as readFileSync3, unlinkSync } from "node:fs";
+import { join as join6 } from "node:path";
 
 // packages/core/src/security/file-ignore.ts
 var DENYLIST_FILES = [
@@ -30940,10 +30946,10 @@ function processInbox(inboxDir, db, options) {
     toProcess = files;
   }
   for (const filename of toProcess) {
-    const filePath = join5(inboxDir, filename);
+    const filePath = join6(inboxDir, filename);
     let raw;
     try {
-      raw = readFileSync2(filePath, "utf-8");
+      raw = readFileSync3(filePath, "utf-8");
     } catch {
       metrics.errors++;
       continue;
@@ -31091,8 +31097,8 @@ function tryDelete(filePath) {
 }
 
 // packages/core/src/logger.ts
-import { appendFileSync, existsSync as existsSync2, mkdirSync as mkdirSync2, renameSync as renameSync2, statSync, unlinkSync as unlinkSync2 } from "node:fs";
-import { dirname } from "node:path";
+import { appendFileSync, existsSync as existsSync3, mkdirSync as mkdirSync3, renameSync as renameSync2, statSync, unlinkSync as unlinkSync2 } from "node:fs";
+import { dirname as dirname2 } from "node:path";
 var LEVELS = { error: 0, info: 1, debug: 2 };
 var currentLevel = "error";
 function setLogLevel(level) {
@@ -31312,9 +31318,9 @@ var SemanticMemory = class {
 
 // packages/core/src/project-root.ts
 import { execFileSync } from "node:child_process";
-import { existsSync as existsSync3, readdirSync as readdirSync3 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import { dirname as dirname2, join as join6, resolve as resolve3 } from "node:path";
+import { existsSync as existsSync4, readdirSync as readdirSync3 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { dirname as dirname3, join as join7, resolve as resolve4 } from "node:path";
 var PROJECT_MARKERS = [
   "package.json",
   "pyproject.toml",
@@ -31344,7 +31350,7 @@ var defaultProjectRootDeps = {
     }
   },
   fileExists(path) {
-    return existsSync3(path);
+    return existsSync4(path);
   },
   readDir(path) {
     try {
@@ -31355,14 +31361,14 @@ var defaultProjectRootDeps = {
   },
   resolveHomeDir() {
     try {
-      return homedir3();
+      return homedir4();
     } catch {
       return null;
     }
   }
 };
 function normalizePath(p) {
-  return resolve3(p).replace(/\\/g, "/");
+  return resolve4(p).replace(/\\/g, "/");
 }
 function hasAnyMarker(dir, markers, deps) {
   for (const marker of markers) {
@@ -31373,7 +31379,7 @@ function hasAnyMarker(dir, markers, deps) {
         if (entry.endsWith(ext)) return true;
       }
     } else {
-      if (deps.fileExists(join6(dir, marker))) return true;
+      if (deps.fileExists(join7(dir, marker))) return true;
     }
   }
   return false;
@@ -31385,14 +31391,14 @@ function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
   const homeDir = deps.resolveHomeDir();
   const normalizedHomeDir = homeDir ? normalizePath(homeDir) : null;
   let highestMarkerDir = null;
-  let dir = resolve3(cwd);
+  let dir = resolve4(cwd);
   for (; ; ) {
     const normalizedDir = normalizePath(dir);
     const isAncestorHomeDir = normalizedHomeDir !== null && normalizedDir === normalizedHomeDir && normalizedDir !== normalizedCwd;
     if (!isAncestorHomeDir && hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
       highestMarkerDir = dir;
     }
-    const parent = dirname2(dir);
+    const parent = dirname3(dir);
     if (parent === dir) break;
     dir = parent;
   }
@@ -31775,8 +31781,8 @@ function generateRecent(db, captureLevel) {
 }
 
 // packages/core/src/storage/init.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync3 } from "node:fs";
-import { dirname as dirname3 } from "node:path";
+import { existsSync as existsSync5, mkdirSync as mkdirSync4, readFileSync as readFileSync4 } from "node:fs";
+import { dirname as dirname4 } from "node:path";
 
 // packages/core/src/storage/migrations.ts
 function getCurrentVersion(db) {
@@ -32085,9 +32091,9 @@ function detectFts5(db) {
   }
 }
 function ensureDir(dbPath) {
-  const dir = dirname3(dbPath);
-  if (!existsSync4(dir)) {
-    mkdirSync3(dir, { recursive: true });
+  const dir = dirname4(dbPath);
+  if (!existsSync5(dir)) {
+    mkdirSync4(dir, { recursive: true });
   }
 }
 async function initStorage(dbPath) {
@@ -32107,8 +32113,8 @@ async function initStorage(dbPath) {
   const initSqlJs = (await import("sql.js")).default;
   const SQL = await initSqlJs();
   let sqlDb;
-  if (existsSync4(dbPath)) {
-    const fileData = readFileSync3(dbPath);
+  if (existsSync5(dbPath)) {
+    const fileData = readFileSync4(dbPath);
     sqlDb = new SQL.Database(new Uint8Array(fileData));
   } else {
     sqlDb = new SQL.Database();
@@ -32803,8 +32809,8 @@ function handleForget(query, deps, confirmToken) {
 }
 
 // packages/core/src/tools/import-codex.ts
-import { readdirSync as readdirSync4, readFileSync as readFileSync4 } from "node:fs";
-import { join as join7 } from "node:path";
+import { readdirSync as readdirSync4, readFileSync as readFileSync5 } from "node:fs";
+import { join as join8 } from "node:path";
 function handleImportCodex(params, deps) {
   const captureMode = resolveCodexCaptureMode(deps.env);
   if (captureMode === "off") {
@@ -32922,7 +32928,7 @@ function collectNewInboxEventIds(inboxDir, before) {
         continue;
       }
       try {
-        const parsed = JSON.parse(readFileSync4(join7(inboxDir, file2), "utf-8"));
+        const parsed = JSON.parse(readFileSync5(join8(inboxDir, file2), "utf-8"));
         if (typeof parsed.event_id === "string" && parsed.event_id.length > 0) {
           eventIds.add(parsed.event_id);
         }
@@ -32937,7 +32943,7 @@ function collectNewInboxEventIds(inboxDir, before) {
 
 // packages/core/src/tools/purge.ts
 import { readdirSync as readdirSync5, statSync as statSync3, unlinkSync as unlinkSync3 } from "node:fs";
-import { join as join8 } from "node:path";
+import { join as join9 } from "node:path";
 function getDbSizeBytes(dbPath) {
   try {
     return statSync3(dbPath).size;
@@ -32988,7 +32994,7 @@ function handlePurge(deps, confirmToken) {
       const inboxFiles = readdirSync5(deps.inboxDir).filter((f) => f.endsWith(".json"));
       for (const f of inboxFiles) {
         try {
-          unlinkSync3(join8(deps.inboxDir, f));
+          unlinkSync3(join9(deps.inboxDir, f));
         } catch {
         }
       }
@@ -33010,8 +33016,8 @@ function handleRemember(text, tags, deps) {
 
 // packages/core/src/scanner/index.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import { existsSync as existsSync5, readdirSync as readdirSync6, readFileSync as readFileSync5, statSync as statSync4 } from "node:fs";
-import { extname, join as join9, relative } from "node:path";
+import { existsSync as existsSync6, readdirSync as readdirSync6, readFileSync as readFileSync6, statSync as statSync4 } from "node:fs";
+import { extname, join as join10, relative } from "node:path";
 
 // packages/core/src/scanner/aliases.ts
 function loadPathAliases(rawPaths) {
@@ -33419,7 +33425,7 @@ function gitExec(args, cwd) {
 }
 var defaultScanDeps = {
   isGitRepo(path) {
-    return existsSync5(join9(path, ".git"));
+    return existsSync6(join10(path, ".git"));
   },
   getHead(path) {
     try {
@@ -33459,7 +33465,7 @@ var defaultScanDeps = {
         return;
       }
       for (const entry of entries) {
-        const fullPath = join9(dir, entry);
+        const fullPath = join10(dir, entry);
         try {
           const stat = statSync4(fullPath);
           if (stat.isDirectory()) {
@@ -33597,7 +33603,7 @@ function walkDirectory(dir, basePath) {
       return;
     }
     for (const entry of entries) {
-      const fullPath = join9(current, entry);
+      const fullPath = join10(current, entry);
       try {
         const stat = statSync4(fullPath);
         if (stat.isDirectory()) {
@@ -33613,10 +33619,10 @@ function walkDirectory(dir, basePath) {
   return results;
 }
 function loadProjectAliases(projectPath) {
-  const tsconfigPath = join9(projectPath, "tsconfig.json");
-  if (!existsSync5(tsconfigPath)) return {};
+  const tsconfigPath = join10(projectPath, "tsconfig.json");
+  if (!existsSync6(tsconfigPath)) return {};
   try {
-    const content = readFileSync5(tsconfigPath, "utf-8");
+    const content = readFileSync6(tsconfigPath, "utf-8");
     const rawPaths = parseTsConfig(content);
     return loadPathAliases(rawPaths);
   } catch {
@@ -33719,7 +33725,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
       skippedFiles++;
       continue;
     }
-    const fullPath = join9(projectPath, relPath);
+    const fullPath = join10(projectPath, relPath);
     let stat;
     try {
       stat = statSync4(fullPath);
@@ -33735,7 +33741,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
     }
     let content;
     try {
-      content = readFileSync5(fullPath, "utf-8");
+      content = readFileSync6(fullPath, "utf-8");
     } catch {
       storeSkippedEntry(db, relPath, "read-failed", now);
       skippedFiles++;
@@ -34257,7 +34263,7 @@ async function createServer(options) {
   const dbPath = options?.dbPath ?? resolveDbPath(root);
   const logPath = resolveLogPath();
   const { db, backend, fts5 } = await initStorage(dbPath);
-  const inboxDir = join10(dirname4(dbPath), "inbox");
+  const inboxDir = join11(dirname5(dbPath), "inbox");
   const config2 = { ...LOCUS_DEFAULTS };
   const envCapture = process.env.LOCUS_CAPTURE_LEVEL;
   if (envCapture === "metadata" || envCapture === "redacted" || envCapture === "full") {

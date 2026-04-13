@@ -99,7 +99,7 @@ This avoids making promises the project cannot enforce from inside the repo.
 
 **Files:** none
 
-- [ ] Verify clean baseline:
+- [x] Verify clean baseline:
 
 ```bash
 git status --short --branch
@@ -107,7 +107,7 @@ git status --short --branch
 
 Expected: clean working tree on the current branch.
 
-- [ ] Verify Phase 3 checkpoint tag exists:
+- [x] Verify Phase 3 checkpoint tag exists:
 
 ```bash
 git tag --list codex-auto-import-phase-3-local
@@ -115,14 +115,14 @@ git tag --list codex-auto-import-phase-3-local
 
 Expected: prints `codex-auto-import-phase-3-local`.
 
-- [ ] Create the Phase 4 branch from the stable checkpoint:
+- [x] Create the Phase 4 branch from the stable checkpoint:
 
 ```bash
 git checkout codex-auto-import-phase-3-local
 git checkout -b feature/codex-skill-upgrade
 ```
 
-- [ ] Verify branch base:
+- [x] Verify branch base:
 
 ```bash
 git log --oneline -3
@@ -135,7 +135,7 @@ Expected: `5a70e57 chore(codex): complete phase 3 validation` at or near `HEAD`.
 **Files:**
 - Create: `packages/codex/tests/skill-contract.test.ts`
 
-- [ ] Add a failing contract test that reads `packages/codex/skills/locus-memory/SKILL.md` and asserts the canonical skill includes:
+- [x] Add a failing contract test that reads `packages/codex/skills/locus-memory/SKILL.md` and asserts the canonical skill includes:
   - `memory_search` as the default recall tool
   - `memory_status` as the diagnostic path when recent history is missing
   - `memory_import_codex` as a manual catch-up or filtered import tool
@@ -143,9 +143,9 @@ Expected: `5a70e57 chore(codex): complete phase 3 validation` at or near `HEAD`.
   - `memory_scan` after structural file changes
   - an explicit statement that recent Codex history is auto-imported before `memory_search`
 
-- [ ] Add a second failing contract test that ensures the skill does **not** contain obsolete guidance such as “always run `memory_import_codex` before history-related searches”.
+- [x] Add a second failing contract test that ensures the skill does **not** contain obsolete guidance such as “always run `memory_import_codex` before history-related searches”.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/codex/tests/skill-contract.test.ts
@@ -153,7 +153,7 @@ npm test -- packages/codex/tests/skill-contract.test.ts
 
 Expected: FAIL because the current skill still reflects pre-Phase-4 guidance.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/codex/tests/skill-contract.test.ts
@@ -169,7 +169,7 @@ git commit -m "test(codex): define skill workflow contract"
 - Create: `scripts/sync-codex-skill.mjs`
 - Modify: `package.json`
 
-- [ ] Write failing tests for a sync helper that:
+- [x] Write failing tests for a sync helper that:
   - resolves the canonical skill source path in the repo
   - resolves the installed Codex skill directory from `CODEX_HOME` or fallback `~/.codex`
   - creates the target directory when missing
@@ -179,7 +179,7 @@ git commit -m "test(codex): define skill workflow contract"
   - supports an explicit overwrite path with backup creation such as `SKILL.md.bak`
   - returns the source and target paths for logging/debugging
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/codex/tests/skill-sync.test.ts
@@ -187,24 +187,24 @@ npm test -- packages/codex/tests/skill-sync.test.ts
 
 Expected: FAIL because the sync helper does not exist yet.
 
-- [ ] Implement the minimal helper in `packages/codex/src/skill-sync.ts`:
+- [x] Implement the minimal helper in `packages/codex/src/skill-sync.ts`:
   - pure path resolver functions
   - one copy function for the canonical skill
   - local-diff detection before overwrite
   - explicit overwrite option plus backup creation for replaced local skill content
   - no repo writes, only explicit user target writes
 
-- [ ] Export the helper from `packages/codex/src/index.ts`.
+- [x] Export the helper from `packages/codex/src/index.ts`.
 
-- [ ] Add `scripts/sync-codex-skill.mjs` as a thin CLI wrapper around the helper.
+- [x] Add `scripts/sync-codex-skill.mjs` as a thin CLI wrapper around the helper.
 
-- [ ] Add a root script:
+- [x] Add a root script:
 
 ```json
 "sync:codex-skill": "node scripts/sync-codex-skill.mjs"
 ```
 
-- [ ] Re-run:
+- [x] Re-run:
 
 ```bash
 npm test -- packages/codex/tests/skill-sync.test.ts
@@ -212,7 +212,7 @@ npm test -- packages/codex/tests/skill-sync.test.ts
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm -w @locus/codex run typecheck
@@ -220,7 +220,7 @@ npm -w @locus/codex run typecheck
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add package.json packages/codex/src/index.ts packages/codex/src/skill-sync.ts packages/codex/tests/skill-sync.test.ts scripts/sync-codex-skill.mjs
@@ -233,7 +233,7 @@ git commit -m "feat(codex): add skill sync helper"
 - Modify: `packages/codex/skills/locus-memory/SKILL.md`
 - Test: `packages/codex/tests/skill-contract.test.ts`
 
-- [ ] Update the canonical skill so it tells Codex to:
+- [x] Update the canonical skill so it tells Codex to:
   - use `memory_search` before re-asking project questions
   - rely on recent-history auto-import before `memory_search`
   - inspect `memory_status` if recent dialogue is missing or stale
@@ -242,13 +242,13 @@ git commit -m "feat(codex): add skill sync helper"
   - use `memory_remember` specifically for architectural choices, trade-offs, and reasons behind decisions so later `memory_search` can explain why a path was chosen
   - call `memory_scan` after large file-structure changes
 
-- [ ] Add one conditional privacy instruction:
+- [x] Add one conditional privacy instruction:
   - when the task clearly involves secrets, tokens, passwords, or highly sensitive material, Codex should remind the user that `LOCUS_CODEX_CAPTURE=full` or similar settings may store redacted-but-local memory content
   - keep this reminder contextual, not a generic banner on every task
 
-- [ ] Keep the skill concise and operational. Prefer imperative guidance over large explanatory paragraphs.
+- [x] Keep the skill concise and operational. Prefer imperative guidance over large explanatory paragraphs.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/codex/tests/skill-contract.test.ts
@@ -256,7 +256,7 @@ npm test -- packages/codex/tests/skill-contract.test.ts
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/codex/skills/locus-memory/SKILL.md packages/codex/tests/skill-contract.test.ts
@@ -270,30 +270,30 @@ git commit -m "docs(codex): upgrade locus memory skill workflow"
 - Modify: `packages/codex/README.md`
 - Modify: `packages/codex/config/config.toml.example`
 
-- [ ] Update `README.md`:
+- [x] Update `README.md`:
   - add or refine a Codex CLI workflow section around Phase 3 + Phase 4 behavior
   - add a short Codex VS Code extension note explaining that it uses Codex MCP configuration when the extension surface exposes MCP tools
   - explain that other MCP IDEs use Locus through MCP, not through the Codex-specific skill
   - note which current Codex docs / CLI generation this skill workflow was validated against
 
-- [ ] Update `packages/codex/README.md`:
+- [x] Update `packages/codex/README.md`:
   - describe canonical skill behavior after Phase 3
   - document `npm run sync:codex-skill`
   - clarify manual import versus search-time auto-import
   - keep wording honest about VS Code extension / preview dependencies
   - note which current Codex docs / CLI generation the skill format was validated against
 
-- [ ] Update `packages/codex/config/config.toml.example`:
+- [x] Update `packages/codex/config/config.toml.example`:
   - include the recommended `LOCUS_CODEX_CAPTURE` / `LOCUS_CAPTURE_LEVEL` block
   - add a comment pointing to the local skill sync command
 
-- [ ] Run docs sanity search:
+- [x] Run docs sanity search:
 
 ```bash
 rg -n "memory_search|memory_status|memory_import_codex|sync:codex-skill|VS Code|MCP" README.md packages/codex/README.md packages/codex/config/config.toml.example
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add README.md packages/codex/README.md packages/codex/config/config.toml.example
@@ -305,15 +305,15 @@ git commit -m "docs(codex): document skill workflow and IDE boundaries"
 **Files:**
 - Modify: `docs/roadmap/codex.md`
 
-- [ ] Mark Phase 4 as implemented locally only after tests and docs are green.
+- [x] Mark Phase 4 as implemented locally only after tests and docs are green.
 
-- [ ] Record that:
+- [x] Record that:
   - canonical skill workflow now matches Phase 3 auto-import semantics
   - local installed skill can be synced from the repo
   - CLI is the primary guaranteed target
   - VS Code / IDE behavior still depends on MCP surface availability
 
-- [ ] Run the local sync command once on the developer machine:
+- [x] Run the local sync command once on the developer machine:
 
 ```bash
 npm run sync:codex-skill
@@ -321,7 +321,7 @@ npm run sync:codex-skill
 
 Expected: prints source/target paths and updates the local installed Codex skill.
 
-- [ ] Verify the installed local skill file exists:
+- [x] Verify the installed local skill file exists:
 
 ```bash
 Get-Content "$HOME\\.codex\\skills\\locus-memory\\SKILL.md"
@@ -329,7 +329,7 @@ Get-Content "$HOME\\.codex\\skills\\locus-memory\\SKILL.md"
 
 Expected: content matches the upgraded canonical skill, unless `CODEX_HOME` overrides the base path.
 
-- [ ] Commit repo-visible changes only:
+- [x] Commit repo-visible changes only:
 
 ```bash
 git add docs/roadmap/codex.md
@@ -340,7 +340,7 @@ git commit -m "docs(codex): mark phase 4 skill upgrade complete"
 
 **Files:** all modified repo files
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts
@@ -348,7 +348,7 @@ npm test -- packages/codex/tests/skill-contract.test.ts packages/codex/tests/ski
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm -w @locus/codex run typecheck
@@ -356,7 +356,7 @@ npm -w @locus/codex run typecheck
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run lint
@@ -364,7 +364,7 @@ npm run lint
 
 Expected: PASS.
 
-- [ ] Commit any formatting-only follow-up if needed:
+- [x] Commit any formatting-only follow-up if needed:
 
 ```bash
 git add <files>
@@ -375,7 +375,7 @@ git commit -m "chore(codex): format phase 4 skill changes"
 
 **Files:** all modified repo files
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run typecheck
@@ -383,7 +383,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test
@@ -391,7 +391,7 @@ npm test
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run build
@@ -399,25 +399,25 @@ npm run build
 
 Expected: PASS.
 
-- [ ] Review final branch diff:
+- [x] Review final branch diff:
 
 ```bash
 git diff --stat codex-auto-import-phase-3-local..HEAD
 ```
 
-- [ ] Review commit sequence:
+- [x] Review commit sequence:
 
 ```bash
 git log --oneline codex-auto-import-phase-3-local..HEAD
 ```
 
-- [ ] Create local checkpoint tag:
+- [x] Create local checkpoint tag:
 
 ```bash
 git tag -a codex-skill-upgrade-phase-4-local -m "Codex skill upgrade phase 4 local checkpoint"
 ```
 
-- [ ] Final checkpoint commit if needed:
+- [x] Final checkpoint commit if needed:
 
 ```bash
 git commit -m "chore(codex): complete phase 4 validation"
