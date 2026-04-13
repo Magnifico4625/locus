@@ -43,6 +43,29 @@ function getRegisteredToolNames(server: ServerContext['server']): string[] {
   return registry ? Object.keys(registry) : [];
 }
 
+function getRegisteredTool(ctx: ServerContext, name: string) {
+  const registry = (
+    ctx.server as {
+      _registeredTools?: Record<string, { handler: (args: unknown) => Promise<{ content: Array<{ text: string }> }> }>;
+    }
+  )._registeredTools;
+  const tool = registry?.[name];
+  if (!tool) {
+    throw new Error(`Tool ${name} is not registered`);
+  }
+  return tool;
+}
+
+async function callTextTool(
+  ctx: ServerContext,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const tool = getRegisteredTool(ctx, name);
+  const result = await tool.handler(args);
+  return result.content[0]?.text ?? '';
+}
+
 // ─── Shared context ───────────────────────────────────────────────────────────
 
 let tempDir: string;
@@ -86,6 +109,25 @@ describe('createServer', () => {
       expect(getRegisteredToolNames(ctx2.server)).toContain('memory_import_codex');
       expect(ctx2.db).toBeDefined();
       expect(ctx2.server).toBeDefined();
+    } finally {
+      ctx2.cleanup();
+    }
+  });
+
+  it('initialises memory_status with a default codex auto-import snapshot', async () => {
+    const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'codex-status.db') });
+    try {
+      const statusText = await callTextTool(ctx2, 'memory_status', {});
+      const status = JSON.parse(statusText) as MemoryStatus;
+
+      expect(status.codexAutoImport).toEqual({
+        clientDetected: false,
+        debounceMs: 45000,
+        lastStatus: 'idle',
+        lastImported: 0,
+        lastDuplicates: 0,
+        lastErrors: 0,
+      });
     } finally {
       ctx2.cleanup();
     }
@@ -142,6 +184,39 @@ describe('createServer', () => {
     expect(found).toBeDefined();
     expect(found?.layer).toBe('semantic');
     expect(found?.relevance).toBeGreaterThan(0);
+  });
+
+  it('memory_search works in a non-Codex environment without CODEX_HOME', async () => {
+    const originalCodexHome = process.env.CODEX_HOME;
+    try {
+      delete process.env.CODEX_HOME;
+
+      const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'generic-search.db') });
+      try {
+        handleRemember('Generic search path still works', ['generic'], { semantic: ctx2.semantic });
+
+        const searchText = await callTextTool(ctx2, 'memory_search', {
+          query: 'Generic search path still works',
+        });
+        const results = JSON.parse(searchText) as SearchResult[];
+
+        expect(
+          results.some(
+            (entry) =>
+              entry.layer === 'semantic' &&
+              entry.content.includes('Generic search path still works'),
+          ),
+        ).toBe(true);
+      } finally {
+        ctx2.cleanup();
+      }
+    } finally {
+      if (originalCodexHome === undefined) {
+        delete process.env.CODEX_HOME;
+      } else {
+        process.env.CODEX_HOME = originalCodexHome;
+      }
+    }
   });
 
   it('memory_status returns a valid MemoryStatus object with correct fields', () => {
