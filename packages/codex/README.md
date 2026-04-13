@@ -28,15 +28,28 @@ codex "Search memory for recent decisions"
 - All 3 MCP resources (project-map, decisions, recent)
 - SQLite storage with FTS5 full-text search
 - Client-aware storage: data stored in `$CODEX_HOME/memory/`
-- Manual and library JSONL import for Codex session rollout files
+- Auto-import before `memory_search`, plus manual and library JSONL import for Codex session rollout files
 
 ## Codex JSONL Import
 
-Phase 1 built the adapter foundation. Phase 2 exposes it through MCP.
+Phase 1 built the adapter foundation. Phase 2 exposed it through MCP. Phase 3 adds bounded auto-import before `memory_search`.
+
+### Auto-import before search
+
+When Codex is the detected client environment, core auto-imports only the newest rollout file before `memory_search`.
+
+Behavior:
+
+- search-triggered, not a background watcher
+- bounded to the newest discovered rollout session
+- debounced in the server process to avoid repeated re-import during active querying
+- best-effort: if import is disabled or fails, search still runs
+
+Use `memory_status` to inspect the last auto-import snapshot.
 
 ### Manual import from Codex
 
-Run the tool from Codex when you want recent session history ingested immediately:
+Run the tool from Codex when you want explicit control over import scope or want to catch up older rollout history beyond the newest auto-imported session:
 
 ```text
 memory_import_codex({"latestOnly":true})
@@ -90,12 +103,11 @@ Supported values:
 | `full` | Import user prompt and assistant response text after redaction |
 
 `LOCUS_CODEX_CAPTURE` controls the Codex adapter before events are written to inbox. `LOCUS_CAPTURE_LEVEL` remains the core ingest pipeline's second-defense gate.
-If `LOCUS_CODEX_CAPTURE=off`, `memory_import_codex` returns a disabled response and performs no import work.
+If `LOCUS_CODEX_CAPTURE=off`, both auto-import before `memory_search` and `memory_import_codex` are disabled.
 
 Redaction is best-effort by design: obvious API keys, bearer tokens, and similar secrets are stripped before storage, but arbitrary free-form text can never be guaranteed perfectly secret-free.
 
 ## What's Coming
 
-- Auto-import before search
 - Codex-aware doctor/status diagnostics
 - npm package for `npx` one-liner install

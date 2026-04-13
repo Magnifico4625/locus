@@ -32,9 +32,9 @@ Locus is an MCP server. It works with any tool that supports the [Model Context 
 |---------|-------------|-----------|----------------------------------|
 | 13 MCP tools (search, explore, remember...) | Full support | Full support | Full support |
 | 3 MCP resources (project-map, decisions, recent) | Auto-injected | On demand | Manual config |
-| Carbon Copy capture | Full support via hooks (v3.0) | Manual import via `memory_import_codex` | Planned for v3.2 via adapters |
+| Carbon Copy capture | Full support via hooks (v3.0) | Auto-import before `memory_search` + manual `memory_import_codex` | Planned for v3.2 via adapters |
 
-**How it works:** The MCP server provides 13 tools and 3 resources to any connected client. Storage location is auto-detected per client (`~/.claude/memory/` for Claude Code, `$CODEX_HOME/memory/` for Codex CLI, `~/.locus/memory/` for others). In Claude Code, three native hooks additionally capture conversation events into a local inbox for passive memory. In Codex CLI, the `memory_import_codex` tool can manually import rollout JSONL sessions into the same inbox and storage pipeline. Automatic pre-search import remains Phase 3 work.
+**How it works:** The MCP server provides 13 tools and 3 resources to any connected client. Storage location is auto-detected per client (`~/.claude/memory/` for Claude Code, `$CODEX_HOME/memory/` for Codex CLI, `~/.locus/memory/` for others). In Claude Code, three native hooks additionally capture conversation events into a local inbox for passive memory. In Codex CLI, the newest rollout session is auto-imported before `memory_search` in a bounded, debounced, best-effort way, and `memory_import_codex` remains available for explicit catch-up or filtered manual import.
 
 ## Features
 
@@ -83,7 +83,9 @@ args = ["/path/to/locus/dist/server.js"]
 LOCUS_LOG = "error"
 ```
 
-> **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 13 MCP tools and 3 resources work immediately. Manual Codex session import is available through `memory_import_codex`; automatic import before search remains future work for Phase 3 / v3.2.
+> **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 13 MCP tools and 3 resources work immediately. Before `memory_search`, Locus auto-imports the newest Codex rollout session with a local debounce window. `memory_import_codex` remains available when you want explicit control, filtered import, or manual catch-up across older sessions.
+
+Recent Codex history becomes searchable automatically when you use `memory_search`.
 
 Import the latest Codex rollout session on demand:
 
@@ -126,7 +128,7 @@ Add this server entry:
 }
 ```
 
-> **Note:** When using Locus outside Claude Code, the MCP tools and resources work fully. Codex CLI additionally supports manual session import via `memory_import_codex`. Adapter support for IDE log files in Cursor, Windsurf, and similar clients is planned for v3.2.
+> **Note:** When using Locus outside Claude Code, the MCP tools and resources work fully. Codex CLI additionally supports auto-import before `memory_search` plus manual session import via `memory_import_codex`. Adapter support for IDE log files in Cursor, Windsurf, and similar clients is planned for v3.2.
 
 ### First Use
 
@@ -193,7 +195,7 @@ Three MCP resources provide lightweight context at the start of every session (<
 |----------|--------|---------|-------------|
 | `LOCUS_LOG` | `error`, `info`, `debug` | `error` | Logging verbosity |
 | `LOCUS_CAPTURE_LEVEL` | `metadata`, `redacted`, `full` | `metadata` | Capture detail level (hooks + MCP server) |
-| `LOCUS_CODEX_CAPTURE` | `off`, `metadata`, `redacted`, `full` | `metadata` | Codex JSONL import behavior for `memory_import_codex` |
+| `LOCUS_CODEX_CAPTURE` | `off`, `metadata`, `redacted`, `full` | `metadata` | Codex JSONL import behavior for both auto-import before `memory_search` and `memory_import_codex` |
 
 **Capture Levels:**
 
@@ -255,7 +257,8 @@ Locus uses a 4-layer security model:
 +------------------------------------------+
 |   Adapters (event sources):              |
 |   Claude Code hooks (v3.0)               |
-|   Codex JSONL adapter + manual import    |
+|   Codex JSONL adapter + auto/manual      |
+|   import into inbox before search        |
 |   log-tailer / cli-wrapper (v3.2)        |
 |   -> inbox/ (atomic JSON events)         |
 +------------------------------------------+
@@ -328,7 +331,7 @@ Version 3.2 will include `@locus/log-tailer` — an adapter that reads IDE log f
 | v3.0.5 | Released | FTS5 self-healing indexes, 12-point doctor, FTS health audit |
 | v3.1 | Released | Multi-client architecture: `@locus/shared-runtime` (client-aware paths), `@locus/codex` (Codex CLI skill + config), 863 tests |
 | v3.1.1 | **Current** | Fix: hooks failed in plugin cache due to bare module import of `@locus/shared-runtime` |
-| v3.2 | Planned | Codex session JSONL adapter, `@locus/log-tailer` (Cursor/Windsurf), npm package for `npx` install |
+| v3.2 | Planned | Codex auto-import polish + skill upgrade, `@locus/log-tailer` (Cursor/Windsurf), npm package for `npx` install |
 | v4.0 | Planned | HTML dashboard for memory visualization |
 
 ## Development

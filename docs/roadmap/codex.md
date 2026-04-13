@@ -123,7 +123,7 @@ Exit criteria:
 
 Goal: expose Codex import through MCP so users and Codex itself can trigger it.
 
-Status: implemented locally on `feature/codex-manual-import` with green targeted tests. This phase adds the MCP-facing manual import path; Phase 3 is now the next execution step.
+Status: implemented locally on `feature/codex-manual-import` with green targeted tests. This phase adds the MCP-facing manual import path and remains the explicit control path even after Phase 3 auto-import.
 
 Implemented:
 
@@ -149,13 +149,25 @@ Exit criteria:
 - Imported Codex conversations become searchable through `memory_search`.
 - No repeated imports on repeated tool calls.
 
-Next step: Phase 3 — Auto Import Before Search.
+Next step at the time of Phase 2 completion: Phase 3 — Auto Import Before Search.
 
 ---
 
 ## Phase 3 — Auto Import Before Search
 
 Goal: make Codex memory feel persistent without requiring manual import every time.
+
+Implementation plan: `docs/superpowers/plans/2026-04-12-codex-auto-import-phase-3.md`
+
+Status: implemented locally on `feature/codex-auto-import` with green targeted tests. Auto-import now reuses the Phase 2 import path, runs before `memory_search` only for Codex, and surfaces last-run state through `memory_status`.
+
+Implemented:
+
+- Search-time Codex auto-import in `packages/core` reusing `handleImportCodex({ latestOnly: true })`.
+- Debounced server-local coordinator with best-effort semantics.
+- Search remains usable when Codex import is disabled or errors.
+- `memory_status` includes `codexAutoImport` snapshot fields for last attempt/result visibility.
+- Regression coverage proving non-Codex search paths still work without `CODEX_HOME`.
 
 Tasks:
 
@@ -171,6 +183,8 @@ Exit criteria:
 - Search latency remains acceptable.
 - Import errors are visible but non-fatal.
 
+Next step: Phase 4 — Codex Skill Upgrade.
+
 ---
 
 ## Phase 4 — Codex Skill Upgrade
@@ -180,9 +194,10 @@ Goal: make Codex use Locus consistently and predictably.
 Tasks:
 
 - Update `packages/codex/skills/locus-memory/SKILL.md`.
-- Instruct Codex to run `memory_import_codex` before history-related searches when available.
 - Instruct Codex to use `memory_search` before re-asking project questions.
+- Instruct Codex to inspect `memory_status` when recent history does not appear as expected.
 - Instruct Codex to call `memory_remember` after important decisions.
+- Keep `memory_import_codex` documented as the explicit manual catch-up path for older sessions or filtered imports.
 - Add guidance for capture levels and privacy.
 - Install/update the local user skill after changes.
 
@@ -289,7 +304,7 @@ Release gates:
 
 ## Immediate Next Steps
 
-1. Finish Phase 2 full validation and checkpointing on `feature/codex-manual-import`.
-2. Start Phase 3 auto-import design with strict debounce and bounded scan scope.
-3. Extend `memory_status` / `memory_config` with last Codex import visibility.
+1. Finish Phase 3 full validation and checkpointing on `feature/codex-auto-import`.
+2. Start Phase 4 skill work so Codex sessions use `memory_search`, `memory_status`, and `memory_remember` more consistently.
+3. Extend Codex-facing diagnostics in `memory_doctor` after the skill behavior is settled.
 4. Keep Claude Code behavior unchanged while Codex-specific work continues.
