@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveCodexHome } from './paths.js';
 
 export interface ResolveInstalledCodexSkillPathOptions {
   env?: Record<string, string | undefined>;
@@ -33,7 +33,7 @@ export function resolveInstalledCodexSkillPath(
   options: ResolveInstalledCodexSkillPathOptions = {},
 ): string {
   const skillName = options.skillName?.trim() || 'locus-memory';
-  return join(resolveCodexHome(options.env), 'skills', skillName, 'SKILL.md');
+  return join(resolveCodexHomeForSkillSync(options.env), 'skills', skillName, 'SKILL.md');
 }
 
 export function copyCodexSkill(options: SkillSyncOptions = {}): SkillSyncResult {
@@ -82,4 +82,27 @@ function targetPathOrDefault(options: SkillSyncOptions): string {
   }
 
   return resolveInstalledCodexSkillPath({ env: options.env });
+}
+
+function resolveCodexHomeForSkillSync(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  const configured = env.CODEX_HOME;
+  if (configured && configured.trim().length > 0) {
+    return resolve(expandTilde(configured));
+  }
+
+  return join(homedir(), '.codex');
+}
+
+function expandTilde(pathValue: string): string {
+  if (pathValue === '~') {
+    return homedir();
+  }
+
+  if (pathValue.startsWith('~/') || pathValue.startsWith('~\\')) {
+    return join(homedir(), pathValue.slice(2));
+  }
+
+  return pathValue;
 }

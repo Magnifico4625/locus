@@ -191,6 +191,17 @@ Next step: Phase 4 — Codex Skill Upgrade.
 
 Goal: make Codex use Locus consistently and predictably.
 
+Implementation plan: `docs/superpowers/plans/2026-04-13-codex-skill-upgrade-phase-4.md`
+
+Status: implemented locally on `feature/codex-skill-upgrade` with green targeted tests. The canonical Codex skill now reflects Phase 3 auto-import behavior, and the repo includes a reproducible local skill sync path.
+
+Implemented:
+
+- `packages/codex/skills/locus-memory/SKILL.md` now points Codex toward `memory_search` first, `memory_status` for diagnostics, and `memory_import_codex` only for manual catch-up or filtered imports.
+- `memory_remember` guidance now emphasizes architectural decisions, trade-offs, and reasons behind the chosen path.
+- `npm run sync:codex-skill` syncs the canonical repo skill into the installed local Codex skill directory.
+- Docs now distinguish the primary validated CLI workflow from VS Code / IDE surfaces that still depend on upstream MCP exposure.
+
 Tasks:
 
 - Update `packages/codex/skills/locus-memory/SKILL.md`.
@@ -205,6 +216,8 @@ Exit criteria:
 
 - New Codex sessions discover and follow the improved memory workflow.
 - Skill behavior is clear without being overly aggressive.
+
+Next step: Phase 5 — Codex Doctor And Status.
 
 ---
 
@@ -304,7 +317,7 @@ Release gates:
 
 ## Immediate Next Steps
 
-1. Finish Phase 3 full validation and checkpointing on `feature/codex-auto-import`.
-2. Start Phase 4 skill work so Codex sessions use `memory_search`, `memory_status`, and `memory_remember` more consistently.
-3. Extend Codex-facing diagnostics in `memory_doctor` after the skill behavior is settled.
+1. Finish Phase 4 local validation and checkpointing on `feature/codex-skill-upgrade`.
+2. Start Phase 5 so Codex users can diagnose MCP visibility, session discovery, and capture settings directly from `memory_doctor`.
+3. Keep CLI as the primary validated path while continuing to document IDE-specific MCP limitations honestly.
 4. Keep Claude Code behavior unchanged while Codex-specific work continues.
