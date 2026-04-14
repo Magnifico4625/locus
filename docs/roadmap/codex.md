@@ -291,7 +291,16 @@ Next step: Phase 7 — Codex Plugin Packaging.
 
 Goal: improve installation UX after the adapter is stable.
 
-Codex plugins are now stable in local Codex CLI feature flags, but plugin work should come after the memory behavior itself is stable.
+Implementation plan: `docs/superpowers/plans/2026-04-14-codex-plugin-packaging-phase-7.md`
+
+Status: in progress locally on `feature/codex-plugin-packaging`. This phase packages the already-working Codex path into a repo-local plugin bundle and marketplace entry without changing runtime behavior or replacing manual MCP setup.
+
+Target deliverables:
+
+- repo-local plugin bundle under `plugins/locus-memory/`
+- repo-local marketplace entry in `.agents/plugins/marketplace.json`
+- plugin sync helper so bundled skill content stays aligned with the canonical Codex skill
+- docs that position plugin packaging as optional onboarding, not a new runtime requirement
 
 Tasks:
 
@@ -343,7 +352,7 @@ Release gates:
 
 ## Immediate Next Steps
 
-1. Finish Phase 6 local validation and checkpointing on `feature/codex-vscode-extension-docs`.
-2. Start Phase 7 only after the VS Code documentation path is complete and stable.
+1. Finish Phase 7 local validation and checkpointing on `feature/codex-plugin-packaging`.
+2. Start release-planning follow-up only after the repo-local plugin packaging path is stable.
 3. Keep CLI as the primary validated path while continuing to document IDE-specific MCP limitations honestly.
 4. Keep Claude Code behavior unchanged while Codex-specific work continues.
