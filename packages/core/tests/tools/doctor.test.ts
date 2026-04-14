@@ -337,4 +337,35 @@ describe('handleDoctor', () => {
     expect(logCheck?.message).toContain('not writable');
     expect(logCheck?.fix).toContain('permissions');
   });
+
+  it('appends Codex checks when Codex diagnostics are provided', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexDiagnostics: {
+        captureMode: 'metadata',
+        sessionsDir: '/codex/sessions',
+        sessionsDirExists: true,
+        rolloutFilesFound: 2,
+        latestRolloutPath: '/codex/sessions/rollout-2026-04-14T12-00-00.jsonl',
+        latestRolloutReadable: true,
+        importedEventCount: 5,
+        latestImportedSessionId: 'session-abc',
+        latestImportedTimestamp: 1700000000000,
+      },
+    } as never);
+
+    expect(report.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Codex capture',
+          status: 'ok',
+        }),
+        expect.objectContaining({
+          name: 'Codex imported events',
+          status: 'ok',
+          message: expect.stringContaining('5'),
+        }),
+      ]),
+    );
+  });
 });

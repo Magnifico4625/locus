@@ -321,4 +321,33 @@ describe('handleStatus', () => {
       message: 'Imported latest Codex session',
     });
   });
+
+  it('exposes Codex diagnostics when the server provides a Codex snapshot', () => {
+    const status = handleStatus({
+      ...(makeStatusDeps(adapter, tempDir) as object),
+      codexDiagnostics: {
+        captureMode: 'metadata',
+        sessionsDir: '/codex/sessions',
+        sessionsDirExists: true,
+        rolloutFilesFound: 3,
+        latestRolloutPath: '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+        latestRolloutReadable: true,
+        importedEventCount: 4,
+        latestImportedSessionId: 'session-123',
+        latestImportedTimestamp: 1700000000000,
+      },
+    } as never);
+
+    expect((status as Record<string, unknown>).codexDiagnostics).toEqual({
+      captureMode: 'metadata',
+      sessionsDir: '/codex/sessions',
+      sessionsDirExists: true,
+      rolloutFilesFound: 3,
+      latestRolloutPath: '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+      latestRolloutReadable: true,
+      importedEventCount: 4,
+      latestImportedSessionId: 'session-123',
+      latestImportedTimestamp: 1700000000000,
+    });
+  });
 });
