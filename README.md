@@ -83,7 +83,7 @@ args = ["/path/to/locus/dist/server.js"]
 LOCUS_LOG = "error"
 ```
 
-> **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 13 MCP tools and 3 resources work immediately. Before `memory_search`, Locus auto-imports the newest Codex rollout session with a local debounce window. `memory_import_codex` remains available when you want explicit control, filtered import, or manual catch-up across older sessions.
+> **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 13 MCP tools and 3 resources work immediately. Before `memory_search`, Locus auto-imports the newest Codex rollout session with a local debounce window. `memory_status` now exposes structured Codex diagnostics, `memory_doctor` adds Codex-specific health checks, and `memory_import_codex` remains available when you want explicit control, filtered import, or manual catch-up across older sessions.
 > Validated against the current Codex docs generation and Codex CLI `0.120.0` surface as of April 13, 2026.
 
 Recent Codex history becomes searchable automatically when you use `memory_search`.
@@ -91,9 +91,17 @@ Recent Codex history becomes searchable automatically when you use `memory_searc
 Recommended Codex workflow:
 
 - use `memory_search` first when recalling recent work, prior decisions, or recent Codex dialogue
-- use `memory_status` if recent dialogue does not appear as expected
+- use `memory_status` to inspect `codexAutoImport` and `codexDiagnostics` if recent dialogue does not appear as expected
+- use `memory_doctor` for actionable Codex checks when you need to diagnose session discovery, rollout readability, capture mode, or imported-event counts
 - use `memory_import_codex` only for older sessions, filtered imports, or explicit manual catch-up
 - use `memory_remember` for important architectural decisions and why they were made
+
+Common Codex fixes:
+
+- confirm `CODEX_HOME` points at the active Codex home directory
+- confirm `$CODEX_HOME/sessions/` exists and contains `rollout-*.jsonl` files
+- confirm `LOCUS_CODEX_CAPTURE` is not set to `off`
+- use `memory_search` first, then `memory_status`, then `memory_doctor`, and only then run `memory_import_codex` for manual catch-up
 
 To keep the locally installed Codex skill aligned with the repo copy:
 
@@ -175,8 +183,8 @@ export LOCUS_CAPTURE_LEVEL=redacted  # prompts as keywords only, no AI responses
 | `memory_remember` | `text: string, tags?: string[]` | Store a decision with auto-redaction |
 | `memory_forget` | `query: string, confirmToken?: string` | Delete matching memories (bulk-delete safety) |
 | `memory_scan` | — | Scan project and index code structure |
-| `memory_status` | — | Runtime stats, config, inbox metrics, and DB info |
-| `memory_doctor` | — | 12-point environment health check |
+| `memory_status` | — | Runtime stats, config, inbox metrics, DB info, and Codex diagnostics when `CODEX_HOME` is present |
+| `memory_doctor` | — | 12-point environment health check plus Codex-specific checks when `CODEX_HOME` is present |
 | `memory_audit` | — | Data inventory and security audit |
 | `memory_config` | — | Show current configuration and sources |
 | `memory_compact` | `maxAgeDays?, keepSessions?` | Clean up old episodic memory entries |
@@ -218,6 +226,7 @@ Three MCP resources provide lightweight context at the start of every session (<
 | `LOCUS_LOG` | `error`, `info`, `debug` | `error` | Logging verbosity |
 | `LOCUS_CAPTURE_LEVEL` | `metadata`, `redacted`, `full` | `metadata` | Capture detail level (hooks + MCP server) |
 | `LOCUS_CODEX_CAPTURE` | `off`, `metadata`, `redacted`, `full` | `metadata` | Codex JSONL import behavior for both auto-import before `memory_search` and `memory_import_codex` |
+| `CODEX_HOME` | filesystem path | platform default | Codex home used for `sessions/`, installed skills, and Codex-specific storage paths |
 
 **Capture Levels:**
 
@@ -353,7 +362,7 @@ Version 3.2 will include `@locus/log-tailer` — an adapter that reads IDE log f
 | v3.0.5 | Released | FTS5 self-healing indexes, 12-point doctor, FTS health audit |
 | v3.1 | Released | Multi-client architecture: `@locus/shared-runtime` (client-aware paths), `@locus/codex` (Codex CLI skill + config), 863 tests |
 | v3.1.1 | **Current** | Fix: hooks failed in plugin cache due to bare module import of `@locus/shared-runtime` |
-| v3.2 | Planned | Codex auto-import polish + skill upgrade, `@locus/log-tailer` (Cursor/Windsurf), npm package for `npx` install |
+| v3.2 | Planned | Codex doctor/status diagnostics, VS Code extension docs, `@locus/log-tailer` (Cursor/Windsurf), npm package for `npx` install |
 | v4.0 | Planned | HTML dashboard for memory visualization |
 
 ## Development

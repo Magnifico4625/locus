@@ -36,6 +36,7 @@ codex "Search memory for recent decisions"
 - Client-aware storage: data stored in `$CODEX_HOME/memory/`
 - Auto-import before `memory_search`, plus manual and library JSONL import for Codex session rollout files
 - Canonical Codex skill workflow for `memory_search`, `memory_status`, `memory_remember`, and manual `memory_import_codex`
+- Codex-aware diagnostics in `memory_status` and `memory_doctor`
 
 Validated against the current Codex docs generation and Codex CLI `0.120.0` surface as of April 13, 2026.
 
@@ -54,7 +55,7 @@ Behavior:
 - debounced in the server process to avoid repeated re-import during active querying
 - best-effort: if import is disabled or fails, search still runs
 
-Use `memory_status` to inspect the last auto-import snapshot.
+Use `memory_status` to inspect both the last auto-import snapshot and the current Codex diagnostics snapshot.
 
 ### Skill workflow
 
@@ -67,6 +68,23 @@ The canonical Locus Codex skill assumes this workflow:
 - `memory_scan` after large project-structure changes
 
 This workflow is optimized for Codex CLI. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
+
+### Diagnosis workflow
+
+When recent Codex dialogue does not show up as expected:
+
+1. Run `memory_search` first so bounded auto-import gets a chance to pull the newest rollout.
+2. Run `memory_status` and inspect `codexAutoImport` plus `codexDiagnostics`.
+3. Run `memory_doctor` for actionable checks and suggested fixes.
+4. Use `memory_import_codex` only if you need explicit manual catch-up or filtered import.
+
+Common fixes:
+
+- verify `CODEX_HOME` points at the Codex home you are actively using
+- verify `$CODEX_HOME/sessions/` exists and contains `rollout-*.jsonl`
+- verify the latest rollout file is readable by the current process
+- verify `LOCUS_CODEX_CAPTURE` is not `off`
+- verify imported-event counts increase after `memory_search` or `memory_import_codex`
 
 ### Manual import from Codex
 
@@ -130,5 +148,4 @@ Redaction is best-effort by design: obvious API keys, bearer tokens, and similar
 
 ## What's Coming
 
-- Codex-aware doctor/status diagnostics
 - npm package for `npx` one-liner install

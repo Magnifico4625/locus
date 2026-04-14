@@ -225,6 +225,17 @@ Next step: Phase 5 — Codex Doctor And Status.
 
 Goal: make Codex memory support diagnosable by users.
 
+Implementation plan: `docs/superpowers/plans/2026-04-14-codex-doctor-status-phase-5.md`
+
+Status: implemented locally on `feature/codex-doctor-status` with green targeted tests. `memory_status` now returns structured Codex diagnostics, and `memory_doctor` now surfaces Codex-specific checks and common fixes when `CODEX_HOME` is present.
+
+Implemented:
+
+- `memory_status` exposes `codexDiagnostics` for `sessions/` discovery, latest rollout readability, capture mode, imported-event count, and latest imported session/timestamp.
+- `memory_doctor` adds Codex checks for sessions directory presence, latest rollout readability, capture mode, imported-event count, and latest imported event visibility.
+- Integration coverage proves Codex diagnostics appear only when `CODEX_HOME` is present and that generic paths remain unchanged otherwise.
+- Docs now explain the Codex diagnosis workflow: `memory_search` first, then `memory_status`, then `memory_doctor`, then manual `memory_import_codex` only when needed.
+
 Tasks:
 
 - Extend `memory_doctor` with Codex checks when `CODEX_HOME` is present.
@@ -239,6 +250,8 @@ Exit criteria:
 
 - A user can diagnose why Codex conversations are or are not being imported.
 - Support questions can be answered from `memory_doctor` output.
+
+Next step: Phase 6 — Codex VS Code Extension Documentation.
 
 ---
 
@@ -317,7 +330,7 @@ Release gates:
 
 ## Immediate Next Steps
 
-1. Finish Phase 4 local validation and checkpointing on `feature/codex-skill-upgrade`.
-2. Start Phase 5 so Codex users can diagnose MCP visibility, session discovery, and capture settings directly from `memory_doctor`.
+1. Finish Phase 5 local validation and checkpointing on `feature/codex-doctor-status`.
+2. Start Phase 6 so Codex VS Code extension users have a clear, documented setup path and known limitations.
 3. Keep CLI as the primary validated path while continuing to document IDE-specific MCP limitations honestly.
 4. Keep Claude Code behavior unchanged while Codex-specific work continues.
