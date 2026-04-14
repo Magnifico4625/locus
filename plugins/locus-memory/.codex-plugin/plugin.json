@@ -1,0 +1,41 @@
+{
+  "name": "locus-memory",
+  "version": "3.1.1",
+  "description": "Persistent project-aware memory for Codex via Locus MCP and skill packaging.",
+  "author": {
+    "name": "Magnifico4625",
+    "email": "vozol81@mail.ru",
+    "url": "https://github.com/Magnifico4625"
+  },
+  "homepage": "https://github.com/Magnifico4625/locus",
+  "repository": "https://github.com/Magnifico4625/locus",
+  "license": "MIT",
+  "keywords": [
+    "codex",
+    "mcp",
+    "memory",
+    "productivity"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Locus Memory",
+    "shortDescription": "Persistent memory and Codex recall for local projects.",
+    "longDescription": "Bundles the Locus Codex skill and MCP server configuration for repo-local Codex onboarding without replacing the documented manual MCP path.",
+    "developerName": "Magnifico4625",
+    "category": "Productivity",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/Magnifico4625/locus",
+    "privacyPolicyURL": "https://github.com/Magnifico4625/locus",
+    "termsOfServiceURL": "https://github.com/Magnifico4625/locus",
+    "defaultPrompt": [
+      "Search memory for recent decisions in this project.",
+      "Show what we decided about the current architecture.",
+      "Check memory status and recent Codex imports before we continue."
+    ],
+    "brandColor": "#2563EB"
+  }
+}
