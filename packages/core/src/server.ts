@@ -19,10 +19,10 @@ import {
   CODEX_AUTO_IMPORT_DEBOUNCE_MS,
   coordinateCodexAutoImport,
 } from './tools/auto-import-codex.js';
+import { collectCodexDiagnostics } from './tools/codex-diagnostics.js';
 import { handleCompact } from './tools/compact.js';
 import { handleConfig } from './tools/config.js';
 import { ConfirmationTokenStore } from './tools/confirmation-token.js';
-import { collectCodexDiagnostics } from './tools/codex-diagnostics.js';
 import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';

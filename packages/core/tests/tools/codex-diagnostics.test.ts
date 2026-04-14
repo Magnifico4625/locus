@@ -80,7 +80,19 @@ describe('collectCodexDiagnostics', () => {
       `INSERT INTO conversation_events
        (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      ['codex-2', 'codex', 'source-2', '/project', 'session-xyz', now, 'session_end', '{}', 'medium', null, now],
+      [
+        'codex-2',
+        'codex',
+        'source-2',
+        '/project',
+        'session-xyz',
+        now,
+        'session_end',
+        '{}',
+        'medium',
+        null,
+        now,
+      ],
     );
 
     const diagnostics = collectCodexDiagnostics({

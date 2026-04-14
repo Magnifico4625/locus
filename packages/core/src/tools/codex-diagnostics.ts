@@ -1,9 +1,5 @@
 import { closeSync, existsSync, openSync } from 'node:fs';
-import {
-  findCodexRolloutFiles,
-  getCodexCaptureMode,
-  resolveCodexSessionsDir,
-} from '@locus/codex';
+import { findCodexRolloutFiles, getCodexCaptureMode, resolveCodexSessionsDir } from '@locus/codex';
 import type { CodexDiagnosticsSnapshot, DatabaseAdapter } from '../types.js';
 
 export interface CodexDiagnosticsDeps {
