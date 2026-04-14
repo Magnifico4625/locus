@@ -32351,6 +32351,50 @@ function classifyStatus(result) {
   return "imported";
 }
 
+// packages/core/src/tools/codex-diagnostics.ts
+import { closeSync, existsSync as existsSync6, openSync } from "node:fs";
+function collectCodexDiagnostics(deps) {
+  const env = deps.env ?? process.env;
+  const codexHome = env.CODEX_HOME;
+  if (!codexHome || codexHome.trim().length === 0) {
+    return void 0;
+  }
+  const captureMode = getCodexCaptureMode(env);
+  const sessionsDir = resolveCodexSessionsDir({ env });
+  const sessionsDirExists = existsSync6(sessionsDir);
+  const rolloutFiles = sessionsDirExists ? findCodexRolloutFiles(sessionsDir) : [];
+  const latestRolloutPath = rolloutFiles.at(-1);
+  const importedEventCount = deps.db.get("SELECT COUNT(*) AS cnt FROM ingest_log WHERE source = ?", ["codex"])?.cnt ?? 0;
+  const latestImported = deps.db.get(
+    `SELECT session_id, timestamp
+     FROM conversation_events
+     WHERE source = ?
+     ORDER BY timestamp DESC, id DESC
+     LIMIT 1`,
+    ["codex"]
+  );
+  return {
+    captureMode,
+    sessionsDir,
+    sessionsDirExists,
+    rolloutFilesFound: rolloutFiles.length,
+    latestRolloutPath,
+    latestRolloutReadable: latestRolloutPath ? isReadable(latestRolloutPath) : void 0,
+    importedEventCount,
+    latestImportedSessionId: latestImported?.session_id ?? void 0,
+    latestImportedTimestamp: latestImported?.timestamp
+  };
+}
+function isReadable(filePath) {
+  try {
+    const fd = openSync(filePath, "r");
+    closeSync(fd);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // packages/core/src/tools/compact.ts
 function handleCompact(db, params) {
   const maxAgeDays = params.maxAgeDays ?? 30;
@@ -32666,6 +32710,7 @@ function handleDoctor(deps) {
       fix: "Run memory_scan() to index project"
     });
   }
+  appendCodexChecks(checks, deps.codexDiagnostics);
   let passed = 0;
   let warnings = 0;
   let failures = 0;
@@ -32675,6 +32720,81 @@ function handleDoctor(deps) {
     else failures++;
   }
   return { checks, passed, warnings, failures };
+}
+function appendCodexChecks(checks, codexDiagnostics) {
+  if (!codexDiagnostics) {
+    return;
+  }
+  if (!codexDiagnostics.sessionsDirExists) {
+    checks.push({
+      name: "Codex sessions",
+      status: "warn",
+      message: `${codexDiagnostics.sessionsDir} is missing`,
+      fix: "Verify CODEX_HOME points to the active Codex home and that sessions/ exists."
+    });
+  } else if (codexDiagnostics.rolloutFilesFound === 0) {
+    checks.push({
+      name: "Codex sessions",
+      status: "warn",
+      message: `${codexDiagnostics.sessionsDir} exists but contains no rollout-*.jsonl files`,
+      fix: "Open a Codex session first, then re-run memory_doctor."
+    });
+  } else {
+    checks.push({
+      name: "Codex sessions",
+      status: "ok",
+      message: `${codexDiagnostics.rolloutFilesFound} rollout file(s) in ${codexDiagnostics.sessionsDir}`
+    });
+  }
+  if (codexDiagnostics.latestRolloutPath) {
+    checks.push(
+      codexDiagnostics.latestRolloutReadable ? {
+        name: "Codex latest rollout",
+        status: "ok",
+        message: codexDiagnostics.latestRolloutPath
+      } : {
+        name: "Codex latest rollout",
+        status: "fail",
+        message: `${codexDiagnostics.latestRolloutPath} is not readable`,
+        fix: "Check file permissions or whether another process is locking the rollout file."
+      }
+    );
+  }
+  checks.push(
+    codexDiagnostics.captureMode === "off" ? {
+      name: "Codex capture",
+      status: "warn",
+      message: "LOCUS_CODEX_CAPTURE=off",
+      fix: "Set LOCUS_CODEX_CAPTURE to metadata, redacted, or full to enable Codex import."
+    } : {
+      name: "Codex capture",
+      status: "ok",
+      message: `LOCUS_CODEX_CAPTURE=${codexDiagnostics.captureMode}`
+    }
+  );
+  checks.push(
+    codexDiagnostics.importedEventCount > 0 ? {
+      name: "Codex imported events",
+      status: "ok",
+      message: `${codexDiagnostics.importedEventCount} event(s) imported`
+    } : {
+      name: "Codex imported events",
+      status: "warn",
+      message: "0 Codex events imported so far",
+      fix: "Use memory_search first, then memory_import_codex if you need a manual catch-up."
+    }
+  );
+  if (codexDiagnostics.latestImportedTimestamp !== void 0) {
+    const details = [
+      `timestamp=${codexDiagnostics.latestImportedTimestamp}`,
+      codexDiagnostics.latestImportedSessionId ? `session=${codexDiagnostics.latestImportedSessionId}` : void 0
+    ].filter(Boolean).join(", ");
+    checks.push({
+      name: "Codex latest imported",
+      status: "ok",
+      message: details
+    });
+  }
 }
 
 // packages/core/src/tools/explore.ts
@@ -33016,7 +33136,7 @@ function handleRemember(text, tags, deps) {
 
 // packages/core/src/scanner/index.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import { existsSync as existsSync6, readdirSync as readdirSync6, readFileSync as readFileSync6, statSync as statSync4 } from "node:fs";
+import { existsSync as existsSync7, readdirSync as readdirSync6, readFileSync as readFileSync6, statSync as statSync4 } from "node:fs";
 import { extname, join as join10, relative } from "node:path";
 
 // packages/core/src/scanner/aliases.ts
@@ -33425,7 +33545,7 @@ function gitExec(args, cwd) {
 }
 var defaultScanDeps = {
   isGitRepo(path) {
-    return existsSync6(join10(path, ".git"));
+    return existsSync7(join10(path, ".git"));
   },
   getHead(path) {
     try {
@@ -33620,7 +33740,7 @@ function walkDirectory(dir, basePath) {
 }
 function loadProjectAliases(projectPath) {
   const tsconfigPath = join10(projectPath, "tsconfig.json");
-  if (!existsSync6(tsconfigPath)) return {};
+  if (!existsSync7(tsconfigPath)) return {};
   try {
     const content = readFileSync6(tsconfigPath, "utf-8");
     const rawPaths = parseTsConfig(content);
@@ -34196,7 +34316,8 @@ function handleStatus(deps) {
     storageBackend: deps.backend,
     fts5Available: deps.fts5,
     searchEngine: deps.fts5 ? "FTS5" : "LIKE fallback",
-    codexAutoImport: deps.codexAutoImportSnapshot ? { ...deps.codexAutoImportSnapshot } : getDefaultCodexAutoImportSnapshot()
+    codexAutoImport: deps.codexAutoImportSnapshot ? { ...deps.codexAutoImportSnapshot } : getDefaultCodexAutoImportSnapshot(),
+    codexDiagnostics: deps.codexDiagnostics ? { ...deps.codexDiagnostics } : void 0
   };
 }
 
@@ -34475,7 +34596,8 @@ async function createServer(options) {
       backend,
       fts5,
       inboxDir,
-      codexAutoImportSnapshot
+      codexAutoImportSnapshot,
+      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env })
     });
     return { content: [{ type: "text", text: JSON.stringify(status) }] };
   });
@@ -34489,7 +34611,8 @@ async function createServer(options) {
       projectRootMethod: method,
       captureLevel: config2.captureLevel,
       logPath,
-      db
+      db,
+      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env })
     });
     return { content: [{ type: "text", text: JSON.stringify(report) }] };
   });

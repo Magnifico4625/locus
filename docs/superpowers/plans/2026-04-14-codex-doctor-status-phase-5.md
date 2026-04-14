@@ -111,7 +111,7 @@ Phase 5 should make the following true:
 
 **Files:** none
 
-- [ ] Verify clean baseline:
+- [x] Verify clean baseline:
 
 ```bash
 git status --short --branch
@@ -119,7 +119,7 @@ git status --short --branch
 
 Expected: clean working tree.
 
-- [ ] Verify Phase 4 checkpoint tag exists:
+- [x] Verify Phase 4 checkpoint tag exists:
 
 ```bash
 git tag --list codex-skill-upgrade-phase-4-local
@@ -127,14 +127,14 @@ git tag --list codex-skill-upgrade-phase-4-local
 
 Expected: prints `codex-skill-upgrade-phase-4-local`.
 
-- [ ] Create the Phase 5 branch from the stable checkpoint:
+- [x] Create the Phase 5 branch from the stable checkpoint:
 
 ```bash
 git checkout codex-skill-upgrade-phase-4-local
 git checkout -b feature/codex-doctor-status
 ```
 
-- [ ] Verify branch base:
+- [x] Verify branch base:
 
 ```bash
 git log --oneline -3
@@ -149,7 +149,7 @@ Expected: `38300b7 chore(codex): complete phase 4 validation` at or near `HEAD`.
 - Modify: `packages/core/tests/tools/status.test.ts`
 - Modify: `packages/core/tests/tools/doctor.test.ts`
 
-- [ ] Add failing unit tests for a new Codex diagnostics snapshot helper that assert:
+- [x] Add failing unit tests for a new Codex diagnostics snapshot helper that assert:
   - no snapshot is returned when `CODEX_HOME` is absent
   - `sessionsDir` resolves from `CODEX_HOME`
   - missing `sessionsDir` is represented explicitly
@@ -157,11 +157,11 @@ Expected: `38300b7 chore(codex): complete phase 4 validation` at or near `HEAD`.
   - Codex import counters are read from DB rows where `source='codex'`
   - latest imported timestamp/session is derived from persisted Codex conversation rows
 
-- [ ] Add failing `status.test.ts` coverage that expects a structured Codex diagnostic block when `CODEX_HOME` is present.
+- [x] Add failing `status.test.ts` coverage that expects a structured Codex diagnostic block when `CODEX_HOME` is present.
 
-- [ ] Add failing `doctor.test.ts` coverage that expects new Codex checks only when `CODEX_HOME` is present.
+- [x] Add failing `doctor.test.ts` coverage that expects new Codex checks only when `CODEX_HOME` is present.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/doctor.test.ts
@@ -169,7 +169,7 @@ npm test -- packages/core/tests/tools/codex-diagnostics.test.ts packages/core/te
 
 Expected: FAIL because the helper and Codex-specific status/doctor output do not exist yet.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/doctor.test.ts
@@ -183,7 +183,7 @@ git commit -m "test(core): define codex diagnostics contract"
 - Create: `packages/core/tests/tools/codex-diagnostics.test.ts`
 - Modify: `packages/core/src/types.ts`
 
-- [ ] Implement `packages/core/src/tools/codex-diagnostics.ts` with a pure helper, for example `collectCodexDiagnostics(...)`, that:
+- [x] Implement `packages/core/src/tools/codex-diagnostics.ts` with a pure helper, for example `collectCodexDiagnostics(...)`, that:
   - returns `undefined` when `CODEX_HOME` is absent
   - resolves `sessionsDir` via `@locus/codex`
   - checks whether the sessions directory exists
@@ -193,14 +193,14 @@ git commit -m "test(core): define codex diagnostics contract"
   - counts imported Codex events from `ingest_log`
   - reads the latest imported Codex event timestamp/session id from persisted rows
 
-- [ ] Add or extend types in `packages/core/src/types.ts` for a structured Codex diagnostics snapshot used by both `memory_status` and `memory_doctor`.
+- [x] Add or extend types in `packages/core/src/types.ts` for a structured Codex diagnostics snapshot used by both `memory_status` and `memory_doctor`.
 
-- [ ] Keep the helper read-only and deterministic:
+- [x] Keep the helper read-only and deterministic:
   - no writes
   - no inbox processing
   - no auto-import
 
-- [ ] Re-run:
+- [x] Re-run:
 
 ```bash
 npm test -- packages/core/tests/tools/codex-diagnostics.test.ts
@@ -208,7 +208,7 @@ npm test -- packages/core/tests/tools/codex-diagnostics.test.ts
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm -w @locus/core run typecheck
@@ -216,7 +216,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/src/tools/codex-diagnostics.ts packages/core/src/types.ts packages/core/tests/tools/codex-diagnostics.test.ts
@@ -230,19 +230,19 @@ git commit -m "feat(core): add codex diagnostics snapshot helper"
 - Modify: `packages/core/src/server.ts`
 - Modify: `packages/core/tests/tools/status.test.ts`
 
-- [ ] Extend `handleStatus(...)` so it accepts an optional Codex diagnostics snapshot and returns it in structured form only when present.
+- [x] Extend `handleStatus(...)` so it accepts an optional Codex diagnostics snapshot and returns it in structured form only when present.
 
-- [ ] Keep existing `codexAutoImport` behavior unchanged.
+- [x] Keep existing `codexAutoImport` behavior unchanged.
 
-- [ ] Wire `createServer()` so `memory_status` computes a fresh Codex diagnostics snapshot at tool-call time and passes it into `handleStatus(...)`.
+- [x] Wire `createServer()` so `memory_status` computes a fresh Codex diagnostics snapshot at tool-call time and passes it into `handleStatus(...)`.
 
-- [ ] Add or update tests that verify:
+- [x] Add or update tests that verify:
   - generic clients still get the current status shape without noisy Codex state
   - Codex-configured environments get the new structured block
   - imported event count, latest imported timestamp, and latest imported session are surfaced correctly
   - capture mode `off` is reflected as configuration state, not failure
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/tools/status.test.ts
@@ -250,7 +250,7 @@ npm test -- packages/core/tests/tools/status.test.ts
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm -w @locus/core run typecheck
@@ -258,7 +258,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/src/tools/status.ts packages/core/src/server.ts packages/core/tests/tools/status.test.ts packages/core/src/types.ts
@@ -272,32 +272,32 @@ git commit -m "feat(core): expose codex diagnostics in memory_status"
 - Modify: `packages/core/src/server.ts`
 - Modify: `packages/core/tests/tools/doctor.test.ts`
 
-- [ ] Extend `DoctorDeps` so `handleDoctor(...)` can accept an optional Codex diagnostics snapshot.
+- [x] Extend `DoctorDeps` so `handleDoctor(...)` can accept an optional Codex diagnostics snapshot.
 
-- [ ] Append Codex-specific checks only when the snapshot is present. The checks should cover:
+- [x] Append Codex-specific checks only when the snapshot is present. The checks should cover:
   - Codex sessions directory
   - latest rollout file readability
   - `LOCUS_CODEX_CAPTURE`
   - imported Codex event count
   - latest imported Codex session/event timestamp
 
-- [ ] Keep statuses pragmatic:
+- [x] Keep statuses pragmatic:
   - missing sessions directory => `warn`
   - unreadable latest rollout => `fail`
   - `LOCUS_CODEX_CAPTURE=off` => `warn`
   - zero imported Codex events => `warn`
   - healthy imported state => `ok`
 
-- [ ] Wire `memory_doctor` in `server.ts` so it computes the same shared Codex diagnostics snapshot used by `memory_status`.
+- [x] Wire `memory_doctor` in `server.ts` so it computes the same shared Codex diagnostics snapshot used by `memory_status`.
 
-- [ ] Add/adjust tests to prove:
+- [x] Add/adjust tests to prove:
   - healthy generic doctor output is unchanged when no Codex env exists
   - healthy Codex env produces additional checks
   - disabled capture is reported as an actionable warning
   - missing sessions dir / missing rollout files / unreadable latest rollout are diagnosed correctly
   - imported event count and latest imported session timestamp are reflected in the report
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/tools/doctor.test.ts
@@ -305,7 +305,7 @@ npm test -- packages/core/tests/tools/doctor.test.ts
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm -w @locus/core run typecheck
@@ -313,7 +313,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/src/tools/doctor.ts packages/core/src/server.ts packages/core/tests/tools/doctor.test.ts packages/core/src/types.ts
@@ -325,15 +325,15 @@ git commit -m "feat(core): add codex checks to memory_doctor"
 **Files:**
 - Modify: `packages/core/tests/integration/server.test.ts`
 
-- [ ] Add integration coverage that starts the MCP server with a temporary `CODEX_HOME` and verifies:
+- [x] Add integration coverage that starts the MCP server with a temporary `CODEX_HOME` and verifies:
   - `memory_status` returns Codex diagnostics
   - `memory_doctor` returns Codex checks
 
-- [ ] Add regression coverage that verifies:
+- [x] Add regression coverage that verifies:
   - when `CODEX_HOME` is absent, `memory_doctor` does not emit Codex-specific checks
   - generic startup and search behavior remain unchanged
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/integration/server.test.ts
@@ -341,7 +341,7 @@ npm test -- packages/core/tests/integration/server.test.ts
 
 Expected: PASS.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/core/tests/integration/server.test.ts
@@ -355,32 +355,32 @@ git commit -m "test(core): cover codex doctor and status integration"
 - Modify: `packages/codex/README.md`
 - Modify: `docs/roadmap/codex.md`
 
-- [ ] Update `README.md` with a short Codex diagnosis section that explains how to use:
+- [x] Update `README.md` with a short Codex diagnosis section that explains how to use:
   - `memory_status` for structured state
   - `memory_doctor` for actionable checks
   - `memory_import_codex` only when manual catch-up is actually needed
 
-- [ ] Add a concise common-fixes list:
+- [x] Add a concise common-fixes list:
   - verify `CODEX_HOME`
   - verify `sessions/` exists
   - verify rollout files exist
   - check `LOCUS_CODEX_CAPTURE`
   - use `memory_search` first, then `memory_status`, then `memory_doctor`, then manual import if needed
 
-- [ ] Update `packages/codex/README.md` with the same support workflow, keeping VS Code/IDE limitations honest.
+- [x] Update `packages/codex/README.md` with the same support workflow, keeping VS Code/IDE limitations honest.
 
-- [ ] Update `docs/roadmap/codex.md`:
+- [x] Update `docs/roadmap/codex.md`:
   - mark Phase 5 as the active planned phase
   - note that the goal is diagnosis, not new capture behavior
   - move the immediate next step toward Phase 5 execution
 
-- [ ] Run docs sanity search:
+- [x] Run docs sanity search:
 
 ```bash
 rg -n "memory_status|memory_doctor|LOCUS_CODEX_CAPTURE|CODEX_HOME|manual import" README.md packages/codex/README.md docs/roadmap/codex.md
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add README.md packages/codex/README.md docs/roadmap/codex.md
@@ -391,7 +391,7 @@ git commit -m "docs(codex): document codex diagnosis workflow"
 
 **Files:** all modified repo files
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/integration/server.test.ts
@@ -399,7 +399,7 @@ npm test -- packages/core/tests/tools/codex-diagnostics.test.ts packages/core/te
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm -w @locus/core run typecheck
@@ -407,7 +407,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run lint
@@ -415,7 +415,7 @@ npm run lint
 
 Expected: PASS.
 
-- [ ] Commit any formatting-only follow-up if needed:
+- [x] Commit any formatting-only follow-up if needed:
 
 ```bash
 git add <files>
@@ -426,7 +426,7 @@ git commit -m "chore(core): format codex diagnostics changes"
 
 **Files:** all modified repo files
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run typecheck
@@ -434,7 +434,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test
@@ -442,7 +442,7 @@ npm test
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run build
@@ -450,27 +450,27 @@ npm run build
 
 Expected: PASS.
 
-- [ ] Review final branch diff:
+- [x] Review final branch diff:
 
 ```bash
 git diff --stat codex-skill-upgrade-phase-4-local..HEAD
 ```
 
-- [ ] Review commit sequence:
+- [x] Review commit sequence:
 
 ```bash
 git log --oneline codex-skill-upgrade-phase-4-local..HEAD
 ```
 
-- [ ] Update this plan file with completed checkboxes.
+- [x] Update this plan file with completed checkboxes.
 
-- [ ] Final checkpoint commit if needed:
+- [x] Final checkpoint commit if needed:
 
 ```bash
 git commit -m "chore(core): complete phase 5 validation"
 ```
 
-- [ ] Create local checkpoint tag:
+- [x] Create local checkpoint tag:
 
 ```bash
 git tag -a codex-doctor-status-phase-5-local -m "Codex doctor and status phase 5 local checkpoint"
