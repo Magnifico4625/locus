@@ -12,6 +12,7 @@ import { handleSearch } from '../../src/tools/search.js';
 import { handleStatus } from '../../src/tools/status.js';
 import type {
   ConversationEventRow,
+  DoctorReport,
   InboxEvent,
   MemoryStatus,
   SearchResult,
@@ -136,6 +137,106 @@ describe('createServer', () => {
     }
   });
 
+  it('memory_status returns Codex diagnostics when CODEX_HOME is configured', async () => {
+    const codexHome = join(tempDir, 'codex-home-status');
+    const sessionsDir = join(codexHome, 'sessions', '2026', '04');
+    const originalCodexHome = process.env.CODEX_HOME;
+    const originalCodexCapture = process.env.LOCUS_CODEX_CAPTURE;
+
+    mkdirSync(sessionsDir, { recursive: true });
+    writeFileSync(join(sessionsDir, 'rollout-2026-04-14T12-00-00.jsonl'), '{}\n', 'utf8');
+
+    try {
+      process.env.CODEX_HOME = codexHome;
+      process.env.LOCUS_CODEX_CAPTURE = 'metadata';
+
+      const ctx2 = await createServer({
+        cwd: tempDir,
+        dbPath: join(tempDir, 'codex-status-diagnostics.db'),
+      });
+      try {
+        const statusText = await callTextTool(ctx2, 'memory_status', {});
+        const status = JSON.parse(statusText) as MemoryStatus;
+
+        expect(status.codexDiagnostics).toMatchObject({
+          captureMode: 'metadata',
+          sessionsDir: join(codexHome, 'sessions'),
+          sessionsDirExists: true,
+          rolloutFilesFound: 1,
+          latestRolloutPath: join(sessionsDir, 'rollout-2026-04-14T12-00-00.jsonl'),
+          latestRolloutReadable: true,
+          importedEventCount: 0,
+        });
+      } finally {
+        ctx2.cleanup();
+      }
+    } finally {
+      if (originalCodexHome === undefined) {
+        delete process.env.CODEX_HOME;
+      } else {
+        process.env.CODEX_HOME = originalCodexHome;
+      }
+
+      if (originalCodexCapture === undefined) {
+        delete process.env.LOCUS_CODEX_CAPTURE;
+      } else {
+        process.env.LOCUS_CODEX_CAPTURE = originalCodexCapture;
+      }
+    }
+  });
+
+  it('memory_doctor returns Codex checks when CODEX_HOME is configured', async () => {
+    const codexHome = join(tempDir, 'codex-home-doctor');
+    const sessionsDir = join(codexHome, 'sessions', '2026', '04');
+    const originalCodexHome = process.env.CODEX_HOME;
+    const originalCodexCapture = process.env.LOCUS_CODEX_CAPTURE;
+
+    mkdirSync(sessionsDir, { recursive: true });
+    writeFileSync(join(sessionsDir, 'rollout-2026-04-14T13-00-00.jsonl'), '{}\n', 'utf8');
+
+    try {
+      process.env.CODEX_HOME = codexHome;
+      process.env.LOCUS_CODEX_CAPTURE = 'metadata';
+
+      const ctx2 = await createServer({
+        cwd: tempDir,
+        dbPath: join(tempDir, 'codex-doctor-diagnostics.db'),
+      });
+      try {
+        const doctorText = await callTextTool(ctx2, 'memory_doctor', {});
+        const report = JSON.parse(doctorText) as DoctorReport;
+
+        expect(report.checks).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              name: 'Codex sessions',
+              status: 'ok',
+            }),
+            expect.objectContaining({
+              name: 'Codex capture',
+              status: 'ok',
+              message: 'LOCUS_CODEX_CAPTURE=metadata',
+            }),
+          ]),
+        );
+      } finally {
+        ctx2.cleanup();
+      }
+    } finally {
+      if (originalCodexHome === undefined) {
+        delete process.env.CODEX_HOME;
+      } else {
+        process.env.CODEX_HOME = originalCodexHome;
+      }
+
+      if (originalCodexCapture === undefined) {
+        delete process.env.LOCUS_CODEX_CAPTURE;
+      } else {
+        process.env.LOCUS_CODEX_CAPTURE = originalCodexCapture;
+      }
+    }
+  });
+
   it('resources return formatted strings — not stub text', () => {
     // project-map: empty DB returns "No files scanned yet."
     const projectMapText = generateProjectMap(ctx.db, 'test-project');
@@ -210,6 +311,29 @@ describe('createServer', () => {
               entry.content.includes('Generic search path still works'),
           ),
         ).toBe(true);
+      } finally {
+        ctx2.cleanup();
+      }
+    } finally {
+      if (originalCodexHome === undefined) {
+        delete process.env.CODEX_HOME;
+      } else {
+        process.env.CODEX_HOME = originalCodexHome;
+      }
+    }
+  });
+
+  it('memory_doctor stays generic when CODEX_HOME is absent', async () => {
+    const originalCodexHome = process.env.CODEX_HOME;
+    try {
+      delete process.env.CODEX_HOME;
+
+      const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'generic-doctor.db') });
+      try {
+        const doctorText = await callTextTool(ctx2, 'memory_doctor', {});
+        const report = JSON.parse(doctorText) as DoctorReport;
+
+        expect(report.checks.some((check) => check.name.startsWith('Codex'))).toBe(false);
       } finally {
         ctx2.cleanup();
       }
