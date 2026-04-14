@@ -36,8 +36,11 @@ Out of scope:
 - `memory_status` should expose Codex diagnostics as structured JSON, but only when Codex is configured; generic clients should stay quiet.
 - `memory_doctor` should append Codex-specific checks only when `CODEX_HOME` is present, matching the roadmap promise exactly.
 - Use DB truth for import state:
-  - imported Codex event count comes from `conversation_events` or `ingest_log` rows with `source='codex'`
+  - imported Codex event count should come from `ingest_log` rows with `source='codex'`
   - latest imported timestamp/session comes from the latest stored Codex conversation event
+- Reuse the existing Codex rollout discovery ordering:
+  - latest rollout file should be derived from `findCodexRolloutFiles(...)` ordering, not filesystem `mtime`
+- Latest rollout readability should be checked with a lightweight open/close probe, not by loading the whole file into memory.
 - Treat `LOCUS_CODEX_CAPTURE=off` as diagnosable configuration, not as a failure.
 - Do not promise that VS Code/IDE MCP visibility issues can be repaired by the repo; docs should keep the upstream boundary explicit.
 
@@ -99,6 +102,7 @@ Phase 5 should make the following true:
 - Do not query the filesystem separately in both `status.ts` and `doctor.ts`; that invites semantic drift.
 - Do not make `memory_status` always emit Codex noise for generic clients.
 - Do not infer imported Codex counts from inbox files; use persisted DB truth.
+- Prefer `ingest_log` for Codex import counts because `conversation_events(source)` is not currently indexed.
 - Do not mark `LOCUS_CODEX_CAPTURE=off` as a hard failure; it is a valid but intentionally disabled state.
 - Do not introduce any write side effects into Phase 5 diagnostics.
 - Keep doctor fixes actionable and local, not vague.
@@ -184,9 +188,9 @@ git commit -m "test(core): define codex diagnostics contract"
   - resolves `sessionsDir` via `@locus/codex`
   - checks whether the sessions directory exists
   - discovers rollout files
-  - records latest rollout path/timestamp/readability
+  - records latest rollout path and readability using the existing lexicographically sorted rollout list
   - reads `LOCUS_CODEX_CAPTURE`
-  - counts imported Codex events from the DB
+  - counts imported Codex events from `ingest_log`
   - reads the latest imported Codex event timestamp/session id from persisted rows
 
 - [ ] Add or extend types in `packages/core/src/types.ts` for a structured Codex diagnostics snapshot used by both `memory_status` and `memory_doctor`.
@@ -486,5 +490,7 @@ After automated validation:
 
 - Keep the snapshot helper small and read-only; it is a Phase 5 diagnostic probe, not a new runtime subsystem.
 - If rollout readability is hard to reproduce portably in tests, inject the helper output into `handleDoctor()`/`handleStatus()` rather than trying to force OS-level permission failures in unit tests.
+- When implementing readability, prefer a lightweight file open/close probe over `fs.access()` or full file reads.
 - If the latest imported timestamp is ambiguous, prefer the latest persisted Codex conversation event timestamp over `ingest_log.processed_at`, because users care about the imported conversation chronology more than ingest wall-clock time.
+- When implementing import counters, prefer `ingest_log` over `conversation_events` for the aggregate count because the latter has no `source` index today.
 - If support docs start drifting into installation docs, stop and keep Phase 5 focused on diagnosis. Installation UX belongs to later phases.
