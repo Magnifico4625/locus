@@ -158,7 +158,7 @@ Do not fake a broken auto-config path just to satisfy the plugin format.
 
 **Files:** none
 
-- [ ] Verify clean baseline:
+- [x] Verify clean baseline:
 
 ```bash
 git status --short --branch
@@ -166,7 +166,7 @@ git status --short --branch
 
 Expected: clean working tree.
 
-- [ ] Verify Phase 6 checkpoint tag exists:
+- [x] Verify Phase 6 checkpoint tag exists:
 
 ```bash
 git tag --list codex-vscode-extension-phase-6-local
@@ -174,14 +174,14 @@ git tag --list codex-vscode-extension-phase-6-local
 
 Expected: prints `codex-vscode-extension-phase-6-local`.
 
-- [ ] Create the Phase 7 branch from the stable checkpoint:
+- [x] Create the Phase 7 branch from the stable checkpoint:
 
 ```bash
 git checkout codex-vscode-extension-phase-6-local
 git checkout -b feature/codex-plugin-packaging
 ```
 
-- [ ] Verify branch base:
+- [x] Verify branch base:
 
 ```bash
 git log --oneline -3
@@ -194,19 +194,19 @@ Expected: `cef278d docs(codex): complete phase 6 validation` at or near `HEAD`.
 **Files:**
 - Create: `packages/codex/tests/plugin-bundle.test.ts`
 
-- [ ] Add failing tests that define the local plugin contract:
+- [x] Add failing tests that define the local plugin contract:
   - plugin bundle exists at `plugins/locus-memory/`
   - required manifest exists at `.codex-plugin/plugin.json`
   - manifest paths use `./`-prefixed relative paths
   - plugin skill exists and matches the canonical Codex skill content
   - repo marketplace exists and points to `./plugins/locus-memory`
 
-- [ ] Include at least one test for `.mcp.json` shape:
+- [x] Include at least one test for `.mcp.json` shape:
   - file exists
   - file contains a local MCP server definition for Locus
   - file contains safe default env values
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/codex/tests/plugin-bundle.test.ts
@@ -214,7 +214,7 @@ npm test -- packages/codex/tests/plugin-bundle.test.ts
 
 Expected: FAIL because the plugin bundle and marketplace do not exist yet.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/codex/tests/plugin-bundle.test.ts
@@ -229,7 +229,7 @@ git commit -m "test(codex): define plugin packaging contract"
 - Create: `plugins/locus-memory/skills/locus-memory/SKILL.md`
 - Create: `.agents/plugins/marketplace.json`
 
-- [ ] Create a minimal plugin manifest with:
+- [x] Create a minimal plugin manifest with:
   - stable kebab-case `name`
   - `version`
   - `description`
@@ -237,21 +237,21 @@ git commit -m "test(codex): define plugin packaging contract"
   - `mcpServers`
   - lightweight `interface` metadata if useful for local install surfaces
 
-- [ ] Create `.mcp.json` with the local Locus MCP server definition.
-- [ ] Make the `.mcp.json` path strategy explicit in implementation:
+- [x] Create `.mcp.json` with the local Locus MCP server definition.
+- [x] Make the `.mcp.json` path strategy explicit in implementation:
   - try repo-relative pathing first
   - only generate an absolute path if runtime behavior requires it
   - if absolute generation is needed, derive it from the repo root, not ad-hoc shell cwd
 
-- [ ] Add the repo marketplace entry:
+- [x] Add the repo marketplace entry:
   - marketplace name
   - local source entry
   - `source.path` = `./plugins/locus-memory`
   - install policy suitable for local availability/testing
 
-- [ ] Seed the plugin skill copy from `packages/codex/skills/locus-memory/SKILL.md`.
+- [x] Seed the plugin skill copy from `packages/codex/skills/locus-memory/SKILL.md`.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/codex/tests/plugin-bundle.test.ts
@@ -259,7 +259,7 @@ npm test -- packages/codex/tests/plugin-bundle.test.ts
 
 Expected: still FAIL if the skill copy or metadata is incomplete, but now fail for content/detail reasons rather than missing files.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add plugins/locus-memory/.codex-plugin/plugin.json plugins/locus-memory/.mcp.json plugins/locus-memory/skills/locus-memory/SKILL.md .agents/plugins/marketplace.json
@@ -273,24 +273,24 @@ git commit -m "feat(codex): add local plugin bundle skeleton"
 - Modify: `package.json`
 - Potentially modify: `packages/codex/src/index.ts`
 
-- [ ] Add a sync/build script that:
+- [x] Add a sync/build script that:
   - copies the canonical skill into the plugin bundle
   - validates that plugin-relative paths still match the bundle layout
   - fails loudly if required source files are missing
   - if needed, materializes repo-root-based absolute MCP paths deterministically
 
-- [ ] Add a root script:
+- [x] Add a root script:
 
 ```json
 "sync:codex-plugin": "node scripts/sync-codex-plugin.mjs"
 ```
 
-- [ ] Keep this helper repo-local. Do not make it install into a personal marketplace yet unless implementation proves that path is stable and worthwhile.
-- [ ] In docs and naming, keep command roles distinct:
+- [x] Keep this helper repo-local. Do not make it install into a personal marketplace yet unless implementation proves that path is stable and worthwhile.
+- [x] In docs and naming, keep command roles distinct:
   - `sync:codex-plugin` = plugin bundle sync/build for repo-local packaging
   - `sync:codex-skill` = manual MCP / advanced fallback / skill-only path
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/codex/tests/plugin-bundle.test.ts
@@ -298,7 +298,7 @@ npm test -- packages/codex/tests/plugin-bundle.test.ts
 
 Expected: PASS once the bundle layout and synced skill content are correct.
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add scripts/sync-codex-plugin.mjs package.json packages/codex/tests/plugin-bundle.test.ts plugins/locus-memory/skills/locus-memory/SKILL.md
@@ -311,14 +311,14 @@ git commit -m "feat(codex): add plugin bundle sync script"
 - Modify: `packages/codex/tests/plugin-bundle.test.ts`
 - Modify: plugin bundle files as needed
 
-- [ ] Extend tests to verify:
+- [x] Extend tests to verify:
   - `plugin.json` uses `./skills/` and `./.mcp.json`
   - marketplace source path is exactly `./plugins/locus-memory`
   - the canonical skill and plugin skill remain byte-equal after sync
   - `.mcp.json` still points at the intended local Locus server command
   - `.mcp.json` contains safe default env values
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/codex/tests/plugin-bundle.test.ts
@@ -326,7 +326,7 @@ npm test -- packages/codex/tests/plugin-bundle.test.ts
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run lint
@@ -334,7 +334,7 @@ npm run lint
 
 Expected: PASS, with the existing `dist/server.js` max-size info only.
 
-- [ ] Commit formatting or metadata follow-up if needed:
+- [x] Commit formatting or metadata follow-up if needed:
 
 ```bash
 git add plugins/locus-memory/.codex-plugin/plugin.json plugins/locus-memory/.mcp.json .agents/plugins/marketplace.json packages/codex/tests/plugin-bundle.test.ts
@@ -348,35 +348,35 @@ git commit -m "chore(codex): validate plugin bundle metadata"
 - Modify: `packages/codex/README.md`
 - Modify: `docs/codex-vscode-extension.md`
 
-- [ ] Add concise plugin packaging docs to the root README:
+- [x] Add concise plugin packaging docs to the root README:
   - local plugin exists in the repo
   - repo marketplace exists
   - manual MCP setup remains supported
 
-- [ ] Update `packages/codex/README.md` with:
+- [x] Update `packages/codex/README.md` with:
   - plugin bundle location
   - repo marketplace path
   - `npm run sync:codex-plugin`
   - plugin as optional packaging, not a new requirement
   - clear distinction from `npm run sync:codex-skill`
 
-- [ ] Update `docs/codex-vscode-extension.md` if needed so it does not contradict plugin packaging:
+- [x] Update `docs/codex-vscode-extension.md` if needed so it does not contradict plugin packaging:
   - manual MCP setup remains the stable documented fallback
   - plugin packaging is an additional onboarding path, not a replacement guarantee
 
-- [ ] Keep docs honest that official public plugin publishing is still “coming soon”.
-- [ ] Document how capture settings are changed in the plugin path:
+- [x] Keep docs honest that official public plugin publishing is still “coming soon”.
+- [x] Document how capture settings are changed in the plugin path:
   - repo-local plugin flow => edit repo-local `.mcp.json` or regenerate via sync helper
   - installed/personal plugin flow if documented later => edit installed `.mcp.json`
   - manual MCP config remains the highest-control fallback
 
-- [ ] Run sanity search:
+- [x] Run sanity search:
 
 ```bash
 rg -n "plugin|marketplace|sync:codex-plugin|manual MCP|public publishing" README.md packages/codex/README.md docs/codex-vscode-extension.md
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add README.md packages/codex/README.md docs/codex-vscode-extension.md
@@ -388,24 +388,24 @@ git commit -m "docs(codex): document local plugin packaging"
 **Files:**
 - Modify: `docs/roadmap/codex.md`
 
-- [ ] Mark Phase 7 as the active local plugin-packaging phase.
+- [x] Mark Phase 7 as the active local plugin-packaging phase.
 
-- [ ] Expand the Phase 7 section so it reflects the actual deliverable:
+- [x] Expand the Phase 7 section so it reflects the actual deliverable:
   - repo-local plugin bundle
   - repo marketplace
   - optional plugin path alongside manual MCP setup
 
-- [ ] Keep the roadmap explicit that this phase improves onboarding, not core runtime capability.
+- [x] Keep the roadmap explicit that this phase improves onboarding, not core runtime capability.
 
-- [ ] Move immediate next steps toward Phase 7 validation and later release planning.
+- [x] Move immediate next steps toward Phase 7 validation and later release planning.
 
-- [ ] Run sanity search:
+- [x] Run sanity search:
 
 ```bash
 rg -n "Phase 7|plugin|marketplace|manual MCP|public" docs/roadmap/codex.md
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add docs/roadmap/codex.md
@@ -416,7 +416,7 @@ git commit -m "docs(codex): mark phase 7 plugin packaging work"
 
 **Files:** all plugin-related files
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test -- packages/codex/tests/plugin-bundle.test.ts
@@ -424,7 +424,7 @@ npm test -- packages/codex/tests/plugin-bundle.test.ts
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm -w @locus/codex run typecheck
@@ -432,7 +432,7 @@ npm -w @locus/codex run typecheck
 
 Expected: PASS if any package code/helpers were added.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run lint
@@ -440,13 +440,13 @@ npm run lint
 
 Expected: PASS, with the existing `dist/server.js` max-size info only.
 
-- [ ] Review the repo-local plugin install paths:
+- [x] Review the repo-local plugin install paths:
   - `plugins/locus-memory/`
   - `.agents/plugins/marketplace.json`
 
-- [ ] If the implementation includes a documented repo-local smoke flow, verify that the docs and paths match exactly.
+- [x] If the implementation includes a documented repo-local smoke flow, verify that the docs and paths match exactly.
 
-- [ ] Commit any final cleanup if needed:
+- [x] Commit any final cleanup if needed:
 
 ```bash
 git add <files>
@@ -457,7 +457,7 @@ git commit -m "chore(codex): finalize plugin packaging validation"
 
 **Files:** all modified repo files
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run typecheck
@@ -465,7 +465,7 @@ npm run typecheck
 
 Expected: PASS.
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm test
@@ -473,28 +473,28 @@ npm test
 
 Expected: PASS.
 
-- [ ] Review final branch diff:
+- [x] Review final branch diff:
 
 ```bash
 git diff --stat codex-vscode-extension-phase-6-local..HEAD
 ```
 
-- [ ] Review commit sequence:
+- [x] Review commit sequence:
 
 ```bash
 git log --oneline codex-vscode-extension-phase-6-local..HEAD
 ```
 
-- [ ] Update this plan file with completed checkboxes.
+- [x] Update this plan file with completed checkboxes.
 
-- [ ] Final checkpoint commit if needed:
+- [x] Final checkpoint commit if needed:
 
 ```bash
 git add docs/superpowers/plans/2026-04-14-codex-plugin-packaging-phase-7.md
 git commit -m "docs(codex): complete phase 7 validation"
 ```
 
-- [ ] Create local checkpoint tag:
+- [x] Create local checkpoint tag:
 
 ```bash
 git tag -a codex-plugin-packaging-phase-7-local -m "Codex plugin packaging phase 7 local checkpoint"
