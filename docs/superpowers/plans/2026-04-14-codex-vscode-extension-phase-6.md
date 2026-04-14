@@ -57,6 +57,9 @@ As of planning time, the docs should preserve these boundaries:
   - `memory_doctor`
   - `memory_import_codex` only for manual catch-up
 - Clarify that passive Codex history recall still depends on the Codex JSONL adapter and `LOCUS_CODEX_CAPTURE`, not on VS Code itself.
+- Treat Windows path syntax as a first-class documentation concern:
+  - examples should prefer forward slashes (`C:/...`) or explicitly escaped backslashes (`C:\\...`) in TOML strings
+  - do not assume users know that raw backslashes can break config parsing
 - Keep all wording honest about preview/extension limits; do not imply that a local skill alone makes the extension fully equivalent to CLI.
 
 ## File Structure
@@ -100,6 +103,7 @@ After Phase 6:
 - Do not promise that VS Code automatically discovers skills or MCP servers beyond what upstream docs say.
 - Do not turn Phase 6 into plugin packaging or adapter design work.
 - Do not duplicate long troubleshooting text in multiple READMEs; link to the dedicated guide.
+- Do not require screenshots for verification; prefer text examples that are easier to keep current across UI changes.
 - Keep `config.toml.example` CLI-first, but annotate its relevance for the extension path.
 
 ### Task 0: Branch From The Phase 5 Checkpoint
@@ -190,11 +194,23 @@ LOCUS_CODEX_CAPTURE = "metadata"
 LOCUS_CAPTURE_LEVEL = "metadata"
 ```
 
+- [ ] Add an explicit Windows note near the config examples:
+  - TOML paths on Windows should use forward slashes (`C:/path/to/locus/dist/server.js`) or escaped backslashes (`C:\\path\\to\\locus\\dist\\server.js`)
+  - explain briefly that raw backslashes can break config parsing or server startup
+
+- [ ] In the restart/reload section, name the concrete VS Code action:
+  - `Developer: Reload Window`
+  - clarify that simply closing the chat tab is not a full MCP reload
+
 - [ ] Include the verification workflow in the guide:
   - `memory_search`
   - `memory_status`
   - `memory_doctor`
   - `memory_import_codex({"latestOnly":true})` only if manual catch-up is needed
+
+- [ ] Add one text-based success example instead of a screenshot:
+  - show a short `memory_status` shape or checklist with fields such as `codexDiagnostics`, `sessionsDirExists`, `rolloutFilesFound`, and `captureMode`
+  - keep it UI-agnostic so the guide survives extension UI changes
 
 - [ ] Include a short “What Locus cannot fix” section:
   - extension build does not expose MCP tools/resources
