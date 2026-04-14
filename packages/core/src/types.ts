@@ -357,6 +357,7 @@ export interface MemoryStatus {
   fts5Available: boolean;
   searchEngine: 'FTS5' | 'LIKE fallback';
   codexAutoImport?: CodexAutoImportSnapshot;
+  codexDiagnostics?: CodexDiagnosticsSnapshot;
 }
 
 // ─── Doctor ───

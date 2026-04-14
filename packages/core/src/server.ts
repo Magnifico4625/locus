@@ -22,6 +22,7 @@ import {
 import { handleCompact } from './tools/compact.js';
 import { handleConfig } from './tools/config.js';
 import { ConfirmationTokenStore } from './tools/confirmation-token.js';
+import { collectCodexDiagnostics } from './tools/codex-diagnostics.js';
 import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';
@@ -342,6 +343,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       fts5,
       inboxDir,
       codexAutoImportSnapshot,
+      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env }),
     });
     return { content: [{ type: 'text' as const, text: JSON.stringify(status) }] };
   });

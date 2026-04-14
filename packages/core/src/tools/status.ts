@@ -2,6 +2,7 @@ import { readdirSync, statSync } from 'node:fs';
 import type {
   CaptureLevel,
   CodexAutoImportSnapshot,
+  CodexDiagnosticsSnapshot,
   DatabaseAdapter,
   LocusConfig,
   MemoryStatus,
@@ -20,6 +21,7 @@ export interface StatusDeps {
   fts5: boolean;
   inboxDir?: string;
   codexAutoImportSnapshot?: CodexAutoImportSnapshot;
+  codexDiagnostics?: CodexDiagnosticsSnapshot;
 }
 
 interface CountRow {
@@ -133,5 +135,6 @@ export function handleStatus(deps: StatusDeps): MemoryStatus {
     codexAutoImport: deps.codexAutoImportSnapshot
       ? { ...deps.codexAutoImportSnapshot }
       : getDefaultCodexAutoImportSnapshot(),
+    codexDiagnostics: deps.codexDiagnostics ? { ...deps.codexDiagnostics } : undefined,
   };
 }
