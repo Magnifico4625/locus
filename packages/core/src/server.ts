@@ -360,6 +360,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       captureLevel: config.captureLevel,
       logPath,
       db,
+      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env }),
     });
     return { content: [{ type: 'text' as const, text: JSON.stringify(report) }] };
   });
