@@ -69,6 +69,10 @@ The canonical Locus Codex skill assumes this workflow:
 
 This workflow is optimized for Codex CLI. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
 
+For the extension-specific setup, reload, and troubleshooting flow, use the dedicated guide:
+
+- [Codex VS Code Extension](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-vscode-extension.md)
+
 ### Diagnosis workflow
 
 When recent Codex dialogue does not show up as expected:
@@ -85,6 +89,7 @@ Common fixes:
 - verify the latest rollout file is readable by the current process
 - verify `LOCUS_CODEX_CAPTURE` is not `off`
 - verify imported-event counts increase after `memory_search` or `memory_import_codex`
+- reload the VS Code window after MCP config changes if you are using the extension
 
 ### Manual import from Codex
 
