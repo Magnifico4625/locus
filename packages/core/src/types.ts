@@ -325,6 +325,18 @@ export interface CodexAutoImportSnapshot {
   message?: string;
 }
 
+export interface CodexDiagnosticsSnapshot {
+  captureMode: CodexImportCaptureMode;
+  sessionsDir: string;
+  sessionsDirExists: boolean;
+  rolloutFilesFound: number;
+  latestRolloutPath?: string;
+  latestRolloutReadable?: boolean;
+  importedEventCount: number;
+  latestImportedSessionId?: string;
+  latestImportedTimestamp?: number;
+}
+
 export interface MemoryStatus {
   projectPath: string;
   projectRoot: string;
