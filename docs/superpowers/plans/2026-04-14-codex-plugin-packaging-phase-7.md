@@ -66,6 +66,9 @@ Critical upstream facts to preserve:
   - `.codex-plugin/plugin.json`
   - `.mcp.json`
   - `skills/locus-memory/SKILL.md`
+- Prefer a repo-relative `.mcp.json` server path first.
+  - If the official plugin/runtime surface proves that relative paths are not viable, fall back to generating an absolute path from the repository root.
+  - Do not derive absolute paths from raw `process.cwd()`; compute them from the known repo/script location instead.
 - Do not overreach into polished public marketplace metadata or image assets unless needed for local install surfaces.
 - Keep Phase 7 honest that repo-local plugin install is for local onboarding/testing; it does not replace future public plugin publishing.
 
@@ -128,12 +131,23 @@ The plugin’s MCP config should stay local-dev-friendly:
 - use `node`
 - point to the repo’s built `dist/server.js`
 - keep paths relative to the plugin root where possible
+- include safe default env values such as:
+  - `LOCUS_LOG=error`
+  - `LOCUS_CODEX_CAPTURE=metadata`
+  - `LOCUS_CAPTURE_LEVEL=metadata`
 
-If relative MCP paths prove too brittle during implementation, fall back to documenting the plugin as skill-first packaging while keeping MCP setup manual. Do not fake a broken auto-config path just to satisfy the plugin format.
+If relative MCP paths prove too brittle during implementation, fall back in this order:
+
+1. generate an absolute path from the repo root for the repo-local packaging flow
+2. document that installed/personal copies may need local path editing
+3. keep manual MCP setup as the supported fallback
+
+Do not fake a broken auto-config path just to satisfy the plugin format.
 
 ## Risk Controls
 
 - Do not replace manual MCP setup docs with plugin-only docs.
+- Do not prematurely declare plugin install the only or default supported path until the local smoke flow is proven.
 - Do not assume public plugin publishing exists yet.
 - Do not duplicate skill instructions manually across two files without a sync mechanism.
 - Do not ship a marketplace entry that points to the wrong path or uses non-`./` relative paths.
@@ -190,6 +204,7 @@ Expected: `cef278d docs(codex): complete phase 6 validation` at or near `HEAD`.
 - [ ] Include at least one test for `.mcp.json` shape:
   - file exists
   - file contains a local MCP server definition for Locus
+  - file contains safe default env values
 
 - [ ] Run:
 
@@ -223,6 +238,10 @@ git commit -m "test(codex): define plugin packaging contract"
   - lightweight `interface` metadata if useful for local install surfaces
 
 - [ ] Create `.mcp.json` with the local Locus MCP server definition.
+- [ ] Make the `.mcp.json` path strategy explicit in implementation:
+  - try repo-relative pathing first
+  - only generate an absolute path if runtime behavior requires it
+  - if absolute generation is needed, derive it from the repo root, not ad-hoc shell cwd
 
 - [ ] Add the repo marketplace entry:
   - marketplace name
@@ -258,6 +277,7 @@ git commit -m "feat(codex): add local plugin bundle skeleton"
   - copies the canonical skill into the plugin bundle
   - validates that plugin-relative paths still match the bundle layout
   - fails loudly if required source files are missing
+  - if needed, materializes repo-root-based absolute MCP paths deterministically
 
 - [ ] Add a root script:
 
@@ -266,6 +286,9 @@ git commit -m "feat(codex): add local plugin bundle skeleton"
 ```
 
 - [ ] Keep this helper repo-local. Do not make it install into a personal marketplace yet unless implementation proves that path is stable and worthwhile.
+- [ ] In docs and naming, keep command roles distinct:
+  - `sync:codex-plugin` = plugin bundle sync/build for repo-local packaging
+  - `sync:codex-skill` = manual MCP / advanced fallback / skill-only path
 
 - [ ] Run:
 
@@ -293,6 +316,7 @@ git commit -m "feat(codex): add plugin bundle sync script"
   - marketplace source path is exactly `./plugins/locus-memory`
   - the canonical skill and plugin skill remain byte-equal after sync
   - `.mcp.json` still points at the intended local Locus server command
+  - `.mcp.json` contains safe default env values
 
 - [ ] Run:
 
@@ -334,12 +358,17 @@ git commit -m "chore(codex): validate plugin bundle metadata"
   - repo marketplace path
   - `npm run sync:codex-plugin`
   - plugin as optional packaging, not a new requirement
+  - clear distinction from `npm run sync:codex-skill`
 
 - [ ] Update `docs/codex-vscode-extension.md` if needed so it does not contradict plugin packaging:
   - manual MCP setup remains the stable documented fallback
   - plugin packaging is an additional onboarding path, not a replacement guarantee
 
 - [ ] Keep docs honest that official public plugin publishing is still “coming soon”.
+- [ ] Document how capture settings are changed in the plugin path:
+  - repo-local plugin flow => edit repo-local `.mcp.json` or regenerate via sync helper
+  - installed/personal plugin flow if documented later => edit installed `.mcp.json`
+  - manual MCP config remains the highest-control fallback
 
 - [ ] Run sanity search:
 
