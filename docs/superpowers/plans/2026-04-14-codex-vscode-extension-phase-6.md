@@ -110,7 +110,7 @@ After Phase 6:
 
 **Files:** none
 
-- [ ] Verify clean baseline:
+- [x] Verify clean baseline:
 
 ```bash
 git status --short --branch
@@ -118,7 +118,7 @@ git status --short --branch
 
 Expected: clean working tree.
 
-- [ ] Verify Phase 5 checkpoint tag exists:
+- [x] Verify Phase 5 checkpoint tag exists:
 
 ```bash
 git tag --list codex-doctor-status-phase-5-local
@@ -126,14 +126,14 @@ git tag --list codex-doctor-status-phase-5-local
 
 Expected: prints `codex-doctor-status-phase-5-local`.
 
-- [ ] Create the Phase 6 branch from the stable checkpoint:
+- [x] Create the Phase 6 branch from the stable checkpoint:
 
 ```bash
 git checkout codex-doctor-status-phase-5-local
 git checkout -b feature/codex-vscode-extension-docs
 ```
 
-- [ ] Verify branch base:
+- [x] Verify branch base:
 
 ```bash
 git log --oneline -3
@@ -145,29 +145,29 @@ Expected: `0079656 chore(core): complete phase 5 validation` at or near `HEAD`.
 
 **Files:** none
 
-- [ ] Re-check the current official upstream surfaces before editing docs:
+- [x] Re-check the current official upstream surfaces before editing docs:
   - OpenAI Codex CLI docs
   - OpenAI Codex Skills docs
   - GitHub Codex VS Code extension docs
 
-- [ ] Confirm the wording boundaries that the repo docs must preserve:
+- [x] Confirm the wording boundaries that the repo docs must preserve:
   - Codex CLI remains the primary validated path
   - the VS Code extension may use the same MCP configuration model
   - upstream extension MCP visibility can still vary
 
-- [ ] Record the concrete source links and version/date context that Phase 6 docs should cite indirectly in prose:
+- [x] Record the concrete source links and version/date context that Phase 6 docs should cite indirectly in prose:
   - current Codex docs generation
   - current Codex CLI surface version/date when available
   - current GitHub extension preview status
 
-- [ ] Commit the branch state only if you end up creating a local notes file.
+- [x] Commit the branch state only if you end up creating a local notes file.
 
 ### Task 2: Create The Canonical VS Code Extension How-To Guide
 
 **Files:**
 - Create: `docs/codex-vscode-extension.md`
 
-- [ ] Write the dedicated guide with these sections:
+- [x] Write the dedicated guide with these sections:
   - What this guide covers
   - What works today
   - Prerequisites
@@ -177,7 +177,7 @@ Expected: `0079656 chore(core): complete phase 5 validation` at or near `HEAD`.
   - Diagnose missing memory results
   - Known limitations and upstream boundary
 
-- [ ] Include concrete setup snippets:
+- [x] Include concrete setup snippets:
 
 ```bash
 codex mcp add locus -- node /path/to/locus/dist/server.js
@@ -194,36 +194,36 @@ LOCUS_CODEX_CAPTURE = "metadata"
 LOCUS_CAPTURE_LEVEL = "metadata"
 ```
 
-- [ ] Add an explicit Windows note near the config examples:
+- [x] Add an explicit Windows note near the config examples:
   - TOML paths on Windows should use forward slashes (`C:/path/to/locus/dist/server.js`) or escaped backslashes (`C:\\path\\to\\locus\\dist\\server.js`)
   - explain briefly that raw backslashes can break config parsing or server startup
 
-- [ ] In the restart/reload section, name the concrete VS Code action:
+- [x] In the restart/reload section, name the concrete VS Code action:
   - `Developer: Reload Window`
   - clarify that simply closing the chat tab is not a full MCP reload
 
-- [ ] Include the verification workflow in the guide:
+- [x] Include the verification workflow in the guide:
   - `memory_search`
   - `memory_status`
   - `memory_doctor`
   - `memory_import_codex({"latestOnly":true})` only if manual catch-up is needed
 
-- [ ] Add one text-based success example instead of a screenshot:
+- [x] Add one text-based success example instead of a screenshot:
   - show a short `memory_status` shape or checklist with fields such as `codexDiagnostics`, `sessionsDirExists`, `rolloutFilesFound`, and `captureMode`
   - keep it UI-agnostic so the guide survives extension UI changes
 
-- [ ] Include a short “What Locus cannot fix” section:
+- [x] Include a short “What Locus cannot fix” section:
   - extension build does not expose MCP tools/resources
   - extension has not reloaded config yet
   - upstream preview behavior differs from CLI
 
-- [ ] Run sanity search:
+- [x] Run sanity search:
 
 ```bash
 rg -n "Codex VS Code Extension|memory_status|memory_doctor|memory_import_codex|Known limitations" docs/codex-vscode-extension.md
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add docs/codex-vscode-extension.md
@@ -235,26 +235,26 @@ git commit -m "docs(codex): add VS Code extension guide"
 **Files:**
 - Modify: `README.md`
 
-- [ ] Tighten the existing `Codex VS Code Extension` section so it:
+- [x] Tighten the existing `Codex VS Code Extension` section so it:
   - links to `docs/codex-vscode-extension.md`
   - states that the extension uses the Codex MCP configuration model
   - keeps CLI marked as the primary validated path
   - points users toward the diagnosis workflow from Phase 5
 
-- [ ] Keep the root README concise:
+- [x] Keep the root README concise:
   - short summary
   - pointer to the dedicated guide
   - no long troubleshooting duplication
 
-- [ ] Ensure the Quick Start / Compatibility / Roadmap copy stays internally consistent after the edit.
+- [x] Ensure the Quick Start / Compatibility / Roadmap copy stays internally consistent after the edit.
 
-- [ ] Run sanity search:
+- [x] Run sanity search:
 
 ```bash
 rg -n "Codex VS Code Extension|codex-vscode-extension|memory_status|memory_doctor" README.md
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add README.md
@@ -267,26 +267,26 @@ git commit -m "docs(codex): link VS Code extension guide from README"
 - Modify: `packages/codex/README.md`
 - Modify: `packages/codex/config/config.toml.example`
 
-- [ ] Update `packages/codex/README.md` so it:
+- [x] Update `packages/codex/README.md` so it:
   - links to the dedicated VS Code guide
   - explains that the same MCP server setup is used
   - preserves the honest preview/extension boundary
   - keeps manual import and diagnostics guidance aligned with Phases 3-5
 
-- [ ] Update `config.toml.example` comments so they explain:
+- [x] Update `config.toml.example` comments so they explain:
   - the same MCP server block is the relevant starting point for CLI and extension-backed Codex setups
   - after config changes, the user should restart Codex CLI or reload the extension host as needed
   - `CODEX_HOME` usually remains auto-detected
 
-- [ ] Do not turn `config.toml.example` into an extension-specific file; keep it CLI-first and reusable.
+- [x] Do not turn `config.toml.example` into an extension-specific file; keep it CLI-first and reusable.
 
-- [ ] Run sanity search:
+- [x] Run sanity search:
 
 ```bash
 rg -n "VS Code|extension|reload|restart|LOCUS_CODEX_CAPTURE" packages/codex/README.md packages/codex/config/config.toml.example
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add packages/codex/README.md packages/codex/config/config.toml.example
@@ -298,24 +298,24 @@ git commit -m "docs(codex): align package docs with VS Code path"
 **Files:**
 - Modify: `docs/roadmap/codex.md`
 
-- [ ] Mark Phase 6 as the active local documentation phase.
+- [x] Mark Phase 6 as the active local documentation phase.
 
-- [ ] Expand the Phase 6 description so it reflects the actual deliverable:
+- [x] Expand the Phase 6 description so it reflects the actual deliverable:
   - dedicated guide
   - README/config updates
   - explicit explanation of upstream extension limits
 
-- [ ] Move immediate next steps from “start Phase 6” to Phase 6 validation / Phase 7 planning.
+- [x] Move immediate next steps from “start Phase 6” to Phase 6 validation / Phase 7 planning.
 
-- [ ] Keep the roadmap honest that this phase improves documentation and supportability, not runtime capability.
+- [x] Keep the roadmap honest that this phase improves documentation and supportability, not runtime capability.
 
-- [ ] Run sanity search:
+- [x] Run sanity search:
 
 ```bash
 rg -n "Phase 6|VS Code|extension|documentation" docs/roadmap/codex.md
 ```
 
-- [ ] Commit:
+- [x] Commit:
 
 ```bash
 git add docs/roadmap/codex.md
@@ -326,13 +326,13 @@ git commit -m "docs(codex): mark phase 6 VS Code docs work"
 
 **Files:** all modified docs/config files
 
-- [ ] Run a combined docs sanity search:
+- [x] Run a combined docs sanity search:
 
 ```bash
 rg -n "Codex VS Code Extension|memory_status|memory_doctor|memory_import_codex|LOCUS_CODEX_CAPTURE|restart|reload" README.md packages/codex/README.md packages/codex/config/config.toml.example docs/codex-vscode-extension.md docs/roadmap/codex.md
 ```
 
-- [ ] Run:
+- [x] Run:
 
 ```bash
 npm run lint
@@ -340,28 +340,28 @@ npm run lint
 
 Expected: PASS, with the existing `dist/server.js` max-size info only.
 
-- [ ] Review final branch diff:
+- [x] Review final branch diff:
 
 ```bash
 git diff --stat codex-doctor-status-phase-5-local..HEAD
 ```
 
-- [ ] Review commit sequence:
+- [x] Review commit sequence:
 
 ```bash
 git log --oneline codex-doctor-status-phase-5-local..HEAD
 ```
 
-- [ ] Update this plan file with completed checkboxes.
+- [x] Update this plan file with completed checkboxes.
 
-- [ ] Final checkpoint commit if needed:
+- [x] Final checkpoint commit if needed:
 
 ```bash
 git add docs/superpowers/plans/2026-04-14-codex-vscode-extension-phase-6.md
 git commit -m "docs(codex): complete phase 6 validation"
 ```
 
-- [ ] Create local checkpoint tag:
+- [x] Create local checkpoint tag:
 
 ```bash
 git tag -a codex-vscode-extension-phase-6-local -m "Codex VS Code extension documentation phase 6 local checkpoint"
