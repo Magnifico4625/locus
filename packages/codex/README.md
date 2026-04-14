@@ -22,6 +22,24 @@ npm run sync:codex-skill
 
 This writes `packages/codex/skills/locus-memory/SKILL.md` into `$CODEX_HOME/skills/locus-memory/SKILL.md`, usually `~/.codex/skills/locus-memory/SKILL.md`.
 
+### 2a. Repo-Local Plugin Bundle (optional)
+
+The repo also contains a local plugin bundle:
+
+- plugin bundle: [plugins/locus-memory](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/plugins/locus-memory)
+- repo marketplace: [.agents/plugins/marketplace.json](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/.agents/plugins/marketplace.json)
+
+To keep the plugin bundle aligned with the canonical skill:
+
+```bash
+npm run sync:codex-plugin
+```
+
+Command roles:
+
+- `npm run sync:codex-plugin` updates the repo-local plugin bundle
+- `npm run sync:codex-skill` updates the installed skill-only path for manual MCP setups
+
 ### 3. Verify
 
 ```bash
@@ -153,4 +171,5 @@ Redaction is best-effort by design: obvious API keys, bearer tokens, and similar
 
 ## What's Coming
 
+- self-serve public plugin publishing is still not the target path here; Phase 7 is repo-local packaging only
 - npm package for `npx` one-liner install

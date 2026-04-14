@@ -37,6 +37,14 @@ Preferred path:
 codex mcp add locus -- node /path/to/locus/dist/server.js
 ```
 
+Optional repo-local plugin packaging also exists in this repository:
+
+- plugin bundle: [plugins/locus-memory](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/plugins/locus-memory)
+- repo marketplace: [.agents/plugins/marketplace.json](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/.agents/plugins/marketplace.json)
+- sync helper: `npm run sync:codex-plugin`
+
+Treat that plugin bundle as an extra local onboarding path. Manual MCP setup stays the stable documented fallback.
+
 Equivalent config in `~/.codex/config.toml`:
 
 ```toml
@@ -139,3 +147,5 @@ Locus cannot fix these extension-side conditions:
 - the extension preview behaves differently from Codex CLI in that build
 
 If the extension does not expose Locus tools at all, verify the same setup in Codex CLI first. If CLI works and the extension does not, that is an upstream extension boundary rather than a separate Locus runtime issue.
+
+The repo-local plugin bundle does not remove that boundary. It can help package the same skill and MCP guidance, but it does not guarantee extension-side MCP visibility in builds where upstream preview behavior differs.

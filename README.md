@@ -83,8 +83,16 @@ args = ["/path/to/locus/dist/server.js"]
 LOCUS_LOG = "error"
 ```
 
+Repo-local plugin packaging is also available for local Codex onboarding:
+
+- plugin bundle: [plugins/locus-memory](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/plugins/locus-memory)
+- repo marketplace: [.agents/plugins/marketplace.json](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/.agents/plugins/marketplace.json)
+- plugin sync helper: `npm run sync:codex-plugin`
+
 > **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 13 MCP tools and 3 resources work immediately. Before `memory_search`, Locus auto-imports the newest Codex rollout session with a local debounce window. `memory_status` now exposes structured Codex diagnostics, `memory_doctor` adds Codex-specific health checks, and `memory_import_codex` remains available when you want explicit control, filtered import, or manual catch-up across older sessions.
 > Validated against the current Codex docs generation and Codex CLI `0.120.0` surface as of April 13, 2026.
+
+Manual MCP setup remains fully supported. The local plugin bundle is an optional packaging layer for repo-local onboarding, not a replacement requirement.
 
 Recent Codex history becomes searchable automatically when you use `memory_search`.
 
@@ -107,6 +115,12 @@ To keep the locally installed Codex skill aligned with the repo copy:
 
 ```bash
 npm run sync:codex-skill
+```
+
+To keep the repo-local Codex plugin bundle aligned with the canonical skill:
+
+```bash
+npm run sync:codex-plugin
 ```
 
 Import the latest Codex rollout session on demand:
@@ -139,6 +153,8 @@ Recommended diagnosis order in the extension:
 - inspect `memory_status`
 - inspect `memory_doctor`
 - use `memory_import_codex` only for explicit manual catch-up
+
+The repo-local plugin bundle can support local Codex onboarding here too, but manual MCP setup remains the documented fallback if extension/plugin behavior differs from Codex CLI in a given build.
 
 ### Any MCP Client (Cursor, Windsurf, Cline, Zed, etc.)
 
