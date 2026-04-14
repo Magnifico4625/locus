@@ -125,9 +125,20 @@ memory_import_codex({"since":1710000000000})
 
 ### Codex VS Code Extension
 
-The Codex VS Code extension uses the same MCP server configuration model when the extension surface exposes MCP tools and resources. In practice, this means Locus can work there through the same server setup, but MCP visibility in the extension may still depend on upstream Codex preview behavior.
+The Codex VS Code extension uses the same Codex MCP configuration model as Codex CLI. In practice, this means Locus can work there through the same server setup, but MCP visibility in the extension may still depend on upstream preview behavior.
 
 Treat Codex CLI as the primary validated path. If the extension does not expose Locus tools in a given build, that is an IDE integration boundary, not a separate Locus skill format.
+
+Use the dedicated guide for setup, reload, verification, and troubleshooting:
+
+- [Codex VS Code Extension](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-vscode-extension.md)
+
+Recommended diagnosis order in the extension:
+
+- run `memory_search` first
+- inspect `memory_status`
+- inspect `memory_doctor`
+- use `memory_import_codex` only for explicit manual catch-up
 
 ### Any MCP Client (Cursor, Windsurf, Cline, Zed, etc.)
 
