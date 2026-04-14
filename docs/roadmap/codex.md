@@ -259,6 +259,17 @@ Next step: Phase 6 — Codex VS Code Extension Documentation.
 
 Goal: document the path for users who use Codex through VS Code.
 
+Implementation plan: `docs/superpowers/plans/2026-04-14-codex-vscode-extension-phase-6.md`
+
+Status: in progress locally on `feature/codex-vscode-extension-docs`. This phase is documentation-only: it packages the existing Codex CLI + MCP setup into a dedicated VS Code extension guide and makes the upstream extension boundary explicit.
+
+Target deliverables:
+
+- dedicated `docs/codex-vscode-extension.md` how-to guide
+- concise README links into the guide instead of duplicated troubleshooting text
+- `packages/codex/README.md` and `config.toml.example` aligned with the VS Code path
+- explicit explanation of what Locus controls locally vs. what still depends on upstream Codex extension MCP exposure
+
 Tasks:
 
 - Add a `Codex VS Code Extension` section to README.
@@ -271,6 +282,8 @@ Tasks:
 Exit criteria:
 
 - GitHub issues like "does this support Codex for VS Code?" have a documented answer.
+
+Next step: Phase 7 — Codex Plugin Packaging.
 
 ---
 
@@ -330,7 +343,7 @@ Release gates:
 
 ## Immediate Next Steps
 
-1. Finish Phase 5 local validation and checkpointing on `feature/codex-doctor-status`.
-2. Start Phase 6 so Codex VS Code extension users have a clear, documented setup path and known limitations.
+1. Finish Phase 6 local validation and checkpointing on `feature/codex-vscode-extension-docs`.
+2. Start Phase 7 only after the VS Code documentation path is complete and stable.
 3. Keep CLI as the primary validated path while continuing to document IDE-specific MCP limitations honestly.
 4. Keep Claude Code behavior unchanged while Codex-specific work continues.
