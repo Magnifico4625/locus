@@ -24,7 +24,11 @@ export function resolvePluginRootPath(): string {
 }
 
 export function resolvePluginSkillTargetPath(): string {
-  return resolve(fileURLToPath(new URL('../../../plugins/locus-memory/skills/locus-memory/SKILL.md', import.meta.url)));
+  return resolve(
+    fileURLToPath(
+      new URL('../../../plugins/locus-memory/skills/locus-memory/SKILL.md', import.meta.url),
+    ),
+  );
 }
 
 export function syncCodexPluginBundle(options: PluginSyncOptions = {}): PluginSyncResult {

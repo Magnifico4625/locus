@@ -10,12 +10,7 @@
   "homepage": "https://github.com/Magnifico4625/locus",
   "repository": "https://github.com/Magnifico4625/locus",
   "license": "MIT",
-  "keywords": [
-    "codex",
-    "mcp",
-    "memory",
-    "productivity"
-  ],
+  "keywords": ["codex", "mcp", "memory", "productivity"],
   "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
@@ -24,10 +19,7 @@
     "longDescription": "Bundles the Locus Codex skill and MCP server configuration for repo-local Codex onboarding without replacing the documented manual MCP path.",
     "developerName": "Magnifico4625",
     "category": "Productivity",
-    "capabilities": [
-      "Interactive",
-      "Write"
-    ],
+    "capabilities": ["Interactive", "Write"],
     "websiteURL": "https://github.com/Magnifico4625/locus",
     "privacyPolicyURL": "https://github.com/Magnifico4625/locus",
     "termsOfServiceURL": "https://github.com/Magnifico4625/locus",

@@ -1,10 +1,7 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-
-const tempDirs: string[] = [];
+import { describe, expect, it } from 'vitest';
 
 function repoRoot(): string {
   return join(import.meta.dirname, '..', '..', '..');
@@ -13,18 +10,6 @@ function repoRoot(): string {
 function readJson(pathValue: string): unknown {
   return JSON.parse(readFileSync(pathValue, 'utf8'));
 }
-
-function makeTempDir(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'locus-codex-plugin-'));
-  tempDirs.push(dir);
-  return dir;
-}
-
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
 
 describe('codex plugin bundle', () => {
   it('includes the required local plugin bundle files', () => {
@@ -79,13 +64,24 @@ describe('codex plugin bundle', () => {
 
   it('uses plugin-relative ./ paths in plugin.json', () => {
     const root = repoRoot();
-    const pluginManifestPath = join(root, 'plugins', 'locus-memory', '.codex-plugin', 'plugin.json');
+    const pluginManifestPath = join(
+      root,
+      'plugins',
+      'locus-memory',
+      '.codex-plugin',
+      'plugin.json',
+    );
 
     expect(existsSync(pluginManifestPath)).toBe(true);
 
-    const pluginManifest = JSON.stringify(readJson(pluginManifestPath));
-    expect(pluginManifest).toContain('./skills/');
-    expect(pluginManifest).toContain('./.mcp.json');
+    const pluginManifest = readJson(pluginManifestPath) as {
+      skills?: string;
+      mcpServers?: string;
+      name?: string;
+    };
+    expect(pluginManifest.name).toBe('locus-memory');
+    expect(pluginManifest.skills).toBe('./skills/');
+    expect(pluginManifest.mcpServers).toBe('./.mcp.json');
   });
 
   it('sync:codex-plugin restores the canonical skill into the plugin bundle', () => {
@@ -112,5 +108,44 @@ describe('codex plugin bundle', () => {
 
     expect(output).toContain('Plugin skill synced:');
     expect(pluginSkill).toBe(canonicalSkill);
+  });
+
+  it('keeps the marketplace source path exact and local', () => {
+    const root = repoRoot();
+    const marketplace = readJson(join(root, '.agents', 'plugins', 'marketplace.json')) as {
+      plugins?: Array<{
+        name?: string;
+        source?: {
+          source?: string;
+          path?: string;
+        };
+      }>;
+    };
+
+    const locusEntry = marketplace.plugins?.find((plugin) => plugin.name === 'locus-memory');
+
+    expect(locusEntry?.source?.source).toBe('local');
+    expect(locusEntry?.source?.path).toBe('./plugins/locus-memory');
+  });
+
+  it('keeps safe default env values in .mcp.json', () => {
+    const root = repoRoot();
+    const pluginMcp = readJson(join(root, 'plugins', 'locus-memory', '.mcp.json')) as {
+      mcpServers?: {
+        locus?: {
+          command?: string;
+          args?: string[];
+          env?: Record<string, string>;
+        };
+      };
+    };
+
+    expect(pluginMcp.mcpServers?.locus?.command).toBe('node');
+    expect(pluginMcp.mcpServers?.locus?.args).toEqual(['../../dist/server.js']);
+    expect(pluginMcp.mcpServers?.locus?.env).toEqual({
+      LOCUS_LOG: 'error',
+      LOCUS_CODEX_CAPTURE: 'metadata',
+      LOCUS_CAPTURE_LEVEL: 'metadata',
+    });
   });
 });
