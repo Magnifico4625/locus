@@ -1,6 +1,10 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+
+const tempDirs: string[] = [];
 
 function repoRoot(): string {
   return join(import.meta.dirname, '..', '..', '..');
@@ -9,6 +13,18 @@ function repoRoot(): string {
 function readJson(pathValue: string): unknown {
   return JSON.parse(readFileSync(pathValue, 'utf8'));
 }
+
+function makeTempDir(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'locus-codex-plugin-'));
+  tempDirs.push(dir);
+  return dir;
+}
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe('codex plugin bundle', () => {
   it('includes the required local plugin bundle files', () => {
@@ -70,5 +86,31 @@ describe('codex plugin bundle', () => {
     const pluginManifest = JSON.stringify(readJson(pluginManifestPath));
     expect(pluginManifest).toContain('./skills/');
     expect(pluginManifest).toContain('./.mcp.json');
+  });
+
+  it('sync:codex-plugin restores the canonical skill into the plugin bundle', () => {
+    writeFileSync(
+      join(repoRoot(), 'plugins', 'locus-memory', 'skills', 'locus-memory', 'SKILL.md'),
+      '# drifted plugin skill\n',
+      'utf8',
+    );
+
+    const output = execFileSync('node', ['scripts/sync-codex-plugin.mjs'], {
+      cwd: repoRoot(),
+      env: process.env,
+      encoding: 'utf8',
+    });
+
+    const canonicalSkill = readFileSync(
+      join(repoRoot(), 'packages', 'codex', 'skills', 'locus-memory', 'SKILL.md'),
+      'utf8',
+    );
+    const pluginSkill = readFileSync(
+      join(repoRoot(), 'plugins', 'locus-memory', 'skills', 'locus-memory', 'SKILL.md'),
+      'utf8',
+    );
+
+    expect(output).toContain('Plugin skill synced:');
+    expect(pluginSkill).toBe(canonicalSkill);
   });
 });

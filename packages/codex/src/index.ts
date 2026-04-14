@@ -6,6 +6,7 @@ export * from './inbox-writer.js';
 export * from './jsonl.js';
 export * from './normalize.js';
 export * from './paths.js';
+export * from './plugin-sync.js';
 export * from './session-files.js';
 export * from './skill-sync.js';
 export * from './types.js';
