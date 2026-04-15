@@ -1,5 +1,6 @@
 import type {
   CaptureLevel,
+  CodexDiagnosticsSnapshot,
   DatabaseAdapter,
   DoctorCheck,
   DoctorReport,
@@ -16,6 +17,7 @@ export interface DoctorDeps {
   captureLevel: CaptureLevel;
   logPath: string;
   db: DatabaseAdapter;
+  codexDiagnostics?: CodexDiagnosticsSnapshot;
   // Override for testing
   checkDbWritable?: () => boolean;
   checkGitAvailable?: () => boolean;
@@ -250,6 +252,8 @@ export function handleDoctor(deps: DoctorDeps): DoctorReport {
     });
   }
 
+  appendCodexChecks(checks, deps.codexDiagnostics);
+
   // Summarize
   let passed = 0;
   let warnings = 0;
@@ -261,4 +265,99 @@ export function handleDoctor(deps: DoctorDeps): DoctorReport {
   }
 
   return { checks, passed, warnings, failures };
+}
+
+function appendCodexChecks(
+  checks: DoctorCheck[],
+  codexDiagnostics: CodexDiagnosticsSnapshot | undefined,
+): void {
+  if (!codexDiagnostics) {
+    return;
+  }
+
+  if (!codexDiagnostics.sessionsDirExists) {
+    checks.push({
+      name: 'Codex sessions',
+      status: 'warn',
+      message: `${codexDiagnostics.sessionsDir} is missing`,
+      fix: 'Verify CODEX_HOME points to the active Codex home and that sessions/ exists.',
+    });
+  } else if (codexDiagnostics.rolloutFilesFound === 0) {
+    checks.push({
+      name: 'Codex sessions',
+      status: 'warn',
+      message: `${codexDiagnostics.sessionsDir} exists but contains no rollout-*.jsonl files`,
+      fix: 'Open a Codex session first, then re-run memory_doctor.',
+    });
+  } else {
+    checks.push({
+      name: 'Codex sessions',
+      status: 'ok',
+      message: `${codexDiagnostics.rolloutFilesFound} rollout file(s) in ${codexDiagnostics.sessionsDir}`,
+    });
+  }
+
+  if (codexDiagnostics.latestRolloutPath) {
+    checks.push(
+      codexDiagnostics.latestRolloutReadable
+        ? {
+            name: 'Codex latest rollout',
+            status: 'ok',
+            message: codexDiagnostics.latestRolloutPath,
+          }
+        : {
+            name: 'Codex latest rollout',
+            status: 'fail',
+            message: `${codexDiagnostics.latestRolloutPath} is not readable`,
+            fix: 'Check file permissions or whether another process is locking the rollout file.',
+          },
+    );
+  }
+
+  checks.push(
+    codexDiagnostics.captureMode === 'off'
+      ? {
+          name: 'Codex capture',
+          status: 'warn',
+          message: 'LOCUS_CODEX_CAPTURE=off',
+          fix: 'Set LOCUS_CODEX_CAPTURE to metadata, redacted, or full to enable Codex import.',
+        }
+      : {
+          name: 'Codex capture',
+          status: 'ok',
+          message: `LOCUS_CODEX_CAPTURE=${codexDiagnostics.captureMode}`,
+        },
+  );
+
+  checks.push(
+    codexDiagnostics.importedEventCount > 0
+      ? {
+          name: 'Codex imported events',
+          status: 'ok',
+          message: `${codexDiagnostics.importedEventCount} event(s) imported`,
+        }
+      : {
+          name: 'Codex imported events',
+          status: 'warn',
+          message: '0 Codex events imported so far',
+          fix: 'Use memory_search first, then memory_import_codex if you need a manual catch-up.',
+        },
+  );
+
+  if (codexDiagnostics.latestImportedTimestamp !== undefined) {
+    const details = [
+      `timestamp=${codexDiagnostics.latestImportedTimestamp}`,
+      codexDiagnostics.latestImportedSessionId
+        ? `session=${codexDiagnostics.latestImportedSessionId}`
+        : undefined,
+    ]
+      .filter(Boolean)
+      .join(', ');
+
+    checks.push({
+      name: 'Codex latest imported',
+      status: 'ok',
+      message: details,
+    });
+  }
 }

@@ -1,0 +1,4 @@
+{"type":"session_meta","timestamp":"2026-04-10T08:00:00.000Z","session_id":"sess_basic_001","cwd":"C:\\Projects\\SampleApp","model":"gpt-5.4"}
+{"type":"event_msg","subtype":"user_message","timestamp":"2026-04-10T08:00:01.000Z","message":"Create a simple parser test."}
+{"type":"response_item","timestamp":"2026-04-10T08:00:02.000Z","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"I will add a parser test."}]}}
+{"type":"event_msg","subtype":"task_complete","timestamp":"2026-04-10T08:00:03.000Z","message":"Parser test task completed."}

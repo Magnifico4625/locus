@@ -6,6 +6,7 @@ import { runMigrations } from '../../src/storage/migrations.js';
 import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
 import type { DoctorDeps } from '../../src/tools/doctor.js';
 import { handleDoctor } from '../../src/tools/doctor.js';
+import type { CodexDiagnosticsSnapshot } from '../../src/types.js';
 
 function createAdapter(dir: string): NodeSqliteAdapter {
   // biome-ignore lint/suspicious/noExplicitAny: node:sqlite dynamic require
@@ -29,6 +30,23 @@ function healthyDeps(adapter: NodeSqliteAdapter, dir: string): DoctorDeps {
     checkGitAvailable: () => true,
     checkDiskSpaceMb: () => 1000,
     checkLogWritable: () => true,
+  };
+}
+
+function codexDiagnostics(
+  overrides: Partial<CodexDiagnosticsSnapshot> = {},
+): CodexDiagnosticsSnapshot {
+  return {
+    captureMode: 'metadata',
+    sessionsDir: '/codex/sessions',
+    sessionsDirExists: true,
+    rolloutFilesFound: 2,
+    latestRolloutPath: '/codex/sessions/rollout-2026-04-14T12-00-00.jsonl',
+    latestRolloutReadable: true,
+    importedEventCount: 5,
+    latestImportedSessionId: 'session-abc',
+    latestImportedTimestamp: 1700000000000,
+    ...overrides,
   };
 }
 
@@ -336,5 +354,93 @@ describe('handleDoctor', () => {
     expect(logCheck?.status).toBe('warn');
     expect(logCheck?.message).toContain('not writable');
     expect(logCheck?.fix).toContain('permissions');
+  });
+
+  it('appends Codex checks when Codex diagnostics are provided', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexDiagnostics: codexDiagnostics(),
+    } as never);
+
+    expect(report.checks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Codex sessions',
+          status: 'ok',
+          message: expect.stringContaining('/codex/sessions'),
+        }),
+        expect.objectContaining({
+          name: 'Codex capture',
+          status: 'ok',
+        }),
+        expect.objectContaining({
+          name: 'Codex imported events',
+          status: 'ok',
+          message: expect.stringContaining('5'),
+        }),
+        expect.objectContaining({
+          name: 'Codex latest imported',
+          status: 'ok',
+          message: expect.stringContaining('session=session-abc'),
+        }),
+      ]),
+    );
+  });
+
+  it('reports disabled Codex capture as an actionable warning', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexDiagnostics: codexDiagnostics({ captureMode: 'off' }),
+    } as never);
+
+    const captureCheck = report.checks.find((c) => c.name === 'Codex capture');
+    expect(captureCheck?.status).toBe('warn');
+    expect(captureCheck?.message).toContain('LOCUS_CODEX_CAPTURE=off');
+    expect(captureCheck?.fix).toContain('metadata');
+  });
+
+  it('reports a missing Codex sessions directory as a warning', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexDiagnostics: codexDiagnostics({
+        sessionsDirExists: false,
+        rolloutFilesFound: 0,
+        latestRolloutPath: undefined,
+        latestRolloutReadable: undefined,
+      }),
+    } as never);
+
+    const sessionsCheck = report.checks.find((c) => c.name === 'Codex sessions');
+    expect(sessionsCheck?.status).toBe('warn');
+    expect(sessionsCheck?.message).toContain('missing');
+    expect(sessionsCheck?.fix).toContain('CODEX_HOME');
+  });
+
+  it('reports an unreadable latest rollout as a failure', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexDiagnostics: codexDiagnostics({ latestRolloutReadable: false }),
+    } as never);
+
+    const rolloutCheck = report.checks.find((c) => c.name === 'Codex latest rollout');
+    expect(rolloutCheck?.status).toBe('fail');
+    expect(rolloutCheck?.message).toContain('not readable');
+    expect(rolloutCheck?.fix).toContain('permissions');
+  });
+
+  it('warns when no Codex events have been imported yet', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexDiagnostics: codexDiagnostics({
+        importedEventCount: 0,
+        latestImportedSessionId: undefined,
+        latestImportedTimestamp: undefined,
+      }),
+    } as never);
+
+    const importedCheck = report.checks.find((c) => c.name === 'Codex imported events');
+    expect(importedCheck?.status).toBe('warn');
+    expect(importedCheck?.message).toContain('0 Codex events');
+    expect(importedCheck?.fix).toContain('memory_import_codex');
   });
 });

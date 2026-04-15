@@ -1,6 +1,6 @@
 {
   "name": "locus-memory",
-  "version": "3.1.1",
+  "version": "3.3.0",
   "description": "Persistent project-aware memory for AI coding tools. Built on MCP. Knows your project, remembers your decisions, costs almost nothing.",
   "type": "module",
   "private": true,
@@ -22,7 +22,9 @@
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
-    "typecheck": "npm -w @locus/core run typecheck",
+    "sync:codex-plugin": "node scripts/sync-codex-plugin.mjs",
+    "sync:codex-skill": "node scripts/sync-codex-skill.mjs",
+    "typecheck": "npm -w @locus/core run typecheck && npm -w @locus/codex run typecheck",
     "check": "npm run typecheck && npm run lint && npm run test",
     "prepublishOnly": "npm run check && npm run build"
   },

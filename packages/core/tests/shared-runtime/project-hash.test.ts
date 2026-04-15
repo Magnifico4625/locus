@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
 import { projectHash } from '@locus/shared-runtime';
+import { describe, expect, it } from 'vitest';
 
 describe('projectHash (shared-runtime)', () => {
   it('returns 16 hex chars', () => {
@@ -15,14 +15,10 @@ describe('projectHash (shared-runtime)', () => {
   });
 
   it('normalizes backslashes (cross-platform)', () => {
-    expect(projectHash('C:/Users/test/project')).toBe(
-      projectHash('C:\\Users\\test\\project'),
-    );
+    expect(projectHash('C:/Users/test/project')).toBe(projectHash('C:\\Users\\test\\project'));
   });
 
   it('normalizes case (Windows paths)', () => {
-    expect(projectHash('C:/Users/Test/Project')).toBe(
-      projectHash('c:/users/test/project'),
-    );
+    expect(projectHash('C:/Users/Test/Project')).toBe(projectHash('c:/users/test/project'));
   });
 });

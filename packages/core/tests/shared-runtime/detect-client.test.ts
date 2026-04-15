@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
 import { detectClientEnv } from '@locus/shared-runtime';
+import { afterEach, describe, expect, it } from 'vitest';
 
 describe('detectClientEnv', () => {
   const originalEnv = { ...process.env };

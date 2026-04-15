@@ -2980,7 +2980,7 @@ var require_compile = __commonJS({
       const schOrFunc = root.refs[ref];
       if (schOrFunc)
         return schOrFunc;
-      let _sch = resolve2.call(this, root, ref);
+      let _sch = resolve6.call(this, root, ref);
       if (_sch === void 0) {
         const schema = (_a2 = root.localRefs) === null || _a2 === void 0 ? void 0 : _a2[ref];
         const { schemaId } = this.opts;
@@ -3007,7 +3007,7 @@ var require_compile = __commonJS({
     function sameSchemaEnv(s1, s2) {
       return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
     }
-    function resolve2(root, ref) {
+    function resolve6(root, ref) {
       let sch;
       while (typeof (sch = this.refs[ref]) == "string")
         ref = sch;
@@ -3582,7 +3582,7 @@ var require_fast_uri = __commonJS({
       }
       return uri;
     }
-    function resolve2(baseURI, relativeURI, options) {
+    function resolve6(baseURI, relativeURI, options) {
       const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
       const resolved = resolveComponent(parse3(baseURI, schemelessOptions), parse3(relativeURI, schemelessOptions), schemelessOptions, true);
       schemelessOptions.skipEscape = true;
@@ -3809,7 +3809,7 @@ var require_fast_uri = __commonJS({
     var fastUri = {
       SCHEMES,
       normalize: normalize2,
-      resolve: resolve2,
+      resolve: resolve6,
       resolveComponent,
       equal,
       serialize,
@@ -6799,7 +6799,563 @@ var require_dist = __commonJS({
 });
 
 // packages/core/src/server.ts
-import { basename as basename2, dirname as dirname4, join as join6 } from "node:path";
+import { basename as basename4, dirname as dirname6, join as join11 } from "node:path";
+
+// packages/codex/src/capture.ts
+var VALID_CAPTURE_MODES = /* @__PURE__ */ new Set(["off", "metadata", "redacted", "full"]);
+function getCodexCaptureMode(env = process.env) {
+  const value = env.LOCUS_CODEX_CAPTURE;
+  return isCodexCaptureMode(value) ? value : "metadata";
+}
+function shouldImportCodexEvent(mode, kind) {
+  if (mode === "off") {
+    return false;
+  }
+  if (mode === "metadata") {
+    return kind !== "user_prompt" && kind !== "ai_response";
+  }
+  if (mode === "redacted") {
+    return kind !== "ai_response";
+  }
+  return true;
+}
+function redactCodexText(text) {
+  return text.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [REDACTED]").replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[REDACTED]").replace(
+    /\b(password|passwd|secret|api[_-]?key|token)\b(\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s\r\n]+)/gi,
+    (_match, key, separator) => `${key}${separator}[REDACTED]`
+  );
+}
+function isCodexCaptureMode(value) {
+  return value !== void 0 && VALID_CAPTURE_MODES.has(value);
+}
+
+// packages/codex/src/ids.ts
+import { createHash } from "node:crypto";
+import { basename } from "node:path";
+function createCodexSourceEventId(input) {
+  const sessionId = input.sessionId ?? "unknown-session";
+  const fileName = basename(input.filePath);
+  const itemId = input.itemId ?? "no-item";
+  return `codex:${sessionId}:${fileName}:${input.line}:${input.kind}:${itemId}`;
+}
+function createCodexEventId(sourceEventId) {
+  return createHash("sha256").update(sourceEventId).digest("hex");
+}
+
+// packages/codex/src/importer.ts
+import { readFileSync } from "node:fs";
+
+// packages/codex/src/inbox-event.ts
+function toInboxEvent(normalizedEvent, captureMode) {
+  if (!shouldImportCodexEvent(captureMode, normalizedEvent.kind)) {
+    return null;
+  }
+  const sourceEventId = createCodexSourceEventId({
+    sessionId: normalizedEvent.sessionId,
+    filePath: normalizedEvent.sourceFile,
+    line: normalizedEvent.sourceLine,
+    kind: normalizedEvent.kind,
+    itemId: normalizedEvent.itemId
+  });
+  return {
+    version: 1,
+    event_id: createCodexEventId(sourceEventId),
+    source: "codex",
+    source_event_id: sourceEventId,
+    project_root: normalizedEvent.projectRoot,
+    session_id: normalizedEvent.sessionId,
+    timestamp: normalizedEvent.timestamp,
+    kind: normalizedEvent.kind,
+    payload: toInboxPayload(normalizedEvent, captureMode)
+  };
+}
+function toInboxPayload(normalizedEvent, captureMode) {
+  switch (normalizedEvent.kind) {
+    case "user_prompt":
+      return {
+        prompt: maybeRedact(stringPayload(normalizedEvent.payload.prompt), captureMode)
+      };
+    case "ai_response":
+      return compactPayload({
+        response: stringPayload(normalizedEvent.payload.response),
+        model: optionalString(normalizedEvent.payload.model)
+      });
+    case "tool_use":
+      return compactPayload({
+        tool: optionalString(normalizedEvent.payload.tool) ?? "unknown",
+        files: arrayPayload(normalizedEvent.payload.files),
+        status: optionalString(normalizedEvent.payload.status) ?? "success",
+        exitCode: optionalNumber(normalizedEvent.payload.exitCode)
+      });
+    case "session_start":
+      return compactPayload({
+        tool: optionalString(normalizedEvent.payload.tool) ?? "codex",
+        model: optionalString(normalizedEvent.payload.model)
+      });
+    case "session_end":
+      return compactPayload({
+        summary: optionalString(normalizedEvent.payload.summary)
+      });
+  }
+}
+function maybeRedact(value, captureMode) {
+  return captureMode === "redacted" ? redactCodexText(value) : value;
+}
+function compactPayload(input) {
+  const output = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== void 0) {
+      output[key] = value;
+    }
+  }
+  return output;
+}
+function stringPayload(value) {
+  return typeof value === "string" ? value : "";
+}
+function optionalString(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function optionalNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function arrayPayload(value) {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : [];
+}
+
+// packages/codex/src/inbox-writer.ts
+import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+function writeCodexInboxEvent(inboxDir, event) {
+  mkdirSync(inboxDir, { recursive: true });
+  const filename = `${event.timestamp}-${event.event_id.slice(0, 8)}.json`;
+  const finalPath = join(inboxDir, filename);
+  if (existsSync(finalPath)) {
+    return { status: "duplicate_pending", filename };
+  }
+  const tmpPath = `${finalPath}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(event), "utf-8");
+  renameSync(tmpPath, finalPath);
+  return { status: "written", filename };
+}
+
+// packages/codex/src/jsonl.ts
+function parseCodexJsonl(raw, filePath) {
+  const records = [];
+  const errors = [];
+  const lines = raw.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const lineNumber = index + 1;
+    const trimmed = line?.trim() ?? "";
+    if (trimmed.length === 0) {
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (error48) {
+      errors.push({
+        line: lineNumber,
+        filePath,
+        message: error48 instanceof Error ? error48.message : "Invalid JSON"
+      });
+      continue;
+    }
+    if (!isRecordObject(parsed)) {
+      errors.push({
+        line: lineNumber,
+        filePath,
+        message: "JSONL record must be an object"
+      });
+      continue;
+    }
+    records.push({
+      line: lineNumber,
+      filePath,
+      raw: parsed
+    });
+  }
+  return { records, errors };
+}
+function isRecordObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// packages/codex/src/normalize.ts
+var UNKNOWN_SESSION = "unknown-session";
+function normalizeCodexRecords(records) {
+  const events = [];
+  let skipped = 0;
+  let currentSessionId = UNKNOWN_SESSION;
+  let currentProjectRoot = process.cwd();
+  let currentModel;
+  for (const record2 of records) {
+    const raw = record2.raw;
+    const type = stringValue(raw.type);
+    if (type === "session_meta") {
+      currentSessionId = stringValue(raw.session_id) ?? currentSessionId;
+      currentProjectRoot = stringValue(raw.cwd) ?? currentProjectRoot;
+      currentModel = stringValue(raw.model) ?? currentModel;
+      events.push(
+        createEvent(record2, {
+          kind: "session_start",
+          sessionId: currentSessionId,
+          projectRoot: currentProjectRoot,
+          payload: compactPayload2({
+            tool: "codex",
+            model: currentModel
+          })
+        })
+      );
+      continue;
+    }
+    const sessionId = stringValue(raw.session_id) ?? currentSessionId;
+    const projectRoot = stringValue(raw.cwd) ?? currentProjectRoot;
+    if (type === "event_msg") {
+      const normalized = normalizeEventMessage(record2, sessionId, projectRoot);
+      if (normalized) {
+        events.push(normalized);
+      } else {
+        skipped++;
+      }
+      continue;
+    }
+    if (type === "response_item") {
+      const normalized = normalizeResponseItem(record2, sessionId, projectRoot, currentModel);
+      if (normalized) {
+        events.push(normalized);
+      } else {
+        skipped++;
+      }
+      continue;
+    }
+    skipped++;
+  }
+  return { events, skipped };
+}
+function normalizeEventMessage(record2, sessionId, projectRoot) {
+  const subtype = stringValue(record2.raw.subtype);
+  if (subtype === "user_message") {
+    return createEvent(record2, {
+      kind: "user_prompt",
+      sessionId,
+      projectRoot,
+      payload: {
+        prompt: firstString(record2.raw.message, record2.raw.text) ?? ""
+      }
+    });
+  }
+  if (subtype === "task_complete") {
+    const summary = firstString(record2.raw.summary, record2.raw.message, record2.raw.text);
+    return createEvent(record2, {
+      kind: "session_end",
+      sessionId,
+      projectRoot,
+      payload: compactPayload2({ summary })
+    });
+  }
+  if (subtype === "exec_command_end") {
+    const exitCode = numberValue(record2.raw.exit_code);
+    return createEvent(record2, {
+      kind: "tool_use",
+      sessionId,
+      projectRoot,
+      itemId: stringValue(record2.raw.call_id),
+      payload: compactPayload2({
+        tool: "exec_command_end",
+        callId: stringValue(record2.raw.call_id),
+        exitCode,
+        durationMs: numberValue(record2.raw.duration_ms),
+        status: exitCode === void 0 || exitCode === 0 ? "success" : "error"
+      })
+    });
+  }
+  return void 0;
+}
+function normalizeResponseItem(record2, sessionId, projectRoot, currentModel) {
+  const item = recordObject(record2.raw.item);
+  if (!item) {
+    return void 0;
+  }
+  const itemType = stringValue(item.type);
+  if (itemType === "message" && stringValue(item.role) === "assistant") {
+    return createEvent(record2, {
+      kind: "ai_response",
+      sessionId,
+      projectRoot,
+      payload: compactPayload2({
+        response: extractTextContent(item.content),
+        model: currentModel
+      })
+    });
+  }
+  if (itemType === "function_call") {
+    const callId = stringValue(item.call_id);
+    return createEvent(record2, {
+      kind: "tool_use",
+      sessionId,
+      projectRoot,
+      itemId: callId,
+      payload: compactPayload2({
+        tool: stringValue(item.name) ?? "function_call",
+        callId,
+        arguments: stringValue(item.arguments)
+      })
+    });
+  }
+  if (itemType === "function_call_output") {
+    const callId = stringValue(item.call_id);
+    return createEvent(record2, {
+      kind: "tool_use",
+      sessionId,
+      projectRoot,
+      itemId: callId,
+      payload: compactPayload2({
+        tool: "function_call_output",
+        callId,
+        output: stringValue(item.output)
+      })
+    });
+  }
+  return void 0;
+}
+function createEvent(record2, input) {
+  return {
+    ...input,
+    timestamp: timestampValue(record2.raw.timestamp),
+    sourceFile: record2.filePath,
+    sourceLine: record2.line
+  };
+}
+function extractTextContent(value) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!Array.isArray(value)) {
+    return "";
+  }
+  return value.map((entry) => {
+    if (typeof entry === "string") {
+      return entry;
+    }
+    if (!isRecordObject2(entry)) {
+      return void 0;
+    }
+    const text = stringValue(entry.text);
+    if (text === void 0) {
+      return void 0;
+    }
+    const type = stringValue(entry.type);
+    return type === void 0 || type === "output_text" || type === "text" ? text : void 0;
+  }).filter((entry) => entry !== void 0).join("\n");
+}
+function timestampValue(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return Date.now();
+}
+function compactPayload2(input) {
+  const output = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== void 0) {
+      output[key] = value;
+    }
+  }
+  return output;
+}
+function firstString(...values) {
+  for (const value of values) {
+    const text = stringValue(value);
+    if (text !== void 0) {
+      return text;
+    }
+  }
+  return void 0;
+}
+function recordObject(value) {
+  return isRecordObject2(value) ? value : void 0;
+}
+function isRecordObject2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function stringValue(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+
+// packages/codex/src/paths.ts
+import { homedir } from "node:os";
+import { join as join2, resolve } from "node:path";
+function resolveCodexHome(env = process.env) {
+  const configured = env.CODEX_HOME;
+  if (configured && configured.trim().length > 0) {
+    return resolve(expandTilde(configured));
+  }
+  return join2(homedir(), ".codex");
+}
+function resolveCodexSessionsDir(options = {}) {
+  if (options.sessionsDir && options.sessionsDir.trim().length > 0) {
+    return resolve(expandTilde(options.sessionsDir));
+  }
+  return join2(resolveCodexHome(options.env), "sessions");
+}
+function expandTilde(pathValue) {
+  if (pathValue === "~") {
+    return homedir();
+  }
+  if (pathValue.startsWith("~/") || pathValue.startsWith("~\\")) {
+    return join2(homedir(), pathValue.slice(2));
+  }
+  return pathValue;
+}
+
+// packages/codex/src/session-files.ts
+import { readdirSync } from "node:fs";
+import { basename as basename2, join as join3, resolve as resolve2 } from "node:path";
+function findCodexRolloutFiles(sessionsDir) {
+  return collectRolloutFiles(resolve2(sessionsDir)).sort();
+}
+function collectRolloutFiles(dir) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const files = [];
+  for (const entry of entries) {
+    const fullPath = join3(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectRolloutFiles(fullPath));
+      continue;
+    }
+    if (entry.isFile() && isRolloutJsonl(fullPath)) {
+      files.push(resolve2(fullPath));
+    }
+  }
+  return files;
+}
+function isRolloutJsonl(filePath) {
+  return /^rollout-.*\.jsonl$/.test(basename2(filePath));
+}
+
+// packages/codex/src/importer.ts
+function importCodexSessionsToInbox(options) {
+  const captureMode = options.captureMode ?? getCodexCaptureMode(options.env);
+  const sessionsDir = resolveCodexSessionsDir({
+    sessionsDir: options.sessionsDir,
+    env: options.env
+  });
+  const metrics = createEmptyMetrics();
+  const files = selectFiles(findCodexRolloutFiles(sessionsDir), options);
+  metrics.filesScanned = files.length;
+  let latestTimestamp = Number.NEGATIVE_INFINITY;
+  for (const filePath of files) {
+    let raw;
+    try {
+      raw = readFileSync(filePath, "utf-8");
+    } catch {
+      metrics.errors++;
+      continue;
+    }
+    const parsed = parseCodexJsonl(raw, filePath);
+    metrics.recordsParsed += parsed.records.length;
+    metrics.parseErrors += parsed.errors.length;
+    const normalized = normalizeCodexRecords(parsed.records);
+    metrics.skippedUnknown += normalized.skipped;
+    const filteredEvents = normalized.events.filter((event) => matchesFilters(event, options));
+    metrics.normalized += filteredEvents.length;
+    metrics.skippedByFilter += normalized.events.length - filteredEvents.length;
+    latestTimestamp = updateLatestSession(metrics, filteredEvents, latestTimestamp);
+    for (const event of filteredEvents) {
+      const inboxEvent = toInboxEvent(event, captureMode);
+      if (!inboxEvent) {
+        metrics.skippedByCapture++;
+        continue;
+      }
+      if (options.shouldSkipEventId?.(inboxEvent.event_id) === true) {
+        metrics.duplicatePending++;
+        continue;
+      }
+      try {
+        const writeResult = writeCodexInboxEvent(options.inboxDir, inboxEvent);
+        if (writeResult.status === "written") {
+          metrics.written++;
+        } else {
+          metrics.duplicatePending++;
+        }
+      } catch {
+        metrics.errors++;
+      }
+    }
+  }
+  return metrics;
+}
+function createEmptyMetrics() {
+  return {
+    filesScanned: 0,
+    recordsParsed: 0,
+    parseErrors: 0,
+    normalized: 0,
+    written: 0,
+    duplicatePending: 0,
+    skippedUnknown: 0,
+    skippedByCapture: 0,
+    skippedByFilter: 0,
+    errors: 0,
+    latestSession: void 0
+  };
+}
+function updateLatestSession(metrics, events, latestTimestamp) {
+  let nextLatestTimestamp = latestTimestamp;
+  for (const event of events) {
+    if (event.timestamp >= nextLatestTimestamp) {
+      nextLatestTimestamp = event.timestamp;
+      metrics.latestSession = event.sessionId;
+    }
+  }
+  return nextLatestTimestamp;
+}
+function selectFiles(files, options) {
+  if (options.latestOnly) {
+    const latestFile = files.at(-1);
+    return latestFile === void 0 ? [] : [latestFile];
+  }
+  return [...files];
+}
+function matchesFilters(event, options) {
+  if (options.projectRoot !== void 0 && event.projectRoot !== options.projectRoot) {
+    return false;
+  }
+  if (options.sessionId !== void 0 && event.sessionId !== options.sessionId) {
+    return false;
+  }
+  if (options.since !== void 0 && event.timestamp < options.since) {
+    return false;
+  }
+  return true;
+}
+
+// packages/codex/src/plugin-sync.ts
+import { copyFileSync, existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2 } from "node:fs";
+import { dirname, resolve as resolve3 } from "node:path";
+import { fileURLToPath } from "node:url";
+
+// packages/codex/src/skill-sync.ts
+import { copyFileSync as copyFileSync2, existsSync as existsSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync3 } from "node:fs";
+import { homedir as homedir2 } from "node:os";
+import { dirname as dirname2, join as join4, resolve as resolve4 } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/shared-runtime/detect-client.js
 function detectClientEnv() {
@@ -6808,48 +7364,46 @@ function detectClientEnv() {
   return "generic";
 }
 
-// packages/shared-runtime/resolve-storage.js
-import { homedir } from "node:os";
-import { join } from "node:path";
-
 // packages/shared-runtime/project-hash.js
-import { createHash } from "node:crypto";
+import { createHash as createHash2 } from "node:crypto";
 import { normalize } from "node:path";
 function projectHash(projectRoot) {
   const normalized = normalize(projectRoot).replace(/\\/g, "/").toLowerCase();
-  return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
+  return createHash2("sha256").update(normalized).digest("hex").slice(0, 16);
 }
 
 // packages/shared-runtime/resolve-storage.js
-function expandTilde(p) {
-  if (p === "~") return homedir();
+import { homedir as homedir3 } from "node:os";
+import { join as join5 } from "node:path";
+function expandTilde2(p) {
+  if (p === "~") return homedir3();
   if (p.startsWith("~/") || p.startsWith("~\\")) {
-    return join(homedir(), p.slice(2));
+    return join5(homedir3(), p.slice(2));
   }
   return p;
 }
 function resolveStorageRoot() {
   if (process.env.LOCUS_STORAGE_ROOT) {
-    return expandTilde(process.env.LOCUS_STORAGE_ROOT);
+    return expandTilde2(process.env.LOCUS_STORAGE_ROOT);
   }
   const client = detectClientEnv();
-  const home = homedir();
+  const home = homedir3();
   if (client === "codex") {
-    return join(expandTilde(process.env.CODEX_HOME), "memory");
+    return join5(expandTilde2(process.env.CODEX_HOME), "memory");
   }
   if (client === "claude-code") {
-    return join(home, ".claude", "memory");
+    return join5(home, ".claude", "memory");
   }
-  return join(home, ".locus", "memory");
+  return join5(home, ".locus", "memory");
 }
 function resolveProjectStorageDir(projectRoot) {
-  return join(resolveStorageRoot(), `locus-${projectHash(projectRoot)}`);
+  return join5(resolveStorageRoot(), `locus-${projectHash(projectRoot)}`);
 }
 function resolveDbPath(projectRoot) {
-  return join(resolveProjectStorageDir(projectRoot), "locus.db");
+  return join5(resolveProjectStorageDir(projectRoot), "locus.db");
 }
 function resolveLogPath() {
-  return join(resolveStorageRoot(), "locus.log");
+  return join5(resolveStorageRoot(), "locus.log");
 }
 
 // node_modules/zod/v3/helpers/util.js
@@ -28027,7 +28581,7 @@ var Protocol = class {
           return;
         }
         const pollInterval = task2.pollInterval ?? this._options?.defaultTaskPollInterval ?? 1e3;
-        await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
+        await new Promise((resolve6) => setTimeout(resolve6, pollInterval));
         options?.signal?.throwIfAborted();
       }
     } catch (error48) {
@@ -28044,7 +28598,7 @@ var Protocol = class {
    */
   request(request, resultSchema, options) {
     const { relatedRequestId, resumptionToken, onresumptiontoken, task, relatedTask } = options ?? {};
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve6, reject) => {
       const earlyReject = (error48) => {
         reject(error48);
       };
@@ -28122,7 +28676,7 @@ var Protocol = class {
           if (!parseResult.success) {
             reject(parseResult.error);
           } else {
-            resolve2(parseResult.data);
+            resolve6(parseResult.data);
           }
         } catch (error48) {
           reject(error48);
@@ -28383,12 +28937,12 @@ var Protocol = class {
       }
     } catch {
     }
-    return new Promise((resolve2, reject) => {
+    return new Promise((resolve6, reject) => {
       if (signal.aborted) {
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
         return;
       }
-      const timeoutId = setTimeout(resolve2, interval);
+      const timeoutId = setTimeout(resolve6, interval);
       signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
         reject(new McpError(ErrorCode.InvalidRequest, "Request cancelled"));
@@ -29488,7 +30042,7 @@ var McpServer = class {
     let task = createTaskResult.task;
     const pollInterval = task.pollInterval ?? 5e3;
     while (task.status !== "completed" && task.status !== "failed" && task.status !== "cancelled") {
-      await new Promise((resolve2) => setTimeout(resolve2, pollInterval));
+      await new Promise((resolve6) => setTimeout(resolve6, pollInterval));
       const updatedTask = await extra.taskStore.getTask(taskId);
       if (!updatedTask) {
         throw new McpError(ErrorCode.InternalError, `Task ${taskId} not found during polling`);
@@ -30131,20 +30685,20 @@ var StdioServerTransport = class {
     this.onclose?.();
   }
   send(message) {
-    return new Promise((resolve2) => {
+    return new Promise((resolve6) => {
       const json2 = serializeMessage(message);
       if (this._stdout.write(json2)) {
-        resolve2();
+        resolve6();
       } else {
-        this._stdout.once("drain", resolve2);
+        this._stdout.once("drain", resolve6);
       }
     });
   }
 };
 
 // packages/core/src/ingest/pipeline.ts
-import { readdirSync, readFileSync, unlinkSync } from "node:fs";
-import { join as join2 } from "node:path";
+import { readdirSync as readdirSync2, readFileSync as readFileSync4, unlinkSync } from "node:fs";
+import { join as join6 } from "node:path";
 
 // packages/core/src/security/file-ignore.ts
 var DENYLIST_FILES = [
@@ -30182,7 +30736,7 @@ function matchGlob(name, pattern) {
 }
 function isDenylisted(filePath) {
   const normalized = filePath.replace(/\\/g, "/");
-  const basename3 = normalized.split("/").pop() ?? normalized;
+  const basename5 = normalized.split("/").pop() ?? normalized;
   for (const pattern of DENYLIST_FILES) {
     if (pattern.startsWith("**/") && pattern.endsWith("/**")) {
       const dir = pattern.slice(3, -3);
@@ -30197,7 +30751,7 @@ function isDenylisted(filePath) {
       }
       continue;
     }
-    if (matchGlob(basename3, pattern)) {
+    if (matchGlob(basename5, pattern)) {
       return true;
     }
   }
@@ -30383,7 +30937,7 @@ function processInbox(inboxDir, db, options) {
   };
   let files;
   try {
-    files = readdirSync(inboxDir).filter((f) => f.endsWith(".json")).sort();
+    files = readdirSync2(inboxDir).filter((f) => f.endsWith(".json")).sort();
   } catch {
     metrics.durationMs = Date.now() - start;
     return metrics;
@@ -30397,10 +30951,10 @@ function processInbox(inboxDir, db, options) {
     toProcess = files;
   }
   for (const filename of toProcess) {
-    const filePath = join2(inboxDir, filename);
+    const filePath = join6(inboxDir, filename);
     let raw;
     try {
-      raw = readFileSync(filePath, "utf-8");
+      raw = readFileSync4(filePath, "utf-8");
     } catch {
       metrics.errors++;
       continue;
@@ -30548,8 +31102,8 @@ function tryDelete(filePath) {
 }
 
 // packages/core/src/logger.ts
-import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync as unlinkSync2 } from "node:fs";
-import { dirname } from "node:path";
+import { appendFileSync, existsSync as existsSync4, mkdirSync as mkdirSync4, renameSync as renameSync2, statSync, unlinkSync as unlinkSync2 } from "node:fs";
+import { dirname as dirname3 } from "node:path";
 var LEVELS = { error: 0, info: 1, debug: 2 };
 var currentLevel = "error";
 function setLogLevel(level) {
@@ -30769,8 +31323,9 @@ var SemanticMemory = class {
 
 // packages/core/src/project-root.ts
 import { execFileSync } from "node:child_process";
-import { existsSync as existsSync2, readdirSync as readdirSync2 } from "node:fs";
-import { dirname as dirname2, join as join3, resolve } from "node:path";
+import { existsSync as existsSync5, readdirSync as readdirSync3 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { dirname as dirname4, join as join7, resolve as resolve5 } from "node:path";
 var PROJECT_MARKERS = [
   "package.json",
   "pyproject.toml",
@@ -30800,18 +31355,25 @@ var defaultProjectRootDeps = {
     }
   },
   fileExists(path) {
-    return existsSync2(path);
+    return existsSync5(path);
   },
   readDir(path) {
     try {
-      return readdirSync2(path);
+      return readdirSync3(path);
     } catch {
       return [];
+    }
+  },
+  resolveHomeDir() {
+    try {
+      return homedir4();
+    } catch {
+      return null;
     }
   }
 };
 function normalizePath(p) {
-  return resolve(p).replace(/\\/g, "/");
+  return resolve5(p).replace(/\\/g, "/");
 }
 function hasAnyMarker(dir, markers, deps) {
   for (const marker of markers) {
@@ -30822,7 +31384,7 @@ function hasAnyMarker(dir, markers, deps) {
         if (entry.endsWith(ext)) return true;
       }
     } else {
-      if (deps.fileExists(join3(dir, marker))) return true;
+      if (deps.fileExists(join7(dir, marker))) return true;
     }
   }
   return false;
@@ -30830,13 +31392,18 @@ function hasAnyMarker(dir, markers, deps) {
 function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
   const gitRoot = deps.tryGitRoot(cwd);
   if (gitRoot) return { root: normalizePath(gitRoot), method: "git-root" };
+  const normalizedCwd = normalizePath(cwd);
+  const homeDir = deps.resolveHomeDir();
+  const normalizedHomeDir = homeDir ? normalizePath(homeDir) : null;
   let highestMarkerDir = null;
-  let dir = resolve(cwd);
+  let dir = resolve5(cwd);
   for (; ; ) {
-    if (hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
+    const normalizedDir = normalizePath(dir);
+    const isAncestorHomeDir = normalizedHomeDir !== null && normalizedDir === normalizedHomeDir && normalizedDir !== normalizedCwd;
+    if (!isAncestorHomeDir && hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
       highestMarkerDir = dir;
     }
-    const parent = dirname2(dir);
+    const parent = dirname4(dir);
     if (parent === dir) break;
     dir = parent;
   }
@@ -31219,8 +31786,8 @@ function generateRecent(db, captureLevel) {
 }
 
 // packages/core/src/storage/init.ts
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync2 } from "node:fs";
-import { dirname as dirname3 } from "node:path";
+import { existsSync as existsSync6, mkdirSync as mkdirSync5, readFileSync as readFileSync5 } from "node:fs";
+import { dirname as dirname5 } from "node:path";
 
 // packages/core/src/storage/migrations.ts
 function getCurrentVersion(db) {
@@ -31357,9 +31924,7 @@ function extractFtsFromRow(kind, payloadJson) {
   return parts.join(" ");
 }
 function rebuildConversationFts(db) {
-  const rows = db.all(
-    "SELECT id, kind, payload_json FROM conversation_events"
-  );
+  const rows = db.all("SELECT id, kind, payload_json FROM conversation_events");
   for (const row of rows) {
     const content = extractFtsFromRow(row.kind, row.payload_json);
     if (content.length > row.kind.length) {
@@ -31435,7 +32000,7 @@ var NodeSqliteAdapter = class {
 };
 
 // packages/core/src/storage/sql-js.ts
-import { writeFileSync } from "node:fs";
+import { writeFileSync as writeFileSync2 } from "node:fs";
 var SAVE_DEBOUNCE_MS = 5e3;
 var SqlJsAdapter = class {
   db;
@@ -31507,7 +32072,7 @@ var SqlJsAdapter = class {
   }
   saveToDisk() {
     const data = this.db.export();
-    writeFileSync(this.dbPath, Buffer.from(data));
+    writeFileSync2(this.dbPath, Buffer.from(data));
   }
   scheduleSave() {
     if (this.saveTimer !== null) {
@@ -31531,9 +32096,9 @@ function detectFts5(db) {
   }
 }
 function ensureDir(dbPath) {
-  const dir = dirname3(dbPath);
-  if (!existsSync3(dir)) {
-    mkdirSync2(dir, { recursive: true });
+  const dir = dirname5(dbPath);
+  if (!existsSync6(dir)) {
+    mkdirSync5(dir, { recursive: true });
   }
 }
 async function initStorage(dbPath) {
@@ -31553,8 +32118,8 @@ async function initStorage(dbPath) {
   const initSqlJs = (await import("sql.js")).default;
   const SQL = await initSqlJs();
   let sqlDb;
-  if (existsSync3(dbPath)) {
-    const fileData = readFileSync2(dbPath);
+  if (existsSync6(dbPath)) {
+    const fileData = readFileSync5(dbPath);
     sqlDb = new SQL.Database(new Uint8Array(fileData));
   } else {
     sqlDb = new SQL.Database();
@@ -31657,7 +32222,9 @@ function handleAudit(deps) {
       const ftsCount = db.get("SELECT COUNT(*) as cnt FROM memories_fts")?.cnt ?? 0;
       const totalMemories = semanticCount + episodicCount;
       if (totalMemories > 0 && ftsCount === 0) {
-        lines.push(`WARNING: FTS5 index for memories is empty (${totalMemories} memories exist but 0 indexed). Run memory_doctor for repair.`);
+        lines.push(
+          `WARNING: FTS5 index for memories is empty (${totalMemories} memories exist but 0 indexed). Run memory_doctor for repair.`
+        );
       } else {
         lines.push(`FTS5 index: ${ftsCount} memories indexed (semantic+episodic).`);
       }
@@ -31668,7 +32235,9 @@ function handleAudit(deps) {
       const convEventCount = db.get("SELECT COUNT(*) as cnt FROM conversation_events")?.cnt ?? 0;
       const convFtsCount = db.get("SELECT COUNT(*) as cnt FROM conversation_fts")?.cnt ?? 0;
       if (convEventCount > 0 && convFtsCount === 0) {
-        lines.push(`WARNING: FTS5 index for conversation events is empty (${convEventCount} events exist but 0 indexed).`);
+        lines.push(
+          `WARNING: FTS5 index for conversation events is empty (${convEventCount} events exist but 0 indexed).`
+        );
       } else {
         lines.push(`FTS5 conversation index: ${convFtsCount}/${convEventCount} events indexed.`);
       }
@@ -31694,6 +32263,141 @@ function handleAudit(deps) {
     );
   }
   return lines.join("\n");
+}
+
+// packages/core/src/tools/auto-import-codex.ts
+var CODEX_AUTO_IMPORT_DEBOUNCE_MS = 45e3;
+function coordinateCodexAutoImport(params) {
+  const debounceMs = params.debounceMs ?? CODEX_AUTO_IMPORT_DEBOUNCE_MS;
+  const client = (params.detectClientEnv ?? detectClientEnv)();
+  if (client !== "codex") {
+    return {
+      snapshot: {
+        ...params.snapshot,
+        clientDetected: false,
+        debounceMs,
+        lastStatus: "skipped_not_codex"
+      },
+      ranImport: false,
+      processedInbox: false
+    };
+  }
+  if (params.snapshot.lastAttemptAt !== void 0 && params.now - params.snapshot.lastAttemptAt < debounceMs) {
+    return {
+      snapshot: {
+        ...params.snapshot,
+        clientDetected: true,
+        debounceMs,
+        lastStatus: "debounced"
+      },
+      ranImport: false,
+      processedInbox: false
+    };
+  }
+  const baseSnapshot = {
+    ...params.snapshot,
+    clientDetected: true,
+    debounceMs,
+    lastAttemptAt: params.now
+  };
+  try {
+    const result = params.runImport();
+    const nextSnapshot = applyImportResult(baseSnapshot, result, params.now);
+    return {
+      snapshot: nextSnapshot,
+      ranImport: true,
+      processedInbox: result.status === "ok" && result.processed > 0
+    };
+  } catch (error48) {
+    return {
+      snapshot: {
+        ...baseSnapshot,
+        lastRunAt: params.now,
+        lastStatus: "error",
+        lastImported: 0,
+        lastDuplicates: 0,
+        lastErrors: 1,
+        latestSession: void 0,
+        message: error48 instanceof Error ? error48.message : String(error48)
+      },
+      ranImport: true,
+      processedInbox: false
+    };
+  }
+}
+function applyImportResult(snapshot, result, now) {
+  return {
+    ...snapshot,
+    lastRunAt: now,
+    lastStatus: classifyStatus(result),
+    lastImported: result.imported,
+    lastDuplicates: result.duplicates,
+    lastErrors: result.errors,
+    latestSession: "latestSession" in result ? result.latestSession : void 0,
+    message: result.message
+  };
+}
+function classifyStatus(result) {
+  if (result.status === "disabled") {
+    return "disabled";
+  }
+  if (result.status === "error") {
+    return "error";
+  }
+  if (result.imported > 0) {
+    return "imported";
+  }
+  if (result.duplicates > 0 && result.errors === 0) {
+    return "duplicates_only";
+  }
+  if (result.errors > 0) {
+    return "error";
+  }
+  return "imported";
+}
+
+// packages/core/src/tools/codex-diagnostics.ts
+import { closeSync, existsSync as existsSync7, openSync } from "node:fs";
+function collectCodexDiagnostics(deps) {
+  const env = deps.env ?? process.env;
+  const codexHome = env.CODEX_HOME;
+  if (!codexHome || codexHome.trim().length === 0) {
+    return void 0;
+  }
+  const captureMode = getCodexCaptureMode(env);
+  const sessionsDir = resolveCodexSessionsDir({ env });
+  const sessionsDirExists = existsSync7(sessionsDir);
+  const rolloutFiles = sessionsDirExists ? findCodexRolloutFiles(sessionsDir) : [];
+  const latestRolloutPath = rolloutFiles.at(-1);
+  const importedEventCount = deps.db.get("SELECT COUNT(*) AS cnt FROM ingest_log WHERE source = ?", ["codex"])?.cnt ?? 0;
+  const latestImported = deps.db.get(
+    `SELECT session_id, timestamp
+     FROM conversation_events
+     WHERE source = ?
+     ORDER BY timestamp DESC, id DESC
+     LIMIT 1`,
+    ["codex"]
+  );
+  return {
+    captureMode,
+    sessionsDir,
+    sessionsDirExists,
+    rolloutFilesFound: rolloutFiles.length,
+    latestRolloutPath,
+    latestRolloutReadable: latestRolloutPath ? isReadable(latestRolloutPath) : void 0,
+    importedEventCount,
+    latestImportedSessionId: latestImported?.session_id ?? void 0,
+    latestImportedTimestamp: latestImported?.timestamp
+  };
+}
+function isReadable(filePath) {
+  try {
+    const fd = openSync(filePath, "r");
+    closeSync(fd);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 // packages/core/src/tools/compact.ts
@@ -32011,6 +32715,7 @@ function handleDoctor(deps) {
       fix: "Run memory_scan() to index project"
     });
   }
+  appendCodexChecks(checks, deps.codexDiagnostics);
   let passed = 0;
   let warnings = 0;
   let failures = 0;
@@ -32021,9 +32726,84 @@ function handleDoctor(deps) {
   }
   return { checks, passed, warnings, failures };
 }
+function appendCodexChecks(checks, codexDiagnostics) {
+  if (!codexDiagnostics) {
+    return;
+  }
+  if (!codexDiagnostics.sessionsDirExists) {
+    checks.push({
+      name: "Codex sessions",
+      status: "warn",
+      message: `${codexDiagnostics.sessionsDir} is missing`,
+      fix: "Verify CODEX_HOME points to the active Codex home and that sessions/ exists."
+    });
+  } else if (codexDiagnostics.rolloutFilesFound === 0) {
+    checks.push({
+      name: "Codex sessions",
+      status: "warn",
+      message: `${codexDiagnostics.sessionsDir} exists but contains no rollout-*.jsonl files`,
+      fix: "Open a Codex session first, then re-run memory_doctor."
+    });
+  } else {
+    checks.push({
+      name: "Codex sessions",
+      status: "ok",
+      message: `${codexDiagnostics.rolloutFilesFound} rollout file(s) in ${codexDiagnostics.sessionsDir}`
+    });
+  }
+  if (codexDiagnostics.latestRolloutPath) {
+    checks.push(
+      codexDiagnostics.latestRolloutReadable ? {
+        name: "Codex latest rollout",
+        status: "ok",
+        message: codexDiagnostics.latestRolloutPath
+      } : {
+        name: "Codex latest rollout",
+        status: "fail",
+        message: `${codexDiagnostics.latestRolloutPath} is not readable`,
+        fix: "Check file permissions or whether another process is locking the rollout file."
+      }
+    );
+  }
+  checks.push(
+    codexDiagnostics.captureMode === "off" ? {
+      name: "Codex capture",
+      status: "warn",
+      message: "LOCUS_CODEX_CAPTURE=off",
+      fix: "Set LOCUS_CODEX_CAPTURE to metadata, redacted, or full to enable Codex import."
+    } : {
+      name: "Codex capture",
+      status: "ok",
+      message: `LOCUS_CODEX_CAPTURE=${codexDiagnostics.captureMode}`
+    }
+  );
+  checks.push(
+    codexDiagnostics.importedEventCount > 0 ? {
+      name: "Codex imported events",
+      status: "ok",
+      message: `${codexDiagnostics.importedEventCount} event(s) imported`
+    } : {
+      name: "Codex imported events",
+      status: "warn",
+      message: "0 Codex events imported so far",
+      fix: "Use memory_search first, then memory_import_codex if you need a manual catch-up."
+    }
+  );
+  if (codexDiagnostics.latestImportedTimestamp !== void 0) {
+    const details = [
+      `timestamp=${codexDiagnostics.latestImportedTimestamp}`,
+      codexDiagnostics.latestImportedSessionId ? `session=${codexDiagnostics.latestImportedSessionId}` : void 0
+    ].filter(Boolean).join(", ");
+    checks.push({
+      name: "Codex latest imported",
+      status: "ok",
+      message: details
+    });
+  }
+}
 
 // packages/core/src/tools/explore.ts
-function basename(relativePath) {
+function basename3(relativePath) {
   const slash = relativePath.lastIndexOf("/");
   return slash === -1 ? relativePath : relativePath.slice(slash + 1);
 }
@@ -32058,7 +32838,7 @@ function formatReExportName(entry) {
   return entry.names.map((n) => `${n} from ${entry.source}`).join(", ");
 }
 function formatFile(row) {
-  const name = basename(row.relative_path);
+  const name = basename3(row.relative_path);
   const exports = parseExports(row.exports_json);
   const imports = parseImports(row.imports_json);
   const reExports = parseReExports(row.re_exports_json);
@@ -32153,9 +32933,142 @@ function handleForget(query, deps, confirmToken) {
   };
 }
 
+// packages/core/src/tools/import-codex.ts
+import { readdirSync as readdirSync4, readFileSync as readFileSync6 } from "node:fs";
+import { join as join8 } from "node:path";
+function handleImportCodex(params, deps) {
+  const captureMode = resolveCodexCaptureMode(deps.env);
+  if (captureMode === "off") {
+    return {
+      status: "disabled",
+      captureMode: "off",
+      imported: 0,
+      skipped: 0,
+      duplicates: 0,
+      errors: 0,
+      filesScanned: 0,
+      message: "Codex import is disabled by LOCUS_CODEX_CAPTURE=off."
+    };
+  }
+  if (deps.db === void 0) {
+    return {
+      status: "error",
+      captureMode,
+      imported: 0,
+      skipped: 0,
+      duplicates: 0,
+      errors: 1,
+      filesScanned: 0,
+      processed: 0,
+      remaining: 0,
+      message: "Database adapter is required for Codex import."
+    };
+  }
+  try {
+    const knownEventIds = loadIngestedCodexEventIds(deps.db);
+    const inboxBefore = listJsonFiles(deps.inboxDir);
+    const importMetrics = deps.importCodexSessionsToInbox({
+      inboxDir: deps.inboxDir,
+      captureMode,
+      latestOnly: params.latestOnly,
+      projectRoot: params.projectRoot,
+      sessionId: params.sessionId,
+      since: params.since,
+      env: deps.env,
+      shouldSkipEventId: (eventId) => knownEventIds.has(eventId)
+    });
+    let ingestMetrics = {
+      processed: 0,
+      skipped: 0,
+      duplicates: 0,
+      filtered: 0,
+      errors: 0,
+      durationMs: 0,
+      remaining: 0
+    };
+    let imported = 0;
+    if (importMetrics.written > 0) {
+      const currentRunEventIds = collectNewInboxEventIds(deps.inboxDir, inboxBefore);
+      ingestMetrics = deps.processInbox(deps.inboxDir, deps.db, {
+        batchLimit: 0,
+        captureLevel: deps.captureLevel,
+        fts5Available: deps.fts5Available
+      });
+      const storedEventIds = loadIngestedCodexEventIds(deps.db);
+      imported = Array.from(currentRunEventIds).filter(
+        (eventId) => storedEventIds.has(eventId)
+      ).length;
+    }
+    const skipped = importMetrics.skippedUnknown + importMetrics.skippedByCapture + importMetrics.skippedByFilter;
+    const errors = importMetrics.errors + importMetrics.parseErrors + ingestMetrics.errors;
+    return {
+      status: "ok",
+      captureMode,
+      imported,
+      skipped,
+      duplicates: importMetrics.duplicatePending,
+      errors,
+      filesScanned: importMetrics.filesScanned,
+      latestSession: importMetrics.latestSession,
+      processed: ingestMetrics.processed,
+      remaining: ingestMetrics.remaining,
+      message: imported > 0 ? `Imported ${imported} Codex ${imported === 1 ? "event" : "events"} into memory.` : "No new Codex events were imported."
+    };
+  } catch (error48) {
+    return {
+      status: "error",
+      captureMode,
+      imported: 0,
+      skipped: 0,
+      duplicates: 0,
+      errors: 1,
+      filesScanned: 0,
+      processed: 0,
+      remaining: 0,
+      message: error48 instanceof Error ? error48.message : String(error48)
+    };
+  }
+}
+function resolveCodexCaptureMode(env = process.env) {
+  const value = env.LOCUS_CODEX_CAPTURE;
+  return value === "off" || value === "metadata" || value === "redacted" || value === "full" ? value : "metadata";
+}
+function loadIngestedCodexEventIds(db) {
+  const rows = db.all("SELECT event_id FROM ingest_log WHERE source = ?", ["codex"]);
+  return new Set(rows.map((row) => row.event_id));
+}
+function listJsonFiles(inboxDir) {
+  try {
+    return new Set(readdirSync4(inboxDir).filter((entry) => entry.endsWith(".json")));
+  } catch {
+    return /* @__PURE__ */ new Set();
+  }
+}
+function collectNewInboxEventIds(inboxDir, before) {
+  const eventIds = /* @__PURE__ */ new Set();
+  try {
+    const files = readdirSync4(inboxDir).filter((entry) => entry.endsWith(".json"));
+    for (const file2 of files) {
+      if (before.has(file2)) {
+        continue;
+      }
+      try {
+        const parsed = JSON.parse(readFileSync6(join8(inboxDir, file2), "utf-8"));
+        if (typeof parsed.event_id === "string" && parsed.event_id.length > 0) {
+          eventIds.add(parsed.event_id);
+        }
+      } catch {
+      }
+    }
+  } catch {
+    return eventIds;
+  }
+  return eventIds;
+}
+
 // packages/core/src/tools/purge.ts
-import { readdirSync as readdirSync3, statSync as statSync3, unlinkSync as unlinkSync3 } from "node:fs";
-import { join as join4 } from "node:path";
+import { readdirSync as readdirSync5, statSync as statSync3, unlinkSync as unlinkSync3 } from "node:fs";
+import { join as join9 } from "node:path";
 function getDbSizeBytes(dbPath) {
   try {
     return statSync3(dbPath).size;
@@ -32203,10 +33116,10 @@ function handlePurge(deps, confirmToken) {
   }
   if (deps.inboxDir) {
     try {
-      const inboxFiles = readdirSync3(deps.inboxDir).filter((f) => f.endsWith(".json"));
+      const inboxFiles = readdirSync5(deps.inboxDir).filter((f) => f.endsWith(".json"));
       for (const f of inboxFiles) {
         try {
-          unlinkSync3(join4(deps.inboxDir, f));
+          unlinkSync3(join9(deps.inboxDir, f));
         } catch {
         }
       }
@@ -32228,8 +33141,8 @@ function handleRemember(text, tags, deps) {
 
 // packages/core/src/scanner/index.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import { existsSync as existsSync4, readdirSync as readdirSync4, readFileSync as readFileSync3, statSync as statSync4 } from "node:fs";
-import { extname, join as join5, relative } from "node:path";
+import { existsSync as existsSync8, readdirSync as readdirSync6, readFileSync as readFileSync7, statSync as statSync4 } from "node:fs";
+import { extname, join as join10, relative } from "node:path";
 
 // packages/core/src/scanner/aliases.ts
 function loadPathAliases(rawPaths) {
@@ -32298,9 +33211,9 @@ var HARDCODED_IGNORE = [
 ];
 var globPatterns = HARDCODED_IGNORE.filter((entry) => entry.includes("*"));
 var plainNames = new Set(HARDCODED_IGNORE.filter((entry) => !entry.includes("*")));
-function matchesGlob(basename3, pattern) {
+function matchesGlob(basename5, pattern) {
   const suffix = pattern.slice(1);
-  return basename3.endsWith(suffix);
+  return basename5.endsWith(suffix);
 }
 function shouldIgnore(filePath) {
   const normalized = filePath.replace(/\\/g, "/");
@@ -32310,9 +33223,9 @@ function shouldIgnore(filePath) {
       return true;
     }
   }
-  const basename3 = segments[segments.length - 1] ?? "";
+  const basename5 = segments[segments.length - 1] ?? "";
   for (const pattern of globPatterns) {
-    if (matchesGlob(basename3, pattern)) {
+    if (matchesGlob(basename5, pattern)) {
       return true;
     }
   }
@@ -32637,7 +33550,7 @@ function gitExec(args, cwd) {
 }
 var defaultScanDeps = {
   isGitRepo(path) {
-    return existsSync4(join5(path, ".git"));
+    return existsSync8(join10(path, ".git"));
   },
   getHead(path) {
     try {
@@ -32672,12 +33585,12 @@ var defaultScanDeps = {
     function walk(dir) {
       let entries;
       try {
-        entries = readdirSync4(dir);
+        entries = readdirSync6(dir);
       } catch {
         return;
       }
       for (const entry of entries) {
-        const fullPath = join5(dir, entry);
+        const fullPath = join10(dir, entry);
         try {
           const stat = statSync4(fullPath);
           if (stat.isDirectory()) {
@@ -32810,12 +33723,12 @@ function walkDirectory(dir, basePath) {
   function walk(current) {
     let entries;
     try {
-      entries = readdirSync4(current);
+      entries = readdirSync6(current);
     } catch {
       return;
     }
     for (const entry of entries) {
-      const fullPath = join5(current, entry);
+      const fullPath = join10(current, entry);
       try {
         const stat = statSync4(fullPath);
         if (stat.isDirectory()) {
@@ -32831,10 +33744,10 @@ function walkDirectory(dir, basePath) {
   return results;
 }
 function loadProjectAliases(projectPath) {
-  const tsconfigPath = join5(projectPath, "tsconfig.json");
-  if (!existsSync4(tsconfigPath)) return {};
+  const tsconfigPath = join10(projectPath, "tsconfig.json");
+  if (!existsSync8(tsconfigPath)) return {};
   try {
-    const content = readFileSync3(tsconfigPath, "utf-8");
+    const content = readFileSync7(tsconfigPath, "utf-8");
     const rawPaths = parseTsConfig(content);
     return loadPathAliases(rawPaths);
   } catch {
@@ -32937,7 +33850,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
       skippedFiles++;
       continue;
     }
-    const fullPath = join5(projectPath, relPath);
+    const fullPath = join10(projectPath, relPath);
     let stat;
     try {
       stat = statSync4(fullPath);
@@ -32953,7 +33866,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
     }
     let content;
     try {
-      content = readFileSync3(fullPath, "utf-8");
+      content = readFileSync7(fullPath, "utf-8");
     } catch {
       storeSkippedEntry(db, relPath, "read-failed", now);
       skippedFiles++;
@@ -33334,7 +34247,17 @@ function handleSearch(query, deps, options) {
 }
 
 // packages/core/src/tools/status.ts
-import { readdirSync as readdirSync5, statSync as statSync5 } from "node:fs";
+import { readdirSync as readdirSync7, statSync as statSync5 } from "node:fs";
+function getDefaultCodexAutoImportSnapshot() {
+  return {
+    clientDetected: false,
+    debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+    lastStatus: "idle",
+    lastImported: 0,
+    lastDuplicates: 0,
+    lastErrors: 0
+  };
+}
 function handleStatus(deps) {
   const { db, dbPath, config: config2 } = deps;
   const totalFilesRow = db.get("SELECT COUNT(*) AS cnt FROM files");
@@ -33367,7 +34290,7 @@ function handleStatus(deps) {
   let inboxPending = 0;
   if (deps.inboxDir) {
     try {
-      const entries = readdirSync5(deps.inboxDir);
+      const entries = readdirSync7(deps.inboxDir);
       inboxPending = entries.filter((f) => f.endsWith(".json")).length;
     } catch {
       inboxPending = 0;
@@ -33397,7 +34320,9 @@ function handleStatus(deps) {
     nodeVersion: process.version,
     storageBackend: deps.backend,
     fts5Available: deps.fts5,
-    searchEngine: deps.fts5 ? "FTS5" : "LIKE fallback"
+    searchEngine: deps.fts5 ? "FTS5" : "LIKE fallback",
+    codexAutoImport: deps.codexAutoImportSnapshot ? { ...deps.codexAutoImportSnapshot } : getDefaultCodexAutoImportSnapshot(),
+    codexDiagnostics: deps.codexDiagnostics ? { ...deps.codexDiagnostics } : void 0
   };
 }
 
@@ -33460,11 +34385,11 @@ function handleTimeline(deps, options) {
 async function createServer(options) {
   const cwd = options?.cwd ?? process.cwd();
   const { root, method } = resolveProjectRoot(cwd);
-  const projectName = basename2(root);
+  const projectName = basename4(root);
   const dbPath = options?.dbPath ?? resolveDbPath(root);
   const logPath = resolveLogPath();
   const { db, backend, fts5 } = await initStorage(dbPath);
-  const inboxDir = join6(dirname4(dbPath), "inbox");
+  const inboxDir = join11(dirname6(dbPath), "inbox");
   const config2 = { ...LOCUS_DEFAULTS };
   const envCapture = process.env.LOCUS_CAPTURE_LEVEL;
   if (envCapture === "metadata" || envCapture === "redacted" || envCapture === "full") {
@@ -33488,6 +34413,14 @@ async function createServer(options) {
   let _lastIngestMetrics = null;
   let lastIngestTime = 0;
   const INGEST_DEBOUNCE_MS = 3e4;
+  let codexAutoImportSnapshot = {
+    clientDetected: false,
+    debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+    lastStatus: "idle",
+    lastImported: 0,
+    lastDuplicates: 0,
+    lastErrors: 0
+  };
   try {
     const startupMetrics = processInbox(inboxDir, db, {
       batchLimit: 0,
@@ -33559,7 +34492,25 @@ async function createServer(options) {
       offset: external_exports3.number().optional().describe("Skip N conversation results")
     },
     async ({ query, timeRange, filePath, kind, source, limit, offset }) => {
-      if (Date.now() - lastIngestTime > INGEST_DEBOUNCE_MS) {
+      const now = Date.now();
+      const autoImport = coordinateCodexAutoImport({
+        now,
+        snapshot: codexAutoImportSnapshot,
+        runImport: () => handleImportCodex(
+          { latestOnly: true },
+          {
+            db,
+            inboxDir,
+            captureLevel: config2.captureLevel,
+            fts5Available: fts5,
+            env: process.env,
+            processInbox,
+            importCodexSessionsToInbox
+          }
+        )
+      });
+      codexAutoImportSnapshot = autoImport.snapshot;
+      if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
         try {
           const metrics = processInbox(inboxDir, db, {
             batchLimit: 50,
@@ -33567,7 +34518,7 @@ async function createServer(options) {
             fts5Available: fts5
           });
           _lastIngestMetrics = metrics;
-          lastIngestTime = Date.now();
+          lastIngestTime = now;
         } catch {
         }
       }
@@ -33604,6 +34555,30 @@ async function createServer(options) {
     }
   );
   server.tool(
+    "memory_import_codex",
+    {
+      latestOnly: external_exports3.boolean().optional().describe("Import only the newest rollout file"),
+      projectRoot: external_exports3.string().optional().describe("Filter Codex events by project root"),
+      sessionId: external_exports3.string().optional().describe("Filter Codex events by session id"),
+      since: external_exports3.number().optional().describe("Import only events at or after this Unix timestamp in milliseconds")
+    },
+    async ({ latestOnly, projectRoot, sessionId, since }) => {
+      const result = handleImportCodex(
+        { latestOnly, projectRoot, sessionId, since },
+        {
+          db,
+          inboxDir,
+          captureLevel: config2.captureLevel,
+          fts5Available: fts5,
+          env: process.env,
+          processInbox,
+          importCodexSessionsToInbox
+        }
+      );
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    }
+  );
+  server.tool(
     "memory_forget",
     { query: external_exports3.string(), confirmToken: external_exports3.string().optional() },
     async ({ query, confirmToken }) => {
@@ -33625,7 +34600,9 @@ async function createServer(options) {
       config: config2,
       backend,
       fts5,
-      inboxDir
+      inboxDir,
+      codexAutoImportSnapshot,
+      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env })
     });
     return { content: [{ type: "text", text: JSON.stringify(status) }] };
   });
@@ -33639,7 +34616,8 @@ async function createServer(options) {
       projectRootMethod: method,
       captureLevel: config2.captureLevel,
       logPath,
-      db
+      db,
+      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env })
     });
     return { content: [{ type: "text", text: JSON.stringify(report) }] };
   });

@@ -1,11 +1,14 @@
 import { readdirSync, statSync } from 'node:fs';
 import type {
   CaptureLevel,
+  CodexAutoImportSnapshot,
+  CodexDiagnosticsSnapshot,
   DatabaseAdapter,
   LocusConfig,
   MemoryStatus,
   ProjectRootMethod,
 } from '../types.js';
+import { CODEX_AUTO_IMPORT_DEBOUNCE_MS } from './auto-import-codex.js';
 
 export interface StatusDeps {
   projectPath: string;
@@ -17,6 +20,8 @@ export interface StatusDeps {
   backend: 'node:sqlite' | 'sql.js';
   fts5: boolean;
   inboxDir?: string;
+  codexAutoImportSnapshot?: CodexAutoImportSnapshot;
+  codexDiagnostics?: CodexDiagnosticsSnapshot;
 }
 
 interface CountRow {
@@ -25,6 +30,17 @@ interface CountRow {
 
 interface ValueRow {
   value: string;
+}
+
+function getDefaultCodexAutoImportSnapshot(): CodexAutoImportSnapshot {
+  return {
+    clientDetected: false,
+    debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+    lastStatus: 'idle',
+    lastImported: 0,
+    lastDuplicates: 0,
+    lastErrors: 0,
+  };
 }
 
 /**
@@ -116,5 +132,9 @@ export function handleStatus(deps: StatusDeps): MemoryStatus {
     storageBackend: deps.backend,
     fts5Available: deps.fts5,
     searchEngine: deps.fts5 ? 'FTS5' : 'LIKE fallback',
+    codexAutoImport: deps.codexAutoImportSnapshot
+      ? { ...deps.codexAutoImportSnapshot }
+      : getDefaultCodexAutoImportSnapshot(),
+    codexDiagnostics: deps.codexDiagnostics ? { ...deps.codexDiagnostics } : undefined,
   };
 }

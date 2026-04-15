@@ -1,4 +1,5 @@
 import { basename, dirname, join } from 'node:path';
+import { importCodexSessionsToInbox } from '@locus/codex';
 import { resolveDbPath, resolveLogPath } from '@locus/shared-runtime';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -14,19 +15,31 @@ import { generateProjectMap } from './resources/project-map.js';
 import { generateRecent } from './resources/recent.js';
 import { initStorage } from './storage/init.js';
 import { handleAudit } from './tools/audit.js';
+import {
+  CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+  coordinateCodexAutoImport,
+} from './tools/auto-import-codex.js';
+import { collectCodexDiagnostics } from './tools/codex-diagnostics.js';
 import { handleCompact } from './tools/compact.js';
 import { handleConfig } from './tools/config.js';
 import { ConfirmationTokenStore } from './tools/confirmation-token.js';
 import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';
+import { handleImportCodex } from './tools/import-codex.js';
 import { handlePurge } from './tools/purge.js';
 import { handleRemember } from './tools/remember.js';
 import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
 import { handleTimeline } from './tools/timeline.js';
-import type { DatabaseAdapter, IngestMetrics, LocusConfig, ProjectRootMethod } from './types.js';
+import type {
+  CodexAutoImportSnapshot,
+  DatabaseAdapter,
+  IngestMetrics,
+  LocusConfig,
+  ProjectRootMethod,
+} from './types.js';
 import { LOCUS_DEFAULTS } from './types.js';
 // ─── Public interfaces ────────────────────────────────────────────────────────
 
@@ -101,6 +114,14 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   let _lastIngestMetrics: IngestMetrics | null = null;
   let lastIngestTime = 0;
   const INGEST_DEBOUNCE_MS = 30_000;
+  let codexAutoImportSnapshot: CodexAutoImportSnapshot = {
+    clientDetected: false,
+    debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+    lastStatus: 'idle',
+    lastImported: 0,
+    lastDuplicates: 0,
+    lastErrors: 0,
+  };
 
   try {
     const startupMetrics = processInbox(inboxDir, db, {
@@ -162,7 +183,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     content: [{ type: 'text' as const, text: handleExplore(path, { db }) }],
   }));
 
-  // 2. memory_search (with pre-search inbox processing)
+  // 2. memory_search (with Codex auto-import + pre-search inbox processing)
   server.tool(
     'memory_search',
     {
@@ -192,8 +213,28 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       offset: z.number().optional().describe('Skip N conversation results'),
     },
     async ({ query, timeRange, filePath, kind, source, limit, offset }) => {
-      // Process inbox before search (debounced, max 50 events)
-      if (Date.now() - lastIngestTime > INGEST_DEBOUNCE_MS) {
+      const now = Date.now();
+      const autoImport = coordinateCodexAutoImport({
+        now,
+        snapshot: codexAutoImportSnapshot,
+        runImport: () =>
+          handleImportCodex(
+            { latestOnly: true },
+            {
+              db,
+              inboxDir,
+              captureLevel: config.captureLevel,
+              fts5Available: fts5,
+              env: process.env,
+              processInbox,
+              importCodexSessionsToInbox,
+            },
+          ),
+      });
+      codexAutoImportSnapshot = autoImport.snapshot;
+
+      // Process any remaining inbox events before search (debounced, max 50 events)
+      if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
         try {
           const metrics = processInbox(inboxDir, db, {
             batchLimit: 50,
@@ -201,7 +242,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
             fts5Available: fts5,
           });
           _lastIngestMetrics = metrics;
-          lastIngestTime = Date.now();
+          lastIngestTime = now;
         } catch {
           // Pre-search ingest failure should not block the search
         }
@@ -243,7 +284,37 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     },
   );
 
-  // 4. memory_forget
+  // 4. memory_import_codex
+  server.tool(
+    'memory_import_codex',
+    {
+      latestOnly: z.boolean().optional().describe('Import only the newest rollout file'),
+      projectRoot: z.string().optional().describe('Filter Codex events by project root'),
+      sessionId: z.string().optional().describe('Filter Codex events by session id'),
+      since: z
+        .number()
+        .optional()
+        .describe('Import only events at or after this Unix timestamp in milliseconds'),
+    },
+    async ({ latestOnly, projectRoot, sessionId, since }) => {
+      const result = handleImportCodex(
+        { latestOnly, projectRoot, sessionId, since },
+        {
+          db,
+          inboxDir,
+          captureLevel: config.captureLevel,
+          fts5Available: fts5,
+          env: process.env,
+          processInbox,
+          importCodexSessionsToInbox,
+        },
+      );
+
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+    },
+  );
+
+  // 5. memory_forget
   server.tool(
     'memory_forget',
     { query: z.string(), confirmToken: z.string().optional() },
@@ -253,13 +324,13 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     },
   );
 
-  // 5. memory_scan
+  // 6. memory_scan
   server.tool('memory_scan', {}, async () => {
     const result = await handleScan({ projectPath: root, db, config });
     return { content: [{ type: 'text' as const, text: JSON.stringify(result.stats) }] };
   });
 
-  // 6. memory_status
+  // 7. memory_status
   server.tool('memory_status', {}, async () => {
     const status = handleStatus({
       projectPath: cwd,
@@ -271,11 +342,13 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       backend,
       fts5,
       inboxDir,
+      codexAutoImportSnapshot,
+      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env }),
     });
     return { content: [{ type: 'text' as const, text: JSON.stringify(status) }] };
   });
 
-  // 7. memory_doctor
+  // 8. memory_doctor
   server.tool('memory_doctor', {}, async () => {
     const report = handleDoctor({
       nodeVersion: process.version,
@@ -287,11 +360,12 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       captureLevel: config.captureLevel,
       logPath,
       db,
+      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env }),
     });
     return { content: [{ type: 'text' as const, text: JSON.stringify(report) }] };
   });
 
-  // 8. memory_audit
+  // 9. memory_audit
   server.tool('memory_audit', {}, async () => {
     const report = handleAudit({
       db,
@@ -304,7 +378,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     return { content: [{ type: 'text' as const, text: report }] };
   });
 
-  // 9. memory_purge
+  // 10. memory_purge
   server.tool('memory_purge', { confirmToken: z.string().optional() }, async ({ confirmToken }) => {
     const result = handlePurge(
       { db, dbPath, projectPath: cwd, tokenStore: purgeTokenStore, inboxDir },
@@ -313,13 +387,13 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
   });
 
-  // 10. memory_config
+  // 11. memory_config
   server.tool('memory_config', {}, async () => {
     const result = handleConfig(config, process.env, fts5);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
 
-  // 11. memory_compact
+  // 12. memory_compact
   server.tool(
     'memory_compact',
     {
@@ -335,7 +409,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     },
   );
 
-  // 12. memory_timeline
+  // 13. memory_timeline
   server.tool(
     'memory_timeline',
     {

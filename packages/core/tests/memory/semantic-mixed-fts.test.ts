@@ -83,14 +83,12 @@ describe('ensureFts: migration gap recovery', () => {
       const tables = adapter.all<{ name: string }>(
         "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_fts'",
       );
-      const tableNames = tables.map(t => t.name);
+      const tableNames = tables.map((t) => t.name);
       expect(tableNames).toContain('memories_fts');
       expect(tableNames).toContain('conversation_fts');
 
       // FTS index should be populated from existing memories
-      const ftsCount = adapter.get<{ cnt: number }>(
-        'SELECT COUNT(*) as cnt FROM memories_fts',
-      );
+      const ftsCount = adapter.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM memories_fts');
       expect(ftsCount?.cnt).toBe(3);
 
       // Search should now work
@@ -152,7 +150,7 @@ describe('ensureFts: migration gap recovery', () => {
     const tables = adapter.all<{ name: string }>(
       "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE '%_fts'",
     );
-    const tableNames = tables.map(t => t.name);
+    const tableNames = tables.map((t) => t.name);
 
     expect(tableNames).toContain('memories_fts');
     expect(tableNames).toContain('conversation_fts');

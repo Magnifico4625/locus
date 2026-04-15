@@ -303,6 +303,40 @@ export interface ProjectIdentity {
 
 // ─── Status ───
 
+export type CodexAutoImportStatus =
+  | 'idle'
+  | 'skipped_not_codex'
+  | 'debounced'
+  | 'disabled'
+  | 'imported'
+  | 'duplicates_only'
+  | 'error';
+
+export interface CodexAutoImportSnapshot {
+  clientDetected: boolean;
+  debounceMs: number;
+  lastStatus: CodexAutoImportStatus;
+  lastAttemptAt?: number;
+  lastRunAt?: number;
+  lastImported: number;
+  lastDuplicates: number;
+  lastErrors: number;
+  latestSession?: string;
+  message?: string;
+}
+
+export interface CodexDiagnosticsSnapshot {
+  captureMode: CodexImportCaptureMode;
+  sessionsDir: string;
+  sessionsDirExists: boolean;
+  rolloutFilesFound: number;
+  latestRolloutPath?: string;
+  latestRolloutReadable?: boolean;
+  importedEventCount: number;
+  latestImportedSessionId?: string;
+  latestImportedTimestamp?: number;
+}
+
 export interface MemoryStatus {
   projectPath: string;
   projectRoot: string;
@@ -322,6 +356,8 @@ export interface MemoryStatus {
   storageBackend: 'node:sqlite' | 'sql.js';
   fts5Available: boolean;
   searchEngine: 'FTS5' | 'LIKE fallback';
+  codexAutoImport?: CodexAutoImportSnapshot;
+  codexDiagnostics?: CodexDiagnosticsSnapshot;
 }
 
 // ─── Doctor ───
@@ -389,3 +425,51 @@ export interface ForgetResponseError {
 }
 
 export type ForgetResponse = ForgetResponseDeleted | ForgetResponsePending | ForgetResponseError;
+
+// ─── Codex Import ───
+
+export type CodexImportCaptureMode = 'off' | CaptureLevel;
+
+export interface MemoryImportCodexResponseOk {
+  status: 'ok';
+  captureMode: Exclude<CodexImportCaptureMode, 'off'>;
+  imported: number;
+  skipped: number;
+  duplicates: number;
+  errors: number;
+  filesScanned: number;
+  latestSession?: string;
+  processed: number;
+  remaining: number;
+  message: string;
+}
+
+export interface MemoryImportCodexResponseDisabled {
+  status: 'disabled';
+  captureMode: 'off';
+  imported: 0;
+  skipped: 0;
+  duplicates: 0;
+  errors: 0;
+  filesScanned: 0;
+  message: string;
+}
+
+export interface MemoryImportCodexResponseError {
+  status: 'error';
+  captureMode: CodexImportCaptureMode;
+  imported: number;
+  skipped: number;
+  duplicates: number;
+  errors: number;
+  filesScanned: number;
+  latestSession?: string;
+  processed?: number;
+  remaining?: number;
+  message: string;
+}
+
+export type MemoryImportCodexResponse =
+  | MemoryImportCodexResponseOk
+  | MemoryImportCodexResponseDisabled
+  | MemoryImportCodexResponseError;

@@ -276,4 +276,78 @@ describe('handleStatus', () => {
     const status = handleStatus(makeStatusDeps(adapter, tempDir));
     expect(status.inboxPending).toBe(0);
   });
+
+  it('exposes a codexAutoImport snapshot with a stable default shape', () => {
+    const status = handleStatus(makeStatusDeps(adapter, tempDir));
+
+    expect(status.codexAutoImport).toEqual({
+      clientDetected: false,
+      debounceMs: 45000,
+      lastStatus: 'idle',
+      lastImported: 0,
+      lastDuplicates: 0,
+      lastErrors: 0,
+    });
+  });
+
+  it('returns the latest codexAutoImport snapshot when provided by the server', () => {
+    const status = handleStatus(
+      makeStatusDeps(adapter, tempDir, {
+        codexAutoImportSnapshot: {
+          clientDetected: true,
+          debounceMs: 45000,
+          lastStatus: 'imported',
+          lastAttemptAt: 1700000000000,
+          lastRunAt: 1700000000500,
+          lastImported: 4,
+          lastDuplicates: 1,
+          lastErrors: 0,
+          latestSession: 'session-123',
+          message: 'Imported latest Codex session',
+        },
+      }),
+    );
+
+    expect(status.codexAutoImport).toEqual({
+      clientDetected: true,
+      debounceMs: 45000,
+      lastStatus: 'imported',
+      lastAttemptAt: 1700000000000,
+      lastRunAt: 1700000000500,
+      lastImported: 4,
+      lastDuplicates: 1,
+      lastErrors: 0,
+      latestSession: 'session-123',
+      message: 'Imported latest Codex session',
+    });
+  });
+
+  it('exposes Codex diagnostics when the server provides a Codex snapshot', () => {
+    const status = handleStatus({
+      ...(makeStatusDeps(adapter, tempDir) as object),
+      codexDiagnostics: {
+        captureMode: 'metadata',
+        sessionsDir: '/codex/sessions',
+        sessionsDirExists: true,
+        rolloutFilesFound: 3,
+        latestRolloutPath: '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+        latestRolloutReadable: true,
+        importedEventCount: 4,
+        latestImportedSessionId: 'session-123',
+        latestImportedTimestamp: 1700000000000,
+      },
+    } as never);
+
+    expect((status as Record<string, unknown>).codexDiagnostics).toEqual({
+      captureMode: 'metadata',
+      sessionsDir: '/codex/sessions',
+      sessionsDirExists: true,
+      rolloutFilesFound: 3,
+      latestRolloutPath: '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+      latestRolloutReadable: true,
+      importedEventCount: 4,
+      latestImportedSessionId: 'session-123',
+      latestImportedTimestamp: 1700000000000,
+    });
+  });
 });

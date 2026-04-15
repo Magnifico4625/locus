@@ -65,6 +65,9 @@ function makeMockDeps(markerDirs: Record<string, string[]>): ProjectRootDeps {
       const normalized = norm(path);
       return normalizedDirs[normalized] ?? [];
     },
+    resolveHomeDir(): string | null {
+      return null;
+    },
   };
 }
 
@@ -149,6 +152,23 @@ describe('resolveProjectRoot', () => {
 
       const result = resolveProjectRoot(cwd, deps);
       expect(result.root).toBe(norm(monorepo));
+      expect(result.method).toBe('project-marker');
+    });
+
+    it('ignores a home-directory package.json when a nested project marker exists', () => {
+      const fakeHome = join(tempBase, 'home');
+      const project = join(fakeHome, 'projects', 'my-app');
+      const cwd = join(project, 'src');
+      mkdirSync(cwd, { recursive: true });
+
+      const deps = makeMockDeps({
+        [fakeHome]: ['package.json'],
+        [project]: ['package.json'],
+      });
+      deps.resolveHomeDir = () => fakeHome;
+
+      const result = resolveProjectRoot(cwd, deps);
+      expect(result.root).toBe(norm(project));
       expect(result.method).toBe('project-marker');
     });
 

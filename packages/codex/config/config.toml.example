@@ -1,5 +1,6 @@
 # Locus Memory -- MCP server configuration for Codex CLI
 # Copy the relevant block into ~/.codex/config.toml
+# The same Codex MCP config is the starting point for the Codex VS Code extension.
 
 # Option A: Direct path (after git clone)
 [mcp_servers.locus]
@@ -8,7 +9,12 @@ args = ["/path/to/locus/dist/server.js"]
 
 [mcp_servers.locus.env]
 LOCUS_LOG = "error"
+LOCUS_CODEX_CAPTURE = "metadata"
+LOCUS_CAPTURE_LEVEL = "metadata"
 # CODEX_HOME is auto-detected by Codex CLI -- no need to set it manually
+# After cloning the repo, run `npm run sync:codex-skill` to install/update the local Codex skill
+# After changing this file, restart Codex CLI or run `Developer: Reload Window` in VS Code
+# If you are on Windows, prefer `C:/path/to/locus/dist/server.js` or escaped backslashes in TOML strings
 
 # Option B: npx (after npm publish -- coming soon)
 # [mcp_servers.locus]

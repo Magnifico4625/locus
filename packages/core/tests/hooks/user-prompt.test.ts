@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 // ─── shared.js exports ──────────────────────────────────────────────────────
 
@@ -66,13 +66,24 @@ describe('shared helpers (from user-prompt context)', () => {
 describe('userPromptSubmit hook', () => {
   const cleanupDirs: string[] = [];
   let testInboxDir: string;
+  let originalStorageRoot: string | undefined;
 
   beforeEach(() => {
+    originalStorageRoot = process.env.LOCUS_STORAGE_ROOT;
     testInboxDir = join(
       tmpdir(),
       `locus-test-prompt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
     );
+    process.env.LOCUS_STORAGE_ROOT = testInboxDir;
     cleanupDirs.push(testInboxDir);
+  });
+
+  afterEach(() => {
+    if (originalStorageRoot === undefined) {
+      delete process.env.LOCUS_STORAGE_ROOT;
+    } else {
+      process.env.LOCUS_STORAGE_ROOT = originalStorageRoot;
+    }
   });
 
   afterAll(() => {
