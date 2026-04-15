@@ -217,11 +217,18 @@ git status --short
 
 - [ ] Bump the public release version to `3.3.0` in:
   - root `package.json`
-  - `package-lock.json`
   - `packages/core/package.json`
   - `packages/codex/package.json`
   - `packages/shared-runtime/package.json`
   - `plugins/locus-memory/.codex-plugin/plugin.json`
+
+- [ ] Refresh `package-lock.json` by running npm after the version bump. Do not edit the lockfile manually:
+
+```bash
+npm install
+```
+
+Expected: `package-lock.json` updates to the new workspace/package versions.
 
 - [ ] Update `CHANGELOG.md`:
   - add `## [3.3.0] - 2026-04-15`
