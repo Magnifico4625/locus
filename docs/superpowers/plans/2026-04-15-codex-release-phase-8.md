@@ -184,20 +184,29 @@ git status --short
   - no unexpected failures
   - any warnings are expected and actionable
 
-- [ ] Run a real recall query with `memory_search` and verify:
-  - it returns known Locus/Codex decisions from the current repo history
-  - recent Codex history is available through the Phase 3 auto-import path
+- [ ] Run `memory_search` before manual import and verify the baseline behavior:
+  - the call itself works in the real Codex session
+  - an empty result is acceptable if this Codex memory root has not yet accumulated searchable project or conversation data
 
-- [ ] Run `memory_import_codex` manually and verify:
+- [ ] Run `memory_import_codex` manually against a known older, contentful session using `since` and verify:
   - it returns stable metrics
-  - repeat import behaves idempotently
+  - imported event counts increase
+  - this is the primary acceptance selector for Phase 8; `sessionId` may be recorded but is not a release gate
 
-- [ ] Run a second `memory_search` after manual import and verify:
-  - imported Codex context is searchable immediately
+- [ ] Repeat the same `memory_import_codex({ since: ... })` call and verify idempotency:
+  - `imported=0`
+  - duplicates rise or remain stable as expected
+
+- [ ] Run a second `memory_search` after the successful `since` import and verify only as a secondary sanity check:
+  - the call still works
+  - do not require meaningful dialogue-text recall when `LOCUS_CODEX_CAPTURE=metadata`
+  - for Phase 8, `metadata` mode acceptance is about ingestion and idempotency, not full semantic conversation recall
 
 - [ ] Verify the “agent behavior” path, not only direct tool calls:
   - ask Codex a repo-history question that should naturally trigger the Locus workflow
   - confirm the skill/plugin path still nudges toward `memory_search` / `memory_status` as designed
+
+- [ ] Record in the release notes that richer conversational recall from Codex dialogue is a future-release track for `redacted` / `full` capture modes, not a blocker for the `metadata`-based `v3.3.0` release.
 
 - [ ] If any step fails, stop release work immediately and fix the issue on `release/codex-v3.3.0` before continuing.
 
