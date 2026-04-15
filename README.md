@@ -20,7 +20,7 @@ Locus solves this with three persistent memory layers:
 
 **New in v3.0 — Carbon Copy:** Zero-cost passive capture of prompts, AI responses, and file changes via an inbox-based event protocol. A 4-phase ingest pipeline processes events into searchable conversation history — no tokens consumed on write, only on recall.
 
-**New in v3.1 — Multi-Client Architecture:** Client-aware storage with automatic detection of Claude Code and Codex CLI environments. One MCP server, every client, your data stays on your machine.
+**New in v3.3 — Codex Release:** Codex now ships as a validated product line with manual import, auto-import before search, doctor/status diagnostics, skill sync, repo-local plugin packaging, and VS Code extension docs.
 
 Locus stores metadata only by default. No raw file content is ever written to disk unless you explicitly opt in.
 
@@ -32,7 +32,7 @@ Locus is an MCP server. It works with any tool that supports the [Model Context 
 |---------|-------------|-----------|----------------------------------|
 | 13 MCP tools (search, explore, remember...) | Full support | Full support | Full support |
 | 3 MCP resources (project-map, decisions, recent) | Auto-injected | On demand | Manual config |
-| Carbon Copy capture | Full support via hooks (v3.0) | Auto-import before `memory_search` + manual `memory_import_codex` | Planned for v3.2 via adapters |
+| Carbon Copy capture | Full support via hooks (v3.0) | Auto-import before `memory_search` + manual `memory_import_codex` | Future adapters planned |
 
 **How it works:** The MCP server provides 13 tools and 3 resources to any connected client. Storage location is auto-detected per client (`~/.claude/memory/` for Claude Code, `$CODEX_HOME/memory/` for Codex CLI, `~/.locus/memory/` for others). In Claude Code, three native hooks additionally capture conversation events into a local inbox for passive memory. In Codex CLI, the newest rollout session is auto-imported before `memory_search` in a bounded, debounced, best-effort way, and `memory_import_codex` remains available for explicit catch-up or filtered manual import.
 
@@ -183,7 +183,7 @@ Add this server entry:
 }
 ```
 
-> **Note:** When using Locus outside Claude Code, the MCP tools and resources work fully. Codex CLI additionally supports auto-import before `memory_search` plus manual session import via `memory_import_codex`. Adapter support for IDE log files in Cursor, Windsurf, and similar clients is planned for v3.2.
+> **Note:** When using Locus outside Claude Code, the MCP tools and resources work fully. Codex CLI additionally supports auto-import before `memory_search` plus manual session import via `memory_import_codex`. Adapter support for IDE log files in Cursor, Windsurf, and similar clients remains a future track.
 
 For other MCP IDEs, Locus works through MCP tools/resources. The Codex-specific skill is not the primary integration mechanism there.
 
@@ -317,7 +317,7 @@ Locus uses a 4-layer security model:
 |   Claude Code hooks (v3.0)               |
 |   Codex JSONL adapter + auto/manual      |
 |   import into inbox before search        |
-|   log-tailer / cli-wrapper (v3.2)        |
+|   log-tailer / cli-wrapper (future)      |
 |   -> inbox/ (atomic JSON events)         |
 +------------------------------------------+
 ```
@@ -363,7 +363,7 @@ These 10 tools cover the structural and semantic memory layers — your AI assis
 
 The conversation layer (Carbon Copy) passively records what files you touched, what tools were used, and optionally what you asked — but this requires hooks to write events into the inbox. Without hooks, these features return empty results.
 
-**Bottom line:** ~75% of tools work fully without hooks. The core value — "AI remembers your project between sessions" — works everywhere. Passive conversation history is the part that needs hooks, and IDE adapter support is coming in v3.2.
+**Bottom line:** ~75% of tools work fully without hooks. The core value — "AI remembers your project between sessions" — works everywhere. Passive conversation history is the part that needs hooks, and broader IDE adapter support remains a future release track.
 
 ### How is Locus different from CLAUDE.md?
 
@@ -379,7 +379,7 @@ Locus has 4 layers of protection: (1) metadata-only storage by default — no fi
 
 ### When will Cursor / Windsurf get full hook support?
 
-Version 3.2 will include `@locus/log-tailer` — an adapter that reads IDE log files and writes events to the same inbox that the Claude Code hooks use. The ingest pipeline is already built and ready; only the event source adapter is needed. See the [Roadmap](#roadmap) below.
+The next Codex-focused release track will target richer conversational recall through `redacted` / `full` capture modes plus additional IDE adapters such as `@locus/log-tailer`. See the [Roadmap](#roadmap) below.
 
 ## Roadmap
 
@@ -388,8 +388,9 @@ Version 3.2 will include `@locus/log-tailer` — an adapter that reads IDE log f
 | v3.0 | Released | Carbon Copy capture, 4-phase ingest, FTS5 conversation search, 12 MCP tools |
 | v3.0.5 | Released | FTS5 self-healing indexes, 12-point doctor, FTS health audit |
 | v3.1 | Released | Multi-client architecture: `@locus/shared-runtime` (client-aware paths), `@locus/codex` (Codex CLI skill + config), 863 tests |
-| v3.1.1 | **Current** | Fix: hooks failed in plugin cache due to bare module import of `@locus/shared-runtime` |
-| v3.2 | Planned | Codex doctor/status diagnostics, VS Code extension docs, `@locus/log-tailer` (Cursor/Windsurf), npm package for `npx` install |
+| v3.1.1 | Released | Fix: hooks failed in plugin cache due to bare module import of `@locus/shared-runtime` |
+| v3.3 | **Current** | Codex release: manual import, auto-import before search, doctor/status diagnostics, skill sync, VS Code docs, repo-local plugin packaging |
+| v3.4 | Planned | Richer Codex conversational recall (`redacted` / `full`), `@locus/log-tailer` (Cursor/Windsurf), npm package for `npx` install |
 | v4.0 | Planned | HTML dashboard for memory visualization |
 
 ## Development

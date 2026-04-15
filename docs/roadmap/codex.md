@@ -261,7 +261,7 @@ Goal: document the path for users who use Codex through VS Code.
 
 Implementation plan: `docs/superpowers/plans/2026-04-14-codex-vscode-extension-phase-6.md`
 
-Status: in progress locally on `feature/codex-vscode-extension-docs`. This phase is documentation-only: it packages the existing Codex CLI + MCP setup into a dedicated VS Code extension guide and makes the upstream extension boundary explicit.
+Status: completed locally and validated before release prep. This phase is documentation-only: it packages the existing Codex CLI + MCP setup into a dedicated VS Code extension guide and makes the upstream extension boundary explicit.
 
 Target deliverables:
 
@@ -293,7 +293,7 @@ Goal: improve installation UX after the adapter is stable.
 
 Implementation plan: `docs/superpowers/plans/2026-04-14-codex-plugin-packaging-phase-7.md`
 
-Status: in progress locally on `feature/codex-plugin-packaging`. This phase packages the already-working Codex path into a repo-local plugin bundle and marketplace entry without changing runtime behavior or replacing manual MCP setup.
+Status: completed locally and checkpointed at `codex-plugin-packaging-phase-7-local`. This phase packages the already-working Codex path into a repo-local plugin bundle and marketplace entry without changing runtime behavior or replacing manual MCP setup.
 
 Target deliverables:
 
@@ -316,6 +316,10 @@ Exit criteria:
 ---
 
 ## Phase 8 — Release Plan
+
+Implementation plan: `docs/superpowers/plans/2026-04-15-codex-release-phase-8.md`
+
+Status: active on `release/codex-v3.3.0`. This phase turns the local Codex work into one GitHub-ready public release only after local acceptance proves the real Codex workflow works end-to-end.
 
 Suggested releases:
 
@@ -352,7 +356,7 @@ Release gates:
 
 ## Immediate Next Steps
 
-1. Finish Phase 7 local validation and checkpointing on `feature/codex-plugin-packaging`.
-2. Start release-planning follow-up only after the repo-local plugin packaging path is stable.
-3. Keep CLI as the primary validated path while continuing to document IDE-specific MCP limitations honestly.
-4. Keep Claude Code behavior unchanged while Codex-specific work continues.
+1. Finish release metadata, changelog, and release notes on `release/codex-v3.3.0`.
+2. Run the final release-branch validation and keep CLI as the primary validated path.
+3. Push one release branch and open one GitHub PR into `main`.
+4. Keep richer Codex conversational recall for a future release track built around `redacted` / `full`.

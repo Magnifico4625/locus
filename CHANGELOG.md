@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-04-15
+
+### Added
+- Codex manual import pipeline via `memory_import_codex` with `latestOnly`, `projectRoot`, `sessionId`, and `since` filters
+- Codex auto-import before `memory_search` with bounded debounce and best-effort semantics
+- Codex-aware `memory_status` and `memory_doctor` diagnostics for `CODEX_HOME`, rollout discovery, capture mode, and imported-event visibility
+- Canonical Codex skill workflow plus repo-local sync helpers: `npm run sync:codex-skill` and `npm run sync:codex-plugin`
+- Repo-local Codex plugin bundle under `plugins/locus-memory/` and repo marketplace entry under `.agents/plugins/marketplace.json`
+- Dedicated Codex VS Code extension guide and release notes for the Codex workflow
+
+### Changed
+- Codex is now a first-class supported product line inside the Locus monorepo rather than a skeleton/in-progress integration
+- Codex CLI documentation now treats `memory_search`, `memory_status`, `memory_doctor`, and manual `memory_import_codex` as the validated workflow
+- Release validation now includes a real local Codex acceptance gate before GitHub push
+
+### Fixed
+- Real local Codex acceptance verified that `memory_import_codex` is reliable through `since`-based ingestion and idempotent re-imports
+- Repo-local plugin packaging now stays aligned with the canonical Codex skill through the sync helper
+
+### Notes
+- Default Codex capture remains `metadata`, so `v3.3.0` validates ingestion, diagnostics, and idempotency rather than full semantic recall of dialogue text
+- Richer conversational recall for Codex through `redacted` or `full` capture modes remains a future-release track
+
 ## [3.1.1] - 2026-03-07
 
 ### Fixed
@@ -128,7 +151,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PostToolUse hook for automatic capture
 - `memory_scan`, `memory_search`, `memory_explore`, `memory_remember`, `memory_forget`, `memory_purge`, `memory_status`, `memory_doctor`, `memory_audit` tools
 
-[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.1.1...HEAD
+[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.3.0...HEAD
+[3.3.0]: https://github.com/Magnifico4625/locus/compare/v3.1.1...v3.3.0
 [3.1.1]: https://github.com/Magnifico4625/locus/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/Magnifico4625/locus/compare/v3.0.5...v3.1.0
 [3.0.5]: https://github.com/Magnifico4625/locus/compare/v3.0.4...v3.0.5
