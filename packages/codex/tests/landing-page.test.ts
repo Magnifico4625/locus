@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 describe('GitHub Pages landing page', () => {
   const repoRoot = resolve(process.cwd());
-  const siteDir = resolve(repoRoot, 'site');
+  const siteDir = resolve(repoRoot, 'docs');
   const indexPath = resolve(siteDir, 'index.html');
 
   it('ships a dedicated index.html for GitHub Pages', () => {
