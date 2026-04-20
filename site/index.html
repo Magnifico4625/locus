@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Locus | Persistent Memory for AI Coding Tools</title>
+    <meta
+      name="description"
+      content="Locus gives AI coding tools persistent project memory. Shipped for Codex and Claude Code with local MCP tools, memory search, diagnostics, and safe-by-default capture."
+    />
+    <meta property="og:title" content="Locus | Persistent Memory for AI Coding Tools" />
+    <meta
+      property="og:description"
+      content="Persistent project-aware memory for AI coding tools. Shipped for Codex and Claude Code."
+    />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://magnifico4625.github.io/locus/" />
+    <meta property="og:site_name" content="Locus" />
+    <meta name="theme-color" content="#050505" />
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://unpkg.com/lucide@0.511.0/dist/umd/lucide.js"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Space Grotesk', 'sans-serif'],
+              mono: ['JetBrains Mono', 'monospace'],
+            },
+            colors: {
+              locus: {
+                bg: '#050505',
+                surface: '#0f0f11',
+                surfaceHover: '#17171a',
+                border: '#232326',
+                accent: '#ccff00',
+                accentMuted: '#ccff0033',
+                text: '#ededed',
+                muted: '#a1a1aa',
+              },
+            },
+            boxShadow: {
+              soft: '0 16px 40px -24px rgba(0, 0, 0, 0.65)',
+            },
+            backgroundImage: {
+              'grid-pattern':
+                "url(\"data:image/svg+xml,%3Csvg width='48' height='48' viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.04'%3E%3Cpath d='M48 0H0v48'/%3E%3Cpath d='M48 24H24v24'/%3E%3C/g%3E%3C/svg%3E\")",
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body class="bg-locus-bg text-locus-text antialiased font-sans min-h-screen overflow-x-hidden">
+    <div class="glow-bg"></div>
+    <div class="fixed inset-0 bg-grid-pattern pointer-events-none opacity-70"></div>
+
+    <header class="sticky top-0 z-50 border-b border-locus-border bg-locus-bg/80 backdrop-blur-xl">
+      <nav class="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <a href="#top" class="flex items-center gap-3">
+          <span
+            class="w-8 h-8 rounded-md bg-locus-accent text-black flex items-center justify-center shadow-soft"
+          >
+            <i data-lucide="database" class="w-4 h-4"></i>
+          </span>
+          <span class="font-semibold tracking-tight text-lg">locus</span>
+        </a>
+        <div class="flex items-center gap-3">
+          <a
+            href="https://github.com/Magnifico4625/locus"
+            target="_blank"
+            rel="noreferrer"
+            class="hidden sm:inline-flex text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            GitHub
+          </a>
+          <a
+            href="https://github.com/Magnifico4625/locus#quick-start"
+            target="_blank"
+            rel="noreferrer"
+            class="inline-flex items-center gap-2 rounded-md border border-locus-border px-4 py-2 text-sm text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
+          >
+            <i data-lucide="book-open" class="w-4 h-4"></i>
+            Quick Start
+          </a>
+        </div>
+      </nav>
+    </header>
+
+    <main id="top" class="relative">
+      <section class="px-6 pt-20 pb-16">
+        <div class="max-w-6xl mx-auto">
+          <div class="max-w-3xl">
+            <div
+              class="inline-flex items-center gap-2 rounded-full border border-locus-border bg-locus-surface px-3 py-1 text-xs font-mono text-zinc-400 mb-8"
+            >
+              <span class="w-2 h-2 rounded-full bg-locus-accent animate-pulse"></span>
+              v3.3.0 shipped • Codex release line is live
+            </div>
+
+            <h1 class="text-5xl md:text-7xl font-bold tracking-tight leading-[1.02] max-w-4xl">
+              Persistent memory for
+              <span class="text-transparent bg-clip-text bg-gradient-to-r from-locus-accent to-emerald-400">
+                AI coding tools
+              </span>
+            </h1>
+
+            <p class="mt-6 max-w-2xl text-lg md:text-xl text-zinc-400 leading-relaxed">
+              Locus gives Codex and Claude Code a local memory layer for project structure,
+              durable decisions, searchable history, and diagnostics. Built on MCP. Safe-by-default.
+              Designed so your agent stops starting from zero.
+            </p>
+
+            <div class="mt-10 flex flex-col sm:flex-row gap-4">
+              <a
+                href="https://github.com/Magnifico4625/locus"
+                target="_blank"
+                rel="noreferrer"
+                class="inline-flex items-center justify-center gap-2 rounded-md bg-white px-6 py-3.5 font-semibold text-black hover:bg-zinc-200 transition-colors"
+              >
+                <i data-lucide="github" class="w-5 h-5"></i>
+                View Repository
+              </a>
+              <a
+                href="https://github.com/Magnifico4625/locus#codex-cli"
+                target="_blank"
+                rel="noreferrer"
+                class="inline-flex items-center justify-center gap-2 rounded-md border border-locus-border bg-locus-surface px-6 py-3.5 font-medium text-zinc-200 hover:border-locus-accent hover:text-white transition-colors"
+              >
+                <i data-lucide="terminal-square" class="w-5 h-5"></i>
+                See Codex Setup
+              </a>
+              <button
+                id="copy-repo-button"
+                type="button"
+                class="inline-flex items-center justify-center gap-2 rounded-md border border-locus-border px-6 py-3.5 font-mono text-sm text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
+              >
+                <i data-lucide="copy" class="w-4 h-4"></i>
+                Copy repo URL
+              </button>
+            </div>
+
+            <div class="mt-8 flex flex-wrap gap-3 text-xs font-mono text-zinc-500">
+              <span class="rounded-full border border-zinc-800 px-3 py-1">Codex CLI</span>
+              <span class="rounded-full border border-zinc-800 px-3 py-1">Codex desktop / extension</span>
+              <span class="rounded-full border border-zinc-800 px-3 py-1">Claude Code</span>
+              <span class="rounded-full border border-zinc-800 px-3 py-1">MCP server</span>
+            </div>
+          </div>
+
+          <div class="mt-14 rounded-2xl border border-locus-border bg-[#0a0a0c] shadow-soft overflow-hidden">
+            <div class="flex items-center gap-3 border-b border-locus-border bg-[#111113] px-4 py-3">
+              <div class="flex gap-2">
+                <span class="w-3 h-3 rounded-full bg-zinc-700"></span>
+                <span class="w-3 h-3 rounded-full bg-zinc-700"></span>
+                <span class="w-3 h-3 rounded-full bg-zinc-700"></span>
+              </div>
+              <div class="ml-auto text-xs font-mono text-zinc-500">codex + locus memory</div>
+            </div>
+            <div class="px-6 py-6 font-mono text-sm leading-7 text-zinc-300 overflow-x-auto">
+              <div><span class="text-zinc-500">~/project</span> <span class="text-locus-accent">$</span> codex</div>
+              <div class="text-zinc-500">Loading project context…</div>
+              <div class="mt-3 flex items-center gap-2 text-emerald-400">
+                <i data-lucide="check-circle" class="w-4 h-4"></i>
+                Locus MCP connected
+              </div>
+              <div class="mt-4 text-zinc-400">memory_search("auth schema decisions")</div>
+              <div class="mt-2"><span class="text-blue-400">Locus:</span> found prior auth trade-offs and recent Codex import status</div>
+              <div><span class="text-blue-400">Codex:</span> continuing from the JWT vs sessions decision we made earlier</div>
+              <div class="mt-4">
+                <span class="text-zinc-500">You:</span>
+                <span class="typing-cursor">finish the auth module and keep the previous token model</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="border-t border-locus-border/60 px-6 py-20">
+        <div class="max-w-6xl mx-auto">
+          <div class="max-w-2xl mb-12">
+            <h2 class="text-3xl md:text-4xl font-semibold tracking-tight">What ships today</h2>
+            <p class="mt-4 text-zinc-400 leading-relaxed">
+              Locus is already a real product line for Codex, not a future promise. The current release
+              focuses on reliable memory primitives, diagnostics, and installable local workflows.
+            </p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            <article class="bento-card rounded-2xl p-7 xl:col-span-2">
+              <div class="feature-icon">
+                <i data-lucide="brain-circuit" class="w-5 h-5 text-locus-accent"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-semibold">Codex memory that survives the next session</h3>
+              <p class="mt-3 text-sm leading-7 text-zinc-400 max-w-xl">
+                `memory_import_codex`, auto-import before `memory_search`, and Codex-aware diagnostics
+                are already shipped in `v3.3.0`. Recent dialogue, prior decisions, and project structure
+                can be recalled through one local memory system instead of ad-hoc summaries.
+              </p>
+            </article>
+
+            <article class="bento-card rounded-2xl p-7">
+              <div class="feature-icon">
+                <i data-lucide="shield-check" class="w-5 h-5 text-locus-accent"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-semibold">Safe-by-default capture</h3>
+              <p class="mt-3 text-sm leading-7 text-zinc-400">
+                The shipped default remains `metadata`. That gives ingestion, visibility, and diagnostics
+                first. Richer recall modes exist, but they are opt-in and should be treated with explicit
+                privacy trade-offs.
+              </p>
+            </article>
+
+            <article class="bento-card rounded-2xl p-7">
+              <div class="feature-icon">
+                <i data-lucide="stethoscope" class="w-5 h-5 text-locus-accent"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-semibold">Diagnosable, not magical</h3>
+              <p class="mt-3 text-sm leading-7 text-zinc-400">
+                `memory_status` and `memory_doctor` expose Codex-specific state so users can see what is
+                imported, what is missing, and where the failure actually lives.
+              </p>
+            </article>
+
+            <article class="bento-card rounded-2xl p-7">
+              <div class="feature-icon">
+                <i data-lucide="plug-zap" class="w-5 h-5 text-locus-accent"></i>
+              </div>
+              <h3 class="mt-6 text-xl font-semibold">Install paths that are improving</h3>
+              <p class="mt-3 text-sm leading-7 text-zinc-400">
+                Repo-local Codex plugin packaging already ships. Marketplace-based one-command install and
+                published runtime packaging are the next step, not hand-wavy marketing copy.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="border-t border-locus-border/60 px-6 py-20 bg-[#070708]">
+        <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-12 items-start">
+          <div>
+            <h2 class="text-3xl md:text-4xl font-semibold tracking-tight">Why teams keep losing context</h2>
+            <p class="mt-4 text-zinc-400 leading-relaxed max-w-2xl">
+              Most coding agents are strong inside a session and weak across sessions. Locus exists to bridge that
+              gap without turning your workflow into a ritual of manual summaries.
+            </p>
+
+            <div class="mt-8 grid sm:grid-cols-2 gap-4">
+              <div class="rounded-2xl border border-locus-border bg-locus-surface/80 p-6">
+                <h3 class="font-semibold">Project structure</h3>
+                <p class="mt-3 text-sm leading-7 text-zinc-400">
+                  Scan the codebase, map files and exports, and keep that structure searchable through MCP.
+                </p>
+              </div>
+              <div class="rounded-2xl border border-locus-border bg-locus-surface/80 p-6">
+                <h3 class="font-semibold">Decision memory</h3>
+                <p class="mt-3 text-sm leading-7 text-zinc-400">
+                  Save architectural choices and trade-offs so the next session starts with context, not guesswork.
+                </p>
+              </div>
+              <div class="rounded-2xl border border-locus-border bg-locus-surface/80 p-6">
+                <h3 class="font-semibold">Conversation history</h3>
+                <p class="mt-3 text-sm leading-7 text-zinc-400">
+                  Carbon Copy-style event ingest captures what happened, then makes it searchable through the same memory layer.
+                </p>
+              </div>
+              <div class="rounded-2xl border border-locus-border bg-locus-surface/80 p-6">
+                <h3 class="font-semibold">Operational trust</h3>
+                <p class="mt-3 text-sm leading-7 text-zinc-400">
+                  Diagnostics, audit visibility, and explicit capture modes matter as much as recall itself.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <aside class="rounded-2xl border border-locus-border bg-locus-surface p-7 shadow-soft">
+            <div class="inline-flex items-center gap-2 text-xs font-mono text-zinc-500">
+              <i data-lucide="map" class="w-4 h-4 text-locus-accent"></i>
+              current product shape
+            </div>
+            <ul class="mt-6 space-y-4 text-sm leading-7 text-zinc-300">
+              <li>
+                <strong class="text-white">Primary:</strong> Codex CLI and Codex desktop / extension
+              </li>
+              <li>
+                <strong class="text-white">Supported:</strong> Claude Code
+              </li>
+              <li>
+                <strong class="text-white">Secondary:</strong> Cursor, Windsurf, Cline, Zed through generic MCP now and adapter work later
+              </li>
+              <li>
+                <strong class="text-white">Current release:</strong> `v3.3.0`
+              </li>
+              <li>
+                <strong class="text-white">Next themes:</strong> one-command install, richer Codex recall, dashboard UX
+              </li>
+            </ul>
+
+            <div class="mt-8 rounded-xl border border-zinc-800 bg-black/30 p-5">
+              <div class="text-xs font-mono text-zinc-500">honest roadmap note</div>
+              <p class="mt-3 text-sm leading-7 text-zinc-400">
+                The current site reflects what ships today. Richer Codex conversational recall and marketplace-first
+                install belong to the next roadmap, not to `v3.3.0` marketing fiction.
+              </p>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="border-t border-locus-border/60 px-6 py-20">
+        <div class="max-w-6xl mx-auto">
+          <div class="rounded-3xl border border-locus-border bg-gradient-to-br from-locus-surface to-[#0b0b0d] p-8 md:p-10 shadow-soft">
+            <div class="max-w-3xl">
+              <h2 class="text-3xl md:text-4xl font-semibold tracking-tight">Explore the real project</h2>
+              <p class="mt-4 text-zinc-400 leading-relaxed">
+                This landing page is intentionally simple. The real source of truth remains the repository:
+                Quick Start, Codex setup, roadmap, releases, and implementation details all live there.
+              </p>
+            </div>
+
+            <div class="mt-8 flex flex-col sm:flex-row gap-4">
+              <a
+                href="https://github.com/Magnifico4625/locus"
+                target="_blank"
+                rel="noreferrer"
+                class="inline-flex items-center justify-center gap-2 rounded-md bg-locus-accent px-6 py-3.5 font-semibold text-black hover:bg-lime-300 transition-colors"
+              >
+                <i data-lucide="arrow-up-right" class="w-5 h-5"></i>
+                Open GitHub Repository
+              </a>
+              <a
+                href="https://github.com/Magnifico4625/locus/releases/tag/v3.3.0"
+                target="_blank"
+                rel="noreferrer"
+                class="inline-flex items-center justify-center gap-2 rounded-md border border-locus-border px-6 py-3.5 font-medium text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors"
+              >
+                <i data-lucide="badge-check" class="w-5 h-5"></i>
+                Read v3.3.0 Release
+              </a>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-locus-border/60 px-6 py-10">
+      <div class="max-w-6xl mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div>
+          <div class="text-sm text-zinc-400">Locus</div>
+          <div class="mt-1 text-xs text-zinc-500">
+            Persistent project-aware memory for AI coding tools.
+          </div>
+        </div>
+        <div class="flex flex-wrap gap-5 text-sm text-zinc-400">
+          <a href="https://github.com/Magnifico4625/locus" target="_blank" rel="noreferrer" class="hover:text-white transition-colors">Repository</a>
+          <a href="https://github.com/Magnifico4625/locus#quick-start" target="_blank" rel="noreferrer" class="hover:text-white transition-colors">Quick Start</a>
+          <a href="https://github.com/Magnifico4625/locus/blob/main/docs/roadmap/codex-next.md" target="_blank" rel="noreferrer" class="hover:text-white transition-colors">Roadmap</a>
+        </div>
+      </div>
+    </footer>
+
+    <div
+      id="toast"
+      class="pointer-events-none fixed bottom-5 right-5 translate-y-20 opacity-0 rounded-md bg-locus-accent px-4 py-2 text-sm font-semibold text-black shadow-soft transition-all duration-300 flex items-center gap-2"
+    >
+      <i data-lucide="check" class="w-4 h-4"></i>
+      Repository URL copied
+    </div>
+
+    <script src="./script.js"></script>
+  </body>
+</html>
