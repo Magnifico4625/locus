@@ -17,7 +17,6 @@
     <meta property="og:url" content="https://magnifico4625.github.io/locus/" />
     <meta property="og:site_name" content="Locus" />
     <meta name="theme-color" content="#050505" />
-    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -25,38 +24,7 @@
       rel="stylesheet"
     />
     <script src="https://unpkg.com/lucide@0.511.0/dist/umd/lucide.js"></script>
-    <script>
-      tailwind.config = {
-        theme: {
-          extend: {
-            fontFamily: {
-              sans: ['Space Grotesk', 'sans-serif'],
-              mono: ['JetBrains Mono', 'monospace'],
-            },
-            colors: {
-              locus: {
-                bg: '#050505',
-                surface: '#0f0f11',
-                surfaceHover: '#17171a',
-                border: '#232326',
-                accent: '#ccff00',
-                accentMuted: '#ccff0033',
-                text: '#ededed',
-                muted: '#a1a1aa',
-              },
-            },
-            boxShadow: {
-              soft: '0 16px 40px -24px rgba(0, 0, 0, 0.65)',
-            },
-            backgroundImage: {
-              'grid-pattern':
-                "url(\"data:image/svg+xml,%3Csvg width='48' height='48' viewBox='0 0 48 48' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' stroke='%23ffffff' stroke-opacity='0.04'%3E%3Cpath d='M48 0H0v48'/%3E%3Cpath d='M48 24H24v24'/%3E%3C/g%3E%3C/svg%3E\")",
-            },
-          },
-        },
-      };
-    </script>
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./app.css" />
   </head>
   <body class="bg-locus-bg text-locus-text antialiased font-sans min-h-screen overflow-x-hidden">
     <div class="glow-bg"></div>

@@ -37,6 +37,15 @@
     }
   },
   "files": {
-    "includes": ["**", "!**/dist/", "!**/node_modules/", "!**/coverage/", "!**/*.md", "!.claude"]
+    "includes": [
+      "**",
+      "!**/dist/",
+      "!**/node_modules/",
+      "!**/coverage/",
+      "!**/*.md",
+      "!.claude",
+      "!site/app.css",
+      "!site/source.css"
+    ]
   }
 }

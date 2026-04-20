@@ -27,4 +27,11 @@ describe('GitHub Pages landing page', () => {
     expect(html).toContain('https://github.com/Magnifico4625/locus');
     expect(html).not.toContain('$ git clone .../locus');
   });
+
+  it('does not depend on the Tailwind CDN at runtime', () => {
+    const html = readFileSync(indexPath, 'utf-8');
+
+    expect(html).not.toContain('cdn.tailwindcss.com');
+    expect(html).toContain('./app.css');
+  });
 });
