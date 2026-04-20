@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "build": "node esbuild.config.ts",
-    "build:site": "npx @tailwindcss/cli -i ./site/source.css -o ./site/app.css --minify",
+    "build:site": "npx @tailwindcss/cli -i ./docs/source.css -o ./docs/app.css --minify",
     "dev": "node --watch packages/core/src/server.ts",
     "test": "vitest run",
     "test:watch": "vitest",

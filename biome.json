@@ -44,8 +44,8 @@
       "!**/coverage/",
       "!**/*.md",
       "!.claude",
-      "!site/app.css",
-      "!site/source.css"
+      "!docs/app.css",
+      "!docs/source.css"
     ]
   }
 }
