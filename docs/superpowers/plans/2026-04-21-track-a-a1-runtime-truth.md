@@ -67,30 +67,32 @@
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a1-runtime-truth.md`
 
-- [ ] Verify the spec branch is clean enough to branch from.
+- [x] Verify the spec branch is clean enough to branch from.
 
 Run: `git status --short`
 Expected: only expected planning docs are modified or the working tree is clean.
 
-- [ ] Create the baseline tag if it does not already exist.
+- [x] Create the baseline tag if it does not already exist.
 
 Run: `git tag --list track-a-baseline-2026-04-21`
 Expected: empty output before creation or the exact tag if already created.
 
-- [ ] Create the working branch for A1.
+- [x] Create the working branch for A1.
 
 Run: `git checkout -b feature/track-a-a1-runtime-truth`
 Expected: branch switches successfully.
 
-- [ ] Commit the plan bundle baseline before touching runtime code.
+- [x] Commit the plan bundle baseline before touching runtime code.
 
 Run: `git add docs/superpowers/specs/2026-04-21-track-a-codex-memory-trust-design.md docs/superpowers/plans/2026-04-21-track-a-plan-bundle.md docs/superpowers/plans/2026-04-21-track-a-a1-runtime-truth.md`
 Expected: staged docs only.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "docs(codex): add track a runtime truth plan"`
 Expected: docs-only commit created.
+
+Note: satisfied by prior docs-only planning checkpoint commit `7aee241` (`docs(codex): add track a implementation plan bundle`), then branched into `feature/track-a-a1-runtime-truth` for execution.
 
 ### Task 1: Freeze Shared Runtime Normalization Contract In Tests
 
