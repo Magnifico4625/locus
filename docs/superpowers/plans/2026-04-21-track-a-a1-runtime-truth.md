@@ -252,24 +252,24 @@ Expected: implementation commit created.
 - Create: `packages/core/tests/integration/codex-runtime-truth.test.ts`
 - Modify: `packages/core/tests/integration/codex-auto-import-search.test.ts`
 
-- [ ] Add an integration test that starts the server under Codex-like env and proves:
+- [x] Add an integration test that starts the server under Codex-like env and proves:
   - the runtime snapshot says Codex
   - auto-import is allowed to run
   - status includes normalized paths and structured detection evidence
 
-- [ ] Add a generic runtime test that proves the same server does not pretend to be Codex.
+- [x] Add a generic runtime test that proves the same server does not pretend to be Codex.
 
-- [ ] Run the integration tests.
+- [x] Run the integration tests.
 
 Run: `npm test -- packages/core/tests/integration/codex-runtime-truth.test.ts packages/core/tests/integration/codex-auto-import-search.test.ts`
 Expected: PASS.
 
-- [ ] Commit the integration coverage.
+- [x] Commit the integration coverage.
 
 Run: `git add packages/core/tests/integration/codex-runtime-truth.test.ts packages/core/tests/integration/codex-auto-import-search.test.ts`
 Expected: integration tests staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(core): cover codex runtime truth integration"`
 Expected: test commit created.
