@@ -44,7 +44,7 @@ export function captureCodexEvent(
   if (!shouldImportCodexEvent(mode, event.kind)) {
     return {
       event: null,
-      capturePolicy: mode,
+      capturePolicy: captureModeToPolicy(mode),
       truncated: false,
       retained: false,
       filtered: true,
@@ -96,6 +96,14 @@ export function redactCodexText(text: string): string {
 
 function isCodexCaptureMode(value: string | undefined): value is CodexCaptureMode {
   return value !== undefined && VALID_CAPTURE_MODES.has(value as CodexCaptureMode);
+}
+
+function captureModeToPolicy(mode: CodexCaptureMode): CodexCapturePolicy {
+  if (mode === 'redacted') {
+    return 'bounded_redacted';
+  }
+
+  return mode;
 }
 
 function keepFullEvent(event: CodexNormalizedEvent): CodexCaptureDecision {

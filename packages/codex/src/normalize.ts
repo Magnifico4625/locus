@@ -76,9 +76,9 @@ function normalizeEventMessage(
   const subtype = stringValue(record.raw.subtype);
 
   if (subtype === 'user_message') {
-    const payload: CodexUserPromptPayload = {
+    const payload = {
       prompt: firstString(record.raw.message, record.raw.text) ?? '',
-    };
+    } satisfies CodexUserPromptPayload;
     return createEvent(record, {
       kind: 'user_prompt',
       sessionId,
@@ -89,7 +89,7 @@ function normalizeEventMessage(
 
   if (subtype === 'task_complete') {
     const summary = firstString(record.raw.summary, record.raw.message, record.raw.text);
-    const payload: CodexSessionEndPayload = compactPayload({ summary });
+    const payload = compactPayload({ summary }) as CodexSessionEndPayload;
     return createEvent(record, {
       kind: 'session_end',
       sessionId,
@@ -132,10 +132,10 @@ function normalizeResponseItem(
   const itemType = stringValue(item.type);
 
   if (itemType === 'message' && stringValue(item.role) === 'assistant') {
-    const payload: CodexAiResponsePayload = compactPayload({
+    const payload = compactPayload({
       response: extractTextContent(item.content),
       model: currentModel,
-    });
+    }) as CodexAiResponsePayload;
     return createEvent(record, {
       kind: 'ai_response',
       sessionId,

@@ -263,27 +263,27 @@ Expected: implementation commit created.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a2-bounded-hybrid-capture.md`
 
-- [ ] Run the A2 validation suite.
+- [x] Run the A2 validation suite.
 
 Run: `npm test -- packages/codex/tests/relevance.test.ts packages/codex/tests/bounded-snippets.test.ts packages/codex/tests/capture.test.ts packages/codex/tests/normalize.test.ts packages/codex/tests/inbox-event.test.ts packages/codex/tests/importer.test.ts packages/codex/tests/core-compat.test.ts`
 Expected: PASS.
 
-- [ ] Run workspace typecheck.
+- [x] Run workspace typecheck.
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] Commit the validation checkpoint.
+- [x] Commit the validation checkpoint.
 
 Run: `git add docs/superpowers/plans/2026-04-21-track-a-a2-bounded-hybrid-capture.md`
 Expected: plan doc staged if updated.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "chore(codex): complete track a a2 validation"`
 Expected: final A2 validation commit created.
 
-- [ ] Tag the checkpoint.
+- [x] Tag the checkpoint.
 
 Run: `git tag -a track-a-a2-local -m "Track A A2 bounded hybrid capture local checkpoint"`
 Expected: tag created locally.

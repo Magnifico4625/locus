@@ -33,6 +33,7 @@ export type CodexCaptureReason =
 export type CodexCapturePolicy = 'off' | 'metadata' | 'bounded_redacted' | 'full';
 
 export interface CodexCaptureAnnotations {
+  [key: string]: unknown;
   capturePolicy?: Exclude<CodexCapturePolicy, 'off'>;
   captureReason?: CodexCaptureReason;
   truncated?: boolean;
