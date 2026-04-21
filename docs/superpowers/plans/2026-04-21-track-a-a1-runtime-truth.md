@@ -101,23 +101,23 @@ Note: satisfied by prior docs-only planning checkpoint commit `7aee241` (`docs(c
 - Modify: `packages/core/tests/shared-runtime/project-hash.test.ts`
 - Modify: `packages/core/tests/shared-runtime/regression-paths.test.ts`
 
-- [ ] Add failing tests for normalization rules:
+- [x] Add failing tests for normalization rules:
   - Windows backslashes become `/`
   - drive letters compare consistently
   - duplicate separators are normalized
   - the same logical project path hashes identically after normalization
 
-- [ ] Run the focused shared-runtime tests.
+- [x] Run the focused shared-runtime tests.
 
 Run: `npm test -- packages/core/tests/shared-runtime/normalize-path.test.ts packages/core/tests/shared-runtime/project-hash.test.ts packages/core/tests/shared-runtime/regression-paths.test.ts`
 Expected: FAIL because the new helper does not exist yet.
 
-- [ ] Commit the failing contract tests.
+- [x] Commit the failing contract tests.
 
 Run: `git add packages/core/tests/shared-runtime/normalize-path.test.ts packages/core/tests/shared-runtime/project-hash.test.ts packages/core/tests/shared-runtime/regression-paths.test.ts`
 Expected: only shared-runtime tests staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(core): define runtime path normalization contract"`
 Expected: test-only commit created.

@@ -21,4 +21,8 @@ describe('projectHash (shared-runtime)', () => {
   it('normalizes case (Windows paths)', () => {
     expect(projectHash('C:/Users/Test/Project')).toBe(projectHash('c:/users/test/project'));
   });
+
+  it('normalizes duplicate separators before hashing', () => {
+    expect(projectHash('C:/Users//Test///Project')).toBe(projectHash('c:\\users\\test\\project'));
+  });
 });
