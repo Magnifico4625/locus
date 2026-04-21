@@ -190,23 +190,23 @@ Expected: test-only commit created.
 - Modify: `packages/shared-runtime/index.js`
 - Modify: `packages/shared-runtime/index.d.ts`
 
-- [ ] Add `detectClientRuntime(env?, argv?, cwd?)` returning the structured runtime object.
+- [x] Add `detectClientRuntime(env?, argv?, cwd?)` returning the structured runtime object.
 
-- [ ] Keep `detectClientEnv()` as a thin wrapper returning only `runtime.client`.
+- [x] Keep `detectClientEnv()` as a thin wrapper returning only `runtime.client`.
 
-- [ ] Encode explicit evidence strings in the runtime result so diagnostics can explain what matched.
+- [x] Encode explicit evidence strings in the runtime result so diagnostics can explain what matched.
 
-- [ ] Re-run shared runtime detection tests.
+- [x] Re-run shared runtime detection tests.
 
 Run: `npm test -- packages/core/tests/shared-runtime/detect-client.test.ts`
 Expected: PASS.
 
-- [ ] Commit the detection implementation.
+- [x] Commit the detection implementation.
 
 Run: `git add packages/shared-runtime/detect-client.js packages/shared-runtime/detect-client.d.ts packages/shared-runtime/index.js packages/shared-runtime/index.d.ts`
 Expected: shared-runtime detection files staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(shared-runtime): add structured client runtime detection"`
 Expected: implementation commit created.
