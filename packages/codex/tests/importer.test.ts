@@ -46,6 +46,25 @@ function readInboxKinds(inboxDir: string): string[] {
     .sort();
 }
 
+function readInboxEvents(inboxDir: string): Array<{
+  kind: string;
+  session_id: string;
+  payload: Record<string, unknown>;
+}> {
+  return readdirSync(inboxDir)
+    .filter((name) => name.endsWith('.json'))
+    .map((name) =>
+      JSON.parse(readFileSync(join(inboxDir, name), 'utf-8')) as {
+        kind: string;
+        session_id: string;
+        timestamp: number;
+        payload: Record<string, unknown>;
+      },
+    )
+    .sort((a, b) => a.timestamp - b.timestamp || a.kind.localeCompare(b.kind))
+    .map(({ kind, session_id, payload }) => ({ kind, session_id, payload }));
+}
+
 afterEach(() => {
   for (const dir of tempRoots.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
@@ -360,5 +379,112 @@ describe('importCodexSessionsToInbox', () => {
       'user_prompt',
       'user_prompt',
     ]);
+  });
+
+  it('keeps metadata mode minimal even for high-signal decision sessions', () => {
+    const root = tempRoot();
+    const sessionsDir = join(root, 'sessions');
+    const inboxDir = join(root, 'inbox');
+    mkdirSync(sessionsDir, { recursive: true });
+    copyFixtureAsRollout(sessionsDir, 'decision-session.jsonl', 'rollout-decision.jsonl');
+
+    const metrics = importCodexSessionsToInbox({ sessionsDir, inboxDir, captureMode: 'metadata' });
+
+    expect(metrics).toEqual({
+      filesScanned: 1,
+      recordsParsed: 4,
+      parseErrors: 0,
+      normalized: 4,
+      written: 2,
+      duplicatePending: 0,
+      skippedUnknown: 0,
+      skippedByCapture: 2,
+      skippedByFilter: 0,
+      errors: 0,
+      latestSession: 'sess_decision_001',
+    });
+    expect(readInboxKinds(inboxDir)).toEqual(['session_end', 'session_start']);
+  });
+
+  it('filters noisy chatter in redacted mode but keeps bounded useful decision context', () => {
+    const root = tempRoot();
+    const sessionsDir = join(root, 'sessions');
+    const inboxDir = join(root, 'inbox');
+    mkdirSync(sessionsDir, { recursive: true });
+    copyFixtureAsRollout(sessionsDir, 'noisy-session.jsonl', 'rollout-noisy.jsonl');
+    copyFixtureAsRollout(sessionsDir, 'decision-session.jsonl', 'rollout-decision.jsonl');
+
+    const metrics = importCodexSessionsToInbox({ sessionsDir, inboxDir, captureMode: 'redacted' });
+    const events = readInboxEvents(inboxDir);
+
+    expect(metrics).toEqual({
+      filesScanned: 2,
+      recordsParsed: 8,
+      parseErrors: 0,
+      normalized: 8,
+      written: 6,
+      duplicatePending: 0,
+      skippedUnknown: 0,
+      skippedByCapture: 2,
+      skippedByFilter: 0,
+      errors: 0,
+      latestSession: 'sess_decision_001',
+    });
+    expect(events.map((event) => `${event.session_id}:${event.kind}`)).toEqual([
+      'sess_noisy_001:session_start',
+      'sess_noisy_001:session_end',
+      'sess_decision_001:session_start',
+      'sess_decision_001:user_prompt',
+      'sess_decision_001:ai_response',
+      'sess_decision_001:session_end',
+    ]);
+    expect(events[3]?.payload).toMatchObject({
+      prompt:
+        'The parser crashes on empty input after the nullable-branch refactor. Keep the fix surgical and avoid touching unrelated modules.',
+      capture_policy: 'bounded_redacted',
+      capture_reason: 'preference',
+      truncated: false,
+    });
+    expect(events[4]?.payload).toMatchObject({
+      capture_policy: 'bounded_redacted',
+      capture_reason: 'next_step',
+      truncated: false,
+    });
+  });
+
+  it('keeps full decision text without bounded payload metadata in full mode', () => {
+    const root = tempRoot();
+    const sessionsDir = join(root, 'sessions');
+    const inboxDir = join(root, 'inbox');
+    mkdirSync(sessionsDir, { recursive: true });
+    copyFixtureAsRollout(sessionsDir, 'decision-session.jsonl', 'rollout-decision.jsonl');
+
+    const metrics = importCodexSessionsToInbox({ sessionsDir, inboxDir, captureMode: 'full' });
+    const events = readInboxEvents(inboxDir);
+    const prompt = events.find((event) => event.kind === 'user_prompt');
+    const response = events.find((event) => event.kind === 'ai_response');
+
+    expect(metrics).toEqual({
+      filesScanned: 1,
+      recordsParsed: 4,
+      parseErrors: 0,
+      normalized: 4,
+      written: 4,
+      duplicatePending: 0,
+      skippedUnknown: 0,
+      skippedByCapture: 0,
+      skippedByFilter: 0,
+      errors: 0,
+      latestSession: 'sess_decision_001',
+    });
+    expect(prompt?.payload).toEqual({
+      prompt:
+        'The parser crashes on empty input after the nullable-branch refactor. Keep the fix surgical and avoid touching unrelated modules.',
+    });
+    expect(response?.payload).toEqual({
+      response:
+        'I traced the failure to parseNullableBranch. Next I will add a failing regression test and keep the patch inside the parser module.',
+      model: 'gpt-5.4',
+    });
   });
 });

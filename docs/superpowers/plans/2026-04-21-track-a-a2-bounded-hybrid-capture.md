@@ -233,27 +233,27 @@ Expected: implementation commit created.
 - Modify: `packages/codex/src/importer.ts`
 - Modify: `packages/codex/tests/importer.test.ts`
 
-- [ ] Ensure the importer passes the new bounded capture logic end-to-end for:
+- [x] Ensure the importer passes the new bounded capture logic end-to-end for:
   - `metadata`
   - `redacted`
   - `full`
 
-- [ ] Add tests against the new fixtures proving:
+- [x] Add tests against the new fixtures proving:
   - noisy sessions do not flood the inbox in `redacted`
   - decision sessions keep bounded useful context
   - `latestSession` and existing metrics still behave correctly
 
-- [ ] Run the importer tests.
+- [x] Run the importer tests.
 
 Run: `npm test -- packages/codex/tests/importer.test.ts`
 Expected: PASS.
 
-- [ ] Commit the importer wiring.
+- [x] Commit the importer wiring.
 
 Run: `git add packages/codex/src/importer.ts packages/codex/tests/importer.test.ts`
 Expected: importer changes staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(codex): apply bounded capture in importer"`
 Expected: implementation commit created.

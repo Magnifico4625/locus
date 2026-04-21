@@ -29,7 +29,6 @@ const BUG_PATTERNS = [
   /\bregression\b/i,
   /\brefactor\b/i,
   /\bnull(?:able)?\b/i,
-  /\bparser\b/i,
 ];
 
 const PREFERENCE_PATTERNS = [
@@ -68,12 +67,12 @@ export function classifyCodexRelevance(
     return { keep: false, reason: 'noise' };
   }
 
-  if (matchesAny(normalized, PREFERENCE_PATTERNS)) {
-    return { keep: true, reason: 'preference' };
-  }
-
   if (role === 'assistant' && matchesAny(normalized, NEXT_STEP_PATTERNS)) {
     return { keep: true, reason: 'next_step' };
+  }
+
+  if (matchesAny(normalized, PREFERENCE_PATTERNS)) {
+    return { keep: true, reason: 'preference' };
   }
 
   if (matchesAny(normalized, BUG_PATTERNS)) {

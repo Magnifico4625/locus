@@ -207,6 +207,17 @@ function keepBoundedTextEvent(
     };
   }
 
+  if (role === 'assistant' && relevance.reason === 'general_context') {
+    return {
+      event: null,
+      capturePolicy: 'bounded_redacted',
+      captureReason: 'noise',
+      truncated: false,
+      retained: false,
+      filtered: true,
+    };
+  }
+
   const snippet = boundCodexSnippet(redactedText, {
     role,
     reason: relevance.reason,

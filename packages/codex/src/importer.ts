@@ -40,31 +40,40 @@ export function importCodexSessionsToInbox(options: CodexImportOptions): CodexIm
     latestTimestamp = updateLatestSession(metrics, filteredEvents, latestTimestamp);
 
     for (const event of filteredEvents) {
-      const inboxEvent = toInboxEvent(event, captureMode);
-      if (!inboxEvent) {
-        metrics.skippedByCapture++;
-        continue;
-      }
-
-      if (options.shouldSkipEventId?.(inboxEvent.event_id) === true) {
-        metrics.duplicatePending++;
-        continue;
-      }
-
-      try {
-        const writeResult = writeCodexInboxEvent(options.inboxDir, inboxEvent);
-        if (writeResult.status === 'written') {
-          metrics.written++;
-        } else {
-          metrics.duplicatePending++;
-        }
-      } catch {
-        metrics.errors++;
-      }
+      importFilteredEvent(event, captureMode, options, metrics);
     }
   }
 
   return metrics;
+}
+
+function importFilteredEvent(
+  event: CodexNormalizedEvent,
+  captureMode: ReturnType<typeof getCodexCaptureMode>,
+  options: CodexImportOptions,
+  metrics: CodexImportMetrics,
+): void {
+  const inboxEvent = toInboxEvent(event, captureMode);
+  if (!inboxEvent) {
+    metrics.skippedByCapture++;
+    return;
+  }
+
+  if (options.shouldSkipEventId?.(inboxEvent.event_id) === true) {
+    metrics.duplicatePending++;
+    return;
+  }
+
+  try {
+    const writeResult = writeCodexInboxEvent(options.inboxDir, inboxEvent);
+    if (writeResult.status === 'written') {
+      metrics.written++;
+    } else {
+      metrics.duplicatePending++;
+    }
+  } catch {
+    metrics.errors++;
+  }
 }
 
 function createEmptyMetrics(): CodexImportMetrics {
