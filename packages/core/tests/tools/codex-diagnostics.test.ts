@@ -53,6 +53,9 @@ describe('collectCodexDiagnostics', () => {
     });
 
     expect(diagnostics).toMatchObject({
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       captureMode: 'metadata',
       sessionsDir: join(codexHome, 'sessions'),
       sessionsDirExists: true,
@@ -104,6 +107,9 @@ describe('collectCodexDiagnostics', () => {
     });
 
     expect(diagnostics).toMatchObject({
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       captureMode: 'full',
       importedEventCount: 2,
       latestImportedSessionId: 'session-xyz',

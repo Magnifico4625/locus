@@ -160,24 +160,24 @@ Expected: implementation commit created.
 - Modify: `packages/core/tests/tools/codex-diagnostics.test.ts`
 - Modify: `packages/core/tests/tools/status.test.ts`
 
-- [ ] Extend tests to define the new runtime snapshot contract:
+- [x] Extend tests to define the new runtime snapshot contract:
   - plain `CODEX_HOME` maps to `client='codex'`
   - desktop/extension-like launches can still report `client='codex'` with a non-generic surface
   - `detectClientEnv()` remains backward compatible
   - auto-import marks `skipped_not_codex` only when runtime detection is truly non-Codex
   - status and diagnostics surface detection evidence
 
-- [ ] Run the targeted tests.
+- [x] Run the targeted tests.
 
 Run: `npm test -- packages/core/tests/shared-runtime/detect-client.test.ts packages/core/tests/tools/auto-import-codex.test.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts`
 Expected: FAIL because the richer runtime API does not exist yet.
 
-- [ ] Commit the failing detection tests.
+- [x] Commit the failing detection tests.
 
 Run: `git add packages/core/tests/shared-runtime/detect-client.test.ts packages/core/tests/tools/auto-import-codex.test.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts`
 Expected: test-only change set staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(core): define codex runtime detection contract"`
 Expected: test-only commit created.

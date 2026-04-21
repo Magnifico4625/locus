@@ -282,6 +282,9 @@ describe('handleStatus', () => {
 
     expect(status.codexAutoImport).toEqual({
       clientDetected: false,
+      client: 'generic',
+      clientSurface: 'generic',
+      detectionEvidence: [],
       debounceMs: 45000,
       lastStatus: 'idle',
       lastImported: 0,
@@ -295,6 +298,9 @@ describe('handleStatus', () => {
       makeStatusDeps(adapter, tempDir, {
         codexAutoImportSnapshot: {
           clientDetected: true,
+          client: 'codex',
+          clientSurface: 'cli',
+          detectionEvidence: ['env:CODEX_HOME'],
           debounceMs: 45000,
           lastStatus: 'imported',
           lastAttemptAt: 1700000000000,
@@ -310,6 +316,9 @@ describe('handleStatus', () => {
 
     expect(status.codexAutoImport).toEqual({
       clientDetected: true,
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       debounceMs: 45000,
       lastStatus: 'imported',
       lastAttemptAt: 1700000000000,
@@ -326,6 +335,9 @@ describe('handleStatus', () => {
     const status = handleStatus({
       ...(makeStatusDeps(adapter, tempDir) as object),
       codexDiagnostics: {
+        client: 'codex',
+        clientSurface: 'cli',
+        detectionEvidence: ['env:CODEX_HOME'],
         captureMode: 'metadata',
         sessionsDir: '/codex/sessions',
         sessionsDirExists: true,
@@ -339,6 +351,9 @@ describe('handleStatus', () => {
     } as never);
 
     expect((status as Record<string, unknown>).codexDiagnostics).toEqual({
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       captureMode: 'metadata',
       sessionsDir: '/codex/sessions',
       sessionsDirExists: true,

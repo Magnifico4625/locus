@@ -28,9 +28,12 @@ describe('coordinateCodexAutoImport', () => {
     expect(importCalls).toBe(0);
     expect(result.ranImport).toBe(false);
     expect(result.processedInbox).toBe(false);
-    expect(result.snapshot).toEqual({
+    expect(result.snapshot).toMatchObject({
       ...BASE_SNAPSHOT,
       clientDetected: false,
+      client: 'generic',
+      clientSurface: 'generic',
+      detectionEvidence: ['fallback:generic'],
       lastStatus: 'skipped_not_codex',
     });
   });
@@ -92,9 +95,12 @@ describe('coordinateCodexAutoImport', () => {
 
     expect(result.ranImport).toBe(true);
     expect(result.processedInbox).toBe(true);
-    expect(result.snapshot).toEqual({
+    expect(result.snapshot).toMatchObject({
       ...BASE_SNAPSHOT,
       clientDetected: true,
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       debounceMs: 45000,
       lastStatus: 'imported',
       lastAttemptAt: 1_760_000_000_000,
@@ -132,6 +138,8 @@ describe('coordinateCodexAutoImport', () => {
     expect(result.ranImport).toBe(true);
     expect(result.processedInbox).toBe(false);
     expect(result.snapshot.lastStatus).toBe('duplicates_only');
+    expect((result.snapshot as Record<string, unknown>).client).toBe('codex');
+    expect((result.snapshot as Record<string, unknown>).clientSurface).toBe('cli');
     expect(result.snapshot.lastDuplicates).toBe(3);
     expect(result.snapshot.lastErrors).toBe(0);
     expect(result.snapshot.latestSession).toBe('sess_dup_001');
@@ -151,9 +159,12 @@ describe('coordinateCodexAutoImport', () => {
 
     expect(result.ranImport).toBe(true);
     expect(result.processedInbox).toBe(false);
-    expect(result.snapshot).toEqual({
+    expect(result.snapshot).toMatchObject({
       ...BASE_SNAPSHOT,
       clientDetected: true,
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       debounceMs: 45000,
       lastStatus: 'error',
       lastAttemptAt: 1_760_000_000_000,
@@ -196,6 +207,8 @@ describe('coordinateCodexAutoImport', () => {
     });
 
     expect(first.snapshot.lastStatus).toBe('error');
+    expect((first.snapshot as Record<string, unknown>).client).toBe('codex');
+    expect((first.snapshot as Record<string, unknown>).clientSurface).toBe('cli');
     expect(first.snapshot.lastAttemptAt).toBe(1_760_000_000_000);
     expect(second.ranImport).toBe(false);
     expect(second.snapshot.lastStatus).toBe('debounced');
