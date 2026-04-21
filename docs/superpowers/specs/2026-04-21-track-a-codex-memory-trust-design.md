@@ -161,6 +161,17 @@ Durable memory must be:
 - revisable
 - searchable over time
 
+Durable memory should also carry a **Topic Key** whenever a fact belongs to a known decision or preference family.
+
+Examples:
+
+- `database_choice`
+- `auth_strategy`
+- `testing_policy`
+- `coding_style`
+
+Topic Keys are the anchor that allow newer memory to supersede older memory intentionally instead of accumulating as disconnected facts.
+
 ### Recent Working Context
 
 Recent working context stores **short redacted snippets** of useful task dialogue and problem-solving context.
@@ -215,6 +226,25 @@ Codex CLI is the primary acceptance surface.
 
 Track A is not complete unless Codex CLI can reliably answer recall-oriented questions using real session memory, not only structural memory or manually remembered facts.
 
+Track A must also define a **normalization layer** for Codex runtime paths and runtime identity inputs.
+
+At minimum, the runtime truth path should normalize:
+
+- `CODEX_HOME`
+- project roots
+- session file paths
+- metadata paths used for dedup, hashing, or diagnostics
+
+The normalization contract should be stable across Windows and Unix-style environments.
+
+Baseline rules:
+
+- convert backslashes to forward slashes
+- normalize drive letters consistently
+- avoid treating logically identical paths as different locations
+
+This matters because memory trust collapses quickly if the same project is observed as multiple identities depending on runtime surface or operating system.
+
 ### Codex Desktop / Extension
 
 Codex desktop / extension should share the same configuration and the same memory model where possible.
@@ -257,6 +287,20 @@ The user should not be required to explicitly run:
 - `memory_import_codex`
 
 for normal recall flows.
+
+This UX contract also requires **skill and prompt wiring**, not only better tools.
+
+Track A must update the Codex-side memory skill and related instructions so that recall behavior becomes explicit and repeatable.
+
+At minimum, the agent guidance should encode:
+
+- if the user asks about prior work, check Locus before claiming not to remember
+- prefer `memory_search` first for recall-oriented questions
+- use `memory_timeline` when temporal sequencing matters
+- use date filters or absolute-date clarification when the user asks about relative dates
+- ask a clarifying question only after memory lookup returns multiple plausible tasks
+
+Without this wiring, Recall UX remains an aspiration rather than a reliable product behavior.
 
 ---
 
@@ -318,6 +362,16 @@ At minimum, the system should support the concepts:
 - `archivable`
 
 These states apply both to durable memory and to recent working context where appropriate.
+
+For durable memory, `superseded` should not rely only on fuzzy similarity.
+
+Track A should prefer:
+
+- explicit Topic Keys where available
+- deterministic conflict rules within the same Topic Key
+- clear replacement semantics when a newer decision displaces an older one
+
+Without this anchor, "we switched from PostgreSQL to SQLite" becomes two unrelated memories instead of one superseding the other.
 
 ---
 
@@ -435,6 +489,7 @@ Scope:
 - auto-import triggering
 - Codex CLI truth path
 - desktop / extension parity diagnostics
+- cross-platform path normalization for runtime identity and project/session metadata
 
 ### A2 — Bounded Hybrid Capture
 
@@ -454,6 +509,7 @@ Scope:
   - preferences
   - style
   - constraints
+- Topic Key generation for durable memory families
 - dedup
 - merge
 - supersede rules
@@ -466,6 +522,7 @@ Scope:
 - summary-first responses
 - automatic tool orchestration
 - clarification flow for multiple candidate tasks
+- skill / prompt updates so the agent checks Locus before saying it does not remember
 
 ### A5 — Retention And Cleanup
 
@@ -474,6 +531,7 @@ Scope:
 - stale / superseded / archivable marking
 - storage hygiene suggestions
 - no autonomous destructive cleanup
+- Topic Key-aware supersede and cleanup semantics for durable memory
 
 ### A6 — Acceptance And Docs Truth Pass
 
