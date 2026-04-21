@@ -1,4 +1,11 @@
-import type { CodexJsonlRecord, CodexNormalizedEvent, CodexNormalizeResult } from './types.js';
+import type {
+  CodexAiResponsePayload,
+  CodexJsonlRecord,
+  CodexNormalizedEvent,
+  CodexNormalizeResult,
+  CodexSessionEndPayload,
+  CodexUserPromptPayload,
+} from './types.js';
 
 const UNKNOWN_SESSION = 'unknown-session';
 
@@ -69,23 +76,25 @@ function normalizeEventMessage(
   const subtype = stringValue(record.raw.subtype);
 
   if (subtype === 'user_message') {
+    const payload: CodexUserPromptPayload = {
+      prompt: firstString(record.raw.message, record.raw.text) ?? '',
+    };
     return createEvent(record, {
       kind: 'user_prompt',
       sessionId,
       projectRoot,
-      payload: {
-        prompt: firstString(record.raw.message, record.raw.text) ?? '',
-      },
+      payload,
     });
   }
 
   if (subtype === 'task_complete') {
     const summary = firstString(record.raw.summary, record.raw.message, record.raw.text);
+    const payload: CodexSessionEndPayload = compactPayload({ summary });
     return createEvent(record, {
       kind: 'session_end',
       sessionId,
       projectRoot,
-      payload: compactPayload({ summary }),
+      payload,
     });
   }
 
@@ -123,14 +132,15 @@ function normalizeResponseItem(
   const itemType = stringValue(item.type);
 
   if (itemType === 'message' && stringValue(item.role) === 'assistant') {
+    const payload: CodexAiResponsePayload = compactPayload({
+      response: extractTextContent(item.content),
+      model: currentModel,
+    });
     return createEvent(record, {
       kind: 'ai_response',
       sessionId,
       projectRoot,
-      payload: compactPayload({
-        response: extractTextContent(item.content),
-        model: currentModel,
-      }),
+      payload,
     });
   }
 

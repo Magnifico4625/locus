@@ -175,26 +175,26 @@ Expected: implementation commit created.
 - Modify: `packages/codex/src/types.ts`
 - Modify: `packages/codex/src/normalize.ts`
 
-- [ ] Extend capture types so normalization and inbox shaping can see:
+- [x] Extend capture types so normalization and inbox shaping can see:
   - capture reason
   - truncated flag
   - whether text was retained or filtered
 
-- [ ] Update `capture.ts` so `redacted` no longer means "everything except AI response"; it should mean "keep only bounded, relevant, redacted conversational context".
+- [x] Update `capture.ts` so `redacted` no longer means "everything except AI response"; it should mean "keep only bounded, relevant, redacted conversational context".
 
-- [ ] Keep the secret redaction comment explicit that this is best effort, not complete DLP.
+- [x] Keep the secret redaction comment explicit that this is best effort, not complete DLP.
 
-- [ ] Re-run the capture tests.
+- [x] Re-run the capture tests.
 
 Run: `npm test -- packages/codex/tests/capture.test.ts packages/codex/tests/normalize.test.ts`
 Expected: PASS.
 
-- [ ] Commit the policy rewrite.
+- [x] Commit the policy rewrite.
 
 Run: `git add packages/codex/src/capture.ts packages/codex/src/types.ts packages/codex/src/normalize.ts`
 Expected: capture-policy files staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(codex): redefine redacted as bounded hybrid capture"`
 Expected: implementation commit created.
