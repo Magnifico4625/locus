@@ -123,4 +123,48 @@ describe('normalizeCodexRecords', () => {
     });
     expect(Number.isFinite(result.events[0]?.timestamp)).toBe(true);
   });
+
+  it('preserves full assistant text so bounded capture can reduce it later', () => {
+    const result = normalizeCodexRecords([
+      {
+        filePath: 'inline.jsonl',
+        line: 1,
+        raw: {
+          type: 'session_meta',
+          timestamp: '2026-04-10T12:00:00.000Z',
+          session_id: 'sess_inline_001',
+          cwd: 'C:\\Projects\\InlineApp',
+          model: 'gpt-5.4',
+        },
+      },
+      {
+        filePath: 'inline.jsonl',
+        line: 2,
+        raw: {
+          type: 'response_item',
+          timestamp: '2026-04-10T12:00:01.000Z',
+          item: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              { type: 'output_text', text: 'I traced the parser failure to the nullable branch.' },
+              { type: 'output_text', text: 'Next I will add the failing regression test.' },
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(result.skipped).toBe(0);
+    expect(result.events[1]).toMatchObject({
+      kind: 'ai_response',
+      sessionId: 'sess_inline_001',
+      projectRoot: 'C:\\Projects\\InlineApp',
+      payload: {
+        response:
+          'I traced the parser failure to the nullable branch.\nNext I will add the failing regression test.',
+        model: 'gpt-5.4',
+      },
+    });
+  });
 });

@@ -65,17 +65,17 @@
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a2-bounded-hybrid-capture.md`
 
-- [ ] Verify the A1 checkpoint exists locally.
+- [x] Verify the A1 checkpoint exists locally.
 
 Run: `git tag --list track-a-a1-local`
 Expected: prints `track-a-a1-local`.
 
-- [ ] Create the working branch from the checkpoint.
+- [x] Create the working branch from the checkpoint.
 
 Run: `git checkout track-a-a1-local`
 Expected: detached HEAD at A1 checkpoint.
 
-- [ ] Create the feature branch.
+- [x] Create the feature branch.
 
 Run: `git checkout -b feature/track-a-a2-bounded-capture`
 Expected: new branch created.
@@ -88,24 +88,24 @@ Expected: new branch created.
 - Modify: `packages/codex/tests/capture.test.ts`
 - Modify: `packages/codex/tests/normalize.test.ts`
 
-- [ ] Add failing tests for:
+- [x] Add failing tests for:
   - noisy generic questions are rejected in `redacted`
   - bug-fixing context is kept in `redacted`
   - assistant rambling is clipped to a bounded snippet
   - `metadata` continues to skip user and assistant content
   - `full` still keeps full text
 
-- [ ] Run the capture-focused tests.
+- [x] Run the capture-focused tests.
 
 Run: `npm test -- packages/codex/tests/relevance.test.ts packages/codex/tests/bounded-snippets.test.ts packages/codex/tests/capture.test.ts packages/codex/tests/normalize.test.ts`
 Expected: FAIL because the new helpers and contract do not exist yet.
 
-- [ ] Commit the failing tests.
+- [x] Commit the failing tests.
 
 Run: `git add packages/codex/tests/relevance.test.ts packages/codex/tests/bounded-snippets.test.ts packages/codex/tests/capture.test.ts packages/codex/tests/normalize.test.ts`
 Expected: test-only change set staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(codex): define bounded capture contract"`
 Expected: test-only commit created.
