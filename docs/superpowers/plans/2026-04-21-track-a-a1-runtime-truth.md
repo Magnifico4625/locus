@@ -279,19 +279,19 @@ Expected: test commit created.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a1-runtime-truth.md`
 
-- [ ] Run the focused validation suite.
+- [x] Run the focused validation suite.
 
 Run: `npm test -- packages/core/tests/shared-runtime/detect-client.test.ts packages/core/tests/shared-runtime/normalize-path.test.ts packages/core/tests/shared-runtime/project-hash.test.ts packages/core/tests/shared-runtime/regression-paths.test.ts packages/core/tests/tools/auto-import-codex.test.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/integration/codex-runtime-truth.test.ts packages/core/tests/integration/codex-auto-import-search.test.ts`
 Expected: PASS.
 
-- [ ] Run a workspace typecheck for the affected packages.
+- [x] Run a workspace typecheck for the affected packages.
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] Update this plan with completion state if desired by the execution workflow.
+- [x] Update this plan with completion state if desired by the execution workflow.
 
-- [ ] Commit the validation checkpoint.
+- [x] Commit the validation checkpoint.
 
 Run: `git add docs/superpowers/plans/2026-04-21-track-a-a1-runtime-truth.md`
 Expected: plan doc staged if updated.
@@ -301,7 +301,7 @@ Expected: plan doc staged if updated.
 Run: `git commit -m "chore(codex): complete track a a1 validation"`
 Expected: final A1 validation commit created.
 
-- [ ] Tag the checkpoint.
+- [x] Tag the checkpoint.
 
 Run: `git tag -a track-a-a1-local -m "Track A A1 runtime truth local checkpoint"`
 Expected: tag created locally.
