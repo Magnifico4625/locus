@@ -116,6 +116,9 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   const INGEST_DEBOUNCE_MS = 30_000;
   let codexAutoImportSnapshot: CodexAutoImportSnapshot = {
     clientDetected: false,
+    client: 'generic',
+    clientSurface: 'generic',
+    detectionEvidence: [],
     debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
     lastStatus: 'idle',
     lastImported: 0,

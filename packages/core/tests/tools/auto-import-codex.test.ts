@@ -3,6 +3,9 @@ import type { CodexAutoImportSnapshot, MemoryImportCodexResponse } from '../../s
 
 const BASE_SNAPSHOT: CodexAutoImportSnapshot = {
   clientDetected: false,
+  client: 'generic',
+  clientSurface: 'generic',
+  detectionEvidence: [],
   debounceMs: 45000,
   lastStatus: 'idle',
   lastImported: 0,
@@ -64,6 +67,9 @@ describe('coordinateCodexAutoImport', () => {
     expect(result.snapshot).toEqual({
       ...BASE_SNAPSHOT,
       clientDetected: true,
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       lastStatus: 'debounced',
       lastAttemptAt: 1_760_000_000_000,
       lastRunAt: 1_760_000_001_000,

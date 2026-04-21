@@ -1,3 +1,5 @@
+import type { ClientEnv, ClientSurface } from '@locus/shared-runtime';
+
 // ─── Storage Layer ───
 
 export interface DatabaseAdapter {
@@ -314,6 +316,9 @@ export type CodexAutoImportStatus =
 
 export interface CodexAutoImportSnapshot {
   clientDetected: boolean;
+  client: ClientEnv;
+  clientSurface: ClientSurface;
+  detectionEvidence: string[];
   debounceMs: number;
   lastStatus: CodexAutoImportStatus;
   lastAttemptAt?: number;
@@ -326,6 +331,9 @@ export interface CodexAutoImportSnapshot {
 }
 
 export interface CodexDiagnosticsSnapshot {
+  client: ClientEnv;
+  clientSurface: ClientSurface;
+  detectionEvidence: string[];
   captureMode: CodexImportCaptureMode;
   sessionsDir: string;
   sessionsDirExists: boolean;

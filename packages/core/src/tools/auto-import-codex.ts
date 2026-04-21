@@ -1,4 +1,4 @@
-import { detectClientEnv } from '@locus/shared-runtime';
+import { detectClientRuntime, type ClientEnv, type ClientRuntime } from '@locus/shared-runtime';
 import type {
   CodexAutoImportSnapshot,
   CodexAutoImportStatus,
@@ -10,7 +10,8 @@ export const CODEX_AUTO_IMPORT_DEBOUNCE_MS = 45_000;
 export interface CoordinateCodexAutoImportParams {
   now: number;
   snapshot: CodexAutoImportSnapshot;
-  detectClientEnv?: typeof detectClientEnv;
+  detectClientRuntime?: typeof detectClientRuntime;
+  detectClientEnv?: () => ClientEnv;
   runImport: () => MemoryImportCodexResponse;
   debounceMs?: number;
 }
@@ -25,13 +26,16 @@ export function coordinateCodexAutoImport(
   params: CoordinateCodexAutoImportParams,
 ): CodexAutoImportCoordinatorResult {
   const debounceMs = params.debounceMs ?? CODEX_AUTO_IMPORT_DEBOUNCE_MS;
-  const client = (params.detectClientEnv ?? detectClientEnv)();
+  const runtime = resolveClientRuntime(params);
 
-  if (client !== 'codex') {
+  if (runtime.client !== 'codex') {
     return {
       snapshot: {
         ...params.snapshot,
         clientDetected: false,
+        client: runtime.client,
+        clientSurface: runtime.surface,
+        detectionEvidence: [...runtime.evidence],
         debounceMs,
         lastStatus: 'skipped_not_codex',
       },
@@ -48,6 +52,9 @@ export function coordinateCodexAutoImport(
       snapshot: {
         ...params.snapshot,
         clientDetected: true,
+        client: runtime.client,
+        clientSurface: runtime.surface,
+        detectionEvidence: [...runtime.evidence],
         debounceMs,
         lastStatus: 'debounced',
       },
@@ -59,6 +66,9 @@ export function coordinateCodexAutoImport(
   const baseSnapshot: CodexAutoImportSnapshot = {
     ...params.snapshot,
     clientDetected: true,
+    client: runtime.client,
+    clientSurface: runtime.surface,
+    detectionEvidence: [...runtime.evidence],
     debounceMs,
     lastAttemptAt: params.now,
   };
@@ -87,6 +97,45 @@ export function coordinateCodexAutoImport(
       processedInbox: false,
     };
   }
+}
+
+function resolveClientRuntime(params: CoordinateCodexAutoImportParams): ClientRuntime {
+  if (params.detectClientRuntime) {
+    return params.detectClientRuntime();
+  }
+
+  if (params.detectClientEnv) {
+    return runtimeFromLegacyClient(params.detectClientEnv());
+  }
+
+  return detectClientRuntime();
+}
+
+function runtimeFromLegacyClient(client: ClientEnv): ClientRuntime {
+  if (client === 'codex') {
+    return {
+      client,
+      surface: 'cli',
+      detected: true,
+      evidence: ['env:CODEX_HOME'],
+    };
+  }
+
+  if (client === 'claude-code') {
+    return {
+      client,
+      surface: 'cli',
+      detected: true,
+      evidence: ['env:CLAUDE_PLUGIN_ROOT'],
+    };
+  }
+
+  return {
+    client: 'generic',
+    surface: 'generic',
+    detected: false,
+    evidence: ['fallback:generic'],
+  };
 }
 
 function applyImportResult(

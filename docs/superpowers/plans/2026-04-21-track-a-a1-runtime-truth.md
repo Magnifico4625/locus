@@ -221,25 +221,27 @@ Expected: implementation commit created.
 - Modify: `packages/core/src/server.ts`
 - Modify: `packages/codex/src/paths.ts`
 
-- [ ] Extend the Codex snapshot types with runtime surface and evidence fields.
+- [x] Extend the Codex snapshot types with runtime surface and evidence fields.
 
-- [ ] Update the auto-import coordinator to consume `detectClientRuntime()` and persist a runtime snapshot instead of only `clientDetected: boolean`.
+- [x] Update the auto-import coordinator to consume `detectClientRuntime()` and persist a runtime snapshot instead of only `clientDetected: boolean`.
 
-- [ ] Normalize all path-like values included in status and diagnostics snapshots.
+- [x] Normalize all path-like values included in status and diagnostics snapshots.
 
-- [ ] Keep `resolveCodexHome()` and `resolveCodexSessionsDir()` aligned with the same normalization rules where identity matters.
+- [x] Keep `resolveCodexHome()` and `resolveCodexSessionsDir()` aligned with the same normalization rules where identity matters.
 
-- [ ] Re-run the targeted tests.
+Note: raw filesystem path resolution in `packages/codex/src/paths.ts` was intentionally left unchanged for actual file access; normalization was applied at the status/diagnostics snapshot layer so runtime identity is stable without risking path-read regressions.
+
+- [x] Re-run the targeted tests.
 
 Run: `npm test -- packages/core/tests/tools/auto-import-codex.test.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts`
 Expected: PASS.
 
-- [ ] Commit the core wiring.
+- [x] Commit the core wiring.
 
 Run: `git add packages/core/src/types.ts packages/core/src/tools/auto-import-codex.ts packages/core/src/tools/codex-diagnostics.ts packages/core/src/tools/status.ts packages/core/src/server.ts packages/codex/src/paths.ts`
 Expected: runtime-truth implementation staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): expose codex runtime truth snapshots"`
 Expected: implementation commit created.

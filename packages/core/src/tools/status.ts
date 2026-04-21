@@ -35,6 +35,9 @@ interface ValueRow {
 function getDefaultCodexAutoImportSnapshot(): CodexAutoImportSnapshot {
   return {
     clientDetected: false,
+    client: 'generic',
+    clientSurface: 'generic',
+    detectionEvidence: [],
     debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
     lastStatus: 'idle',
     lastImported: 0,

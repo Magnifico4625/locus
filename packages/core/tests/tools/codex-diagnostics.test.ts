@@ -1,3 +1,4 @@
+import { normalizePathForIdentity } from '@locus/shared-runtime';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -57,10 +58,12 @@ describe('collectCodexDiagnostics', () => {
       clientSurface: 'cli',
       detectionEvidence: ['env:CODEX_HOME'],
       captureMode: 'metadata',
-      sessionsDir: join(codexHome, 'sessions'),
+      sessionsDir: normalizePathForIdentity(join(codexHome, 'sessions')),
       sessionsDirExists: true,
       rolloutFilesFound: 2,
-      latestRolloutPath: join(sessionsDir, 'rollout-2026-04-14T12-00-00.jsonl'),
+      latestRolloutPath: normalizePathForIdentity(
+        join(sessionsDir, 'rollout-2026-04-14T12-00-00.jsonl'),
+      ),
       latestRolloutReadable: true,
       importedEventCount: 0,
     });

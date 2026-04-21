@@ -1,3 +1,4 @@
+import { normalizePathForIdentity } from '@locus/shared-runtime';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -339,10 +340,12 @@ describe('handleStatus', () => {
         clientSurface: 'cli',
         detectionEvidence: ['env:CODEX_HOME'],
         captureMode: 'metadata',
-        sessionsDir: '/codex/sessions',
+        sessionsDir: normalizePathForIdentity('/codex/sessions'),
         sessionsDirExists: true,
         rolloutFilesFound: 3,
-        latestRolloutPath: '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+        latestRolloutPath: normalizePathForIdentity(
+          '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+        ),
         latestRolloutReadable: true,
         importedEventCount: 4,
         latestImportedSessionId: 'session-123',
@@ -355,10 +358,12 @@ describe('handleStatus', () => {
       clientSurface: 'cli',
       detectionEvidence: ['env:CODEX_HOME'],
       captureMode: 'metadata',
-      sessionsDir: '/codex/sessions',
+      sessionsDir: normalizePathForIdentity('/codex/sessions'),
       sessionsDirExists: true,
       rolloutFilesFound: 3,
-      latestRolloutPath: '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+      latestRolloutPath: normalizePathForIdentity(
+        '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+      ),
       latestRolloutReadable: true,
       importedEventCount: 4,
       latestImportedSessionId: 'session-123',
