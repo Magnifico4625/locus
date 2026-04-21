@@ -131,23 +131,23 @@ Expected: test-only commit created.
 - Modify: `packages/shared-runtime/index.js`
 - Modify: `packages/shared-runtime/index.d.ts`
 
-- [ ] Implement `normalizePathForIdentity(pathValue)` in shared-runtime and export it from the barrel.
+- [x] Implement `normalizePathForIdentity(pathValue)` in shared-runtime and export it from the barrel.
 
-- [ ] Refactor `projectHash()` to call the shared helper instead of embedding its own normalization logic.
+- [x] Refactor `projectHash()` to call the shared helper instead of embedding its own normalization logic.
 
-- [ ] Keep the helper dependency-free and safe for hooks and plain JS consumers.
+- [x] Keep the helper dependency-free and safe for hooks and plain JS consumers.
 
-- [ ] Re-run the shared-runtime tests.
+- [x] Re-run the shared-runtime tests.
 
 Run: `npm test -- packages/core/tests/shared-runtime/normalize-path.test.ts packages/core/tests/shared-runtime/project-hash.test.ts packages/core/tests/shared-runtime/regression-paths.test.ts`
 Expected: PASS.
 
-- [ ] Commit the shared-runtime implementation.
+- [x] Commit the shared-runtime implementation.
 
 Run: `git add packages/shared-runtime/normalize-path.js packages/shared-runtime/normalize-path.d.ts packages/shared-runtime/project-hash.js packages/shared-runtime/index.js packages/shared-runtime/index.d.ts`
 Expected: only shared-runtime files staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(shared-runtime): add identity path normalization"`
 Expected: implementation commit created.

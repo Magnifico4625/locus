@@ -1,5 +1,6 @@
 export type { ClientEnv } from './detect-client.js';
 export { detectClientEnv } from './detect-client.js';
+export { normalizePathForIdentity } from './normalize-path.js';
 export {
   resolveStorageRoot,
   resolveProjectStorageDir,
