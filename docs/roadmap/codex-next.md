@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-16  
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** make Locus easier to install, more useful for real Codex conversation recall, and more diagnosable in Codex CLI and Codex desktop/extension surfaces.
+**Primary focus:** make Locus actually trustworthy as persistent memory for Codex CLI and Codex desktop / extension surfaces, then reduce install friction and polish the product surface around that stronger memory core.
 
 ---
 
@@ -18,8 +18,8 @@ Unlike [codex.md](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/roadmap/
 
 Current planning window:
 
-- **Late April 2026** — packaging, install UX, and Codex-facing polish
-- **May 2026** — richer recall, dashboard foundations, and broader adapter groundwork
+- **Late April 2026** — memory trust gap closure, recall validation, and Codex-facing diagnostics
+- **May 2026** — one-command install, desktop polish, and richer product UX around the stronger memory path
 - **Later** — secondary clients and broader memory platform UX
 
 ---
@@ -36,15 +36,63 @@ Rules:
 
 - Codex CLI and Codex desktop/extension remain the primary validation path.
 - Cursor, Windsurf, and similar IDE clients remain important but secondary.
-- New work should improve onboarding, recall quality, or diagnosability before expanding surface area.
+- New work should improve recall truthfulness, onboarding, or diagnosability before expanding surface area.
 
 ---
 
-## Track A — One-Command Install For Codex
+## Track A — Codex Memory Trust / Honest Recall
 
 **Priority:** `P0`  
 **Target window:** late April 2026 into May 2026  
-**Why it matters:** `v3.3.0` proved the Codex product line. The next major UX win is reducing installation from a repo-driven setup to a simple marketplace-based flow.
+**Why it matters:** the current product story is ahead of the lived Codex experience. `metadata` mode plus fragile Codex client detection can produce a system that is diagnostically alive but not yet useful as persistent conversational memory. Before scaling install, Locus needs to earn trust as actual memory.
+
+### Goal
+
+Make Codex users able to rely on Locus for meaningful project recall: recent dialogue, accepted decisions, user preferences, and working style should become recoverable in a way that matches the product story, not only the plumbing story.
+
+### Target deliverables
+
+- robust Codex client detection so auto-import reliably identifies real Codex CLI and desktop / extension launches
+- auto-import behavior that actually triggers in the validated Codex paths instead of silently falling back to generic mode
+- a practical recommended capture path beyond pure `metadata`, centered on `redacted` as the likely trust-preserving default for real recall
+- automatic extraction and storage of high-value memories such as accepted architecture decisions, user preferences, and recurring collaboration style
+- bounded automatic memory write-back during or after sessions, so important context is persisted without requiring the user to explicitly call `memory_remember`
+- acceptance tests against real Codex session fixtures that prove meaningful recall, not only import counts, idempotency, or diagnostics
+- docs and diagnostics that clearly distinguish:
+  - imported events
+  - searchable useful recall
+  - intentionally filtered content
+
+### Key constraints
+
+- do not claim strong recall from `metadata` if the mode is still intentionally minimal
+- keep token growth and local storage growth bounded; automatic summarization/extraction should be selective, not verbose transcript hoarding by default
+- `full` remains explicitly opt-in and warning-heavy
+- user trust matters more than the appearance of coverage; docs must describe what actually works in Codex CLI and desktop / extension
+- Claude Code must not regress casually while Codex-first memory behavior improves
+
+### Success criteria
+
+- Codex CLI can reliably recover meaningful recent context from real sessions, not only structural metadata
+- Codex desktop / extension surfaces can either recover the same context or report their limitation honestly and diagnosably
+- repeated collaboration patterns become discoverable:
+  - preferred workflow
+  - accepted product direction
+  - coding-style or review-style preferences
+  - prior architecture decisions and why they were chosen
+- README claims about persistent memory, recent dialogue, and cross-session continuity are true in normal validated Codex usage
+
+### Release intent
+
+Highest-priority candidate scope for the next Codex-focused release line, likely **`v3.4`** in whole or in part.
+
+---
+
+## Track B — One-Command Install For Codex
+
+**Priority:** `P0`  
+**Target window:** May 2026 and after the first memory-trust work lands  
+**Why it matters:** once the Codex memory path is trustworthy, the next major UX win is reducing installation from a repo-driven setup to a simple marketplace-based or package-driven flow.
 
 ### Goal
 
@@ -55,7 +103,7 @@ Make Locus installable for Codex users with the smallest possible setup burden, 
 - separate Codex marketplace repository as a thin distribution layer
 - marketplace-based install path for Locus plugin discovery
 - published runtime artifact so the plugin no longer depends on a local repo checkout
-- npm package for `npx` / packaged install flow
+- npm package for one-command `npx` / packaged install flow
 - migration guide from manual MCP setup to marketplace/package install
 - documented fallback path when marketplace or extension behavior differs from Codex CLI
 
@@ -73,24 +121,29 @@ Make Locus installable for Codex users with the smallest possible setup burden, 
 
 ### Release intent
 
-Candidate scope for **`v3.4`** if packaged runtime and marketplace flow are both solid.
+Candidate scope for **`v3.4.x`** once the first memory-trust fixes have landed.
 
 ---
 
-## Track B — Richer Codex Conversational Recall
+## Track C — Richer Codex Conversational Recall
 
 **Priority:** `P0`  
-**Target window:** May 2026  
-**Why it matters:** current `metadata` mode validates ingestion and idempotency, but does not yet deliver strong semantic recall of real Codex dialogue.
+**Target window:** May 2026 and after the trust-gap work establishes the baseline  
+**Why it matters:** once the product is no longer misleading at the baseline level, the next step is to deepen recall quality and make richer capture modes production-worthy rather than experimental.
 
 ### Goal
 
-Turn Codex memory from “events were imported” into “recent conversation context can be recalled meaningfully” while keeping privacy controls explicit and defensible.
+Turn Codex memory from “recent context is finally trustworthy” into “recent context is richly useful” while keeping privacy controls explicit and defensible.
 
 ### Target deliverables
 
 - stronger `redacted` import path for usable dialogue recall
 - optional `full` import path for maximum recall with clear warnings
+- higher-quality extraction of persistent facts from dialogue:
+  - accepted decisions
+  - user preferences
+  - collaboration style
+  - recurring project constraints
 - improved redaction guarantees and documented best-effort limits
 - acceptance tests that prove recall quality, not only ingestion
 - clearer capture-mode diagnostics in `memory_status`, `memory_doctor`, and docs
@@ -98,7 +151,7 @@ Turn Codex memory from “events were imported” into “recent conversation co
 
 ### Key constraints
 
-- `metadata` should remain the default safe mode until richer capture has proven privacy and UX discipline
+- do not force `metadata` to remain the default if it keeps undermining the core memory promise; choose the default based on validated trust and usefulness
 - `full` must be treated as opt-in with visible warnings
 - semantic recall quality should be measured against real Codex session fixtures, not only synthetic cases
 
@@ -110,11 +163,11 @@ Turn Codex memory from “events were imported” into “recent conversation co
 
 ### Release intent
 
-Most likely **`v3.4.x` or `v3.5`**, depending on how much packaging work lands first.
+Most likely **`v3.4.x` or `v3.5`**, depending on how much of the baseline trust work and packaging work land first.
 
 ---
 
-## Track C — Codex Desktop / Extension Polish
+## Track D — Codex Desktop / Extension Polish
 
 **Priority:** `P1`  
 **Target window:** late April 2026 through May 2026  
@@ -143,7 +196,7 @@ Can land incrementally alongside `v3.4`.
 
 ---
 
-## Track D — HTML Dashboard
+## Track E — HTML Dashboard
 
 **Priority:** `P1`  
 **Target window:** May 2026 and later  
@@ -179,7 +232,7 @@ Likely **`v4.0`** scope unless a smaller read-only dashboard ships earlier.
 
 ---
 
-## Track E — Secondary IDE Adapters
+## Track F — Secondary IDE Adapters
 
 **Priority:** `P2`  
 **Target window:** May 2026 and later  
@@ -229,6 +282,13 @@ These are not separate releases, but they should shape every major track above.
 - keep audit output understandable for non-experts
 - avoid making “full memory” feel magical or risk-free
 
+### Memory Write Discipline
+
+- automatically persist only high-value facts, not every transient exchange
+- keep preference/style capture selective and revisable
+- ensure automatic memory writes remain inspectable and diagnosable by the user
+- prevent uncontrolled token/storage growth from naive dialogue capture
+
 ### Upgrade And Migration Paths
 
 - document how manual MCP users move to marketplace/package install
@@ -258,7 +318,8 @@ This is a planning suggestion, not a hard contract.
 
 | Release | Primary intent |
 |---------|----------------|
-| `v3.4` | one-command install foundations: marketplace repo, packaged runtime, install UX cleanup |
+| `v3.4` | close the Codex memory trust gap: reliable auto-import, validated recall, automatic high-value memory persistence |
+| `v3.4.x` | one-command install foundations: marketplace repo, packaged runtime, install UX cleanup |
 | `v3.5` | richer Codex conversational recall (`redacted` / `full`) and stronger capture/privacy UX |
 | `v4.0` | HTML dashboard + broader product-grade memory visibility |
 
@@ -268,7 +329,20 @@ Secondary IDE adapters should be scheduled only when they do not block the Codex
 
 ## Immediate Next Candidates
 
-1. Design the Codex marketplace repository as a thin distribution layer.
-2. Define the published runtime strategy for `npx` / packaged install.
-3. Choose the target behavior for `redacted` as the likely “recommended rich recall” mode.
-4. Decide whether the dashboard starts as read-only diagnostics or as a broader memory browser from day one.
+1. Prove why the current validated Codex path still delivers weak real recall:
+   - client detection
+   - auto-import triggering
+   - capture-mode usefulness
+   - search quality on real sessions
+2. Define the first trustworthy Codex default or recommended mode:
+   - improved `metadata`
+   - `redacted` by default
+   - or another bounded selective-capture design
+3. Design automatic high-value memory persistence for:
+   - accepted decisions
+   - user preferences
+   - collaboration style
+   - stable project constraints
+4. Define the published runtime strategy for `npx` / packaged install.
+5. Design the Codex marketplace repository as a thin distribution layer.
+6. Decide whether the dashboard starts as read-only diagnostics or as a broader memory browser from day one.
