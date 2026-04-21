@@ -141,7 +141,7 @@ Expected: fixture commit created.
 - Create: `packages/codex/src/bounded-snippets.ts`
 - Modify: `packages/codex/src/index.ts`
 
-- [ ] Implement a deterministic relevance classifier that labels text as:
+- [x] Implement a deterministic relevance classifier that labels text as:
   - `noise`
   - `bug_context`
   - `decision`
@@ -149,21 +149,21 @@ Expected: fixture commit created.
   - `next_step`
   - `general_context`
 
-- [ ] Implement bounded snippet helpers for user and assistant text with clear limits and truncation markers.
+- [x] Implement bounded snippet helpers for user and assistant text with clear limits and truncation markers.
 
-- [ ] Export the helpers for unit tests only through package source exports.
+- [x] Export the helpers for unit tests only through package source exports.
 
-- [ ] Re-run the new helper tests.
+- [x] Re-run the new helper tests.
 
 Run: `npm test -- packages/codex/tests/relevance.test.ts packages/codex/tests/bounded-snippets.test.ts`
 Expected: PASS.
 
-- [ ] Commit the helper layer.
+- [x] Commit the helper layer.
 
 Run: `git add packages/codex/src/relevance.ts packages/codex/src/bounded-snippets.ts packages/codex/src/index.ts`
 Expected: helper implementation staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(codex): add bounded relevance and snippet helpers"`
 Expected: implementation commit created.

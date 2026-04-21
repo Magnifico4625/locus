@@ -1,4 +1,5 @@
 export * from './capture.js';
+export * from './bounded-snippets.js';
 export * from './ids.js';
 export * from './importer.js';
 export * from './inbox-event.js';
@@ -7,6 +8,7 @@ export * from './jsonl.js';
 export * from './normalize.js';
 export * from './paths.js';
 export * from './plugin-sync.js';
+export * from './relevance.js';
 export * from './session-files.js';
 export * from './skill-sync.js';
 export * from './types.js';
