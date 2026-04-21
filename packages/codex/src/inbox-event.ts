@@ -1,6 +1,12 @@
-import { redactCodexText, shouldImportCodexEvent } from './capture.js';
+import { captureCodexEvent } from './capture.js';
 import { createCodexEventId, createCodexSourceEventId } from './ids.js';
-import type { CodexCaptureMode, CodexNormalizedEvent, CodexNormalizedKind } from './types.js';
+import type {
+  CodexCaptureMode,
+  CodexCapturePolicy,
+  CodexCaptureReason,
+  CodexNormalizedEvent,
+  CodexNormalizedKind,
+} from './types.js';
 
 export interface LocusInboxEventV1 {
   version: 1;
@@ -18,16 +24,17 @@ export function toInboxEvent(
   normalizedEvent: CodexNormalizedEvent,
   captureMode: CodexCaptureMode,
 ): LocusInboxEventV1 | null {
-  if (!shouldImportCodexEvent(captureMode, normalizedEvent.kind)) {
+  const captured = captureCodexEvent(normalizedEvent, captureMode);
+  if (!captured.event) {
     return null;
   }
 
   const sourceEventId = createCodexSourceEventId({
-    sessionId: normalizedEvent.sessionId,
-    filePath: normalizedEvent.sourceFile,
-    line: normalizedEvent.sourceLine,
-    kind: normalizedEvent.kind,
-    itemId: normalizedEvent.itemId,
+    sessionId: captured.event.sessionId,
+    filePath: captured.event.sourceFile,
+    line: captured.event.sourceLine,
+    kind: captured.event.kind,
+    itemId: captured.event.itemId,
   });
 
   return {
@@ -35,28 +42,39 @@ export function toInboxEvent(
     event_id: createCodexEventId(sourceEventId),
     source: 'codex',
     source_event_id: sourceEventId,
-    project_root: normalizedEvent.projectRoot,
-    session_id: normalizedEvent.sessionId,
-    timestamp: normalizedEvent.timestamp,
-    kind: normalizedEvent.kind,
-    payload: toInboxPayload(normalizedEvent, captureMode),
+    project_root: captured.event.projectRoot,
+    session_id: captured.event.sessionId,
+    timestamp: captured.event.timestamp,
+    kind: captured.event.kind,
+    payload: toInboxPayload(captured.event, captured.capturePolicy, captured.captureReason),
   };
 }
 
 function toInboxPayload(
   normalizedEvent: CodexNormalizedEvent,
-  captureMode: CodexCaptureMode,
+  capturePolicy: CodexCapturePolicy,
+  captureReason?: CodexCaptureReason,
 ): Record<string, unknown> {
   switch (normalizedEvent.kind) {
     case 'user_prompt':
-      return {
-        prompt: maybeRedact(stringPayload(normalizedEvent.payload.prompt), captureMode),
-      };
+      return withCaptureMetadata(
+        {
+          prompt: stringPayload(normalizedEvent.payload.prompt),
+        },
+        capturePolicy,
+        captureReason,
+        optionalBoolean(normalizedEvent.payload.truncated),
+      );
     case 'ai_response':
-      return compactPayload({
-        response: stringPayload(normalizedEvent.payload.response),
-        model: optionalString(normalizedEvent.payload.model),
-      });
+      return withCaptureMetadata(
+        compactPayload({
+          response: stringPayload(normalizedEvent.payload.response),
+          model: optionalString(normalizedEvent.payload.model),
+        }),
+        capturePolicy,
+        captureReason,
+        optionalBoolean(normalizedEvent.payload.truncated),
+      );
     case 'tool_use':
       return compactPayload({
         tool: optionalString(normalizedEvent.payload.tool) ?? 'unknown',
@@ -70,14 +88,33 @@ function toInboxPayload(
         model: optionalString(normalizedEvent.payload.model),
       });
     case 'session_end':
-      return compactPayload({
-        summary: optionalString(normalizedEvent.payload.summary),
-      });
+      return withCaptureMetadata(
+        compactPayload({
+          summary: optionalString(normalizedEvent.payload.summary),
+        }),
+        capturePolicy,
+        captureReason,
+        optionalBoolean(normalizedEvent.payload.truncated),
+      );
   }
 }
 
-function maybeRedact(value: string, captureMode: CodexCaptureMode): string {
-  return captureMode === 'redacted' ? redactCodexText(value) : value;
+function withCaptureMetadata(
+  payload: Record<string, unknown>,
+  capturePolicy: CodexCapturePolicy,
+  captureReason?: CodexCaptureReason,
+  truncated?: boolean,
+): Record<string, unknown> {
+  if (capturePolicy !== 'bounded_redacted') {
+    return payload;
+  }
+
+  return compactPayload({
+    ...payload,
+    capture_policy: capturePolicy,
+    capture_reason: captureReason,
+    truncated,
+  });
 }
 
 function compactPayload(input: Record<string, unknown>): Record<string, unknown> {
@@ -100,6 +137,10 @@ function optionalString(value: unknown): string | undefined {
 
 function optionalNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function optionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 function arrayPayload(value: unknown): string[] {

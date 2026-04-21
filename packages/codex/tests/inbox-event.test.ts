@@ -126,14 +126,25 @@ describe('toInboxEvent', () => {
       kind: 'ai_response',
       sourceLine: 3,
       payload: {
-        response: 'Assistant response should not be imported in redacted mode.',
+        response:
+          'I traced the parser failure to the nullable branch. Next I will add the failing regression test and keep the patch surgical inside the parser module. Extra filler should be clipped once bounded capture is applied to the assistant response in redacted mode.',
         model: 'gpt-5.4',
       },
     };
 
     expect(toInboxEvent(prompt, 'redacted')?.payload).toEqual({
       prompt: 'Use Authorization: Bearer [REDACTED] and OPENAI_API_KEY=[REDACTED]',
+      capture_policy: 'bounded_redacted',
+      capture_reason: 'general_context',
+      truncated: false,
     });
-    expect(toInboxEvent(assistant, 'redacted')).toBeNull();
+    expect(toInboxEvent(assistant, 'redacted')?.payload).toEqual({
+      response:
+        'I traced the parser failure to the nullable branch. Next I will add the failing regression test and keep the patch surgical inside the parser module. ...',
+      model: 'gpt-5.4',
+      capture_policy: 'bounded_redacted',
+      capture_reason: 'next_step',
+      truncated: true,
+    });
   });
 });

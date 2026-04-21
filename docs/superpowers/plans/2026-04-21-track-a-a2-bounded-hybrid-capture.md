@@ -206,23 +206,23 @@ Expected: implementation commit created.
 - Modify: `packages/codex/tests/inbox-event.test.ts`
 - Modify: `packages/codex/tests/core-compat.test.ts`
 
-- [ ] Update inbox event generation so kept bounded snippets include inspection metadata such as `capture_policy`, `capture_reason`, and `truncated`.
+- [x] Update inbox event generation so kept bounded snippets include inspection metadata such as `capture_policy`, `capture_reason`, and `truncated`.
 
-- [ ] Keep the event kinds unchanged so core ingest does not need a schema break in `A2`.
+- [x] Keep the event kinds unchanged so core ingest does not need a schema break in `A2`.
 
-- [ ] Add tests proving the new payload shape still passes core compat validation.
+- [x] Add tests proving the new payload shape still passes core compat validation.
 
-- [ ] Run the payload compatibility tests.
+- [x] Run the payload compatibility tests.
 
 Run: `npm test -- packages/codex/tests/inbox-event.test.ts packages/codex/tests/core-compat.test.ts`
 Expected: PASS.
 
-- [ ] Commit the inbox payload shaping.
+- [x] Commit the inbox payload shaping.
 
 Run: `git add packages/codex/src/inbox-event.ts packages/codex/tests/inbox-event.test.ts packages/codex/tests/core-compat.test.ts`
 Expected: payload shaping changes staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(codex): add inspectable bounded payload metadata"`
 Expected: implementation commit created.
