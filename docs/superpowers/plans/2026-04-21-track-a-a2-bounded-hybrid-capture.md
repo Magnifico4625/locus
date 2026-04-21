@@ -117,19 +117,19 @@ Expected: test-only commit created.
 - Create: `packages/codex/tests/fixtures/decision-session.jsonl`
 - Modify: `packages/codex/tests/importer.test.ts`
 
-- [ ] Add one noisy fixture and one high-signal decision fixture with no real secrets.
+- [x] Add one noisy fixture and one high-signal decision fixture with no real secrets.
 
-- [ ] Verify the fixture set is sanitized.
+- [x] Verify the fixture set is sanitized.
 
 Run: `rg -n "OPENAI|sk-|token|password|secret|Bearer" packages/codex/tests/fixtures`
 Expected: no real secrets in the new fixtures.
 
-- [ ] Commit the fixtures.
+- [x] Commit the fixtures.
 
 Run: `git add packages/codex/tests/fixtures/noisy-session.jsonl packages/codex/tests/fixtures/decision-session.jsonl packages/codex/tests/importer.test.ts`
 Expected: new fixtures staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(codex): add bounded capture fixtures"`
 Expected: fixture commit created.

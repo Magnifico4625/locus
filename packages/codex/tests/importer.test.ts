@@ -326,4 +326,39 @@ describe('importCodexSessionsToInbox', () => {
     expect(metrics.latestSession).toBe('sess_basic_001');
     expect(existsSync(inboxDir)).toBe(false);
   });
+
+  it('imports the new sanitized noisy and decision fixtures without parse errors', () => {
+    const root = tempRoot();
+    const sessionsDir = join(root, 'sessions');
+    const inboxDir = join(root, 'inbox');
+    mkdirSync(sessionsDir, { recursive: true });
+    copyFixtureAsRollout(sessionsDir, 'noisy-session.jsonl', 'rollout-noisy.jsonl');
+    copyFixtureAsRollout(sessionsDir, 'decision-session.jsonl', 'rollout-decision.jsonl');
+
+    const metrics = importCodexSessionsToInbox({ sessionsDir, inboxDir, captureMode: 'full' });
+
+    expect(metrics).toEqual({
+      filesScanned: 2,
+      recordsParsed: 8,
+      parseErrors: 0,
+      normalized: 8,
+      written: 8,
+      duplicatePending: 0,
+      skippedUnknown: 0,
+      skippedByCapture: 0,
+      skippedByFilter: 0,
+      errors: 0,
+      latestSession: 'sess_decision_001',
+    });
+    expect(readInboxKinds(inboxDir)).toEqual([
+      'ai_response',
+      'ai_response',
+      'session_end',
+      'session_end',
+      'session_start',
+      'session_start',
+      'user_prompt',
+      'user_prompt',
+    ]);
+  });
 });
