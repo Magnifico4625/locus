@@ -51,17 +51,17 @@ Track A is not complete unless the following are proven:
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a6-acceptance-docs.md`
 
-- [ ] Verify the A5 checkpoint exists.
+- [x] Verify the A5 checkpoint exists.
 
 Run: `git tag --list track-a-a5-local`
 Expected: prints `track-a-a5-local`.
 
-- [ ] Create the branch from the checkpoint.
+- [x] Create the branch from the checkpoint.
 
 Run: `git checkout track-a-a5-local`
 Expected: detached HEAD at A5 checkpoint.
 
-- [ ] Create the feature branch.
+- [x] Create the feature branch.
 
 Run: `git checkout -b feature/track-a-a6-acceptance-docs`
 Expected: new branch created.
@@ -72,19 +72,19 @@ Expected: new branch created.
 - Create: `packages/codex/tests/fixtures/track-a/recall-bugfix.jsonl`
 - Create: `packages/codex/tests/fixtures/track-a/recall-decisions.jsonl`
 
-- [ ] Add one fixture emphasizing recent bug-fixing recall and one emphasizing decision memory.
+- [x] Add one fixture emphasizing recent bug-fixing recall and one emphasizing decision memory.
 
-- [ ] Verify the fixtures contain no real secrets.
+- [x] Verify the fixtures contain no real secrets.
 
 Run: `rg -n "OPENAI|sk-|token|password|secret|Bearer" packages/codex/tests/fixtures/track-a`
 Expected: no real secrets in the new fixtures.
 
-- [ ] Commit the acceptance fixtures.
+- [x] Commit the acceptance fixtures.
 
 Run: `git add packages/codex/tests/fixtures/track-a/recall-bugfix.jsonl packages/codex/tests/fixtures/track-a/recall-decisions.jsonl`
 Expected: fixture files staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(codex): add track a acceptance fixtures"`
 Expected: fixture commit created.
