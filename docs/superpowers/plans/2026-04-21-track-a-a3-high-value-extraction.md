@@ -76,17 +76,17 @@ Rules:
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a3-high-value-extraction.md`
 
-- [ ] Verify the A2 checkpoint tag exists.
+- [x] Verify the A2 checkpoint tag exists.
 
 Run: `git tag --list track-a-a2-local`
 Expected: prints `track-a-a2-local`.
 
-- [ ] Create the feature branch from the checkpoint.
+- [x] Create the feature branch from the checkpoint.
 
 Run: `git checkout track-a-a2-local`
 Expected: detached HEAD at A2 checkpoint.
 
-- [ ] Create the branch.
+- [x] Create the branch.
 
 Run: `git checkout -b feature/track-a-a3-high-value-extraction`
 Expected: new branch created.
@@ -97,23 +97,23 @@ Expected: new branch created.
 - Modify: `packages/core/tests/storage/migrations.test.ts`
 - Create: `packages/core/tests/memory/durable.test.ts`
 
-- [ ] Add failing tests that define:
+- [x] Add failing tests that define:
   - `durable_memories` table exists after migrations
   - required indexes exist for `topic_key`, `state`, and `source_event_id`
   - optional FTS table exists when FTS5 is available
   - legacy tables remain intact
 
-- [ ] Run the storage-focused tests.
+- [x] Run the storage-focused tests.
 
 Run: `npm test -- packages/core/tests/storage/migrations.test.ts packages/core/tests/memory/durable.test.ts`
 Expected: FAIL because the new table and storage class do not exist yet.
 
-- [ ] Commit the failing schema tests.
+- [x] Commit the failing schema tests.
 
 Run: `git add packages/core/tests/storage/migrations.test.ts packages/core/tests/memory/durable.test.ts`
 Expected: test-only files staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(core): define durable memory schema contract"`
 Expected: test-only commit created.
