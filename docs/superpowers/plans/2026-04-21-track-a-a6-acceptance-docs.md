@@ -109,12 +109,12 @@ Expected: fixture commit created.
 Run: `npm test -- packages/core/tests/integration/track-a-recall-acceptance.test.ts packages/core/tests/integration/track-a-desktop-diagnostics.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/tools/status.test.ts`
 Expected: FAIL until the truth messaging is implemented.
 
-- [ ] Commit the failing acceptance tests.
+- [x] Commit the failing acceptance tests.
 
 Run: `git add packages/core/tests/integration/track-a-recall-acceptance.test.ts packages/core/tests/integration/track-a-desktop-diagnostics.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/tools/status.test.ts`
 Expected: acceptance tests staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(core): define track a acceptance and truth checks"`
 Expected: test-only commit created.
