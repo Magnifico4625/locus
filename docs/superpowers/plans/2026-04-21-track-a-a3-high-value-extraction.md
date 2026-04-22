@@ -222,26 +222,26 @@ Expected: implementation commit created.
 - Create: `packages/core/tests/integration/durable-extraction-flow.test.ts`
 - Modify: `packages/core/tests/integration/codex-import-tool.test.ts`
 
-- [ ] Add a runner that scans newly ingested conversation events using a persisted watermark or last processed event id.
+- [x] Add a runner that scans newly ingested conversation events using a persisted watermark or last processed event id.
 
-- [ ] Call the runner after successful `processInbox()` in:
+- [x] Call the runner after successful `processInbox()` in:
   - manual Codex import
   - startup inbox processing
   - pre-search auto-import path
 
-- [ ] Ensure repeated runs are idempotent.
+- [x] Ensure repeated runs are idempotent.
 
-- [ ] Run the integration-focused tests.
+- [x] Run the integration-focused tests.
 
 Run: `npm test -- packages/core/tests/tools/import-codex.test.ts packages/core/tests/integration/durable-extraction-flow.test.ts packages/core/tests/integration/codex-import-tool.test.ts`
 Expected: PASS.
 
-- [ ] Commit the durable runner wiring.
+- [x] Commit the durable runner wiring.
 
 Run: `git add packages/core/src/memory/durable-runner.ts packages/core/src/tools/import-codex.ts packages/core/src/server.ts packages/core/tests/tools/import-codex.test.ts packages/core/tests/integration/durable-extraction-flow.test.ts packages/core/tests/integration/codex-import-tool.test.ts`
 Expected: runner wiring changes staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): run durable extraction after codex ingest"`
 Expected: implementation commit created.

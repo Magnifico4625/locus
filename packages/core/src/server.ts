@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { processInbox } from './ingest/pipeline.js';
 import { log, setLogLevel } from './logger.js';
 import { MemoryCompressor } from './memory/compressor.js';
+import { runDurableExtraction } from './memory/durable-runner.js';
 import { EpisodicMemory } from './memory/episodic.js';
 import { SemanticMemory } from './memory/semantic.js';
 import { resolveProjectRoot } from './project-root.js';
@@ -132,8 +133,11 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       captureLevel: config.captureLevel,
       fts5Available: fts5,
     });
+    runDurableExtraction(db, { source: 'codex' });
     _lastIngestMetrics = startupMetrics;
-    lastIngestTime = Date.now();
+    if (startupMetrics.processed > 0) {
+      lastIngestTime = Date.now();
+    }
     if (startupMetrics.processed > 0) {
       log(
         'info',
@@ -230,6 +234,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
               fts5Available: fts5,
               env: process.env,
               processInbox,
+              runDurableExtraction,
               importCodexSessionsToInbox,
             },
           ),
@@ -244,6 +249,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
             captureLevel: config.captureLevel,
             fts5Available: fts5,
           });
+          runDurableExtraction(db, { source: 'codex' });
           _lastIngestMetrics = metrics;
           lastIngestTime = now;
         } catch {
@@ -309,6 +315,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           fts5Available: fts5,
           env: process.env,
           processInbox,
+          runDurableExtraction,
           importCodexSessionsToInbox,
         },
       );

@@ -58,6 +58,14 @@ describe('handleImportCodex', () => {
         fts5Available: false,
         env: { LOCUS_CODEX_CAPTURE: 'off' },
         processInbox: () => makeIngestMetrics(),
+        runDurableExtraction: () => ({
+          scanned: 0,
+          inserted: 0,
+          confirmed: 0,
+          superseded: 0,
+          ignored: 0,
+          watermarkEventId: 0,
+        }),
         importCodexSessionsToInbox: () => {
           throw new Error('importer should not be called when capture is off');
         },
@@ -92,6 +100,14 @@ describe('handleImportCodex', () => {
         processInbox: () => {
           throw new Error('processInbox should not run when importer wrote nothing');
         },
+        runDurableExtraction: () => ({
+          scanned: 0,
+          inserted: 0,
+          confirmed: 0,
+          superseded: 0,
+          ignored: 0,
+          watermarkEventId: 0,
+        }),
         importCodexSessionsToInbox: () => ({
           filesScanned: 2,
           recordsParsed: 5,
@@ -132,6 +148,14 @@ describe('handleImportCodex', () => {
         processInbox: () => {
           throw new Error('processInbox should not run when importer wrote nothing');
         },
+        runDurableExtraction: () => ({
+          scanned: 0,
+          inserted: 0,
+          confirmed: 0,
+          superseded: 0,
+          ignored: 0,
+          watermarkEventId: 0,
+        }),
         importCodexSessionsToInbox: (options) => {
           callbackMatched = options.shouldSkipEventId?.('known-event-id') === true;
           return {
@@ -160,6 +184,7 @@ describe('handleImportCodex', () => {
   it('does not call processInbox when importer produces no new writes', async () => {
     const { handleImportCodex } = await import('../../src/tools/import-codex.js');
     let processCalls = 0;
+    let durableCalls = 0;
 
     const result = handleImportCodex(
       {},
@@ -172,6 +197,17 @@ describe('handleImportCodex', () => {
         processInbox: () => {
           processCalls++;
           return makeIngestMetrics();
+        },
+        runDurableExtraction: () => {
+          durableCalls++;
+          return {
+            scanned: 0,
+            inserted: 0,
+            confirmed: 0,
+            superseded: 0,
+            ignored: 0,
+            watermarkEventId: 0,
+          };
         },
         importCodexSessionsToInbox: () => ({
           filesScanned: 1,
@@ -190,6 +226,7 @@ describe('handleImportCodex', () => {
     );
 
     expect(processCalls).toBe(0);
+    expect(durableCalls).toBe(0);
     expect(result.status).toBe('ok');
     expect(result.imported).toBe(0);
     expect(result.processed).toBe(0);
@@ -220,6 +257,14 @@ describe('handleImportCodex', () => {
           ingested.add('old-pending');
           return makeIngestMetrics({ processed: 5, remaining: 0 });
         },
+        runDurableExtraction: () => ({
+          scanned: 2,
+          inserted: 1,
+          confirmed: 0,
+          superseded: 0,
+          ignored: 1,
+          watermarkEventId: 10,
+        }),
         importCodexSessionsToInbox: () => {
           writeFileSync(
             join(inboxDir, 'run-1.json'),
@@ -252,5 +297,62 @@ describe('handleImportCodex', () => {
     expect(result.imported).toBe(1);
     expect(result.processed).toBe(5);
     expect(result.duplicates).toBe(0);
+  });
+
+  it('runs durable extraction after processInbox when importer writes new events', async () => {
+    const { handleImportCodex } = await import('../../src/tools/import-codex.js');
+    const inboxDir = createTempDir();
+    const ingested = new Set<string>();
+    let durableCalls = 0;
+
+    const result = handleImportCodex(
+      {},
+      {
+        db: makeDbWithIngestedIds(ingested),
+        inboxDir,
+        captureLevel: 'metadata',
+        fts5Available: false,
+        env: {},
+        processInbox: () => {
+          ingested.add('run-event-1');
+          return makeIngestMetrics({ processed: 1, remaining: 0 });
+        },
+        runDurableExtraction: () => {
+          durableCalls++;
+          return {
+            scanned: 1,
+            inserted: 1,
+            confirmed: 0,
+            superseded: 0,
+            ignored: 0,
+            watermarkEventId: 1,
+          };
+        },
+        importCodexSessionsToInbox: () => {
+          writeFileSync(
+            join(inboxDir, 'run-1.json'),
+            JSON.stringify({ event_id: 'run-event-1' }),
+            'utf-8',
+          );
+          return {
+            filesScanned: 1,
+            recordsParsed: 1,
+            parseErrors: 0,
+            normalized: 1,
+            written: 1,
+            duplicatePending: 0,
+            skippedUnknown: 0,
+            skippedByCapture: 0,
+            skippedByFilter: 0,
+            errors: 0,
+            latestSession: 'sess_durable_001',
+          };
+        },
+      },
+    );
+
+    expect(result.status).toBe('ok');
+    expect(result.imported).toBe(1);
+    expect(durableCalls).toBe(1);
   });
 });

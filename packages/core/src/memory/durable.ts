@@ -140,6 +140,14 @@ export class DurableMemoryStore {
     return rows.map(rowToEntry);
   }
 
+  listByMemoryType(memoryType: DurableMemoryType): DurableMemoryEntry[] {
+    const rows = this.db.all<DurableMemoryRow>(
+      'SELECT * FROM durable_memories WHERE memory_type = ? ORDER BY updated_at DESC, id DESC',
+      [memoryType],
+    );
+    return rows.map(rowToEntry);
+  }
+
   search(query: string, limit = 20): DurableMemoryEntry[] {
     if (this.fts5) {
       const sanitized = sanitizeFtsQuery(query);

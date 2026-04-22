@@ -7,6 +7,7 @@ import type {
   IngestMetrics,
   MemoryImportCodexResponse,
 } from '../types.js';
+import type { DurableExtractionMetrics } from '../memory/durable-runner.js';
 
 interface CodexImportToolParams {
   latestOnly?: boolean;
@@ -53,6 +54,10 @@ export interface ImportCodexDeps {
     db: DatabaseAdapter,
     options?: ProcessInboxOptionsLike,
   ) => IngestMetrics;
+  runDurableExtraction?: (
+    db: DatabaseAdapter,
+    options?: { source?: string },
+  ) => DurableExtractionMetrics;
   importCodexSessionsToInbox: (options: CodexImporterOptionsLike) => CodexImporterMetricsLike;
 }
 
@@ -127,6 +132,7 @@ export function handleImportCodex(
         captureLevel: deps.captureLevel,
         fts5Available: deps.fts5Available,
       });
+      deps.runDurableExtraction?.(deps.db, { source: 'codex' });
       const storedEventIds = loadIngestedCodexEventIds(deps.db);
       imported = Array.from(currentRunEventIds).filter((eventId) =>
         storedEventIds.has(eventId),
