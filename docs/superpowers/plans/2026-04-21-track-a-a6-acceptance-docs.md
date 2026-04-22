@@ -97,14 +97,14 @@ Expected: fixture commit created.
 - Modify: `packages/core/tests/tools/doctor.test.ts`
 - Modify: `packages/core/tests/tools/status.test.ts`
 
-- [ ] Add failing tests for:
+- [x] Add failing tests for:
   - CLI recall over the new fixtures returns useful summary-first results
   - durable decisions are present in recall output
   - `memory_status` warns when capture mode is too weak for strong recall
   - `memory_doctor` flags limited recall when capture mode is `metadata`
   - desktop/extension diagnostics are honest when parity is incomplete
 
-- [ ] Run the acceptance-focused tests.
+- [x] Run the acceptance-focused tests.
 
 Run: `npm test -- packages/core/tests/integration/track-a-recall-acceptance.test.ts packages/core/tests/integration/track-a-desktop-diagnostics.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/tools/status.test.ts`
 Expected: FAIL until the truth messaging is implemented.

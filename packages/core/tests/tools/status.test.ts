@@ -371,6 +371,38 @@ describe('handleStatus', () => {
     });
   });
 
+  it('exposes codex truth guidance when metadata capture is too weak for strong recall', () => {
+    const status = handleStatus({
+      ...(makeStatusDeps(adapter, tempDir, {
+        config: { ...LOCUS_DEFAULTS, captureLevel: 'metadata' },
+      }) as object),
+      codexDiagnostics: {
+        client: 'codex',
+        clientSurface: 'cli',
+        detectionEvidence: ['env:CODEX_HOME'],
+        captureMode: 'metadata',
+        sessionsDir: normalizePathForIdentity('/codex/sessions'),
+        sessionsDirExists: true,
+        rolloutFilesFound: 3,
+        latestRolloutPath: normalizePathForIdentity(
+          '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+        ),
+        latestRolloutReadable: true,
+        importedEventCount: 4,
+        latestImportedSessionId: 'session-123',
+        latestImportedTimestamp: 1700000000000,
+      },
+    } as never);
+
+    expect((status as Record<string, unknown>).codexTruth).toEqual({
+      recallReadiness: 'limited',
+      recommendedCaptureMode: 'redacted',
+      desktopParity: 'unverified',
+      recallMessage: expect.stringContaining('metadata'),
+      desktopMessage: expect.stringContaining('desktop'),
+    });
+  });
+
   it('includes durable-memory state counts in status output', () => {
     const now = Date.now();
     adapter.run(
