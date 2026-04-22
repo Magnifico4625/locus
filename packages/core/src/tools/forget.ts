@@ -32,20 +32,21 @@ function parseTopicKey(query: string): string | null {
     return null;
   }
 
-  const topicKey = match[1].trim();
+  const topicKey = (match[1] ?? '').trim();
   return topicKey.length > 0 ? topicKey : null;
 }
 
 function resolveMatches(query: string, deps: ForgetDeps): ForgetMatchSet {
   const topicKey = parseTopicKey(query);
-  if (topicKey !== null && deps.durable) {
-    const matches = deps.durable.listByTopic(topicKey);
+  const durable = deps.durable;
+  if (topicKey !== null && durable) {
+    const matches = durable.listByTopic(topicKey);
     return {
       kind: 'durable_topic',
       count: matches.length,
       deleteAll: () => {
         for (const entry of matches) {
-          deps.durable?.removeById(entry.id);
+          durable.removeById(entry.id);
         }
       },
     };

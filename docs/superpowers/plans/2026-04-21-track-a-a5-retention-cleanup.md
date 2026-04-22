@@ -213,7 +213,7 @@ Expected: implementation commit created.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a5-retention-cleanup.md`
 
-- [ ] Run the A5 validation suite.
+- [x] Run the A5 validation suite.
 
 Run: `npm test -- packages/core/tests/memory/review.test.ts packages/core/tests/tools/review.test.ts packages/core/tests/tools/forget.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/compact.test.ts packages/core/tests/integration/memory-review-flow.test.ts`
 Expected: PASS.
@@ -223,17 +223,17 @@ Expected: PASS.
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] Commit the validation checkpoint.
+- [x] Commit the validation checkpoint.
 
 Run: `git add docs/superpowers/plans/2026-04-21-track-a-a5-retention-cleanup.md`
 Expected: plan doc staged if updated.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "chore(codex): complete track a a5 validation"`
 Expected: final A5 validation commit created.
 
-- [ ] Tag the checkpoint.
+- [x] Tag the checkpoint.
 
 Run: `git tag -a track-a-a5-local -m "Track A A5 retention cleanup local checkpoint"`
 Expected: tag created locally.
