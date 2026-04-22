@@ -29,6 +29,7 @@ import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';
 import { handleImportCodex } from './tools/import-codex.js';
 import { handlePurge } from './tools/purge.js';
+import { handleRecall } from './tools/recall.js';
 import { handleRemember } from './tools/remember.js';
 import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
@@ -190,6 +191,43 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     content: [{ type: 'text' as const, text: handleExplore(path, { db }) }],
   }));
 
+  function runPreQueryCodexFlow(now: number): void {
+    const autoImport = coordinateCodexAutoImport({
+      now,
+      snapshot: codexAutoImportSnapshot,
+      runImport: () =>
+        handleImportCodex(
+          { latestOnly: true },
+          {
+            db,
+            inboxDir,
+            captureLevel: config.captureLevel,
+            fts5Available: fts5,
+            env: process.env,
+            processInbox,
+            runDurableExtraction,
+            importCodexSessionsToInbox,
+          },
+        ),
+    });
+    codexAutoImportSnapshot = autoImport.snapshot;
+
+    if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
+      try {
+        const metrics = processInbox(inboxDir, db, {
+          batchLimit: 50,
+          captureLevel: config.captureLevel,
+          fts5Available: fts5,
+        });
+        runDurableExtraction(db, { source: 'codex' });
+        _lastIngestMetrics = metrics;
+        lastIngestTime = now;
+      } catch {
+        // Pre-query ingest failure should not block search or recall
+      }
+    }
+  }
+
   // 2. memory_search (with Codex auto-import + pre-search inbox processing)
   server.tool(
     'memory_search',
@@ -221,41 +259,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     },
     async ({ query, timeRange, filePath, kind, source, limit, offset }) => {
       const now = Date.now();
-      const autoImport = coordinateCodexAutoImport({
-        now,
-        snapshot: codexAutoImportSnapshot,
-        runImport: () =>
-          handleImportCodex(
-            { latestOnly: true },
-            {
-              db,
-              inboxDir,
-              captureLevel: config.captureLevel,
-              fts5Available: fts5,
-              env: process.env,
-              processInbox,
-              runDurableExtraction,
-              importCodexSessionsToInbox,
-            },
-          ),
-      });
-      codexAutoImportSnapshot = autoImport.snapshot;
-
-      // Process any remaining inbox events before search (debounced, max 50 events)
-      if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
-        try {
-          const metrics = processInbox(inboxDir, db, {
-            batchLimit: 50,
-            captureLevel: config.captureLevel,
-            fts5Available: fts5,
-          });
-          runDurableExtraction(db, { source: 'codex' });
-          _lastIngestMetrics = metrics;
-          lastIngestTime = now;
-        } catch {
-          // Pre-search ingest failure should not block the search
-        }
-      }
+      runPreQueryCodexFlow(now);
 
       const results = handleSearch(
         query,
@@ -275,6 +279,46 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           {
             type: 'text' as const,
             text: JSON.stringify(results),
+          },
+        ],
+      };
+    },
+  );
+
+  // 2b. memory_recall (with the same Codex auto-import + pre-query inbox processing)
+  server.tool(
+    'memory_recall',
+    {
+      question: z.string(),
+      timeRange: z
+        .object({
+          from: z.number().optional(),
+          to: z.number().optional(),
+          relative: z.enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d']).optional(),
+        })
+        .optional()
+        .describe('Filter recall candidates by time range (absolute or relative)'),
+      limit: z.number().optional().describe('Max recall candidates to inspect per source (default 10)'),
+    },
+    async ({ question, timeRange, limit }) => {
+      const now = Date.now();
+      runPreQueryCodexFlow(now);
+
+      const result = handleRecall(
+        question,
+        { db, now },
+        {
+          timeRange,
+          limit,
+          now,
+        },
+      );
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(result),
           },
         ],
       };

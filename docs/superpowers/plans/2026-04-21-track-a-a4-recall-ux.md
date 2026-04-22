@@ -154,26 +154,26 @@ Expected: implementation commit created.
 - Modify: `packages/core/tests/integration/server.test.ts`
 - Create: `packages/core/tests/integration/recall-tool.test.ts`
 
-- [ ] Add the `memory_recall` MCP tool with a concise schema:
+- [x] Add the `memory_recall` MCP tool with a concise schema:
   - `question: string`
   - `timeRange?: TimeRange`
   - `limit?: number`
 
-- [ ] Make the tool reuse the same pre-search Codex auto-import flow as `memory_search`.
+- [x] Make the tool reuse the same pre-search Codex auto-import flow as `memory_search`.
 
-- [ ] Add integration tests proving the tool is exposed and returns structured JSON.
+- [x] Add integration tests proving the tool is exposed and returns structured JSON.
 
-- [ ] Run the recall integration tests.
+- [x] Run the recall integration tests.
 
 Run: `npm test -- packages/core/tests/integration/recall-tool.test.ts packages/core/tests/integration/server.test.ts`
 Expected: PASS.
 
-- [ ] Commit the MCP wiring.
+- [x] Commit the MCP wiring.
 
 Run: `git add packages/core/src/server.ts packages/core/tests/integration/recall-tool.test.ts packages/core/tests/integration/server.test.ts`
 Expected: recall tool wiring staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): expose memory recall tool"`
 Expected: implementation commit created.

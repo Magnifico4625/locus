@@ -13,6 +13,12 @@ interface RecallDeps {
   now?: number;
 }
 
+export interface RecallOptions {
+  timeRange?: TimeRange;
+  limit?: number;
+  now?: number;
+}
+
 interface DurableRecallRow {
   id: number;
   summary: string;
@@ -75,6 +81,14 @@ function parseRange(question: string, now: number): { timeRange?: TimeRange; res
   return {};
 }
 
+function resolveRangeLabel(timeRange: TimeRange): string {
+  if (timeRange.relative) {
+    return timeRange.relative;
+  }
+
+  return 'custom';
+}
+
 function buildResolvedRange(
   label: string,
   timeRange: TimeRange,
@@ -98,6 +112,7 @@ function loadDurableCandidates(
   questionTerms: string[],
   timeRange: TimeRange | undefined,
   now: number,
+  limit: number,
 ): MemoryRecallCandidate[] {
   const params: unknown[] = [];
   const clauses = ["memory_type = 'decision'", "state = 'active'"];
@@ -115,8 +130,8 @@ function loadDurableCandidates(
      FROM durable_memories
      WHERE ${clauses.join(' AND ')}
      ORDER BY updated_at DESC, id DESC
-     LIMIT 10`,
-    params,
+     LIMIT ?`,
+    [...params, limit],
   );
 
   return rows
@@ -134,13 +149,14 @@ function loadConversationCandidates(
   questionTerms: string[],
   timeRange: TimeRange | undefined,
   now: number,
+  limit: number,
 ): MemoryRecallCandidate[] {
   const entries = handleTimeline(
     { db },
     {
       timeRange,
       summary: false,
-      limit: 10,
+      limit,
       now,
     },
   );
@@ -191,13 +207,29 @@ function buildResult(
   };
 }
 
-export function handleRecall(question: string, deps: RecallDeps): MemoryRecallResult {
-  const now = deps.now ?? Date.now();
+export function handleRecall(
+  question: string,
+  deps: RecallDeps,
+  options?: RecallOptions,
+): MemoryRecallResult {
+  const now = options?.now ?? deps.now ?? Date.now();
+  const limit = Math.max(1, options?.limit ?? 10);
   const questionTerms = parseQuestionTerms(question);
-  const { timeRange, resolvedRange } = parseRange(question, now);
+  const questionRange = parseRange(question, now);
+  const explicitRange = options?.timeRange
+    ? buildResolvedRange(resolveRangeLabel(options.timeRange), options.timeRange, now)
+    : undefined;
+  const timeRange = explicitRange?.timeRange ?? questionRange.timeRange;
+  const resolvedRange = explicitRange?.resolvedRange ?? questionRange.resolvedRange;
 
-  const durableCandidates = loadDurableCandidates(deps.db, questionTerms, timeRange, now);
-  const conversationCandidates = loadConversationCandidates(deps.db, questionTerms, timeRange, now);
+  const durableCandidates = loadDurableCandidates(deps.db, questionTerms, timeRange, now, limit);
+  const conversationCandidates = loadConversationCandidates(
+    deps.db,
+    questionTerms,
+    timeRange,
+    now,
+    limit,
+  );
 
   const candidates = [...durableCandidates, ...conversationCandidates];
   return buildResult(question, candidates, resolvedRange);
