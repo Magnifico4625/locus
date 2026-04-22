@@ -243,27 +243,27 @@ Expected: test commit created.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a4-recall-ux.md`
 
-- [ ] Run the A4 validation suite.
+- [x] Run the A4 validation suite.
 
 Run: `npm test -- packages/core/tests/tools/recall.test.ts packages/core/tests/integration/recall-tool.test.ts packages/core/tests/integration/server.test.ts packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts`
 Expected: PASS.
 
-- [ ] Run workspace typecheck.
+- [x] Run workspace typecheck.
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] Commit the validation checkpoint.
+- [x] Commit the validation checkpoint.
 
 Run: `git add docs/superpowers/plans/2026-04-21-track-a-a4-recall-ux.md`
 Expected: plan doc staged if updated.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "chore(codex): complete track a a4 validation"`
 Expected: final A4 validation commit created.
 
-- [ ] Tag the checkpoint.
+- [x] Tag the checkpoint.
 
 Run: `git tag -a track-a-a4-local -m "Track A A4 recall UX local checkpoint"`
 Expected: tag created locally.
