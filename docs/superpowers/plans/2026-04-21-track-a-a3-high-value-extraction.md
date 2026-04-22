@@ -183,31 +183,31 @@ Expected: test-only commit created.
 - Create: `packages/core/src/memory/durable-extractor.ts`
 - Create: `packages/core/src/memory/durable-merge.ts`
 
-- [ ] Implement deterministic Topic Key classification and canonicalization helpers.
+- [x] Implement deterministic Topic Key classification and canonicalization helpers.
 
-- [ ] Implement a rule-based extractor that reads redacted conversation payloads and emits durable facts only for:
+- [x] Implement a rule-based extractor that reads redacted conversation payloads and emits durable facts only for:
   - decisions
   - preferences
   - style guidance
   - stable constraints
 
-- [ ] Implement merge logic that decides between:
+- [x] Implement merge logic that decides between:
   - ignore
   - confirm existing
   - insert new active
   - supersede previous active
 
-- [ ] Re-run the extraction unit tests.
+- [x] Re-run the extraction unit tests.
 
 Run: `npm test -- packages/core/tests/memory/topic-keys.test.ts packages/core/tests/memory/durable-extractor.test.ts packages/core/tests/memory/durable-merge.test.ts`
 Expected: PASS.
 
-- [ ] Commit the extraction layer.
+- [x] Commit the extraction layer.
 
 Run: `git add packages/core/src/memory/topic-keys.ts packages/core/src/memory/durable-extractor.ts packages/core/src/memory/durable-merge.ts`
 Expected: extraction modules staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): add rule-based durable extraction"`
 Expected: implementation commit created.
