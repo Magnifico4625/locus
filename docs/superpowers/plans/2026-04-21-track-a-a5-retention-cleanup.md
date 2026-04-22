@@ -189,21 +189,21 @@ Expected: implementation commit created.
 - Modify: `packages/core/tests/tools/status.test.ts`
 - Modify: `packages/core/tests/tools/compact.test.ts`
 
-- [ ] Add durable-state counts or a compact durable-memory summary to `memory_status`.
+- [x] Add durable-state counts or a compact durable-memory summary to `memory_status`.
 
-- [ ] Ensure `memory_compact` tests still reflect that compact is manual and does not become hidden auto-cleanup.
+- [x] Ensure `memory_compact` tests still reflect that compact is manual and does not become hidden auto-cleanup.
 
-- [ ] Run the status and compact tests.
+- [x] Run the status and compact tests.
 
 Run: `npm test -- packages/core/tests/tools/status.test.ts packages/core/tests/tools/compact.test.ts`
 Expected: PASS.
 
-- [ ] Commit the status visibility changes.
+- [x] Commit the status visibility changes.
 
 Run: `git add packages/core/src/tools/status.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/compact.test.ts`
 Expected: status and compact changes staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): expose durable retention state in status"`
 Expected: implementation commit created.

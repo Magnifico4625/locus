@@ -141,4 +141,44 @@ describe('handleCompact', () => {
     );
     expect(kept?.session_id).toBe('session-2');
   });
+
+  it('does not delete durable memories or change durable states during compact', () => {
+    const now = Date.now();
+    const oldTime = now - 60 * 24 * 60 * 60 * 1000;
+
+    db.run(
+      `INSERT INTO durable_memories (
+        topic_key, memory_type, state, summary, evidence_json,
+        source_event_id, source, superseded_by_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'database_choice',
+        'decision',
+        'stale',
+        'Use SQLite locally.',
+        '{}',
+        null,
+        'codex',
+        null,
+        oldTime,
+        oldTime,
+      ],
+    );
+    db.run(
+      "INSERT INTO memories (layer, content, tags_json, created_at, updated_at, session_id) VALUES ('episodic', 'old event', '[]', ?, ?, 'sess1')",
+      [oldTime, oldTime],
+    );
+
+    const result = handleCompact(db, { maxAgeDays: 1, keepSessions: 0 });
+    const durableRow = db.get<{ cnt: number; stale_count: number }>(
+      `SELECT
+         COUNT(*) AS cnt,
+         SUM(CASE WHEN state = 'stale' THEN 1 ELSE 0 END) AS stale_count
+       FROM durable_memories`,
+    );
+
+    expect(result.deletedEntries).toBe(1);
+    expect(durableRow?.cnt ?? 0).toBe(1);
+    expect(durableRow?.stale_count ?? 0).toBe(1);
+  });
 });

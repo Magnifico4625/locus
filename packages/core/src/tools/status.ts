@@ -1,4 +1,5 @@
 import { readdirSync, statSync } from 'node:fs';
+import { DurableMemoryStore } from '../memory/durable.js';
 import type {
   CaptureLevel,
   CodexAutoImportSnapshot,
@@ -52,6 +53,7 @@ function getDefaultCodexAutoImportSnapshot(): CodexAutoImportSnapshot {
  */
 export function handleStatus(deps: StatusDeps): MemoryStatus {
   const { db, dbPath, config } = deps;
+  const durable = new DurableMemoryStore(db, false);
 
   // ── File counts ─────────────────────────────────────────────────────────────
 
@@ -74,6 +76,7 @@ export function handleStatus(deps: StatusDeps): MemoryStatus {
     "SELECT COUNT(*) AS cnt FROM memories WHERE layer = 'episodic'",
   );
   const totalEpisodes = totalEpisodesRow?.cnt ?? 0;
+  const durableMemoryStates = durable.countByState();
 
   // ── Scan state ───────────────────────────────────────────────────────────────
 
@@ -135,6 +138,7 @@ export function handleStatus(deps: StatusDeps): MemoryStatus {
     storageBackend: deps.backend,
     fts5Available: deps.fts5,
     searchEngine: deps.fts5 ? 'FTS5' : 'LIKE fallback',
+    durableMemoryStates,
     codexAutoImport: deps.codexAutoImportSnapshot
       ? { ...deps.codexAutoImportSnapshot }
       : getDefaultCodexAutoImportSnapshot(),

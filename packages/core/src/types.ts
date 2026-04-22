@@ -440,6 +440,7 @@ export interface MemoryStatus {
   storageBackend: 'node:sqlite' | 'sql.js';
   fts5Available: boolean;
   searchEngine: 'FTS5' | 'LIKE fallback';
+  durableMemoryStates?: DurableMemoryStateCounts;
   codexAutoImport?: CodexAutoImportSnapshot;
   codexDiagnostics?: CodexDiagnosticsSnapshot;
 }
