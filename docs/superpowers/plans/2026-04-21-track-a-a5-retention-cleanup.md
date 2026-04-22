@@ -160,24 +160,24 @@ Expected: implementation commit created.
 - Modify: `packages/core/tests/tools/forget.test.ts`
 - Modify: `packages/core/src/types.ts`
 
-- [ ] Extend forget query parsing to support durable targets such as:
+- [x] Extend forget query parsing to support durable targets such as:
   - `durable:17`
   - `topic:database_choice`
   - plain semantic text fallback
 
-- [ ] Keep bulk-deletion confirmation rules intact.
+- [x] Keep bulk-deletion confirmation rules intact.
 
-- [ ] Re-run forget tests.
+- [x] Re-run forget tests.
 
 Run: `npm test -- packages/core/tests/tools/forget.test.ts`
 Expected: PASS.
 
-- [ ] Commit the durable forget path.
+- [x] Commit the durable forget path.
 
 Run: `git add packages/core/src/tools/forget.ts packages/core/tests/tools/forget.test.ts packages/core/src/types.ts`
 Expected: forget-path changes staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): support durable memory deletion targets"`
 Expected: implementation commit created.

@@ -490,6 +490,8 @@ export type PurgeResponse = PurgeResponsePending | PurgeResponseDone | PurgeResp
 
 // ─── Forget ───
 
+export type ForgetTargetKind = 'semantic_query' | 'durable_id' | 'durable_topic';
+
 export interface ForgetResponseDeleted {
   status: 'deleted';
   deleted: number;

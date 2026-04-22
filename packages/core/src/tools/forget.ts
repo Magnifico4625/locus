@@ -1,19 +1,76 @@
+import type { DurableMemoryStore } from '../memory/durable.js';
 import type { SemanticMemory } from '../memory/semantic.js';
-import type { ForgetResponse } from '../types.js';
+import type { ForgetResponse, ForgetTargetKind } from '../types.js';
 import type { ConfirmationTokenStore } from './confirmation-token.js';
 
 export interface ForgetDeps {
   semantic: SemanticMemory;
   tokenStore: ConfirmationTokenStore;
+  durable?: DurableMemoryStore;
 }
 
 const BULK_DELETE_THRESHOLD = 5;
 
+interface ForgetMatchSet {
+  kind: ForgetTargetKind;
+  count: number;
+  deleteAll: () => void;
+}
+
+function parseDurableId(query: string): number | null {
+  const match = /^durable:(\d+)$/i.exec(query.trim());
+  if (!match) {
+    return null;
+  }
+
+  return Number(match[1]);
+}
+
+function parseTopicKey(query: string): string | null {
+  const match = /^topic:(.+)$/i.exec(query.trim());
+  if (!match) {
+    return null;
+  }
+
+  const topicKey = match[1].trim();
+  return topicKey.length > 0 ? topicKey : null;
+}
+
+function resolveMatches(query: string, deps: ForgetDeps): ForgetMatchSet {
+  const topicKey = parseTopicKey(query);
+  if (topicKey !== null && deps.durable) {
+    const matches = deps.durable.listByTopic(topicKey);
+    return {
+      kind: 'durable_topic',
+      count: matches.length,
+      deleteAll: () => {
+        for (const entry of matches) {
+          deps.durable?.removeById(entry.id);
+        }
+      },
+    };
+  }
+
+  const matches = deps.semantic.search(query, 100);
+  return {
+    kind: 'semantic_query',
+    count: matches.length,
+    deleteAll: () => {
+      for (const entry of matches) {
+        deps.semantic.remove(entry.id);
+      }
+    },
+  };
+}
+
 /**
- * Remove memory entries matching a search query from semantic memory.
+ * Remove memory entries matching either:
+ * - a plain semantic search query
+ * - an explicit durable id target: durable:<id>
+ * - an explicit durable topic target: topic:<topicKey>
  *
  * Flow:
- * 1. Search for matching entries (up to 100).
+ * 1. Resolve the target and matching entries.
  * 2. If 0 matches: return deleted=0 immediately.
  * 3. If <=5 matches: delete all, return deleted count.
  * 4. If >5 matches AND no confirmToken: generate a pending-confirmation token
@@ -27,17 +84,25 @@ export function handleForget(
   deps: ForgetDeps,
   confirmToken?: string,
 ): ForgetResponse {
-  const matches = deps.semantic.search(query, 100);
-  const count = matches.length;
+  const durableId = parseDurableId(query);
+  if (durableId !== null && deps.durable) {
+    const deleted = deps.durable.removeById(durableId);
+    return {
+      status: 'deleted',
+      deleted: deleted ? 1 : 0,
+      message: deleted ? 'Deleted 1 entry.' : 'No matching entries found.',
+    };
+  }
+
+  const matchSet = resolveMatches(query, deps);
+  const count = matchSet.count;
 
   if (count === 0) {
     return { status: 'deleted', deleted: 0, message: 'No matching entries found.' };
   }
 
   if (count <= BULK_DELETE_THRESHOLD) {
-    for (const entry of matches) {
-      deps.semantic.remove(entry.id);
-    }
+    matchSet.deleteAll();
     return {
       status: 'deleted',
       deleted: count,
@@ -61,9 +126,7 @@ export function handleForget(
     return { status: 'error', message: 'Invalid or expired confirmation token.' };
   }
 
-  for (const entry of matches) {
-    deps.semantic.remove(entry.id);
-  }
+  matchSet.deleteAll();
   return {
     status: 'deleted',
     deleted: count,
