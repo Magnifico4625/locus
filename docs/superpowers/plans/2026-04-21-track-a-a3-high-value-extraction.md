@@ -255,21 +255,21 @@ Expected: implementation commit created.
 - Modify: `packages/core/tests/resources/decisions.test.ts`
 - Modify: `packages/core/src/types.ts`
 
-- [ ] Extend search results with a `durable` layer and ensure durable hits are ranked above generic semantic entries when both match.
+- [x] Extend search results with a `durable` layer and ensure durable hits are ranked above generic semantic entries when both match.
 
-- [ ] Update the `memory://decisions` resource so it reads from durable memory first and only falls back to legacy semantic memories if durable memory is empty.
+- [x] Update the `memory://decisions` resource so it reads from durable memory first and only falls back to legacy semantic memories if durable memory is empty.
 
-- [ ] Re-run search and resource tests.
+- [x] Re-run search and resource tests.
 
 Run: `npm test -- packages/core/tests/tools/search.test.ts packages/core/tests/resources/decisions.test.ts`
 Expected: PASS.
 
-- [ ] Commit the search/resource integration.
+- [x] Commit the search/resource integration.
 
 Run: `git add packages/core/src/tools/search.ts packages/core/src/resources/decisions.ts packages/core/tests/tools/search.test.ts packages/core/tests/resources/decisions.test.ts packages/core/src/types.ts`
 Expected: search and resource changes staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): surface durable memory in search and decisions"`
 Expected: implementation commit created.

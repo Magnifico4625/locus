@@ -45,6 +45,12 @@ interface EpisodicRow {
   session_id: string | null;
 }
 
+interface DurableRow {
+  id: number;
+  summary: string;
+  updated_at: number;
+}
+
 interface ConversationFtsRow {
   id: number;
   event_id: string;
@@ -229,6 +235,47 @@ function searchEpisodic(query: string, db: DatabaseAdapter): SearchResult[] {
   }));
 }
 
+function searchDurable(query: string, db: DatabaseAdapter, fts5: boolean): SearchResult[] {
+  let rows: DurableRow[] = [];
+
+  if (fts5) {
+    const sanitized = sanitizeFtsQuery(query);
+    if (sanitized) {
+      try {
+        rows = db.all<DurableRow>(
+          `SELECT dm.id, dm.summary, dm.updated_at
+           FROM durable_memories_fts dfts
+           JOIN durable_memories dm ON dm.id = dfts.rowid
+           WHERE dfts MATCH ? AND dm.state = 'active'
+           ORDER BY dm.updated_at DESC, dm.id DESC
+           LIMIT 10`,
+          [sanitized],
+        );
+      } catch {
+        rows = [];
+      }
+    }
+  }
+
+  if (rows.length === 0) {
+    rows = db.all<DurableRow>(
+      `SELECT id, summary, updated_at
+       FROM durable_memories
+       WHERE state = 'active' AND summary LIKE ?
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 10`,
+      [`%${query}%`],
+    );
+  }
+
+  return rows.map((row) => ({
+    layer: 'durable' as const,
+    content: row.summary,
+    relevance: 0.9,
+    source: `durable:${row.id}`,
+  }));
+}
+
 // ─── Conversation Search ──────────────────────────────────────────────────────
 
 function buildWhereClause(
@@ -409,10 +456,13 @@ export function handleSearch(
     source: `memory:${entry.id}`,
   }));
 
-  // 3. Episodic results
+  // 3. Durable results
+  const durable = searchDurable(query, db, fts5);
+
+  // 4. Episodic results
   const episodic = searchEpisodic(query, db);
 
-  // 4. Conversation results (new in v3)
+  // 5. Conversation results (new in v3)
   let conversation: SearchResult[] = [];
   const resolved = options?.timeRange ? resolveTimeRange(options.timeRange) : undefined;
   const convOpts = {
@@ -430,7 +480,7 @@ export function handleSearch(
   }
 
   // Combine, sort by relevance DESC, limit to 20
-  const combined = [...structural, ...semanticResults, ...episodic, ...conversation];
+  const combined = [...structural, ...durable, ...semanticResults, ...episodic, ...conversation];
   combined.sort((a, b) => b.relevance - a.relevance);
 
   return combined.slice(0, 20);

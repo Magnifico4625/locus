@@ -99,7 +99,7 @@ export interface DurableMemoryEntry {
 // ─── Search ───
 
 export interface SearchResult {
-  layer: 'structural' | 'semantic' | 'episodic' | 'conversation';
+  layer: 'structural' | 'semantic' | 'episodic' | 'conversation' | 'durable';
   content: string;
   relevance: number;
   source: string;
