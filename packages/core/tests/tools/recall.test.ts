@@ -120,6 +120,13 @@ describe('handleRecall', () => {
     }) as MemoryRecallResult;
 
     expect(result.status).toBe('ok');
+    expect(result.resolvedRange).toEqual({
+      label: 'last week',
+      from: now - 7 * 24 * 3600 * 1000,
+      to: now,
+      fromIso: new Date(now - 7 * 24 * 3600 * 1000).toISOString(),
+      toIso: new Date(now).toISOString(),
+    });
     expect(result.summary).toContain('GitHub OAuth');
     expect(result.candidates).toEqual([
       expect.objectContaining({

@@ -215,25 +215,25 @@ Expected: implementation commit created.
 - Create: `packages/core/tests/integration/recall-tool.test.ts`
 - Modify: `packages/core/tests/tools/recall.test.ts`
 
-- [ ] Add integration cases covering:
+- [x] Add integration cases covering:
   - "what did we do yesterday?"
   - "what did we decide about auth last week?"
   - ambiguous two-task recall
   - empty-memory response
 
-- [ ] Ensure returned ranges include ISO timestamps or equivalent absolute date evidence.
+- [x] Ensure returned ranges include ISO timestamps or equivalent absolute date evidence.
 
-- [ ] Run the dedicated recall acceptance tests.
+- [x] Run the dedicated recall acceptance tests.
 
 Run: `npm test -- packages/core/tests/tools/recall.test.ts packages/core/tests/integration/recall-tool.test.ts`
 Expected: PASS.
 
-- [ ] Commit the recall acceptance coverage.
+- [x] Commit the recall acceptance coverage.
 
 Run: `git add packages/core/tests/tools/recall.test.ts packages/core/tests/integration/recall-tool.test.ts`
 Expected: recall acceptance tests staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(core): cover natural-language recall flows"`
 Expected: test commit created.
