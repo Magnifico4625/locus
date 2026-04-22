@@ -279,27 +279,27 @@ Expected: implementation commit created.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a3-high-value-extraction.md`
 
-- [ ] Run the A3 validation suite.
+- [x] Run the A3 validation suite.
 
 Run: `npm test -- packages/core/tests/storage/migrations.test.ts packages/core/tests/memory/durable.test.ts packages/core/tests/memory/topic-keys.test.ts packages/core/tests/memory/durable-extractor.test.ts packages/core/tests/memory/durable-merge.test.ts packages/core/tests/tools/import-codex.test.ts packages/core/tests/tools/search.test.ts packages/core/tests/resources/decisions.test.ts packages/core/tests/integration/durable-extraction-flow.test.ts packages/core/tests/integration/codex-import-tool.test.ts`
 Expected: PASS.
 
-- [ ] Run workspace typecheck.
+- [x] Run workspace typecheck.
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] Commit the validation checkpoint.
+- [x] Commit the validation checkpoint.
 
 Run: `git add docs/superpowers/plans/2026-04-21-track-a-a3-high-value-extraction.md`
 Expected: plan doc staged if updated.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "chore(codex): complete track a a3 validation"`
 Expected: final A3 validation commit created.
 
-- [ ] Tag the checkpoint.
+- [x] Tag the checkpoint.
 
 Run: `git tag -a track-a-a3-local -m "Track A A3 high-value extraction local checkpoint"`
 Expected: tag created locally.

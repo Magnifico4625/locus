@@ -29,10 +29,11 @@ export function mergeDurableCandidate(
     };
   }
 
-  if (candidate.memoryType === 'decision' && matchingTopic.length > 0) {
+  const firstMatchingEntry = matchingTopic[0];
+  if (candidate.memoryType === 'decision' && firstMatchingEntry) {
     return {
       action: 'supersede_existing',
-      existingId: matchingTopic[0].id,
+      existingId: firstMatchingEntry.id,
     };
   }
 
