@@ -103,25 +103,25 @@ Expected: test-only commit created.
 - Modify: `packages/core/src/memory/durable.ts`
 - Modify: `packages/core/src/types.ts`
 
-- [ ] Implement a pure review engine that produces candidates for:
+- [x] Implement a pure review engine that produces candidates for:
   - superseded durable memories
   - duplicate confirmations
   - aged but still readable archivable memories
   - stale low-value durable entries
 
-- [ ] Expose counts by durable state from the durable store.
+- [x] Expose counts by durable state from the durable store.
 
-- [ ] Re-run the review unit tests.
+- [x] Re-run the review unit tests.
 
 Run: `npm test -- packages/core/tests/memory/review.test.ts`
 Expected: PASS.
 
-- [ ] Commit the review engine.
+- [x] Commit the review engine.
 
 Run: `git add packages/core/src/memory/review.ts packages/core/src/memory/durable.ts packages/core/src/types.ts`
 Expected: review engine files staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): add durable memory review engine"`
 Expected: implementation commit created.

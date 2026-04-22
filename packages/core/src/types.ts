@@ -96,6 +96,38 @@ export interface DurableMemoryEntry {
   updatedAt: number;
 }
 
+export interface DurableMemoryStateCounts {
+  active: number;
+  stale: number;
+  superseded: number;
+  archivable: number;
+}
+
+export type DurableReviewReason =
+  | 'superseded_by_newer_memory'
+  | 'duplicate_confirmation'
+  | 'aged_but_readable'
+  | 'stale_low_value';
+
+export type DurableReviewAction = 'delete' | 'archive' | 'review';
+
+export interface DurableReviewCandidate {
+  durableId: number;
+  topicKey?: string;
+  state: DurableMemoryState;
+  reason: DurableReviewReason;
+  recommendedAction: DurableReviewAction;
+  summary: string;
+  supersededById?: number;
+  updatedAt: number;
+}
+
+export interface DurableReviewResult {
+  totalCandidates: number;
+  countsByState: DurableMemoryStateCounts;
+  candidates: DurableReviewCandidate[];
+}
+
 // ─── Search ───
 
 export interface SearchResult {

@@ -1,6 +1,7 @@
 import type {
   DatabaseAdapter,
   DurableMemoryEntry,
+  DurableMemoryStateCounts,
   DurableMemoryState,
   DurableMemoryType,
 } from '../types.js';
@@ -146,6 +147,33 @@ export class DurableMemoryStore {
       [memoryType],
     );
     return rows.map(rowToEntry);
+  }
+
+  listAll(limit = 100): DurableMemoryEntry[] {
+    const rows = this.db.all<DurableMemoryRow>(
+      'SELECT * FROM durable_memories ORDER BY updated_at DESC, id DESC LIMIT ?',
+      [limit],
+    );
+    return rows.map(rowToEntry);
+  }
+
+  countByState(): DurableMemoryStateCounts {
+    const rows = this.db.all<{ state: DurableMemoryState; cnt: number }>(
+      'SELECT state, COUNT(*) AS cnt FROM durable_memories GROUP BY state',
+    );
+
+    const counts: DurableMemoryStateCounts = {
+      active: 0,
+      stale: 0,
+      superseded: 0,
+      archivable: 0,
+    };
+
+    for (const row of rows) {
+      counts[row.state] = row.cnt;
+    }
+
+    return counts;
   }
 
   search(query: string, limit = 20): DurableMemoryEntry[] {
