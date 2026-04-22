@@ -370,4 +370,89 @@ describe('handleStatus', () => {
       latestImportedTimestamp: 1700000000000,
     });
   });
+
+  it('includes durable-memory state counts in status output', () => {
+    const now = Date.now();
+    adapter.run(
+      `INSERT INTO durable_memories (
+        topic_key, memory_type, state, summary, evidence_json,
+        source_event_id, source, superseded_by_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'auth_strategy',
+        'decision',
+        'active',
+        'Use GitHub OAuth',
+        '{}',
+        null,
+        'codex',
+        null,
+        now,
+        now,
+      ],
+    );
+    adapter.run(
+      `INSERT INTO durable_memories (
+        topic_key, memory_type, state, summary, evidence_json,
+        source_event_id, source, superseded_by_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'coding_style',
+        'style',
+        'stale',
+        'Prefer long block comments',
+        '{}',
+        null,
+        'manual',
+        null,
+        now,
+        now,
+      ],
+    );
+    adapter.run(
+      `INSERT INTO durable_memories (
+        topic_key, memory_type, state, summary, evidence_json,
+        source_event_id, source, superseded_by_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'database_choice',
+        'decision',
+        'superseded',
+        'Use PostgreSQL locally',
+        '{}',
+        null,
+        'codex',
+        1,
+        now,
+        now,
+      ],
+    );
+    adapter.run(
+      `INSERT INTO durable_memories (
+        topic_key, memory_type, state, summary, evidence_json,
+        source_event_id, source, superseded_by_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'meeting_notes',
+        'constraint',
+        'archivable',
+        'Archive old planning note',
+        '{}',
+        null,
+        'manual',
+        null,
+        now,
+        now,
+      ],
+    );
+
+    const status = handleStatus(makeStatusDeps(adapter, tempDir));
+
+    expect((status as Record<string, unknown>).durableMemoryStates).toEqual({
+      active: 1,
+      stale: 1,
+      superseded: 1,
+      archivable: 1,
+    });
+  });
 });

@@ -51,17 +51,17 @@
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a5-retention-cleanup.md`
 
-- [ ] Verify the A4 checkpoint exists.
+- [x] Verify the A4 checkpoint exists.
 
 Run: `git tag --list track-a-a4-local`
 Expected: prints `track-a-a4-local`.
 
-- [ ] Create the branch from the checkpoint.
+- [x] Create the branch from the checkpoint.
 
 Run: `git checkout track-a-a4-local`
 Expected: detached HEAD at A4 checkpoint.
 
-- [ ] Create the feature branch.
+- [x] Create the feature branch.
 
 Run: `git checkout -b feature/track-a-a5-retention-cleanup`
 Expected: new branch created.
@@ -74,24 +74,24 @@ Expected: new branch created.
 - Modify: `packages/core/tests/tools/forget.test.ts`
 - Modify: `packages/core/tests/tools/status.test.ts`
 
-- [ ] Add failing tests for:
+- [x] Add failing tests for:
   - superseded memories appear in review candidates
   - stale durable memories are suggested, not deleted
   - `memory_review` returns machine-friendly reasons and recommended actions
   - `memory_forget` can target durable ids or topic keys
   - status includes durable-memory state counts
 
-- [ ] Run the focused tests.
+- [x] Run the focused tests.
 
 Run: `npm test -- packages/core/tests/memory/review.test.ts packages/core/tests/tools/review.test.ts packages/core/tests/tools/forget.test.ts packages/core/tests/tools/status.test.ts`
 Expected: FAIL because review tooling does not exist yet.
 
-- [ ] Commit the failing tests.
+- [x] Commit the failing tests.
 
 Run: `git add packages/core/tests/memory/review.test.ts packages/core/tests/tools/review.test.ts packages/core/tests/tools/forget.test.ts packages/core/tests/tools/status.test.ts`
 Expected: test-only change set staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(core): define memory review and cleanup contracts"`
 Expected: test-only commit created.

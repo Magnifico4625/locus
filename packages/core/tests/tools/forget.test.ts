@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { DurableMemoryStore } from '../../src/memory/durable.js';
 import { SemanticMemory } from '../../src/memory/semantic.js';
 import { runMigrations } from '../../src/storage/migrations.js';
 import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
@@ -18,6 +19,7 @@ function createAdapter(dir: string): NodeSqliteAdapter {
 describe('handleForget', () => {
   let tempDir: string;
   let adapter: NodeSqliteAdapter;
+  let durable: DurableMemoryStore;
   let semantic: SemanticMemory;
   let tokenStore: ConfirmationTokenStore;
 
@@ -25,6 +27,7 @@ describe('handleForget', () => {
     tempDir = mkdtempSync(join(tmpdir(), 'locus-forget-'));
     adapter = createAdapter(tempDir);
     runMigrations(adapter, false);
+    durable = new DurableMemoryStore(adapter, false);
     semantic = new SemanticMemory(adapter, false);
     tokenStore = new ConfirmationTokenStore('forget');
   });
@@ -208,6 +211,62 @@ describe('handleForget', () => {
     expect(second.status).toBe('error');
     if (second.status === 'error') {
       expect(second.message).toContain('Invalid or expired');
+    }
+  });
+
+  it('deletes a durable memory by explicit durable id target', () => {
+    const durableEntry = durable.insert({
+      topicKey: 'database_choice',
+      memoryType: 'decision',
+      summary: 'Use SQLite for local storage.',
+      evidence: { source: 'test' },
+      source: 'codex',
+    });
+
+    const result = handleForget(
+      `durable:${durableEntry.id}`,
+      { semantic, tokenStore, durable } as never,
+    );
+
+    expect(result.status).toBe('deleted');
+    if (result.status === 'deleted') {
+      expect(result.deleted).toBe(1);
+    }
+
+    const remaining = adapter.get<{ cnt: number }>(
+      'SELECT COUNT(*) AS cnt FROM durable_memories WHERE id = ?',
+      [durableEntry.id],
+    );
+    expect(remaining?.cnt ?? 0).toBe(0);
+  });
+
+  it('requires confirmation when deleting a durable topic with more than five entries', () => {
+    for (let i = 0; i < 6; i++) {
+      durable.insert({
+        topicKey: 'database_choice',
+        memoryType: 'decision',
+        summary: `Database decision ${i}`,
+        evidence: { source: 'test' },
+        source: 'codex',
+      });
+    }
+
+    const pending = handleForget('topic:database_choice', { semantic, tokenStore, durable } as never);
+
+    expect(pending.status).toBe('pending_confirmation');
+    if (pending.status !== 'pending_confirmation') {
+      return;
+    }
+
+    const confirmed = handleForget(
+      'topic:database_choice',
+      { semantic, tokenStore, durable } as never,
+      pending.confirmToken,
+    );
+
+    expect(confirmed.status).toBe('deleted');
+    if (confirmed.status === 'deleted') {
+      expect(confirmed.deleted).toBe(6);
     }
   });
 });
