@@ -123,26 +123,26 @@ Expected: test-only commit created.
 - Modify: `packages/core/src/tools/timeline.ts`
 - Modify: `packages/core/src/types.ts`
 
-- [ ] Implement `handleRecall()` as a pure helper that:
+- [x] Implement `handleRecall()` as a pure helper that:
   - resolves time windows
   - queries durable memory
   - queries recent conversation context
   - groups related events into recall candidates
   - emits a summary-first structured result
 
-- [ ] Reuse `resolveTimeRange()` instead of inventing a second date resolver.
+- [x] Reuse `resolveTimeRange()` instead of inventing a second date resolver.
 
-- [ ] Re-run the recall unit tests.
+- [x] Re-run the recall unit tests.
 
 Run: `npm test -- packages/core/tests/tools/recall.test.ts`
 Expected: PASS.
 
-- [ ] Commit the helper implementation.
+- [x] Commit the helper implementation.
 
 Run: `git add packages/core/src/tools/recall.ts packages/core/src/tools/search.ts packages/core/src/tools/timeline.ts packages/core/src/types.ts`
 Expected: recall helper files staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): add summary-first memory recall helper"`
 Expected: implementation commit created.

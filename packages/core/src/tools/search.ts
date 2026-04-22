@@ -133,37 +133,60 @@ export function summarizePayload(kind: string, payloadJson: string | null): stri
 
 // ─── Time Range Resolution ────────────────────────────────────────────────────
 
-interface ResolvedTimeRange {
+export interface ResolvedTimeRange {
   from: number;
   to: number;
+}
+
+type TimeResolutionMode = 'local' | 'utc';
+
+function setStartOfDay(date: Date, mode: TimeResolutionMode): void {
+  if (mode === 'utc') {
+    date.setUTCHours(0, 0, 0, 0);
+    return;
+  }
+
+  date.setHours(0, 0, 0, 0);
 }
 
 /**
  * Converts a TimeRange (possibly with relative strings) into absolute timestamps.
  */
-export function resolveTimeRange(range: TimeRange): ResolvedTimeRange {
-  const now = Date.now();
+export function resolveTimeRange(
+  range: TimeRange,
+  referenceNow?: number,
+  mode: TimeResolutionMode = 'local',
+): ResolvedTimeRange {
+  const now = referenceNow ?? Date.now();
 
   if (range.relative) {
     switch (range.relative) {
       case 'today': {
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
+        const start = new Date(now);
+        setStartOfDay(start, mode);
         return { from: start.getTime(), to: now };
       }
       case 'yesterday': {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
+        const startOfToday = new Date(now);
+        setStartOfDay(startOfToday, mode);
         const startOfYesterday = new Date(startOfToday);
-        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        if (mode === 'utc') {
+          startOfYesterday.setUTCDate(startOfYesterday.getUTCDate() - 1);
+        } else {
+          startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        }
         return { from: startOfYesterday.getTime(), to: startOfToday.getTime() };
       }
       case 'this_week': {
-        const monday = new Date();
-        const dayOfWeek = monday.getDay();
+        const monday = new Date(now);
+        const dayOfWeek = mode === 'utc' ? monday.getUTCDay() : monday.getDay();
         const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-        monday.setDate(monday.getDate() - diff);
-        monday.setHours(0, 0, 0, 0);
+        if (mode === 'utc') {
+          monday.setUTCDate(monday.getUTCDate() - diff);
+        } else {
+          monday.setDate(monday.getDate() - diff);
+        }
+        setStartOfDay(monday, mode);
         return { from: monday.getTime(), to: now };
       }
       case 'last_7d':

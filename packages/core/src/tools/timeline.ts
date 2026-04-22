@@ -14,6 +14,7 @@ export interface TimelineOptions {
   summary?: boolean;
   limit?: number;
   offset?: number;
+  now?: number;
 }
 
 export interface TimelineEntry {
@@ -54,7 +55,7 @@ export function handleTimeline(deps: TimelineDeps, options?: TimelineOptions): T
   const params: unknown[] = [];
 
   if (options?.timeRange) {
-    const resolved = resolveTimeRange(options.timeRange);
+    const resolved = resolveTimeRange(options.timeRange, options.now);
     clauses.push('ce.timestamp >= ?');
     params.push(resolved.from);
     clauses.push('ce.timestamp <= ?');
