@@ -105,6 +105,32 @@ export interface SearchResult {
   source: string;
 }
 
+export type MemoryRecallStatus = 'ok' | 'no_memory' | 'needs_clarification';
+
+export interface MemoryRecallResolvedRange {
+  label: string;
+  from: number;
+  to: number;
+  fromIso: string;
+  toIso: string;
+}
+
+export interface MemoryRecallCandidate {
+  sessionId?: string;
+  headline: string;
+  whyMatched: string;
+  eventIds: string[];
+  durableMemoryIds: number[];
+}
+
+export interface MemoryRecallResult {
+  status: MemoryRecallStatus;
+  question: string;
+  resolvedRange?: MemoryRecallResolvedRange;
+  summary: string;
+  candidates: MemoryRecallCandidate[];
+}
+
 // ─── Scanner ───
 
 export interface ScanResult {

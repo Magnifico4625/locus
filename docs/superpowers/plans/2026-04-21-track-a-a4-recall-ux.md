@@ -72,17 +72,17 @@ Rules:
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a4-recall-ux.md`
 
-- [ ] Verify the A3 checkpoint tag exists.
+- [x] Verify the A3 checkpoint tag exists.
 
 Run: `git tag --list track-a-a3-local`
 Expected: prints `track-a-a3-local`.
 
-- [ ] Create the branch from the checkpoint.
+- [x] Create the branch from the checkpoint.
 
 Run: `git checkout track-a-a3-local`
 Expected: detached HEAD at A3 checkpoint.
 
-- [ ] Create the feature branch.
+- [x] Create the feature branch.
 
 Run: `git checkout -b feature/track-a-a4-recall-ux`
 Expected: new branch created.
@@ -93,24 +93,24 @@ Expected: new branch created.
 - Create: `packages/core/tests/tools/recall.test.ts`
 - Modify: `packages/core/src/types.ts`
 
-- [ ] Add failing tests defining:
+- [x] Add failing tests defining:
   - `yesterday` resolves to an absolute date range
   - durable memory contributes to the summary
   - recent conversation context contributes to the summary
   - ambiguous matches return `needs_clarification`
   - no matches returns `no_memory`
 
-- [ ] Run the recall unit tests.
+- [x] Run the recall unit tests.
 
 Run: `npm test -- packages/core/tests/tools/recall.test.ts`
 Expected: FAIL because the recall helper does not exist yet.
 
-- [ ] Commit the failing recall tests.
+- [x] Commit the failing recall tests.
 
 Run: `git add packages/core/tests/tools/recall.test.ts packages/core/src/types.ts`
 Expected: test contract staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(core): define memory recall tool contract"`
 Expected: test-only commit created.
