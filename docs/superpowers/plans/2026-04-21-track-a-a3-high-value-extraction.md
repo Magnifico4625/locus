@@ -153,7 +153,7 @@ Expected: implementation commit created.
 - Create: `packages/core/tests/memory/durable-extractor.test.ts`
 - Create: `packages/core/tests/memory/durable-merge.test.ts`
 
-- [ ] Add failing tests for:
+- [x] Add failing tests for:
   - `database_choice` extraction
   - `auth_strategy` extraction
   - coding-style preference extraction
@@ -161,17 +161,17 @@ Expected: implementation commit created.
   - duplicate confirmation updates an existing durable entry instead of creating a new one
   - conflicting newer decision supersedes the older active entry within the same Topic Key
 
-- [ ] Run the new unit tests.
+- [x] Run the new unit tests.
 
 Run: `npm test -- packages/core/tests/memory/topic-keys.test.ts packages/core/tests/memory/durable-extractor.test.ts packages/core/tests/memory/durable-merge.test.ts`
 Expected: FAIL because the extractor modules do not exist yet.
 
-- [ ] Commit the failing extraction contract tests.
+- [x] Commit the failing extraction contract tests.
 
 Run: `git add packages/core/tests/memory/topic-keys.test.ts packages/core/tests/memory/durable-extractor.test.ts packages/core/tests/memory/durable-merge.test.ts`
 Expected: test-only change set staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(core): define durable extraction and topic key rules"`
 Expected: test-only commit created.
