@@ -125,23 +125,23 @@ Expected: test-only commit created.
 - Modify: `packages/core/src/storage/migrations.ts`
 - Modify: `packages/core/src/types.ts`
 
-- [ ] Add the durable-memory table, indexes, and optional FTS support in migrations.
+- [x] Add the durable-memory table, indexes, and optional FTS support in migrations.
 
-- [ ] Implement a focused `DurableMemoryStore` for insert, update state, search, list by topic, and remove-by-id behavior.
+- [x] Implement a focused `DurableMemoryStore` for insert, update state, search, list by topic, and remove-by-id behavior.
 
-- [ ] Add typed interfaces in `types.ts` without breaking existing semantic memory types.
+- [x] Add typed interfaces in `types.ts` without breaking existing semantic memory types.
 
-- [ ] Re-run durable storage tests.
+- [x] Re-run durable storage tests.
 
 Run: `npm test -- packages/core/tests/storage/migrations.test.ts packages/core/tests/memory/durable.test.ts`
 Expected: PASS.
 
-- [ ] Commit the storage layer.
+- [x] Commit the storage layer.
 
 Run: `git add packages/core/src/memory/durable.ts packages/core/src/storage/migrations.ts packages/core/src/types.ts`
 Expected: durable storage implementation staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): add durable memory storage"`
 Expected: implementation commit created.

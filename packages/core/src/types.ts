@@ -78,6 +78,24 @@ export interface MemoryEntry {
   sessionId?: string;
 }
 
+export type DurableMemoryType = 'decision' | 'preference' | 'style' | 'constraint';
+
+export type DurableMemoryState = 'active' | 'stale' | 'superseded' | 'archivable';
+
+export interface DurableMemoryEntry {
+  id: number;
+  topicKey?: string;
+  memoryType: DurableMemoryType;
+  state: DurableMemoryState;
+  summary: string;
+  evidence: Record<string, unknown>;
+  sourceEventId?: string;
+  source: 'codex' | 'claude-code' | 'manual';
+  supersededById?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 // ─── Search ───
 
 export interface SearchResult {
