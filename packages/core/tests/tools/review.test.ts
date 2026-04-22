@@ -61,6 +61,43 @@ describe('handleReview', () => {
     ]);
   });
 
+  it('supports filtering by state and topicKey', () => {
+    durable.insert({
+      topicKey: 'auth_strategy',
+      memoryType: 'decision',
+      state: 'superseded',
+      summary: 'Use password auth locally.',
+      evidence: { source: 'test' },
+      source: 'codex',
+    });
+    const stale = durable.insert({
+      topicKey: 'coding_style',
+      memoryType: 'style',
+      state: 'stale',
+      summary: 'Prefer explanatory block comments.',
+      evidence: { source: 'test' },
+      source: 'manual',
+    });
+
+    const result = handleReview(
+      { db: adapter },
+      {
+        state: 'stale',
+        topicKey: 'coding_style',
+        limit: 10,
+      },
+    );
+
+    expect(result.totalCandidates).toBe(1);
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        durableId: stale.id,
+        state: 'stale',
+        topicKey: 'coding_style',
+      }),
+    ]);
+  });
+
   it('never deletes durable memory entries while reviewing them', () => {
     durable.insert({
       topicKey: 'auth_strategy',

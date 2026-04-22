@@ -30,6 +30,7 @@ import { handleForget } from './tools/forget.js';
 import { handleImportCodex } from './tools/import-codex.js';
 import { handlePurge } from './tools/purge.js';
 import { handleRecall } from './tools/recall.js';
+import { handleReview } from './tools/review.js';
 import { handleRemember } from './tools/remember.js';
 import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
@@ -323,6 +324,24 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         ],
       };
     },
+  );
+
+  // 3. memory_remember
+  server.tool(
+    'memory_review',
+    {
+      state: z.enum(['active', 'stale', 'superseded', 'archivable']).optional(),
+      topicKey: z.string().optional(),
+      limit: z.number().optional().describe('Max review candidates to return (default 20)'),
+    },
+    async ({ state, topicKey, limit }) => ({
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(handleReview({ db }, { state, topicKey, limit })),
+        },
+      ],
+    }),
   );
 
   // 3. memory_remember

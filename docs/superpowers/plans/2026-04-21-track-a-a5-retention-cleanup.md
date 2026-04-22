@@ -134,21 +134,21 @@ Expected: implementation commit created.
 - Create: `packages/core/tests/tools/review.test.ts`
 - Create: `packages/core/tests/integration/memory-review-flow.test.ts`
 
-- [ ] Add the `memory_review` tool with optional filters such as `state`, `topicKey`, and `limit`.
+- [x] Add the `memory_review` tool with optional filters such as `state`, `topicKey`, and `limit`.
 
-- [ ] Ensure the tool returns only review output and never deletes state.
+- [x] Ensure the tool returns only review output and never deletes state.
 
-- [ ] Run the review tool tests.
+- [x] Run the review tool tests.
 
 Run: `npm test -- packages/core/tests/tools/review.test.ts packages/core/tests/integration/memory-review-flow.test.ts`
 Expected: PASS.
 
-- [ ] Commit the tool wiring.
+- [x] Commit the tool wiring.
 
 Run: `git add packages/core/src/tools/review.ts packages/core/src/server.ts packages/core/tests/tools/review.test.ts packages/core/tests/integration/memory-review-flow.test.ts`
 Expected: review tool changes staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): expose memory review tool"`
 Expected: implementation commit created.
