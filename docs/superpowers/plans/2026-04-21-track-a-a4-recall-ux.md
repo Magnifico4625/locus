@@ -186,25 +186,25 @@ Expected: implementation commit created.
 - Modify: `packages/codex/tests/skill-sync.test.ts`
 - Modify: `scripts/sync-codex-skill.mjs`
 
-- [ ] Update the canonical skill so it explicitly says:
+- [x] Update the canonical skill so it explicitly says:
   - use `memory_recall` first for past-work questions
   - fall back to `memory_search` / `memory_timeline` only when needed
   - do not say "I don't remember" before checking Locus
   - clarify ambiguous histories after lookup, not before
 
-- [ ] Extend the skill contract tests accordingly.
+- [x] Extend the skill contract tests accordingly.
 
-- [ ] Re-run the skill tests.
+- [x] Re-run the skill tests.
 
 Run: `npm test -- packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts`
 Expected: PASS.
 
-- [ ] Commit the skill update.
+- [x] Commit the skill update.
 
 Run: `git add packages/codex/skills/locus-memory/SKILL.md packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts scripts/sync-codex-skill.mjs`
 Expected: skill and test changes staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(codex): teach skill to use memory recall first"`
 Expected: implementation commit created.
