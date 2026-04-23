@@ -1,7 +1,7 @@
 # Track A: Codex Memory Trust / Honest Recall Design
 
 **Date:** 2026-04-21  
-**Status:** approved product design baseline for planning  
+**Status:** approved product design baseline; A1-A6 implementation is in local validation  
 **Primary users:** Codex CLI users first, Codex desktop / extension users second  
 **Primary problem:** Locus currently proves Codex ingest plumbing and structural memory, but does not yet reliably deliver the product promise of useful cross-session Codex memory.
 
@@ -19,6 +19,8 @@ The goal of Track A is not "make memory bigger." The goal is to make Locus **tru
 - the user should stay in control of what automatic memory does
 
 This is the **master design** for Track A. It intentionally does not specify exact implementation steps or exact file edits. Those belong in the follow-up implementation plans.
+
+Current validation artifact: [docs/codex-acceptance-matrix.md](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-acceptance-matrix.md).
 
 ---
 
@@ -459,6 +461,14 @@ Diagnostics should make it clear when:
 - the memory available is incomplete
 
 The system should explicitly avoid green-check false confidence.
+
+Track A implementation exposes this distinction through:
+
+- `memory_status.codexTruth`
+- `memory_doctor` capture-mode warnings
+- `memory_doctor` desktop/extension parity warnings
+
+The validated product statement is: Codex CLI is the primary acceptance path; `redacted` is the practical recall mode; `metadata` is limited recall; desktop/extension parity remains unverified until checked in that runtime surface.
 
 ---
 

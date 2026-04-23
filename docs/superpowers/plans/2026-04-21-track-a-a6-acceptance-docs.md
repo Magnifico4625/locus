@@ -182,31 +182,31 @@ Expected: test commit created.
 - Modify: `docs/roadmap/codex-next.md`
 - Modify: `docs/superpowers/specs/2026-04-21-track-a-codex-memory-trust-design.md`
 
-- [ ] Add a compact acceptance matrix documenting:
+- [x] Add a compact acceptance matrix documenting:
   - CLI
   - desktop/extension
   - manual MCP fallback
   - capture mode expectations
 
-- [ ] Update README and Codex docs so they describe:
+- [x] Update README and Codex docs so they describe:
   - the validated recall flow
   - the recommended capture mode
   - the meaning of `metadata`, `redacted`, and `full`
   - the fact that desktop parity may differ from CLI
 
-- [ ] Update roadmap/spec status text only if it helps separate delivered Track A behavior from future work.
+- [x] Update roadmap/spec status text only if it helps separate delivered Track A behavior from future work.
 
-- [ ] Verify docs alignment with quick grep checks.
+- [x] Verify docs alignment with quick grep checks.
 
 Run: `rg -n "metadata|redacted|full|recall|memory_recall|desktop|CLI|parity" README.md packages/codex/README.md docs/codex-vscode-extension.md docs/codex-acceptance-matrix.md docs/roadmap/codex-next.md docs/superpowers/specs/2026-04-21-track-a-codex-memory-trust-design.md`
 Expected: all updated docs mention the same product story without contradictions.
 
-- [ ] Commit the docs truth pass.
+- [x] Commit the docs truth pass.
 
 Run: `git add docs/codex-acceptance-matrix.md README.md packages/codex/README.md docs/codex-vscode-extension.md docs/roadmap/codex-next.md docs/superpowers/specs/2026-04-21-track-a-codex-memory-trust-design.md`
 Expected: docs-only change set staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "docs(codex): align track a docs with validated recall"`
 Expected: docs commit created.

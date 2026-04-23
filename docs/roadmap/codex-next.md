@@ -44,6 +44,7 @@ Rules:
 
 **Priority:** `P0`  
 **Target window:** late April 2026 into May 2026  
+**Current status:** Track A implementation is in local validation. CLI recall acceptance, durable decision candidates, metadata truth warnings, and desktop/extension parity warnings are covered by focused tests. Public release status still depends on final validation and release flow.
 **Why it matters:** the current product story is ahead of the lived Codex experience. `metadata` mode plus fragile Codex client detection can produce a system that is diagnostically alive but not yet useful as persistent conversational memory. Before scaling install, Locus needs to earn trust as actual memory.
 
 ### Goal
@@ -73,7 +74,7 @@ Make Codex users able to rely on Locus for meaningful project recall: recent dia
 
 ### Success criteria
 
-- Codex CLI can reliably recover meaningful recent context from real sessions, not only structural metadata
+- Codex CLI can reliably recover meaningful recent context from fixture-backed real-session flows, not only structural metadata
 - Codex desktop / extension surfaces can either recover the same context or report their limitation honestly and diagnosably
 - repeated collaboration patterns become discoverable:
   - preferred workflow
@@ -304,6 +305,8 @@ Maintain an explicit validation matrix for:
 - manual MCP fallback
 - secondary IDE adapters when they exist
 
+Current matrix: [docs/codex-acceptance-matrix.md](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-acceptance-matrix.md).
+
 ### Performance And Scale
 
 - test larger Codex session histories
@@ -329,20 +332,18 @@ Secondary IDE adapters should be scheduled only when they do not block the Codex
 
 ## Immediate Next Candidates
 
-1. Prove why the current validated Codex path still delivers weak real recall:
-   - client detection
-   - auto-import triggering
-   - capture-mode usefulness
-   - search quality on real sessions
-2. Define the first trustworthy Codex default or recommended mode:
-   - improved `metadata`
-   - `redacted` by default
-   - or another bounded selective-capture design
-3. Design automatic high-value memory persistence for:
+1. Finish Track A final validation and release documentation:
+   - acceptance suite
+   - typecheck
+   - acceptance matrix
+   - README/Codex docs truth alignment
+2. Prepare Track B one-command install planning:
+   - npm package / `npx`
+   - marketplace repository
+   - packaged runtime
+3. Continue improving high-value memory persistence for:
    - accepted decisions
    - user preferences
    - collaboration style
    - stable project constraints
-4. Define the published runtime strategy for `npx` / packaged install.
-5. Design the Codex marketplace repository as a thin distribution layer.
-6. Decide whether the dashboard starts as read-only diagnostics or as a broader memory browser from day one.
+4. Decide whether the dashboard starts as read-only diagnostics or as a broader memory browser from day one.

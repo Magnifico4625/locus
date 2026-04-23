@@ -14,13 +14,14 @@ It covers:
 
 When the Codex VS Code extension exposes the same Codex MCP surface as Codex CLI, Locus works through the same MCP server setup:
 
-- all 13 MCP tools
+- all 14 MCP tools
 - all 3 MCP resources
 - Codex auto-import before `memory_search`
 - manual import through `memory_import_codex`
 - Codex diagnostics through `memory_status` and `memory_doctor`
 
 Codex CLI remains the primary validated path. The VS Code extension uses the same configuration model, but extension-side MCP visibility can still vary by upstream preview build.
+Until validated inside a specific extension build, Locus reports Codex desktop/extension parity as unverified. Treat that as a product truth signal, not a failure by itself.
 
 ## Prerequisites
 
@@ -54,8 +55,8 @@ args = ["/path/to/locus/dist/server.js"]
 
 [mcp_servers.locus.env]
 LOCUS_LOG = "error"
-LOCUS_CODEX_CAPTURE = "metadata"
-LOCUS_CAPTURE_LEVEL = "metadata"
+LOCUS_CODEX_CAPTURE = "redacted"
+LOCUS_CAPTURE_LEVEL = "redacted"
 ```
 
 Windows note:
@@ -81,9 +82,10 @@ If `Reload Window` is not enough, fully restart VS Code and reopen the Codex ext
 Use this order:
 
 1. Ask Codex to run `memory_search` for a recent project topic.
-2. If recent memory does not appear, run `memory_status`.
-3. If the state still looks wrong, run `memory_doctor`.
-4. Use `memory_import_codex({"latestOnly":true})` only if you need explicit manual catch-up.
+2. Ask Codex to run `memory_recall` for a summary-first question such as "what did we do yesterday?"
+3. If recent memory does not appear, run `memory_status`.
+4. If the state still looks wrong, run `memory_doctor`.
+5. Use `memory_import_codex({"latestOnly":true})` only if you need explicit manual catch-up.
 
 Text-based success example for `memory_status`:
 
@@ -96,8 +98,13 @@ Text-based success example for `memory_status`:
     "sessionsDirExists": true,
     "rolloutFilesFound": 3,
     "latestRolloutReadable": true,
-    "captureMode": "metadata",
+    "captureMode": "redacted",
     "importedEventCount": 42
+  },
+  "codexTruth": {
+    "recallReadiness": "practical",
+    "recommendedCaptureMode": "redacted",
+    "desktopParity": "unverified"
   }
 }
 ```
@@ -109,6 +116,8 @@ You do not need this exact payload shape in the UI, but you should see the same 
 - `rolloutFilesFound` is greater than `0`
 - `latestRolloutReadable` is `true`
 - `captureMode` is not `off`
+- `codexTruth.recallReadiness` is `practical` for `redacted`, or `limited` for `metadata`
+- `codexTruth.desktopParity` may be `unverified` even when CLI behavior is healthy
 
 ## Diagnose Missing Recent Memory
 
@@ -126,6 +135,7 @@ Common causes:
 - no `rollout-*.jsonl` files exist yet
 - the latest rollout file is not readable
 - `LOCUS_CODEX_CAPTURE=off`
+- `LOCUS_CODEX_CAPTURE=metadata`, which is valid for diagnostics but limited for strong recall
 - the extension has not reloaded its MCP configuration yet
 
 ## What Requires The Codex JSONL Adapter
@@ -137,6 +147,8 @@ Recent Codex conversation recall depends on the existing Codex JSONL import path
 - `LOCUS_CODEX_CAPTURE`
 
 This is local Locus behavior. It does not depend on a VS Code-specific adapter.
+
+For practical recall, prefer `LOCUS_CODEX_CAPTURE=redacted` and `LOCUS_CAPTURE_LEVEL=redacted`. `metadata` is intentionally limited. `full` stores the most conversation content after best-effort redaction and should be used only when the user explicitly accepts that trade-off.
 
 ## Known Limitations
 

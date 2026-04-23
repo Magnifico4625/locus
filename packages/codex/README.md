@@ -46,21 +46,33 @@ Command roles:
 codex "Search memory for recent decisions"
 ```
 
+For useful conversational recall, configure Codex with `redacted` capture:
+
+```toml
+[mcp_servers.locus.env]
+LOCUS_CODEX_CAPTURE = "redacted"
+LOCUS_CAPTURE_LEVEL = "redacted"
+```
+
 ## What Works
 
-- All 13 MCP tools (including `memory_import_codex`)
+- All 14 MCP tools (including `memory_recall` and `memory_import_codex`)
 - All 3 MCP resources (project-map, decisions, recent)
 - SQLite storage with FTS5 full-text search
 - Client-aware storage: data stored in `$CODEX_HOME/memory/`
 - Auto-import before `memory_search`, plus manual and library JSONL import for Codex session rollout files
 - Canonical Codex skill workflow for `memory_search`, `memory_status`, `memory_remember`, and manual `memory_import_codex`
 - Codex-aware diagnostics in `memory_status` and `memory_doctor`
+- Summary-first recall through `memory_recall`
+- `codexTruth` status guidance that separates import health from recall usefulness
 
-Validated against the current Codex docs generation and Codex CLI `0.120.0` surface as of April 13, 2026.
+Last documented validation target: Codex docs generation and Codex CLI `0.120.0` surface as of April 13, 2026.
+
+Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is reported as unverified until checked there.
 
 ## Codex JSONL Import
 
-Phase 1 built the adapter foundation. Phase 2 exposed it through MCP. Phase 3 adds bounded auto-import before `memory_search`.
+Phase 1 built the adapter foundation. Phase 2 exposed it through MCP. Phase 3 added bounded auto-import before `memory_search`. Track A adds acceptance-backed truth: `metadata` is limited recall, `redacted` is the recommended practical mode, and diagnostics must say when desktop/extension parity is unverified.
 
 ### Auto-import before search
 
@@ -80,12 +92,13 @@ Use `memory_status` to inspect both the last auto-import snapshot and the curren
 The canonical Locus Codex skill assumes this workflow:
 
 - `memory_search` first for project recall and recent Codex dialogue
+- `memory_recall` for summary-first questions like "what did we do yesterday?"
 - `memory_status` when recent history does not appear as expected
 - `memory_import_codex` only for manual catch-up, filtered imports, or older sessions
 - `memory_remember` for architectural decisions, trade-offs, and reasons behind the chosen path
 - `memory_scan` after large project-structure changes
 
-This workflow is optimized for Codex CLI. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
+This workflow is optimized and validated for Codex CLI. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
 
 For the extension-specific setup, reload, and troubleshooting flow, use the dedicated guide:
 
@@ -96,7 +109,7 @@ For the extension-specific setup, reload, and troubleshooting flow, use the dedi
 When recent Codex dialogue does not show up as expected:
 
 1. Run `memory_search` first so bounded auto-import gets a chance to pull the newest rollout.
-2. Run `memory_status` and inspect `codexAutoImport` plus `codexDiagnostics`.
+2. Run `memory_status` and inspect `codexAutoImport`, `codexDiagnostics`, and `codexTruth`.
 3. Run `memory_doctor` for actionable checks and suggested fixes.
 4. Use `memory_import_codex` only if you need explicit manual catch-up or filtered import.
 
@@ -106,6 +119,7 @@ Common fixes:
 - verify `$CODEX_HOME/sessions/` exists and contains `rollout-*.jsonl`
 - verify the latest rollout file is readable by the current process
 - verify `LOCUS_CODEX_CAPTURE` is not `off`
+- if `codexTruth.recallReadiness` is `limited`, switch to `redacted` for practical recall
 - verify imported-event counts increase after `memory_search` or `memory_import_codex`
 - reload the VS Code window after MCP config changes if you are using the extension
 
@@ -138,7 +152,7 @@ import { importCodexSessionsToInbox } from '@locus/codex';
 const metrics = importCodexSessionsToInbox({
   sessionsDir: 'C:/Users/Admin/.codex/sessions',
   inboxDir: 'C:/path/to/locus-project-inbox',
-  captureMode: 'metadata',
+  captureMode: 'redacted',
 });
 ```
 
@@ -155,19 +169,29 @@ LOCUS_CODEX_CAPTURE = "metadata"
 LOCUS_CAPTURE_LEVEL = "metadata"
 ```
 
+For practical recall, use `redacted` instead:
+
+```toml
+[mcp_servers.locus.env]
+LOCUS_CODEX_CAPTURE = "redacted"
+LOCUS_CAPTURE_LEVEL = "redacted"
+```
+
 Supported values:
 
 | Value | Behavior |
 |-------|----------|
 | `off` | Do not import Codex session JSONL events |
-| `metadata` | Default. Import session/tool metadata only; do not import user prompt or assistant response text |
-| `redacted` | Import user prompt text after best-effort redaction; skip assistant response text |
-| `full` | Import user prompt and assistant response text after redaction |
+| `metadata` | Default. Import session/tool metadata only; useful for diagnostics but limited for conversational recall |
+| `redacted` | Recommended for practical recall. Import bounded, filtered, best-effort-redacted snippets while preserving privacy boundaries |
+| `full` | Maximum recall. Import user prompt and assistant response text after redaction; explicit opt-in warning territory |
 
 `LOCUS_CODEX_CAPTURE` controls the Codex adapter before events are written to inbox. `LOCUS_CAPTURE_LEVEL` remains the core ingest pipeline's second-defense gate.
 If `LOCUS_CODEX_CAPTURE=off`, both auto-import before `memory_search` and `memory_import_codex` are disabled.
 
 Redaction is best-effort by design: obvious API keys, bearer tokens, and similar secrets are stripped before storage, but arbitrary free-form text can never be guaranteed perfectly secret-free.
+
+See [Codex Acceptance Matrix](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-acceptance-matrix.md) for the current CLI, desktop/extension, manual fallback, and capture-mode validation status.
 
 ## What's Coming
 
