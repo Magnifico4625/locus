@@ -7395,10 +7395,12 @@ function normalizeCodexRecords(records) {
   return { events, skipped };
 }
 function normalizeEventMessage(record2, sessionId, projectRoot) {
-  const subtype = stringValue2(record2.raw.subtype);
+  const payloadRecord = recordObject(record2.raw.payload);
+  const event = payloadRecord ?? record2.raw;
+  const subtype = stringValue2(record2.raw.subtype) ?? stringValue2(event.type);
   if (subtype === "user_message") {
     const payload = {
-      prompt: firstString(record2.raw.message, record2.raw.text) ?? ""
+      prompt: firstString(event.message, event.text) ?? ""
     };
     return createEvent(record2, {
       kind: "user_prompt",
@@ -7408,7 +7410,12 @@ function normalizeEventMessage(record2, sessionId, projectRoot) {
     });
   }
   if (subtype === "task_complete") {
-    const summary = firstString(record2.raw.summary, record2.raw.message, record2.raw.text);
+    const summary = firstString(
+      event.summary,
+      event.last_agent_message,
+      event.message,
+      event.text
+    );
     const payload = compactPayload3({ summary });
     return createEvent(record2, {
       kind: "session_end",
@@ -7418,17 +7425,17 @@ function normalizeEventMessage(record2, sessionId, projectRoot) {
     });
   }
   if (subtype === "exec_command_end") {
-    const exitCode = numberValue(record2.raw.exit_code);
+    const exitCode = numberValue(event.exit_code);
     return createEvent(record2, {
       kind: "tool_use",
       sessionId,
       projectRoot,
-      itemId: stringValue2(record2.raw.call_id),
+      itemId: stringValue2(event.call_id),
       payload: compactPayload3({
         tool: "exec_command_end",
-        callId: stringValue2(record2.raw.call_id),
+        callId: stringValue2(event.call_id),
         exitCode,
-        durationMs: numberValue(record2.raw.duration_ms),
+        durationMs: numberValue(event.duration_ms) ?? durationMsValue(event.duration),
         status: exitCode === void 0 || exitCode === 0 ? "success" : "error"
       })
     });
@@ -7436,7 +7443,7 @@ function normalizeEventMessage(record2, sessionId, projectRoot) {
   return void 0;
 }
 function normalizeResponseItem(record2, sessionId, projectRoot, currentModel) {
-  const item = recordObject(record2.raw.item);
+  const item = recordObject(record2.raw.item) ?? recordObject(record2.raw.payload);
   if (!item) {
     return void 0;
   }
@@ -7554,6 +7561,18 @@ function stringValue2(value) {
 }
 function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function durationMsValue(value) {
+  const duration3 = recordObject(value);
+  if (!duration3) {
+    return void 0;
+  }
+  const secs = numberValue(duration3.secs);
+  const nanos = numberValue(duration3.nanos);
+  if (secs === void 0 && nanos === void 0) {
+    return void 0;
+  }
+  return Math.round((secs ?? 0) * 1e3 + (nanos ?? 0) / 1e6);
 }
 
 // packages/codex/src/paths.ts
