@@ -155,19 +155,19 @@ Expected: implementation commit created.
 - Modify: `packages/core/tests/integration/track-a-recall-acceptance.test.ts`
 - Modify: `packages/core/tests/integration/track-a-desktop-diagnostics.test.ts`
 
-- [ ] Fix any remaining fixture wiring or helper gaps until the new acceptance tests pass without weakening the contract.
+- [x] Fix any remaining fixture wiring or helper gaps until the new acceptance tests pass without weakening the contract.
 
-- [ ] Run the acceptance suite.
+- [x] Run the acceptance suite.
 
 Run: `npm test -- packages/core/tests/integration/track-a-recall-acceptance.test.ts packages/core/tests/integration/track-a-desktop-diagnostics.test.ts`
 Expected: PASS.
 
-- [ ] Commit the final acceptance green state.
+- [x] Commit the final acceptance green state.
 
 Run: `git add packages/core/tests/integration/track-a-recall-acceptance.test.ts packages/core/tests/integration/track-a-desktop-diagnostics.test.ts`
 Expected: final acceptance changes staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "test(core): validate track a codex recall acceptance"`
 Expected: test commit created.

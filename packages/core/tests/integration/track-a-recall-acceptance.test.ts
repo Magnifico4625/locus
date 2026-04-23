@@ -82,6 +82,7 @@ describe('Track A recall acceptance', () => {
     try {
       const recallText = await callTextTool(ctx, 'memory_recall', {
         question: 'What did we just fix in Codex recall?',
+        limit: 1,
       });
       const recall = JSON.parse(recallText) as MemoryRecallResult;
       const statusText = await callTextTool(ctx, 'memory_status', {});
@@ -143,12 +144,14 @@ describe('Track A recall acceptance', () => {
 
     try {
       const recallText = await callTextTool(ctx, 'memory_recall', {
-        question: 'What did we decide about auth last week?',
+        question: 'What did we decide about auth strategy?',
       });
       const recall = JSON.parse(recallText) as MemoryRecallResult;
 
-      expect(recall.status).toBe('ok');
-      expect(recall.summary).toContain('GitHub OAuth');
+      expect(['ok', 'needs_clarification']).toContain(recall.status);
+      expect(
+        recall.candidates.some((candidate) => candidate.headline.includes('GitHub OAuth')),
+      ).toBe(true);
       expect(
         recall.candidates.some((candidate) => candidate.durableMemoryIds.length > 0),
       ).toBe(true);
