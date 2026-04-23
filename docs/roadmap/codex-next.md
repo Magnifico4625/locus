@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-16  
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** make Locus actually trustworthy as persistent memory for Codex CLI and Codex desktop / extension surfaces, then reduce install friction and polish the product surface around that stronger memory core.
+**Primary focus:** Track A closed the first Codex memory-trust gap locally. The next focus is release preparation, one-command install, and product polish around that stronger memory core.
 
 ---
 
@@ -18,7 +18,7 @@ Unlike [codex.md](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/roadmap/
 
 Current planning window:
 
-- **Late April 2026** — memory trust gap closure, recall validation, and Codex-facing diagnostics
+- **Late April 2026** — memory trust gap closure, recall validation, and Codex-facing diagnostics completed locally
 - **May 2026** — one-command install, desktop polish, and richer product UX around the stronger memory path
 - **Later** — secondary clients and broader memory platform UX
 
@@ -44,7 +44,7 @@ Rules:
 
 **Priority:** `P0`  
 **Target window:** late April 2026 into May 2026  
-**Current status:** Track A implementation is in local validation. CLI recall acceptance, durable decision candidates, metadata truth warnings, and desktop/extension parity warnings are covered by focused tests. Public release status still depends on final validation and release flow.
+**Current status:** completed locally on branch `feature/track-a-a6-acceptance-docs`; checkpoint tag `track-a-a6-local`; public release status still depends on merge/release flow.
 **Why it matters:** the current product story is ahead of the lived Codex experience. `metadata` mode plus fragile Codex client detection can produce a system that is diagnostically alive but not yet useful as persistent conversational memory. Before scaling install, Locus needs to earn trust as actual memory.
 
 ### Goal
@@ -86,6 +86,22 @@ Make Codex users able to rely on Locus for meaningful project recall: recent dia
 ### Release intent
 
 Highest-priority candidate scope for the next Codex-focused release line, likely **`v3.4`** in whole or in part.
+
+### Delivered Locally
+
+- `A1` Runtime Truth: completed and tagged `track-a-a1-local`
+- `A2` Bounded Hybrid Capture: completed and tagged `track-a-a2-local`
+- `A3` Local High-Value Extraction: completed and tagged `track-a-a3-local`
+- `A4` Recall UX: completed and tagged `track-a-a4-local`
+- `A5` Retention And Cleanup: completed and tagged `track-a-a5-local`
+- `A6` Acceptance And Docs Truth Pass: completed and tagged `track-a-a6-local`
+
+Validation evidence from `A6`:
+
+- Track A focused test subset passed: `11` test files, `99` tests.
+- Workspace typecheck passed for `@locus/core` and `@locus/codex`.
+- Acceptance matrix added: [docs/codex-acceptance-matrix.md](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-acceptance-matrix.md).
+- README, Codex docs, VS Code guide, roadmap, and Track A spec now describe `metadata`, `redacted`, `full`, Codex CLI validation, and desktop/extension parity honestly.
 
 ---
 
@@ -321,7 +337,7 @@ This is a planning suggestion, not a hard contract.
 
 | Release | Primary intent |
 |---------|----------------|
-| `v3.4` | close the Codex memory trust gap: reliable auto-import, validated recall, automatic high-value memory persistence |
+| `v3.4` | ship the completed Track A memory-trust work: reliable auto-import, validated recall, automatic high-value memory persistence, honest diagnostics/docs |
 | `v3.4.x` | one-command install foundations: marketplace repo, packaged runtime, install UX cleanup |
 | `v3.5` | richer Codex conversational recall (`redacted` / `full`) and stronger capture/privacy UX |
 | `v4.0` | HTML dashboard + broader product-grade memory visibility |
@@ -332,16 +348,16 @@ Secondary IDE adapters should be scheduled only when they do not block the Codex
 
 ## Immediate Next Candidates
 
-1. Finish Track A final validation and release documentation:
-   - acceptance suite
-   - typecheck
-   - acceptance matrix
-   - README/Codex docs truth alignment
-2. Prepare Track B one-command install planning:
+1. Prepare Track A for merge and public release:
+   - review branch diff
+   - run release-readiness checks
+   - prepare PR/release notes
+   - keep local checkpoint tag `track-a-a6-local` until release is cut
+2. Plan Track B one-command install:
    - npm package / `npx`
    - marketplace repository
    - packaged runtime
-3. Continue improving high-value memory persistence for:
+3. Continue improving high-value memory persistence quality after Track A ships:
    - accepted decisions
    - user preferences
    - collaboration style
