@@ -18,11 +18,7 @@
  * @param {string} [_cwd]
  * @returns {ClientRuntime}
  */
-export function detectClientRuntime(
-  env = process.env,
-  _argv = process.argv,
-  _cwd = process.cwd(),
-) {
+export function detectClientRuntime(env = process.env, _argv = process.argv, _cwd = process.cwd()) {
   if (hasNonEmptyValue(env.CODEX_HOME)) {
     return {
       client: 'codex',

@@ -218,7 +218,7 @@ Expected: implementation commit created.
 Run: `npm test -- packages/core/tests/memory/review.test.ts packages/core/tests/tools/review.test.ts packages/core/tests/tools/forget.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/compact.test.ts packages/core/tests/integration/memory-review-flow.test.ts`
 Expected: PASS.
 
-- [ ] Run workspace typecheck.
+- [x] Run workspace typecheck.
 
 Run: `npm run typecheck`
 Expected: PASS.

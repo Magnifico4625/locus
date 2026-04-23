@@ -1,7 +1,7 @@
+import type { ConversationEventRow, DatabaseAdapter } from '../types.js';
 import { DurableMemoryStore } from './durable.js';
 import { extractDurableCandidatesFromEvent } from './durable-extractor.js';
 import { mergeDurableCandidate } from './durable-merge.js';
-import type { ConversationEventRow, DatabaseAdapter } from '../types.js';
 
 const DEFAULT_SOURCE = 'codex';
 const WATERMARK_PREFIX = 'durable';
@@ -32,7 +32,9 @@ function getWatermarkKey(source: string): string {
 }
 
 function getWatermark(db: DatabaseAdapter, source: string): number {
-  const row = db.get<WatermarkRow>('SELECT value FROM scan_state WHERE key = ?', [getWatermarkKey(source)]);
+  const row = db.get<WatermarkRow>('SELECT value FROM scan_state WHERE key = ?', [
+    getWatermarkKey(source),
+  ]);
   return Number(row?.value ?? '0') || 0;
 }
 

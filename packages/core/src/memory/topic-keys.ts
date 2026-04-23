@@ -6,7 +6,10 @@ export interface TopicKeyInput {
 }
 
 function normalizeSummary(summary: string): string {
-  return summary.toLowerCase().replace(/[^a-z0-9]+/gi, ' ').trim();
+  return summary
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim();
 }
 
 function includesAny(text: string, needles: string[]): boolean {
@@ -28,7 +31,12 @@ export function deriveTopicKey(input: TopicKeyInput): string | undefined {
   }
 
   if (
-    includesAny(normalized, ['oauth', 'github oauth', 'auth strategy', 'authentication strategy']) &&
+    includesAny(normalized, [
+      'oauth',
+      'github oauth',
+      'auth strategy',
+      'authentication strategy',
+    ]) &&
     includesAny(normalized, ['auth', 'authentication', 'login'])
   ) {
     return 'auth_strategy';

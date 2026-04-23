@@ -1,8 +1,8 @@
 import type {
   DatabaseAdapter,
   DurableMemoryEntry,
-  DurableMemoryStateCounts,
   DurableMemoryState,
+  DurableMemoryStateCounts,
   DurableMemoryType,
 } from '../types.js';
 import { sanitizeFtsQuery } from '../utils.js';
@@ -104,7 +104,9 @@ export class DurableMemoryStore {
   }
 
   updateState(id: number, state: DurableMemoryState, supersededById?: number): boolean {
-    const existing = this.db.get<DurableMemoryRow>('SELECT * FROM durable_memories WHERE id = ?', [id]);
+    const existing = this.db.get<DurableMemoryRow>('SELECT * FROM durable_memories WHERE id = ?', [
+      id,
+    ]);
     if (!existing) {
       return false;
     }
@@ -117,7 +119,9 @@ export class DurableMemoryStore {
   }
 
   removeById(id: number): boolean {
-    const existing = this.db.get<DurableMemoryRow>('SELECT * FROM durable_memories WHERE id = ?', [id]);
+    const existing = this.db.get<DurableMemoryRow>('SELECT * FROM durable_memories WHERE id = ?', [
+      id,
+    ]);
     if (!existing) {
       return false;
     }

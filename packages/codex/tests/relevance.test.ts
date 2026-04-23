@@ -25,10 +25,7 @@ describe('classifyCodexRelevance', () => {
 
   it('detects explicit user preferences', () => {
     expect(
-      classifyCodexRelevance(
-        'Keep the fix surgical and do not touch unrelated modules.',
-        'user',
-      ),
+      classifyCodexRelevance('Keep the fix surgical and do not touch unrelated modules.', 'user'),
     ).toEqual({
       keep: true,
       reason: 'preference',

@@ -1,10 +1,10 @@
+import { reviewDurableMemories } from '../memory/review.js';
 import type {
   DatabaseAdapter,
   DurableMemoryState,
   DurableReviewCandidate,
   DurableReviewResult,
 } from '../types.js';
-import { reviewDurableMemories } from '../memory/review.js';
 
 export interface ReviewDeps {
   db: DatabaseAdapter;

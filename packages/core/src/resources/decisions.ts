@@ -57,8 +57,7 @@ export function generateDecisions(db: DatabaseAdapter): string {
 
 function formatDecisionLines(entries: string[], total: number): string {
   const lines: string[] = entries.map((entry) => {
-    const content =
-      entry.length > MAX_LINE_CHARS ? `${entry.slice(0, MAX_LINE_CHARS)}...` : entry;
+    const content = entry.length > MAX_LINE_CHARS ? `${entry.slice(0, MAX_LINE_CHARS)}...` : entry;
     return `- ${content}`;
   });
 

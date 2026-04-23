@@ -152,9 +152,9 @@ describe('Track A recall acceptance', () => {
       expect(
         recall.candidates.some((candidate) => candidate.headline.includes('GitHub OAuth')),
       ).toBe(true);
-      expect(
-        recall.candidates.some((candidate) => candidate.durableMemoryIds.length > 0),
-      ).toBe(true);
+      expect(recall.candidates.some((candidate) => candidate.durableMemoryIds.length > 0)).toBe(
+        true,
+      );
     } finally {
       ctx.cleanup();
       if (originalCodexHome === undefined) {

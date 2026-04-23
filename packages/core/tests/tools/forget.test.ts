@@ -223,10 +223,11 @@ describe('handleForget', () => {
       source: 'codex',
     });
 
-    const result = handleForget(
-      `durable:${durableEntry.id}`,
-      { semantic, tokenStore, durable } as never,
-    );
+    const result = handleForget(`durable:${durableEntry.id}`, {
+      semantic,
+      tokenStore,
+      durable,
+    } as never);
 
     expect(result.status).toBe('deleted');
     if (result.status === 'deleted') {
@@ -251,7 +252,11 @@ describe('handleForget', () => {
       });
     }
 
-    const pending = handleForget('topic:database_choice', { semantic, tokenStore, durable } as never);
+    const pending = handleForget('topic:database_choice', {
+      semantic,
+      tokenStore,
+      durable,
+    } as never);
 
     expect(pending.status).toBe('pending_confirmation');
     if (pending.status !== 'pending_confirmation') {

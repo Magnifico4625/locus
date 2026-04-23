@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { DurableMemoryEntry } from '../../src/types.js';
 import { mergeDurableCandidate } from '../../src/memory/durable-merge.js';
+import type { DurableMemoryEntry } from '../../src/types.js';
 
 function makeDurableEntry(overrides: Partial<DurableMemoryEntry>): DurableMemoryEntry {
   return {

@@ -54,9 +54,7 @@ export function collectCodexDiagnostics(
     sessionsDir: normalizePathForIdentity(sessionsDir),
     sessionsDirExists,
     rolloutFilesFound: rolloutFiles.length,
-    latestRolloutPath: latestRolloutPath
-      ? normalizePathForIdentity(latestRolloutPath)
-      : undefined,
+    latestRolloutPath: latestRolloutPath ? normalizePathForIdentity(latestRolloutPath) : undefined,
     latestRolloutReadable: latestRolloutPath ? isReadable(latestRolloutPath) : undefined,
     importedEventCount,
     latestImportedSessionId: latestImported?.session_id ?? undefined,

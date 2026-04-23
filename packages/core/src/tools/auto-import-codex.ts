@@ -1,4 +1,4 @@
-import { detectClientRuntime, type ClientEnv, type ClientRuntime } from '@locus/shared-runtime';
+import { type ClientEnv, type ClientRuntime, detectClientRuntime } from '@locus/shared-runtime';
 import type {
   CodexAutoImportSnapshot,
   CodexAutoImportStatus,

@@ -83,8 +83,9 @@ describe('Codex runtime truth integration', () => {
         detectionEvidence: ['env:CODEX_HOME'],
       });
       expect(['imported', 'duplicates_only']).toContain(status.codexAutoImport?.lastStatus);
-      expect((status.codexAutoImport?.lastImported ?? 0) + (status.codexAutoImport?.lastDuplicates ?? 0))
-        .toBeGreaterThan(0);
+      expect(
+        (status.codexAutoImport?.lastImported ?? 0) + (status.codexAutoImport?.lastDuplicates ?? 0),
+      ).toBeGreaterThan(0);
 
       expect(status.codexDiagnostics).toMatchObject({
         client: 'codex',

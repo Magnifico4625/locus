@@ -296,7 +296,7 @@ Expected: PASS.
 Run: `git add docs/superpowers/plans/2026-04-21-track-a-a1-runtime-truth.md`
 Expected: plan doc staged if updated.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "chore(codex): complete track a a1 validation"`
 Expected: final A1 validation commit created.

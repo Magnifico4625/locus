@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { ConversationEventRow } from '../../src/types.js';
 import { extractDurableCandidatesFromEvent } from '../../src/memory/durable-extractor.js';
+import type { ConversationEventRow } from '../../src/types.js';
 
 function makeConversationRow(
   overrides: Partial<ConversationEventRow> & { payload_json: string },

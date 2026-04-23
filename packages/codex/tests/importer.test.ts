@@ -53,13 +53,14 @@ function readInboxEvents(inboxDir: string): Array<{
 }> {
   return readdirSync(inboxDir)
     .filter((name) => name.endsWith('.json'))
-    .map((name) =>
-      JSON.parse(readFileSync(join(inboxDir, name), 'utf-8')) as {
-        kind: string;
-        session_id: string;
-        timestamp: number;
-        payload: Record<string, unknown>;
-      },
+    .map(
+      (name) =>
+        JSON.parse(readFileSync(join(inboxDir, name), 'utf-8')) as {
+          kind: string;
+          session_id: string;
+          timestamp: number;
+          payload: Record<string, unknown>;
+        },
     )
     .sort((a, b) => a.timestamp - b.timestamp || a.kind.localeCompare(b.kind))
     .map(({ kind, session_id, payload }) => ({ kind, session_id, payload }));

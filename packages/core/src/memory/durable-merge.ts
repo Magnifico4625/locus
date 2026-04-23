@@ -8,7 +8,10 @@ export type DurableMergeDecision =
   | { action: 'supersede_existing'; existingId: number };
 
 function normalizeSummary(summary: string): string {
-  return summary.toLowerCase().replace(/[^a-z0-9]+/gi, ' ').trim();
+  return summary
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim();
 }
 
 export function mergeDurableCandidate(
@@ -21,7 +24,9 @@ export function mergeDurableCandidate(
     : activeEntries.filter((entry) => entry.memoryType === candidate.memoryType);
 
   const candidateSummary = normalizeSummary(candidate.summary);
-  const duplicate = matchingTopic.find((entry) => normalizeSummary(entry.summary) === candidateSummary);
+  const duplicate = matchingTopic.find(
+    (entry) => normalizeSummary(entry.summary) === candidateSummary,
+  );
   if (duplicate) {
     return {
       action: 'confirm_existing',

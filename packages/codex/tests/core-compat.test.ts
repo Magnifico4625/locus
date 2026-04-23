@@ -26,7 +26,10 @@ describe('Codex importer core ingest compatibility', () => {
 
     cpSync(join(fixturesDir, 'basic-session.jsonl'), join(sessionsDir, 'rollout-basic.jsonl'));
     cpSync(join(fixturesDir, 'tool-session.jsonl'), join(sessionsDir, 'rollout-tool.jsonl'));
-    cpSync(join(fixturesDir, 'decision-session.jsonl'), join(sessionsDir, 'rollout-decision.jsonl'));
+    cpSync(
+      join(fixturesDir, 'decision-session.jsonl'),
+      join(sessionsDir, 'rollout-decision.jsonl'),
+    );
 
     const sqlite = require('node:sqlite') as {
       DatabaseSync: new (path: string) => unknown;
@@ -90,14 +93,16 @@ describe('Codex importer core ingest compatibility', () => {
 
     const redactedPromptFile = readdirSync(inboxDir)
       .filter((name) => name.endsWith('.json'))
-      .map((name) => JSON.parse(require('node:fs').readFileSync(join(inboxDir, name), 'utf-8')) as {
-        kind: string;
-        payload: Record<string, unknown>;
-      })
+      .map(
+        (name) =>
+          JSON.parse(require('node:fs').readFileSync(join(inboxDir, name), 'utf-8')) as {
+            kind: string;
+            payload: Record<string, unknown>;
+          },
+      )
       .find(
         (event) =>
-          event.kind === 'user_prompt' &&
-          event.payload.capture_policy === 'bounded_redacted',
+          event.kind === 'user_prompt' && event.payload.capture_policy === 'bounded_redacted',
       );
 
     expect(redactedPromptFile?.payload.capture_reason).toBeDefined();
@@ -118,9 +123,7 @@ describe('Codex importer core ingest compatibility', () => {
       ),
     ).toBe(true);
     expect(
-      storedRows.some(
-        (row) => row.payload_json?.includes('"capture_policy":"bounded_redacted"'),
-      ),
+      storedRows.some((row) => row.payload_json?.includes('"capture_policy":"bounded_redacted"')),
     ).toBe(true);
   });
 });

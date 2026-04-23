@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { DurableExtractionMetrics } from '../memory/durable-runner.js';
 import type {
   CaptureLevel,
   CodexImportCaptureMode,
@@ -7,7 +8,6 @@ import type {
   IngestMetrics,
   MemoryImportCodexResponse,
 } from '../types.js';
-import type { DurableExtractionMetrics } from '../memory/durable-runner.js';
 
 interface CodexImportToolParams {
   latestOnly?: boolean;

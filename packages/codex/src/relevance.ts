@@ -58,10 +58,7 @@ const DECISION_PATTERNS = [
   /\bstrategy\b/i,
 ];
 
-export function classifyCodexRelevance(
-  text: string,
-  role: CodexSpeakerRole,
-): CodexRelevanceResult {
+export function classifyCodexRelevance(text: string, role: CodexSpeakerRole): CodexRelevanceResult {
   const normalized = text.trim();
   if (normalized.length === 0) {
     return { keep: false, reason: 'noise' };

@@ -72,7 +72,11 @@ describe('durable extraction flow integration', () => {
     mkdirSync(inboxDir, { recursive: true });
 
     const event = makeCodexInboxEvent({ event_id: 'startup-codex-decision-001' });
-    writeFileSync(join(inboxDir, `${event.timestamp}-startup.json`), JSON.stringify(event), 'utf-8');
+    writeFileSync(
+      join(inboxDir, `${event.timestamp}-startup.json`),
+      JSON.stringify(event),
+      'utf-8',
+    );
 
     const ctx = await createServer({ cwd: projectDir, dbPath });
     try {
@@ -106,7 +110,11 @@ describe('durable extraction flow integration', () => {
     try {
       mkdirSync(ctx.inboxDir, { recursive: true });
       const event = makeCodexInboxEvent({ event_id: 'search-codex-decision-001' });
-      writeFileSync(join(ctx.inboxDir, `${event.timestamp}-search.json`), JSON.stringify(event), 'utf-8');
+      writeFileSync(
+        join(ctx.inboxDir, `${event.timestamp}-search.json`),
+        JSON.stringify(event),
+        'utf-8',
+      );
 
       await callTextTool(ctx, 'memory_search', { query: 'SQLite durable memory store' });
       const firstCount =

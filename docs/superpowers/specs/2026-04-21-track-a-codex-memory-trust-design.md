@@ -1,7 +1,7 @@
 # Track A: Codex Memory Trust / Honest Recall Design
 
 **Date:** 2026-04-21  
-**Status:** approved product design baseline; A1-A6 implementation is in local validation  
+**Status:** approved product design baseline; A1-A6 completed locally and validated; public release still pending merge/release flow
 **Primary users:** Codex CLI users first, Codex desktop / extension users second  
 **Primary problem:** Locus currently proves Codex ingest plumbing and structural memory, but does not yet reliably deliver the product promise of useful cross-session Codex memory.
 
@@ -21,6 +21,8 @@ The goal of Track A is not "make memory bigger." The goal is to make Locus **tru
 This is the **master design** for Track A. It intentionally does not specify exact implementation steps or exact file edits. Those belong in the follow-up implementation plans.
 
 Current validation artifact: [docs/codex-acceptance-matrix.md](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-acceptance-matrix.md).
+
+Local completion checkpoint: `track-a-a6-local`. Final public release still requires the normal merge and release flow.
 
 ---
 

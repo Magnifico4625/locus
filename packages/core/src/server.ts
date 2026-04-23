@@ -30,8 +30,8 @@ import { handleForget } from './tools/forget.js';
 import { handleImportCodex } from './tools/import-codex.js';
 import { handlePurge } from './tools/purge.js';
 import { handleRecall } from './tools/recall.js';
-import { handleReview } from './tools/review.js';
 import { handleRemember } from './tools/remember.js';
+import { handleReview } from './tools/review.js';
 import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
@@ -299,7 +299,10 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         })
         .optional()
         .describe('Filter recall candidates by time range (absolute or relative)'),
-      limit: z.number().optional().describe('Max recall candidates to inspect per source (default 10)'),
+      limit: z
+        .number()
+        .optional()
+        .describe('Max recall candidates to inspect per source (default 10)'),
     },
     async ({ question, timeRange, limit }) => {
       const now = Date.now();

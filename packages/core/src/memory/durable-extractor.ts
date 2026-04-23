@@ -59,7 +59,10 @@ function extractConstraintSummary(text: string): string | undefined {
   const normalized = normalizeSentence(text);
   const lower = normalized.toLowerCase();
 
-  if (lower.includes('do not touch ') || lower.includes('keep codex as the primary validation path')) {
+  if (
+    lower.includes('do not touch ') ||
+    lower.includes('keep codex as the primary validation path')
+  ) {
     return normalized;
   }
 
@@ -86,7 +89,9 @@ function buildCandidate(
   };
 }
 
-export function extractDurableCandidatesFromEvent(event: ConversationEventRow): DurableMemoryCandidate[] {
+export function extractDurableCandidatesFromEvent(
+  event: ConversationEventRow,
+): DurableMemoryCandidate[] {
   const payload = parsePayload(event.payload_json);
   if (!payload) {
     return [];

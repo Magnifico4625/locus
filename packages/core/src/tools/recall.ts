@@ -1,5 +1,3 @@
-import { handleTimeline } from './timeline.js';
-import { resolveTimeRange } from './search.js';
 import type {
   DatabaseAdapter,
   MemoryRecallCandidate,
@@ -7,6 +5,8 @@ import type {
   MemoryRecallResult,
   TimeRange,
 } from '../types.js';
+import { resolveTimeRange } from './search.js';
+import { handleTimeline } from './timeline.js';
 
 interface RecallDeps {
   db: DatabaseAdapter;
@@ -63,7 +63,10 @@ function matchesTerms(text: string, terms: string[]): boolean {
   return terms.some((term) => normalized.includes(term));
 }
 
-function parseRange(question: string, now: number): { timeRange?: TimeRange; resolvedRange?: MemoryRecallResolvedRange } {
+function parseRange(
+  question: string,
+  now: number,
+): { timeRange?: TimeRange; resolvedRange?: MemoryRecallResolvedRange } {
   const lower = question.toLowerCase();
 
   if (lower.includes('yesterday')) {
@@ -162,7 +165,9 @@ function loadConversationCandidates(
   );
 
   return entries
-    .filter((entry) => typeof entry.summary === 'string' && matchesTerms(entry.summary, questionTerms))
+    .filter(
+      (entry) => typeof entry.summary === 'string' && matchesTerms(entry.summary, questionTerms),
+    )
     .map((entry) => ({
       sessionId: entry.sessionId ?? undefined,
       headline: entry.summary ?? entry.kind,

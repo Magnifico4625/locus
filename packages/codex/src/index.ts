@@ -1,5 +1,5 @@
-export * from './capture.js';
 export * from './bounded-snippets.js';
+export * from './capture.js';
 export * from './ids.js';
 export * from './importer.js';
 export * from './inbox-event.js';
