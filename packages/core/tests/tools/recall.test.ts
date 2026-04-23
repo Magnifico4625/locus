@@ -161,6 +161,46 @@ describe('handleRecall', () => {
     ]);
   });
 
+  it('finds matching conversation context even when it is older than the recent timeline window', () => {
+    insertConversationEvent(adapter, {
+      eventId: 'evt-tracka-live-marker',
+      timestamp: now - 30 * 60_000,
+      kind: 'user_prompt',
+      payloadJson: JSON.stringify({
+        prompt:
+          'TRACKA-LIVE-20260423 decision: use SQLite cache and redacted capture for live recall.',
+      }),
+      sessionId: 'sess-tracka-live',
+    });
+
+    for (let index = 0; index < 12; index++) {
+      insertConversationEvent(adapter, {
+        eventId: `evt-newer-${index}`,
+        timestamp: now - index * 60_000,
+        kind: 'session_end',
+        payloadJson: JSON.stringify({
+          summary: `Newer unrelated task ${index}.`,
+        }),
+        sessionId: `sess-newer-${index}`,
+      });
+    }
+
+    const result = handleRecall('What did we decide for TRACKA-LIVE-20260423?', {
+      db: adapter,
+      now,
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('ok');
+    expect(result.summary).toContain('SQLite cache');
+    expect(result.summary).toContain('redacted capture');
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        sessionId: 'sess-tracka-live',
+        eventIds: ['evt-tracka-live-marker'],
+      }),
+    ]);
+  });
+
   it('returns needs_clarification when multiple distinct recall candidates match', () => {
     insertConversationEvent(adapter, {
       eventId: 'evt-task-1',

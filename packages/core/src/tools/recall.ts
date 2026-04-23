@@ -5,7 +5,7 @@ import type {
   MemoryRecallResult,
   TimeRange,
 } from '../types.js';
-import { resolveTimeRange } from './search.js';
+import { resolveTimeRange, summarizePayload } from './search.js';
 import { handleTimeline } from './timeline.js';
 
 interface RecallDeps {
@@ -23,6 +23,13 @@ interface DurableRecallRow {
   id: number;
   summary: string;
   updated_at: number;
+}
+
+interface ConversationRecallRow {
+  event_id: string;
+  kind: string;
+  payload_json: string | null;
+  session_id: string | null;
 }
 
 const QUESTION_STOP_WORDS = new Set([
@@ -154,6 +161,43 @@ function loadConversationCandidates(
   now: number,
   limit: number,
 ): MemoryRecallCandidate[] {
+  if (questionTerms.length > 0) {
+    const params: unknown[] = [];
+    const clauses: string[] = [];
+
+    if (timeRange) {
+      const resolved = resolveTimeRange(timeRange, now);
+      clauses.push('timestamp >= ?');
+      params.push(resolved.from);
+      clauses.push('timestamp <= ?');
+      params.push(resolved.to);
+    }
+
+    const termClauses = questionTerms.map(() => 'LOWER(COALESCE(payload_json, ?)) LIKE ?');
+    const termParams = questionTerms.flatMap((term) => ['', `%${term.toLowerCase()}%`]);
+    clauses.push(`(${termClauses.join(' OR ')})`);
+    params.push(...termParams);
+
+    const rows = db.all<ConversationRecallRow>(
+      `SELECT event_id, kind, payload_json, session_id
+       FROM conversation_events
+       WHERE ${clauses.join(' AND ')}
+       ORDER BY timestamp DESC, id DESC
+       LIMIT ?`,
+      [...params, limit],
+    );
+
+    return rows
+      .map((row) => ({
+        sessionId: row.session_id ?? undefined,
+        headline: summarizePayload(row.kind, row.payload_json),
+        whyMatched: 'recent conversation context',
+        eventIds: [row.event_id],
+        durableMemoryIds: [],
+      }))
+      .filter((candidate) => matchesTerms(candidate.headline, questionTerms));
+  }
+
   const entries = handleTimeline(
     { db },
     {

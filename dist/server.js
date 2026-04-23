@@ -7410,12 +7410,7 @@ function normalizeEventMessage(record2, sessionId, projectRoot) {
     });
   }
   if (subtype === "task_complete") {
-    const summary = firstString(
-      event.summary,
-      event.last_agent_message,
-      event.message,
-      event.text
-    );
+    const summary = firstString(event.summary, event.last_agent_message, event.message, event.text);
     const payload = compactPayload3({ summary });
     return createEvent(record2, {
       kind: "session_end",
@@ -34589,6 +34584,36 @@ function loadDurableCandidates(db, questionTerms, timeRange, now, limit) {
   }));
 }
 function loadConversationCandidates(db, questionTerms, timeRange, now, limit) {
+  if (questionTerms.length > 0) {
+    const params = [];
+    const clauses = [];
+    if (timeRange) {
+      const resolved = resolveTimeRange(timeRange, now);
+      clauses.push("timestamp >= ?");
+      params.push(resolved.from);
+      clauses.push("timestamp <= ?");
+      params.push(resolved.to);
+    }
+    const termClauses = questionTerms.map(() => "LOWER(COALESCE(payload_json, ?)) LIKE ?");
+    const termParams = questionTerms.flatMap((term) => ["", `%${term.toLowerCase()}%`]);
+    clauses.push(`(${termClauses.join(" OR ")})`);
+    params.push(...termParams);
+    const rows = db.all(
+      `SELECT event_id, kind, payload_json, session_id
+       FROM conversation_events
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY timestamp DESC, id DESC
+       LIMIT ?`,
+      [...params, limit]
+    );
+    return rows.map((row) => ({
+      sessionId: row.session_id ?? void 0,
+      headline: summarizePayload(row.kind, row.payload_json),
+      whyMatched: "recent conversation context",
+      eventIds: [row.event_id],
+      durableMemoryIds: []
+    })).filter((candidate) => matchesTerms(candidate.headline, questionTerms));
+  }
   const entries = handleTimeline(
     { db },
     {
