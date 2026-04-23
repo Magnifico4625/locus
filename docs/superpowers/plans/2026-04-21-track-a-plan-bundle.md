@@ -35,25 +35,36 @@
 
 ## Checkpoint Convention
 
-- [ ] Before `A1`, create baseline tag: `track-a-baseline-2026-04-21`
-- [ ] After `A1`, tag: `track-a-a1-local`
-- [ ] After `A2`, tag: `track-a-a2-local`
-- [ ] After `A3`, tag: `track-a-a3-local`
-- [ ] After `A4`, tag: `track-a-a4-local`
-- [ ] After `A5`, tag: `track-a-a5-local`
-- [ ] After `A6`, tag: `track-a-a6-local`
+- [x] Before `A1`, create baseline tag: `track-a-baseline-2026-04-21`
+- [x] After `A1`, tag: `track-a-a1-local`
+- [x] After `A2`, tag: `track-a-a2-local`
+- [x] After `A3`, tag: `track-a-a3-local`
+- [x] After `A4`, tag: `track-a-a4-local`
+- [x] After `A5`, tag: `track-a-a5-local`
+- [x] After `A6`, tag: `track-a-a6-local`
+
+## Completed Checkpoints
+
+| Plan | Local tag | Checkpoint commit |
+|------|-----------|-------------------|
+| `A1` Runtime Truth | `track-a-a1-local` | `642fdc9` `chore(codex): complete track a a1 validation` |
+| `A2` Bounded Hybrid Capture | `track-a-a2-local` | `74fb2a8` `chore(codex): complete track a a2 validation` |
+| `A3` Local High-Value Extraction | `track-a-a3-local` | `225efac` `chore(codex): complete track a a3 validation` |
+| `A4` Recall UX | `track-a-a4-local` | `52c8d57` `chore(codex): complete track a a4 validation` |
+| `A5` Retention And Cleanup | `track-a-a5-local` | `645f8d4` `chore(codex): complete track a a5 validation` |
+| `A6` Acceptance And Docs Truth Pass | `track-a-a6-local` | `d0677ba` `chore(codex): complete track a a6 validation` |
 
 ## Review Gates
 
-- [ ] Review and approve each sub-plan before implementation starts.
-- [ ] Execute one plan at a time; do not overlap `A2` with `A3+`.
-- [ ] Request code review at the end of each plan, not only at the end of Track A.
-- [ ] Run targeted tests during each task and a focused validation pass before tagging each checkpoint.
+- [x] Review and approve each sub-plan before implementation starts.
+- [x] Execute one plan at a time; do not overlap `A2` with `A3+`.
+- [x] Request code review at the end of each plan, not only at the end of Track A.
+- [x] Run targeted tests during each task and a focused validation pass before tagging each checkpoint.
 
 ## Hard Rules For Every Sub-Plan
 
-- [ ] No claim of improved recall without a runtime or fixture-backed check.
-- [ ] No Codex desktop parity claim without explicit diagnostics coverage.
-- [ ] No hidden destructive cleanup.
-- [ ] No Claude Code regressions introduced casually.
-- [ ] Keep docs honest: shipped behavior and future behavior must stay separated.
+- [x] No claim of improved recall without a runtime or fixture-backed check.
+- [x] No Codex desktop parity claim without explicit diagnostics coverage.
+- [x] No hidden destructive cleanup.
+- [x] No Claude Code regressions introduced casually.
+- [x] Keep docs honest: shipped behavior and future behavior must stay separated.
