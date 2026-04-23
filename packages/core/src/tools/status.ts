@@ -4,6 +4,7 @@ import type {
   CaptureLevel,
   CodexAutoImportSnapshot,
   CodexDiagnosticsSnapshot,
+  CodexTruthSnapshot,
   DatabaseAdapter,
   LocusConfig,
   MemoryStatus,
@@ -44,6 +45,59 @@ function getDefaultCodexAutoImportSnapshot(): CodexAutoImportSnapshot {
     lastImported: 0,
     lastDuplicates: 0,
     lastErrors: 0,
+  };
+}
+
+function buildCodexTruth(
+  codexDiagnostics: CodexDiagnosticsSnapshot | undefined,
+): CodexTruthSnapshot | undefined {
+  if (!codexDiagnostics) {
+    return undefined;
+  }
+
+  const desktopMessage =
+    'Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.';
+
+  if (codexDiagnostics.captureMode === 'off') {
+    return {
+      recallReadiness: 'disabled',
+      recommendedCaptureMode: 'redacted',
+      desktopParity: 'unverified',
+      recallMessage:
+        'Codex capture is off, so Locus cannot import Codex conversation events for recall.',
+      desktopMessage,
+    };
+  }
+
+  if (codexDiagnostics.captureMode === 'metadata') {
+    return {
+      recallReadiness: 'limited',
+      recommendedCaptureMode: 'redacted',
+      desktopParity: 'unverified',
+      recallMessage:
+        'metadata capture imports structural session events and diagnostics, but conversational recall is intentionally limited.',
+      desktopMessage,
+    };
+  }
+
+  if (codexDiagnostics.captureMode === 'redacted') {
+    return {
+      recallReadiness: 'practical',
+      recommendedCaptureMode: 'redacted',
+      desktopParity: 'unverified',
+      recallMessage:
+        'redacted capture stores bounded, filtered conversation snippets for practical recall without full transcripts.',
+      desktopMessage,
+    };
+  }
+
+  return {
+    recallReadiness: 'maximum',
+    recommendedCaptureMode: 'redacted',
+    desktopParity: 'unverified',
+    recallMessage:
+      'full capture stores raw conversation content and can provide maximum recall, but it is explicit warning territory.',
+    desktopMessage,
   };
 }
 
@@ -143,5 +197,6 @@ export function handleStatus(deps: StatusDeps): MemoryStatus {
       ? { ...deps.codexAutoImportSnapshot }
       : getDefaultCodexAutoImportSnapshot(),
     codexDiagnostics: deps.codexDiagnostics ? { ...deps.codexDiagnostics } : undefined,
+    codexTruth: buildCodexTruth(deps.codexDiagnostics),
   };
 }

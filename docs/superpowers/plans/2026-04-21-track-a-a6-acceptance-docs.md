@@ -127,24 +127,24 @@ Expected: test-only commit created.
 - Modify: `packages/core/tests/tools/doctor.test.ts`
 - Modify: `packages/core/tests/tools/status.test.ts`
 
-- [ ] Add explicit messaging when:
+- [x] Add explicit messaging when:
   - capture mode is `metadata`
   - conversational recall is intentionally limited
   - desktop/extension parity is unverified or partial
 
-- [ ] Avoid green-check messaging that implies strong recall when only ingest plumbing is healthy.
+- [x] Avoid green-check messaging that implies strong recall when only ingest plumbing is healthy.
 
-- [ ] Re-run the truth-messaging tests.
+- [x] Re-run the truth-messaging tests.
 
 Run: `npm test -- packages/core/tests/tools/doctor.test.ts packages/core/tests/tools/status.test.ts`
 Expected: PASS.
 
-- [ ] Commit the status/doctor truth pass.
+- [x] Commit the status/doctor truth pass.
 
 Run: `git add packages/core/src/tools/doctor.ts packages/core/src/tools/status.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/tools/status.test.ts`
 Expected: truth-messaging changes staged.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "feat(core): make recall limitations explicit in status and doctor"`
 Expected: implementation commit created.

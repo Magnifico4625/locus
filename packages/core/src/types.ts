@@ -421,6 +421,17 @@ export interface CodexDiagnosticsSnapshot {
   latestImportedTimestamp?: number;
 }
 
+export type CodexRecallReadiness = 'disabled' | 'limited' | 'practical' | 'maximum';
+export type CodexDesktopParity = 'unverified';
+
+export interface CodexTruthSnapshot {
+  recallReadiness: CodexRecallReadiness;
+  recommendedCaptureMode: CaptureLevel;
+  desktopParity: CodexDesktopParity;
+  recallMessage: string;
+  desktopMessage: string;
+}
+
 export interface MemoryStatus {
   projectPath: string;
   projectRoot: string;
@@ -443,6 +454,7 @@ export interface MemoryStatus {
   durableMemoryStates?: DurableMemoryStateCounts;
   codexAutoImport?: CodexAutoImportSnapshot;
   codexDiagnostics?: CodexDiagnosticsSnapshot;
+  codexTruth?: CodexTruthSnapshot;
 }
 
 // ─── Doctor ───
