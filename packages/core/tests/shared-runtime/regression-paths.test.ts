@@ -147,4 +147,12 @@ describe('regression: Windows path normalization', () => {
   it('project hash is case-insensitive', () => {
     expect(projectHash('C:/Users/Admin/MyProject')).toBe(projectHash('c:/users/admin/myproject'));
   });
+
+  it('storage paths remain identical for duplicate-separator variants', () => {
+    process.env.LOCUS_STORAGE_ROOT = '/mnt/shared/locus-data';
+
+    expect(resolveDbPath('C:/Users//Admin///my-project')).toBe(
+      resolveDbPath('c:\\users\\admin\\my-project'),
+    );
+  });
 });

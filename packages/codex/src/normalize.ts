@@ -1,4 +1,11 @@
-import type { CodexJsonlRecord, CodexNormalizedEvent, CodexNormalizeResult } from './types.js';
+import type {
+  CodexAiResponsePayload,
+  CodexJsonlRecord,
+  CodexNormalizedEvent,
+  CodexNormalizeResult,
+  CodexSessionEndPayload,
+  CodexUserPromptPayload,
+} from './types.js';
 
 const UNKNOWN_SESSION = 'unknown-session';
 
@@ -66,41 +73,45 @@ function normalizeEventMessage(
   sessionId: string,
   projectRoot: string,
 ): CodexNormalizedEvent | undefined {
-  const subtype = stringValue(record.raw.subtype);
+  const payloadRecord = recordObject(record.raw.payload);
+  const event = payloadRecord ?? record.raw;
+  const subtype = stringValue(record.raw.subtype) ?? stringValue(event.type);
 
   if (subtype === 'user_message') {
+    const payload = {
+      prompt: firstString(event.message, event.text) ?? '',
+    } satisfies CodexUserPromptPayload;
     return createEvent(record, {
       kind: 'user_prompt',
       sessionId,
       projectRoot,
-      payload: {
-        prompt: firstString(record.raw.message, record.raw.text) ?? '',
-      },
+      payload,
     });
   }
 
   if (subtype === 'task_complete') {
-    const summary = firstString(record.raw.summary, record.raw.message, record.raw.text);
+    const summary = firstString(event.summary, event.last_agent_message, event.message, event.text);
+    const payload = compactPayload({ summary }) as CodexSessionEndPayload;
     return createEvent(record, {
       kind: 'session_end',
       sessionId,
       projectRoot,
-      payload: compactPayload({ summary }),
+      payload,
     });
   }
 
   if (subtype === 'exec_command_end') {
-    const exitCode = numberValue(record.raw.exit_code);
+    const exitCode = numberValue(event.exit_code);
     return createEvent(record, {
       kind: 'tool_use',
       sessionId,
       projectRoot,
-      itemId: stringValue(record.raw.call_id),
+      itemId: stringValue(event.call_id),
       payload: compactPayload({
         tool: 'exec_command_end',
-        callId: stringValue(record.raw.call_id),
+        callId: stringValue(event.call_id),
         exitCode,
-        durationMs: numberValue(record.raw.duration_ms),
+        durationMs: numberValue(event.duration_ms) ?? durationMsValue(event.duration),
         status: exitCode === undefined || exitCode === 0 ? 'success' : 'error',
       }),
     });
@@ -115,7 +126,7 @@ function normalizeResponseItem(
   projectRoot: string,
   currentModel: string | undefined,
 ): CodexNormalizedEvent | undefined {
-  const item = recordObject(record.raw.item);
+  const item = recordObject(record.raw.item) ?? recordObject(record.raw.payload);
   if (!item) {
     return undefined;
   }
@@ -123,14 +134,15 @@ function normalizeResponseItem(
   const itemType = stringValue(item.type);
 
   if (itemType === 'message' && stringValue(item.role) === 'assistant') {
+    const payload = compactPayload({
+      response: extractTextContent(item.content),
+      model: currentModel,
+    }) as CodexAiResponsePayload;
     return createEvent(record, {
       kind: 'ai_response',
       sessionId,
       projectRoot,
-      payload: compactPayload({
-        response: extractTextContent(item.content),
-        model: currentModel,
-      }),
+      payload,
     });
   }
 
@@ -259,4 +271,19 @@ function stringValue(value: unknown): string | undefined {
 
 function numberValue(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
+function durationMsValue(value: unknown): number | undefined {
+  const duration = recordObject(value);
+  if (!duration) {
+    return undefined;
+  }
+
+  const secs = numberValue(duration.secs);
+  const nanos = numberValue(duration.nanos);
+  if (secs === undefined && nanos === undefined) {
+    return undefined;
+  }
+
+  return Math.round((secs ?? 0) * 1000 + (nanos ?? 0) / 1_000_000);
 }

@@ -45,6 +45,38 @@ function insertEpisodic(db: DatabaseAdapter, content: string, sessionId: string)
   );
 }
 
+function insertDurableMemory(
+  db: DatabaseAdapter,
+  opts: {
+    summary: string;
+    topicKey?: string;
+    memoryType?: string;
+    state?: string;
+    source?: string;
+    updatedAt?: number;
+  },
+): void {
+  const now = opts.updatedAt ?? Date.now();
+  db.run(
+    `INSERT INTO durable_memories (
+      topic_key, memory_type, state, summary, evidence_json,
+      source_event_id, source, superseded_by_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      opts.topicKey ?? null,
+      opts.memoryType ?? 'decision',
+      opts.state ?? 'active',
+      opts.summary,
+      JSON.stringify({ test: true }),
+      null,
+      opts.source ?? 'codex',
+      null,
+      now,
+      now,
+    ],
+  );
+}
+
 // ─── Suite ────────────────────────────────────────────────────────────────────
 
 describe('handleSearch', () => {
@@ -225,6 +257,36 @@ describe('handleSearch', () => {
 
     const pathMatch = results.find((r) => r.layer === 'structural' && r.relevance === 0.5);
     expect(pathMatch?.content).toBe('src/authentication/session.ts');
+  });
+
+  it('returns durable results as a first-class layer', () => {
+    insertDurableMemory(adapter, {
+      topicKey: 'database_choice',
+      summary: 'Use SQLite for the local durable memory store.',
+    });
+
+    const results = handleSearch('SQLite', { db: adapter, semantic, fts5: true });
+
+    const durable = results.filter((r) => r.layer === 'durable');
+    expect(durable.length).toBeGreaterThan(0);
+    expect(durable[0]?.content).toContain('SQLite');
+    expect(durable[0]?.source).toMatch(/^durable:\d+$/);
+  });
+
+  it('ranks durable hits above generic semantic hits for the same query', () => {
+    insertDurableMemory(adapter, {
+      topicKey: 'database_choice',
+      summary: 'Use SQLite for the local durable memory store.',
+    });
+    semantic.add('SQLite note saved in legacy semantic memory', ['sqlite']);
+
+    const results = handleSearch('SQLite', { db: adapter, semantic, fts5: true });
+    const durableIndex = results.findIndex((r) => r.layer === 'durable');
+    const semanticIndex = results.findIndex((r) => r.layer === 'semantic');
+
+    expect(durableIndex).toBeGreaterThanOrEqual(0);
+    expect(semanticIndex).toBeGreaterThanOrEqual(0);
+    expect(durableIndex).toBeLessThan(semanticIndex);
   });
 });
 

@@ -1,3 +1,5 @@
+import type { ClientEnv, ClientSurface } from '@locus/shared-runtime';
+
 // ─── Storage Layer ───
 
 export interface DatabaseAdapter {
@@ -76,13 +78,89 @@ export interface MemoryEntry {
   sessionId?: string;
 }
 
+export type DurableMemoryType = 'decision' | 'preference' | 'style' | 'constraint';
+
+export type DurableMemoryState = 'active' | 'stale' | 'superseded' | 'archivable';
+
+export interface DurableMemoryEntry {
+  id: number;
+  topicKey?: string;
+  memoryType: DurableMemoryType;
+  state: DurableMemoryState;
+  summary: string;
+  evidence: Record<string, unknown>;
+  sourceEventId?: string;
+  source: 'codex' | 'claude-code' | 'manual';
+  supersededById?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface DurableMemoryStateCounts {
+  active: number;
+  stale: number;
+  superseded: number;
+  archivable: number;
+}
+
+export type DurableReviewReason =
+  | 'superseded_by_newer_memory'
+  | 'duplicate_confirmation'
+  | 'aged_but_readable'
+  | 'stale_low_value';
+
+export type DurableReviewAction = 'delete' | 'archive' | 'review';
+
+export interface DurableReviewCandidate {
+  durableId: number;
+  topicKey?: string;
+  state: DurableMemoryState;
+  reason: DurableReviewReason;
+  recommendedAction: DurableReviewAction;
+  summary: string;
+  supersededById?: number;
+  updatedAt: number;
+}
+
+export interface DurableReviewResult {
+  totalCandidates: number;
+  countsByState: DurableMemoryStateCounts;
+  candidates: DurableReviewCandidate[];
+}
+
 // ─── Search ───
 
 export interface SearchResult {
-  layer: 'structural' | 'semantic' | 'episodic' | 'conversation';
+  layer: 'structural' | 'semantic' | 'episodic' | 'conversation' | 'durable';
   content: string;
   relevance: number;
   source: string;
+}
+
+export type MemoryRecallStatus = 'ok' | 'no_memory' | 'needs_clarification';
+
+export interface MemoryRecallResolvedRange {
+  label: string;
+  from: number;
+  to: number;
+  fromIso: string;
+  toIso: string;
+}
+
+export interface MemoryRecallCandidate {
+  sessionId?: string;
+  headline: string;
+  whyMatched: string;
+  eventIds: string[];
+  durableMemoryIds: number[];
+}
+
+export interface MemoryRecallResult {
+  status: MemoryRecallStatus;
+  question: string;
+  resolvedRange?: MemoryRecallResolvedRange;
+  summary: string;
+  candidates: MemoryRecallCandidate[];
 }
 
 // ─── Scanner ───
@@ -314,6 +392,9 @@ export type CodexAutoImportStatus =
 
 export interface CodexAutoImportSnapshot {
   clientDetected: boolean;
+  client: ClientEnv;
+  clientSurface: ClientSurface;
+  detectionEvidence: string[];
   debounceMs: number;
   lastStatus: CodexAutoImportStatus;
   lastAttemptAt?: number;
@@ -326,6 +407,9 @@ export interface CodexAutoImportSnapshot {
 }
 
 export interface CodexDiagnosticsSnapshot {
+  client: ClientEnv;
+  clientSurface: ClientSurface;
+  detectionEvidence: string[];
   captureMode: CodexImportCaptureMode;
   sessionsDir: string;
   sessionsDirExists: boolean;
@@ -335,6 +419,17 @@ export interface CodexDiagnosticsSnapshot {
   importedEventCount: number;
   latestImportedSessionId?: string;
   latestImportedTimestamp?: number;
+}
+
+export type CodexRecallReadiness = 'disabled' | 'limited' | 'practical' | 'maximum';
+export type CodexDesktopParity = 'unverified';
+
+export interface CodexTruthSnapshot {
+  recallReadiness: CodexRecallReadiness;
+  recommendedCaptureMode: CaptureLevel;
+  desktopParity: CodexDesktopParity;
+  recallMessage: string;
+  desktopMessage: string;
 }
 
 export interface MemoryStatus {
@@ -356,8 +451,10 @@ export interface MemoryStatus {
   storageBackend: 'node:sqlite' | 'sql.js';
   fts5Available: boolean;
   searchEngine: 'FTS5' | 'LIKE fallback';
+  durableMemoryStates?: DurableMemoryStateCounts;
   codexAutoImport?: CodexAutoImportSnapshot;
   codexDiagnostics?: CodexDiagnosticsSnapshot;
+  codexTruth?: CodexTruthSnapshot;
 }
 
 // ─── Doctor ───
@@ -405,6 +502,8 @@ export interface PurgeResponseError {
 export type PurgeResponse = PurgeResponsePending | PurgeResponseDone | PurgeResponseError;
 
 // ─── Forget ───
+
+export type ForgetTargetKind = 'semantic_query' | 'durable_id' | 'durable_topic';
 
 export interface ForgetResponseDeleted {
   status: 'deleted';

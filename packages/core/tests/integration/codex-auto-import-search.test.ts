@@ -1,10 +1,12 @@
 import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { normalizePathForIdentity } from '@locus/shared-runtime';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ServerContext } from '../../src/server.js';
 import { createServer } from '../../src/server.js';
 import { handleRemember } from '../../src/tools/remember.js';
+import type { MemoryStatus } from '../../src/types.js';
 
 const fixturesDir = join(import.meta.dirname, '..', '..', '..', 'codex', 'tests', 'fixtures');
 const tempRoots: string[] = [];
@@ -71,6 +73,8 @@ describe('memory_search auto-import integration', () => {
     try {
       const searchText = await callTextTool(ctx, 'memory_search', { query: 'parser test' });
       const results = JSON.parse(searchText) as Array<{ layer: string; content: string }>;
+      const statusText = await callTextTool(ctx, 'memory_status', {});
+      const status = JSON.parse(statusText) as MemoryStatus;
 
       const rows =
         ctx.db.get<{ cnt: number }>(
@@ -86,6 +90,19 @@ describe('memory_search auto-import integration', () => {
               entry.content.includes('Create a simple parser test')),
         ),
       ).toBe(true);
+      expect(status.codexAutoImport).toMatchObject({
+        clientDetected: true,
+        client: 'codex',
+        clientSurface: 'cli',
+        detectionEvidence: ['env:CODEX_HOME'],
+      });
+      expect(status.codexDiagnostics).toMatchObject({
+        client: 'codex',
+        clientSurface: 'cli',
+        detectionEvidence: ['env:CODEX_HOME'],
+        sessionsDir: normalizePathForIdentity(sessionsDir),
+        latestRolloutPath: normalizePathForIdentity(join(sessionsDir, 'rollout-basic.jsonl')),
+      });
     } finally {
       ctx.cleanup();
       if (originalCodexHome === undefined) {

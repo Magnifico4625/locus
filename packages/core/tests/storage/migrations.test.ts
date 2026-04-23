@@ -30,7 +30,7 @@ describe('runMigrations', () => {
     const { runMigrations } = await import('../../src/storage/migrations.js');
     runMigrations(adapter, false);
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(2);
+    expect(row?.version).toBe(3);
   });
 
   it('creates files table', async () => {
@@ -92,7 +92,7 @@ describe('runMigrations', () => {
     runMigrations(adapter, false);
     expect(() => runMigrations(adapter, false)).not.toThrow();
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(2);
+    expect(row?.version).toBe(3);
   });
 
   it('files table has expected columns', async () => {
@@ -153,11 +153,11 @@ describe('migrationV2', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('updates schema_version to 2 on fresh DB', async () => {
+  it('updates schema_version to 3 on fresh DB', async () => {
     const { runMigrations } = await import('../../src/storage/migrations.js');
     runMigrations(adapter, false);
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(2);
+    expect(row?.version).toBe(3);
   });
 
   it('creates conversation_events table', async () => {
@@ -299,7 +299,7 @@ describe('migrationV2', () => {
     runMigrations(adapter, false);
     expect(() => runMigrations(adapter, false)).not.toThrow();
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(2);
+    expect(row?.version).toBe(3);
   });
 
   it('preserves existing v1 data after v2 migration', async () => {
@@ -328,5 +328,67 @@ describe('migrationV2', () => {
     const files = adapter.all<{ relative_path: string }>('SELECT relative_path FROM files');
     expect(files).toHaveLength(1);
     expect(files[0]?.relative_path).toBe('src/index.ts');
+  });
+
+  it('creates durable_memories table with durable memory columns', async () => {
+    const { runMigrations } = await import('../../src/storage/migrations.js');
+    runMigrations(adapter, false);
+    const columns = adapter.all<{ name: string }>("PRAGMA table_info('durable_memories')");
+    const colNames = columns.map((c) => c.name);
+    expect(colNames).toContain('id');
+    expect(colNames).toContain('topic_key');
+    expect(colNames).toContain('memory_type');
+    expect(colNames).toContain('state');
+    expect(colNames).toContain('summary');
+    expect(colNames).toContain('evidence_json');
+    expect(colNames).toContain('source_event_id');
+    expect(colNames).toContain('source');
+    expect(colNames).toContain('superseded_by_id');
+    expect(colNames).toContain('created_at');
+    expect(colNames).toContain('updated_at');
+  });
+
+  it('creates durable memory indexes on topic_key, state, and source_event_id', async () => {
+    const { runMigrations } = await import('../../src/storage/migrations.js');
+    runMigrations(adapter, false);
+    const indexes = adapter.all<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='durable_memories'",
+    );
+    const indexNames = indexes.map((i) => i.name);
+    expect(indexNames.some((name) => name.includes('topic'))).toBe(true);
+    expect(indexNames.some((name) => name.includes('state'))).toBe(true);
+    expect(indexNames.some((name) => name.includes('source_event'))).toBe(true);
+  });
+
+  it('creates durable_memories_fts when fts5=true', async () => {
+    const { runMigrations } = await import('../../src/storage/migrations.js');
+    runMigrations(adapter, true);
+    const tables = adapter.all<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table'",
+    );
+    expect(tables.some((t) => t.name === 'durable_memories_fts')).toBe(true);
+  });
+
+  it('does NOT create durable_memories_fts when fts5=false', async () => {
+    const { runMigrations } = await import('../../src/storage/migrations.js');
+    runMigrations(adapter, false);
+    const tables = adapter.all<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table'",
+    );
+    expect(tables.some((t) => t.name === 'durable_memories_fts')).toBe(false);
+  });
+
+  it('keeps legacy tables intact after adding durable memory schema', async () => {
+    const { runMigrations } = await import('../../src/storage/migrations.js');
+    runMigrations(adapter, false);
+    const tables = adapter.all<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table'",
+    );
+    const tableNames = tables.map((t) => t.name);
+    expect(tableNames).toContain('files');
+    expect(tableNames).toContain('memories');
+    expect(tableNames).toContain('conversation_events');
+    expect(tableNames).toContain('ingest_log');
+    expect(tableNames).toContain('durable_memories');
   });
 });

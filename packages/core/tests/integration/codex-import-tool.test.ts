@@ -1,9 +1,10 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { importCodexSessionsToInbox } from '../../../codex/src/importer.js';
 import { processInbox } from '../../src/ingest/pipeline.js';
+import { runDurableExtraction } from '../../src/memory/durable-runner.js';
 import { createServer } from '../../src/server.js';
 import { handleImportCodex } from '../../src/tools/import-codex.js';
 import { handleSearch } from '../../src/tools/search.js';
@@ -139,6 +140,7 @@ describe('handleImportCodex integration', () => {
           LOCUS_CAPTURE_LEVEL: 'full',
         },
         processInbox,
+        runDurableExtraction,
         importCodexSessionsToInbox,
       };
 
@@ -160,6 +162,100 @@ describe('handleImportCodex integration', () => {
       expect(second.duplicates).toBe(4);
       expect(second.processed).toBe(0);
       expect(rowsAfterSecond).toBe(rowsAfterFirst);
+    } finally {
+      ctx.cleanup();
+      if (originalCodexHome === undefined) {
+        delete process.env.CODEX_HOME;
+      } else {
+        process.env.CODEX_HOME = originalCodexHome;
+      }
+      if (originalCodexCapture === undefined) {
+        delete process.env.LOCUS_CODEX_CAPTURE;
+      } else {
+        process.env.LOCUS_CODEX_CAPTURE = originalCodexCapture;
+      }
+      if (originalCaptureLevel === undefined) {
+        delete process.env.LOCUS_CAPTURE_LEVEL;
+      } else {
+        process.env.LOCUS_CAPTURE_LEVEL = originalCaptureLevel;
+      }
+    }
+  });
+
+  it('extracts durable decisions as part of the Codex import flow', async () => {
+    const root = makeTempRoot();
+    const projectDir = join(root, 'project');
+    const codexHome = join(root, 'codex-home');
+    const sessionsDir = join(codexHome, 'sessions');
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(sessionsDir, { recursive: true });
+
+    const rolloutPath = join(sessionsDir, 'rollout-durable.jsonl');
+    const rolloutContent = [
+      {
+        type: 'session_meta',
+        timestamp: '2026-04-22T09:00:00.000Z',
+        session_id: 'sess_durable_001',
+        cwd: 'C:\\Projects\\SampleApp',
+        model: 'gpt-5.4',
+      },
+      {
+        type: 'event_msg',
+        subtype: 'task_complete',
+        timestamp: '2026-04-22T09:00:01.000Z',
+        message: 'Decision: use SQLite for the local durable memory store.',
+      },
+    ]
+      .map((line) => JSON.stringify(line))
+      .join('\n');
+    writeFileSync(rolloutPath, rolloutContent, 'utf-8');
+
+    const originalCodexHome = process.env.CODEX_HOME;
+    const originalCodexCapture = process.env.LOCUS_CODEX_CAPTURE;
+    const originalCaptureLevel = process.env.LOCUS_CAPTURE_LEVEL;
+
+    process.env.CODEX_HOME = codexHome;
+    process.env.LOCUS_CODEX_CAPTURE = 'full';
+    process.env.LOCUS_CAPTURE_LEVEL = 'full';
+
+    const ctx = await createServer({ cwd: projectDir, dbPath: join(root, 'locus.db') });
+
+    try {
+      const deps = {
+        db: ctx.db,
+        inboxDir: ctx.inboxDir,
+        captureLevel: ctx.config.captureLevel,
+        fts5Available: ctx.fts5,
+        env: {
+          CODEX_HOME: codexHome,
+          LOCUS_CODEX_CAPTURE: 'full',
+          LOCUS_CAPTURE_LEVEL: 'full',
+        },
+        processInbox,
+        runDurableExtraction,
+        importCodexSessionsToInbox,
+      };
+
+      const first = handleImportCodex({}, deps);
+      const durableCountAfterFirst =
+        ctx.db.get<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM durable_memories')?.cnt ?? 0;
+      const durableRow = ctx.db.get<{ topic_key: string | null; summary: string }>(
+        'SELECT topic_key, summary FROM durable_memories ORDER BY id DESC LIMIT 1',
+      );
+
+      const second = handleImportCodex({}, deps);
+      const durableCountAfterSecond =
+        ctx.db.get<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM durable_memories')?.cnt ?? 0;
+
+      expect(first.status).toBe('ok');
+      expect(first.imported).toBe(2);
+      expect(durableCountAfterFirst).toBe(1);
+      expect(durableRow?.topic_key).toBe('database_choice');
+      expect(durableRow?.summary).toContain('SQLite');
+
+      expect(second.status).toBe('ok');
+      expect(second.imported).toBe(0);
+      expect(durableCountAfterSecond).toBe(durableCountAfterFirst);
     } finally {
       ctx.cleanup();
       if (originalCodexHome === undefined) {

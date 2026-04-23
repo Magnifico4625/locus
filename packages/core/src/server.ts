@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { processInbox } from './ingest/pipeline.js';
 import { log, setLogLevel } from './logger.js';
 import { MemoryCompressor } from './memory/compressor.js';
+import { runDurableExtraction } from './memory/durable-runner.js';
 import { EpisodicMemory } from './memory/episodic.js';
 import { SemanticMemory } from './memory/semantic.js';
 import { resolveProjectRoot } from './project-root.js';
@@ -28,7 +29,9 @@ import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';
 import { handleImportCodex } from './tools/import-codex.js';
 import { handlePurge } from './tools/purge.js';
+import { handleRecall } from './tools/recall.js';
 import { handleRemember } from './tools/remember.js';
+import { handleReview } from './tools/review.js';
 import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
@@ -116,6 +119,9 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   const INGEST_DEBOUNCE_MS = 30_000;
   let codexAutoImportSnapshot: CodexAutoImportSnapshot = {
     clientDetected: false,
+    client: 'generic',
+    clientSurface: 'generic',
+    detectionEvidence: [],
     debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
     lastStatus: 'idle',
     lastImported: 0,
@@ -129,8 +135,11 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       captureLevel: config.captureLevel,
       fts5Available: fts5,
     });
+    runDurableExtraction(db, { source: 'codex' });
     _lastIngestMetrics = startupMetrics;
-    lastIngestTime = Date.now();
+    if (startupMetrics.processed > 0) {
+      lastIngestTime = Date.now();
+    }
     if (startupMetrics.processed > 0) {
       log(
         'info',
@@ -183,6 +192,43 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     content: [{ type: 'text' as const, text: handleExplore(path, { db }) }],
   }));
 
+  function runPreQueryCodexFlow(now: number): void {
+    const autoImport = coordinateCodexAutoImport({
+      now,
+      snapshot: codexAutoImportSnapshot,
+      runImport: () =>
+        handleImportCodex(
+          { latestOnly: true },
+          {
+            db,
+            inboxDir,
+            captureLevel: config.captureLevel,
+            fts5Available: fts5,
+            env: process.env,
+            processInbox,
+            runDurableExtraction,
+            importCodexSessionsToInbox,
+          },
+        ),
+    });
+    codexAutoImportSnapshot = autoImport.snapshot;
+
+    if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
+      try {
+        const metrics = processInbox(inboxDir, db, {
+          batchLimit: 50,
+          captureLevel: config.captureLevel,
+          fts5Available: fts5,
+        });
+        runDurableExtraction(db, { source: 'codex' });
+        _lastIngestMetrics = metrics;
+        lastIngestTime = now;
+      } catch {
+        // Pre-query ingest failure should not block search or recall
+      }
+    }
+  }
+
   // 2. memory_search (with Codex auto-import + pre-search inbox processing)
   server.tool(
     'memory_search',
@@ -214,39 +260,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     },
     async ({ query, timeRange, filePath, kind, source, limit, offset }) => {
       const now = Date.now();
-      const autoImport = coordinateCodexAutoImport({
-        now,
-        snapshot: codexAutoImportSnapshot,
-        runImport: () =>
-          handleImportCodex(
-            { latestOnly: true },
-            {
-              db,
-              inboxDir,
-              captureLevel: config.captureLevel,
-              fts5Available: fts5,
-              env: process.env,
-              processInbox,
-              importCodexSessionsToInbox,
-            },
-          ),
-      });
-      codexAutoImportSnapshot = autoImport.snapshot;
-
-      // Process any remaining inbox events before search (debounced, max 50 events)
-      if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
-        try {
-          const metrics = processInbox(inboxDir, db, {
-            batchLimit: 50,
-            captureLevel: config.captureLevel,
-            fts5Available: fts5,
-          });
-          _lastIngestMetrics = metrics;
-          lastIngestTime = now;
-        } catch {
-          // Pre-search ingest failure should not block the search
-        }
-      }
+      runPreQueryCodexFlow(now);
 
       const results = handleSearch(
         query,
@@ -270,6 +284,67 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         ],
       };
     },
+  );
+
+  // 2b. memory_recall (with the same Codex auto-import + pre-query inbox processing)
+  server.tool(
+    'memory_recall',
+    {
+      question: z.string(),
+      timeRange: z
+        .object({
+          from: z.number().optional(),
+          to: z.number().optional(),
+          relative: z.enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d']).optional(),
+        })
+        .optional()
+        .describe('Filter recall candidates by time range (absolute or relative)'),
+      limit: z
+        .number()
+        .optional()
+        .describe('Max recall candidates to inspect per source (default 10)'),
+    },
+    async ({ question, timeRange, limit }) => {
+      const now = Date.now();
+      runPreQueryCodexFlow(now);
+
+      const result = handleRecall(
+        question,
+        { db, now },
+        {
+          timeRange,
+          limit,
+          now,
+        },
+      );
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(result),
+          },
+        ],
+      };
+    },
+  );
+
+  // 3. memory_remember
+  server.tool(
+    'memory_review',
+    {
+      state: z.enum(['active', 'stale', 'superseded', 'archivable']).optional(),
+      topicKey: z.string().optional(),
+      limit: z.number().optional().describe('Max review candidates to return (default 20)'),
+    },
+    async ({ state, topicKey, limit }) => ({
+      content: [
+        {
+          type: 'text' as const,
+          text: JSON.stringify(handleReview({ db }, { state, topicKey, limit })),
+        },
+      ],
+    }),
   );
 
   // 3. memory_remember
@@ -306,6 +381,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           fts5Available: fts5,
           env: process.env,
           processInbox,
+          runDurableExtraction,
           importCodexSessionsToInbox,
         },
       );

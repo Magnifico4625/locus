@@ -6801,6 +6801,118 @@ var require_dist = __commonJS({
 // packages/core/src/server.ts
 import { basename as basename4, dirname as dirname6, join as join11 } from "node:path";
 
+// packages/codex/src/bounded-snippets.ts
+var USER_CHAR_LIMIT = 280;
+var ASSISTANT_CHAR_LIMIT = 220;
+var USER_MAX_SENTENCES = 3;
+var ASSISTANT_MAX_SENTENCES = 2;
+function boundCodexSnippet(text, options) {
+  const normalized = collapseWhitespace(text);
+  if (normalized.length === 0) {
+    return { text: "", truncated: false };
+  }
+  const sentenceLimit = options.role === "assistant" ? ASSISTANT_MAX_SENTENCES : USER_MAX_SENTENCES;
+  const charLimit = options.role === "assistant" ? ASSISTANT_CHAR_LIMIT : USER_CHAR_LIMIT;
+  const sentences = splitSentences(normalized);
+  const keptSentences = [];
+  for (const sentence of sentences) {
+    if (keptSentences.length >= sentenceLimit) {
+      break;
+    }
+    const candidate = [...keptSentences, sentence].join(" ");
+    if (candidate.length > charLimit) {
+      break;
+    }
+    keptSentences.push(sentence);
+  }
+  let boundedText = keptSentences.join(" ");
+  if (boundedText.length === 0) {
+    boundedText = normalized.slice(0, charLimit).trimEnd();
+  }
+  const truncated = boundedText.length < normalized.length;
+  return {
+    text: truncated ? `${boundedText} ...` : boundedText,
+    truncated
+  };
+}
+function collapseWhitespace(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function splitSentences(text) {
+  const matches = text.match(/[^.!?]+[.!?]?/g);
+  if (!matches) {
+    return [text];
+  }
+  return matches.map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 0);
+}
+
+// packages/codex/src/relevance.ts
+var NOISE_PATTERNS = [
+  /\bfor general learning\b/i,
+  /\bexplain what\b/i,
+  /\bhistory of\b/i,
+  /\bcompare\b/i,
+  /\bwhat are\b/i
+];
+var BUG_PATTERNS = [
+  /\bbug\b/i,
+  /\bcrash(?:es|ed|ing)?\b/i,
+  /\bfail(?:s|ed|ing|ure)?\b/i,
+  /\berror\b/i,
+  /\bregression\b/i,
+  /\brefactor\b/i,
+  /\bnull(?:able)?\b/i
+];
+var PREFERENCE_PATTERNS = [
+  /\bprefer\b/i,
+  /\bkeep\b.{0,24}\bsurgical\b/i,
+  /\bdo not touch\b/i,
+  /\bdon't touch\b/i,
+  /\bavoid touching\b/i,
+  /\bunrelated modules?\b/i,
+  /\bunrelated code\b/i
+];
+var NEXT_STEP_PATTERNS = [
+  /\bnext\b.{0,24}\b(i|we)\b.{0,24}\bwill\b/i,
+  /\bi will add\b/i,
+  /\bi will run\b/i,
+  /\bi will wire\b/i,
+  /\bthen run\b/i
+];
+var DECISION_PATTERNS = [
+  /\bdecision\b/i,
+  /\bdecide(?:d)?\b/i,
+  /\bchoose\b/i,
+  /\bkeep the fix\b/i,
+  /\bpatch\b.{0,24}\bfirst\b/i,
+  /\bstrategy\b/i
+];
+function classifyCodexRelevance(text, role) {
+  const normalized = text.trim();
+  if (normalized.length === 0) {
+    return { keep: false, reason: "noise" };
+  }
+  if (role === "assistant" && matchesAny(normalized, NEXT_STEP_PATTERNS)) {
+    return { keep: true, reason: "next_step" };
+  }
+  if (matchesAny(normalized, PREFERENCE_PATTERNS)) {
+    return { keep: true, reason: "preference" };
+  }
+  if (matchesAny(normalized, BUG_PATTERNS)) {
+    return { keep: true, reason: "bug_context" };
+  }
+  if (matchesAny(normalized, DECISION_PATTERNS)) {
+    return { keep: true, reason: "decision" };
+  }
+  if (matchesAny(normalized, NOISE_PATTERNS)) {
+    return { keep: false, reason: "noise" };
+  }
+  return { keep: true, reason: "general_context" };
+}
+function matchesAny(text, patterns) {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
 // packages/codex/src/capture.ts
 var VALID_CAPTURE_MODES = /* @__PURE__ */ new Set(["off", "metadata", "redacted", "full"]);
 function getCodexCaptureMode(env = process.env) {
@@ -6815,9 +6927,47 @@ function shouldImportCodexEvent(mode, kind) {
     return kind !== "user_prompt" && kind !== "ai_response";
   }
   if (mode === "redacted") {
-    return kind !== "ai_response";
+    return true;
   }
   return true;
+}
+function captureCodexEvent(event, mode) {
+  if (!shouldImportCodexEvent(mode, event.kind)) {
+    return {
+      event: null,
+      capturePolicy: captureModeToPolicy(mode),
+      truncated: false,
+      retained: false,
+      filtered: true
+    };
+  }
+  if (mode === "metadata") {
+    if (event.kind === "user_prompt" || event.kind === "ai_response") {
+      return {
+        event: null,
+        capturePolicy: "metadata",
+        truncated: false,
+        retained: false,
+        filtered: true
+      };
+    }
+    return {
+      event: annotateEvent(event, {
+        capturePolicy: "metadata",
+        truncated: false,
+        retained: true,
+        filtered: false
+      }),
+      capturePolicy: "metadata",
+      truncated: false,
+      retained: true,
+      filtered: false
+    };
+  }
+  if (mode === "full") {
+    return keepFullEvent(event);
+  }
+  return keepBoundedRedactedEvent(event);
 }
 function redactCodexText(text) {
   return text.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [REDACTED]").replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[REDACTED]").replace(
@@ -6827,6 +6977,189 @@ function redactCodexText(text) {
 }
 function isCodexCaptureMode(value) {
   return value !== void 0 && VALID_CAPTURE_MODES.has(value);
+}
+function captureModeToPolicy(mode) {
+  if (mode === "redacted") {
+    return "bounded_redacted";
+  }
+  return mode;
+}
+function keepFullEvent(event) {
+  if (event.kind === "user_prompt") {
+    const prompt = redactCodexText(stringValue(event.payload.prompt));
+    return keepDecision(
+      annotateEvent(event, {
+        prompt,
+        capturePolicy: "full",
+        truncated: false,
+        retained: true,
+        filtered: false
+      }),
+      "full"
+    );
+  }
+  if (event.kind === "ai_response") {
+    const response = redactCodexText(stringValue(event.payload.response));
+    return keepDecision(
+      annotateEvent(event, {
+        response,
+        model: optionalString(event.payload.model),
+        capturePolicy: "full",
+        truncated: false,
+        retained: true,
+        filtered: false
+      }),
+      "full"
+    );
+  }
+  if (event.kind === "session_end") {
+    return keepDecision(
+      annotateEvent(event, {
+        summary: maybeRedactSummary(event.payload.summary),
+        capturePolicy: "full",
+        truncated: false,
+        retained: true,
+        filtered: false
+      }),
+      "full"
+    );
+  }
+  return keepDecision(
+    annotateEvent(event, {
+      capturePolicy: "full",
+      truncated: false,
+      retained: true,
+      filtered: false
+    }),
+    "full"
+  );
+}
+function keepBoundedRedactedEvent(event) {
+  if (event.kind === "user_prompt") {
+    return keepBoundedTextEvent(event, "prompt", "user");
+  }
+  if (event.kind === "ai_response") {
+    return keepBoundedTextEvent(event, "response", "assistant");
+  }
+  if (event.kind === "session_end") {
+    return keepDecision(
+      annotateEvent(event, {
+        summary: maybeRedactSummary(event.payload.summary),
+        capturePolicy: "bounded_redacted",
+        captureReason: "general_context",
+        truncated: false,
+        retained: true,
+        filtered: false
+      }),
+      "bounded_redacted",
+      "general_context"
+    );
+  }
+  return keepDecision(
+    annotateEvent(event, {
+      capturePolicy: "bounded_redacted",
+      truncated: false,
+      retained: true,
+      filtered: false
+    }),
+    "bounded_redacted"
+  );
+}
+function keepBoundedTextEvent(event, payloadKey, role) {
+  const originalText = stringValue(event.payload[payloadKey]);
+  const redactedText = redactCodexText(originalText);
+  const relevance = classifyCodexRelevance(redactedText, role);
+  if (!relevance.keep) {
+    return {
+      event: null,
+      capturePolicy: "bounded_redacted",
+      captureReason: relevance.reason,
+      truncated: false,
+      retained: false,
+      filtered: true
+    };
+  }
+  if (role === "assistant" && relevance.reason === "general_context") {
+    return {
+      event: null,
+      capturePolicy: "bounded_redacted",
+      captureReason: "noise",
+      truncated: false,
+      retained: false,
+      filtered: true
+    };
+  }
+  const snippet = boundCodexSnippet(redactedText, {
+    role,
+    reason: relevance.reason
+  });
+  if (payloadKey === "prompt") {
+    return keepDecision(
+      annotateEvent(event, {
+        prompt: snippet.text,
+        capturePolicy: "bounded_redacted",
+        captureReason: relevance.reason,
+        truncated: snippet.truncated,
+        retained: true,
+        filtered: false
+      }),
+      "bounded_redacted",
+      relevance.reason,
+      snippet.truncated
+    );
+  }
+  return keepDecision(
+    annotateEvent(event, {
+      response: snippet.text,
+      model: optionalString(event.payload.model),
+      capturePolicy: "bounded_redacted",
+      captureReason: relevance.reason,
+      truncated: snippet.truncated,
+      retained: true,
+      filtered: false
+    }),
+    "bounded_redacted",
+    relevance.reason,
+    snippet.truncated
+  );
+}
+function annotateEvent(event, payloadPatch) {
+  return {
+    ...event,
+    payload: compactPayload({
+      ...event.payload,
+      ...payloadPatch
+    })
+  };
+}
+function keepDecision(event, capturePolicy, captureReason, truncated = false) {
+  return {
+    event,
+    capturePolicy,
+    captureReason,
+    truncated,
+    retained: true,
+    filtered: false
+  };
+}
+function compactPayload(input) {
+  const output = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== void 0) {
+      output[key] = value;
+    }
+  }
+  return output;
+}
+function stringValue(value) {
+  return typeof value === "string" ? value : "";
+}
+function optionalString(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function maybeRedactSummary(value) {
+  const summary = optionalString(value);
+  return summary === void 0 ? void 0 : redactCodexText(summary);
 }
 
 // packages/codex/src/ids.ts
@@ -6847,61 +7180,85 @@ import { readFileSync } from "node:fs";
 
 // packages/codex/src/inbox-event.ts
 function toInboxEvent(normalizedEvent, captureMode) {
-  if (!shouldImportCodexEvent(captureMode, normalizedEvent.kind)) {
+  const captured = captureCodexEvent(normalizedEvent, captureMode);
+  if (!captured.event) {
     return null;
   }
   const sourceEventId = createCodexSourceEventId({
-    sessionId: normalizedEvent.sessionId,
-    filePath: normalizedEvent.sourceFile,
-    line: normalizedEvent.sourceLine,
-    kind: normalizedEvent.kind,
-    itemId: normalizedEvent.itemId
+    sessionId: captured.event.sessionId,
+    filePath: captured.event.sourceFile,
+    line: captured.event.sourceLine,
+    kind: captured.event.kind,
+    itemId: captured.event.itemId
   });
   return {
     version: 1,
     event_id: createCodexEventId(sourceEventId),
     source: "codex",
     source_event_id: sourceEventId,
-    project_root: normalizedEvent.projectRoot,
-    session_id: normalizedEvent.sessionId,
-    timestamp: normalizedEvent.timestamp,
-    kind: normalizedEvent.kind,
-    payload: toInboxPayload(normalizedEvent, captureMode)
+    project_root: captured.event.projectRoot,
+    session_id: captured.event.sessionId,
+    timestamp: captured.event.timestamp,
+    kind: captured.event.kind,
+    payload: toInboxPayload(captured.event, captured.capturePolicy, captured.captureReason)
   };
 }
-function toInboxPayload(normalizedEvent, captureMode) {
+function toInboxPayload(normalizedEvent, capturePolicy, captureReason) {
   switch (normalizedEvent.kind) {
     case "user_prompt":
-      return {
-        prompt: maybeRedact(stringPayload(normalizedEvent.payload.prompt), captureMode)
-      };
+      return withCaptureMetadata(
+        {
+          prompt: stringPayload(normalizedEvent.payload.prompt)
+        },
+        capturePolicy,
+        captureReason,
+        optionalBoolean(normalizedEvent.payload.truncated)
+      );
     case "ai_response":
-      return compactPayload({
-        response: stringPayload(normalizedEvent.payload.response),
-        model: optionalString(normalizedEvent.payload.model)
-      });
+      return withCaptureMetadata(
+        compactPayload2({
+          response: stringPayload(normalizedEvent.payload.response),
+          model: optionalString2(normalizedEvent.payload.model)
+        }),
+        capturePolicy,
+        captureReason,
+        optionalBoolean(normalizedEvent.payload.truncated)
+      );
     case "tool_use":
-      return compactPayload({
-        tool: optionalString(normalizedEvent.payload.tool) ?? "unknown",
+      return compactPayload2({
+        tool: optionalString2(normalizedEvent.payload.tool) ?? "unknown",
         files: arrayPayload(normalizedEvent.payload.files),
-        status: optionalString(normalizedEvent.payload.status) ?? "success",
+        status: optionalString2(normalizedEvent.payload.status) ?? "success",
         exitCode: optionalNumber(normalizedEvent.payload.exitCode)
       });
     case "session_start":
-      return compactPayload({
-        tool: optionalString(normalizedEvent.payload.tool) ?? "codex",
-        model: optionalString(normalizedEvent.payload.model)
+      return compactPayload2({
+        tool: optionalString2(normalizedEvent.payload.tool) ?? "codex",
+        model: optionalString2(normalizedEvent.payload.model)
       });
     case "session_end":
-      return compactPayload({
-        summary: optionalString(normalizedEvent.payload.summary)
-      });
+      return withCaptureMetadata(
+        compactPayload2({
+          summary: optionalString2(normalizedEvent.payload.summary)
+        }),
+        capturePolicy,
+        captureReason,
+        optionalBoolean(normalizedEvent.payload.truncated)
+      );
   }
 }
-function maybeRedact(value, captureMode) {
-  return captureMode === "redacted" ? redactCodexText(value) : value;
+function withCaptureMetadata(payload, capturePolicy, captureReason, truncated) {
+  if (capturePolicy !== "bounded_redacted") {
+    return payload;
+  }
+  return compactPayload2({
+    ...payload,
+    capture_policy: capturePolicy,
+    capture_reason: captureReason,
+    truncated
+  });
 }
-function compactPayload(input) {
+function compactPayload2(input) {
   const output = {};
   for (const [key, value] of Object.entries(input)) {
     if (value !== void 0) {
@@ -6913,11 +7270,14 @@ function compactPayload(input) {
 function stringPayload(value) {
   return typeof value === "string" ? value : "";
 }
-function optionalString(value) {
+function optionalString2(value) {
   return typeof value === "string" ? value : void 0;
 }
 function optionalNumber(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function optionalBoolean(value) {
+  return typeof value === "boolean" ? value : void 0;
 }
 function arrayPayload(value) {
   return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : [];
@@ -6992,17 +7352,17 @@ function normalizeCodexRecords(records) {
   let currentModel;
   for (const record2 of records) {
     const raw = record2.raw;
-    const type = stringValue(raw.type);
+    const type = stringValue2(raw.type);
     if (type === "session_meta") {
-      currentSessionId = stringValue(raw.session_id) ?? currentSessionId;
-      currentProjectRoot = stringValue(raw.cwd) ?? currentProjectRoot;
-      currentModel = stringValue(raw.model) ?? currentModel;
+      currentSessionId = stringValue2(raw.session_id) ?? currentSessionId;
+      currentProjectRoot = stringValue2(raw.cwd) ?? currentProjectRoot;
+      currentModel = stringValue2(raw.model) ?? currentModel;
       events.push(
         createEvent(record2, {
           kind: "session_start",
           sessionId: currentSessionId,
           projectRoot: currentProjectRoot,
-          payload: compactPayload2({
+          payload: compactPayload3({
             tool: "codex",
             model: currentModel
           })
@@ -7010,8 +7370,8 @@ function normalizeCodexRecords(records) {
       );
       continue;
     }
-    const sessionId = stringValue(raw.session_id) ?? currentSessionId;
-    const projectRoot = stringValue(raw.cwd) ?? currentProjectRoot;
+    const sessionId = stringValue2(raw.session_id) ?? currentSessionId;
+    const projectRoot = stringValue2(raw.cwd) ?? currentProjectRoot;
     if (type === "event_msg") {
       const normalized = normalizeEventMessage(record2, sessionId, projectRoot);
       if (normalized) {
@@ -7035,38 +7395,42 @@ function normalizeCodexRecords(records) {
   return { events, skipped };
 }
 function normalizeEventMessage(record2, sessionId, projectRoot) {
-  const subtype = stringValue(record2.raw.subtype);
+  const payloadRecord = recordObject(record2.raw.payload);
+  const event = payloadRecord ?? record2.raw;
+  const subtype = stringValue2(record2.raw.subtype) ?? stringValue2(event.type);
   if (subtype === "user_message") {
+    const payload = {
+      prompt: firstString(event.message, event.text) ?? ""
+    };
     return createEvent(record2, {
       kind: "user_prompt",
       sessionId,
       projectRoot,
-      payload: {
-        prompt: firstString(record2.raw.message, record2.raw.text) ?? ""
-      }
+      payload
     });
   }
   if (subtype === "task_complete") {
-    const summary = firstString(record2.raw.summary, record2.raw.message, record2.raw.text);
+    const summary = firstString(event.summary, event.last_agent_message, event.message, event.text);
+    const payload = compactPayload3({ summary });
     return createEvent(record2, {
       kind: "session_end",
       sessionId,
       projectRoot,
-      payload: compactPayload2({ summary })
+      payload
     });
   }
   if (subtype === "exec_command_end") {
-    const exitCode = numberValue(record2.raw.exit_code);
+    const exitCode = numberValue(event.exit_code);
     return createEvent(record2, {
       kind: "tool_use",
       sessionId,
       projectRoot,
-      itemId: stringValue(record2.raw.call_id),
-      payload: compactPayload2({
+      itemId: stringValue2(event.call_id),
+      payload: compactPayload3({
         tool: "exec_command_end",
-        callId: stringValue(record2.raw.call_id),
+        callId: stringValue2(event.call_id),
         exitCode,
-        durationMs: numberValue(record2.raw.duration_ms),
+        durationMs: numberValue(event.duration_ms) ?? durationMsValue(event.duration),
         status: exitCode === void 0 || exitCode === 0 ? "success" : "error"
       })
     });
@@ -7074,47 +7438,48 @@ function normalizeEventMessage(record2, sessionId, projectRoot) {
   return void 0;
 }
 function normalizeResponseItem(record2, sessionId, projectRoot, currentModel) {
-  const item = recordObject(record2.raw.item);
+  const item = recordObject(record2.raw.item) ?? recordObject(record2.raw.payload);
   if (!item) {
     return void 0;
   }
-  const itemType = stringValue(item.type);
-  if (itemType === "message" && stringValue(item.role) === "assistant") {
+  const itemType = stringValue2(item.type);
+  if (itemType === "message" && stringValue2(item.role) === "assistant") {
+    const payload = compactPayload3({
+      response: extractTextContent(item.content),
+      model: currentModel
+    });
     return createEvent(record2, {
       kind: "ai_response",
       sessionId,
       projectRoot,
-      payload: compactPayload2({
-        response: extractTextContent(item.content),
-        model: currentModel
-      })
+      payload
     });
   }
   if (itemType === "function_call") {
-    const callId = stringValue(item.call_id);
+    const callId = stringValue2(item.call_id);
     return createEvent(record2, {
       kind: "tool_use",
       sessionId,
       projectRoot,
       itemId: callId,
-      payload: compactPayload2({
-        tool: stringValue(item.name) ?? "function_call",
+      payload: compactPayload3({
+        tool: stringValue2(item.name) ?? "function_call",
         callId,
-        arguments: stringValue(item.arguments)
+        arguments: stringValue2(item.arguments)
       })
     });
   }
   if (itemType === "function_call_output") {
-    const callId = stringValue(item.call_id);
+    const callId = stringValue2(item.call_id);
     return createEvent(record2, {
       kind: "tool_use",
       sessionId,
       projectRoot,
       itemId: callId,
-      payload: compactPayload2({
+      payload: compactPayload3({
         tool: "function_call_output",
         callId,
-        output: stringValue(item.output)
+        output: stringValue2(item.output)
       })
     });
   }
@@ -7142,11 +7507,11 @@ function extractTextContent(value) {
     if (!isRecordObject2(entry)) {
       return void 0;
     }
-    const text = stringValue(entry.text);
+    const text = stringValue2(entry.text);
     if (text === void 0) {
       return void 0;
     }
-    const type = stringValue(entry.type);
+    const type = stringValue2(entry.type);
     return type === void 0 || type === "output_text" || type === "text" ? text : void 0;
   }).filter((entry) => entry !== void 0).join("\n");
 }
@@ -7162,7 +7527,7 @@ function timestampValue(value) {
   }
   return Date.now();
 }
-function compactPayload2(input) {
+function compactPayload3(input) {
   const output = {};
   for (const [key, value] of Object.entries(input)) {
     if (value !== void 0) {
@@ -7173,7 +7538,7 @@ function compactPayload2(input) {
 }
 function firstString(...values) {
   for (const value of values) {
-    const text = stringValue(value);
+    const text = stringValue2(value);
     if (text !== void 0) {
       return text;
     }
@@ -7186,11 +7551,23 @@ function recordObject(value) {
 function isRecordObject2(value) {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function stringValue(value) {
+function stringValue2(value) {
   return typeof value === "string" ? value : void 0;
 }
 function numberValue(value) {
   return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function durationMsValue(value) {
+  const duration3 = recordObject(value);
+  if (!duration3) {
+    return void 0;
+  }
+  const secs = numberValue(duration3.secs);
+  const nanos = numberValue(duration3.nanos);
+  if (secs === void 0 && nanos === void 0) {
+    return void 0;
+  }
+  return Math.round((secs ?? 0) * 1e3 + (nanos ?? 0) / 1e6);
 }
 
 // packages/codex/src/paths.ts
@@ -7278,28 +7655,31 @@ function importCodexSessionsToInbox(options) {
     metrics.skippedByFilter += normalized.events.length - filteredEvents.length;
     latestTimestamp = updateLatestSession(metrics, filteredEvents, latestTimestamp);
     for (const event of filteredEvents) {
-      const inboxEvent = toInboxEvent(event, captureMode);
-      if (!inboxEvent) {
-        metrics.skippedByCapture++;
-        continue;
-      }
-      if (options.shouldSkipEventId?.(inboxEvent.event_id) === true) {
-        metrics.duplicatePending++;
-        continue;
-      }
-      try {
-        const writeResult = writeCodexInboxEvent(options.inboxDir, inboxEvent);
-        if (writeResult.status === "written") {
-          metrics.written++;
-        } else {
-          metrics.duplicatePending++;
-        }
-      } catch {
-        metrics.errors++;
-      }
+      importFilteredEvent(event, captureMode, options, metrics);
     }
   }
   return metrics;
+}
+function importFilteredEvent(event, captureMode, options, metrics) {
+  const inboxEvent = toInboxEvent(event, captureMode);
+  if (!inboxEvent) {
+    metrics.skippedByCapture++;
+    return;
+  }
+  if (options.shouldSkipEventId?.(inboxEvent.event_id) === true) {
+    metrics.duplicatePending++;
+    return;
+  }
+  try {
+    const writeResult = writeCodexInboxEvent(options.inboxDir, inboxEvent);
+    if (writeResult.status === "written") {
+      metrics.written++;
+    } else {
+      metrics.duplicatePending++;
+    }
+  } catch {
+    metrics.errors++;
+  }
 }
 function createEmptyMetrics() {
   return {
@@ -7358,17 +7738,47 @@ import { dirname as dirname2, join as join4, resolve as resolve4 } from "node:pa
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/shared-runtime/detect-client.js
+function detectClientRuntime(env = process.env, _argv = process.argv, _cwd = process.cwd()) {
+  if (hasNonEmptyValue(env.CODEX_HOME)) {
+    return {
+      client: "codex",
+      surface: "cli",
+      detected: true,
+      evidence: ["env:CODEX_HOME"]
+    };
+  }
+  if (hasNonEmptyValue(env.CLAUDE_PLUGIN_ROOT)) {
+    return {
+      client: "claude-code",
+      surface: "cli",
+      detected: true,
+      evidence: ["env:CLAUDE_PLUGIN_ROOT"]
+    };
+  }
+  return {
+    client: "generic",
+    surface: "generic",
+    detected: false,
+    evidence: ["fallback:generic"]
+  };
+}
 function detectClientEnv() {
-  if (process.env.CODEX_HOME) return "codex";
-  if (process.env.CLAUDE_PLUGIN_ROOT) return "claude-code";
-  return "generic";
+  return detectClientRuntime().client;
+}
+function hasNonEmptyValue(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+// packages/shared-runtime/normalize-path.js
+import { normalize } from "node:path";
+function normalizePathForIdentity(pathValue) {
+  return normalize(pathValue).replace(/\\/g, "/").toLowerCase();
 }
 
 // packages/shared-runtime/project-hash.js
 import { createHash as createHash2 } from "node:crypto";
-import { normalize } from "node:path";
 function projectHash(projectRoot) {
-  const normalized = normalize(projectRoot).replace(/\\/g, "/").toLowerCase();
+  const normalized = normalizePathForIdentity(projectRoot);
   return createHash2("sha256").update(normalized).digest("hex").slice(0, 16);
 }
 
@@ -31164,8 +31574,391 @@ var MemoryCompressor = class {
   }
 };
 
-// packages/core/src/memory/episodic.ts
+// packages/core/src/memory/durable.ts
 function rowToEntry(row) {
+  return {
+    id: row.id,
+    topicKey: row.topic_key ?? void 0,
+    memoryType: row.memory_type,
+    state: row.state,
+    summary: row.summary,
+    evidence: JSON.parse(row.evidence_json),
+    sourceEventId: row.source_event_id ?? void 0,
+    source: row.source,
+    supersededById: row.superseded_by_id ?? void 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+var DurableMemoryStore = class {
+  db;
+  fts5;
+  constructor(db, fts5Available) {
+    this.db = db;
+    this.fts5 = fts5Available;
+  }
+  insert(input) {
+    const now = Date.now();
+    const result = this.db.run(
+      `INSERT INTO durable_memories (
+        topic_key,
+        memory_type,
+        state,
+        summary,
+        evidence_json,
+        source_event_id,
+        source,
+        superseded_by_id,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.topicKey ?? null,
+        input.memoryType,
+        input.state ?? "active",
+        input.summary,
+        JSON.stringify(input.evidence),
+        input.sourceEventId ?? null,
+        input.source,
+        input.supersededById ?? null,
+        now,
+        now
+      ]
+    );
+    const row = this.db.get("SELECT * FROM durable_memories WHERE id = ?", [
+      result.lastInsertRowid
+    ]);
+    if (!row) {
+      throw new Error("Failed to read inserted durable memory row");
+    }
+    if (this.fts5) {
+      this.db.run("INSERT INTO durable_memories_fts(rowid, summary) VALUES (?, ?)", [
+        row.id,
+        row.summary
+      ]);
+    }
+    return rowToEntry(row);
+  }
+  updateState(id, state, supersededById) {
+    const existing = this.db.get("SELECT * FROM durable_memories WHERE id = ?", [
+      id
+    ]);
+    if (!existing) {
+      return false;
+    }
+    const result = this.db.run(
+      "UPDATE durable_memories SET state = ?, superseded_by_id = ?, updated_at = ? WHERE id = ?",
+      [state, supersededById ?? null, Date.now(), id]
+    );
+    return result.changes > 0;
+  }
+  removeById(id) {
+    const existing = this.db.get("SELECT * FROM durable_memories WHERE id = ?", [
+      id
+    ]);
+    if (!existing) {
+      return false;
+    }
+    if (this.fts5) {
+      this.db.run(
+        "INSERT INTO durable_memories_fts(durable_memories_fts, rowid, summary) VALUES ('delete', ?, ?)",
+        [id, existing.summary]
+      );
+    }
+    const result = this.db.run("DELETE FROM durable_memories WHERE id = ?", [id]);
+    return result.changes > 0;
+  }
+  listByTopic(topicKey) {
+    const rows = this.db.all(
+      "SELECT * FROM durable_memories WHERE topic_key = ? ORDER BY updated_at DESC, id DESC",
+      [topicKey]
+    );
+    return rows.map(rowToEntry);
+  }
+  listByMemoryType(memoryType) {
+    const rows = this.db.all(
+      "SELECT * FROM durable_memories WHERE memory_type = ? ORDER BY updated_at DESC, id DESC",
+      [memoryType]
+    );
+    return rows.map(rowToEntry);
+  }
+  listAll(limit = 100) {
+    const rows = this.db.all(
+      "SELECT * FROM durable_memories ORDER BY updated_at DESC, id DESC LIMIT ?",
+      [limit]
+    );
+    return rows.map(rowToEntry);
+  }
+  countByState() {
+    const rows = this.db.all(
+      "SELECT state, COUNT(*) AS cnt FROM durable_memories GROUP BY state"
+    );
+    const counts = {
+      active: 0,
+      stale: 0,
+      superseded: 0,
+      archivable: 0
+    };
+    for (const row of rows) {
+      counts[row.state] = row.cnt;
+    }
+    return counts;
+  }
+  search(query, limit = 20) {
+    if (this.fts5) {
+      const sanitized = sanitizeFtsQuery(query);
+      if (!sanitized) {
+        return [];
+      }
+      const rows2 = this.db.all(
+        `SELECT * FROM durable_memories
+         WHERE id IN (SELECT rowid FROM durable_memories_fts WHERE durable_memories_fts MATCH ?)
+         ORDER BY updated_at DESC, id DESC
+         LIMIT ?`,
+        [sanitized, limit]
+      );
+      return rows2.map(rowToEntry);
+    }
+    const rows = this.db.all(
+      "SELECT * FROM durable_memories WHERE summary LIKE ? ORDER BY updated_at DESC, id DESC LIMIT ?",
+      [`%${query}%`, limit]
+    );
+    return rows.map(rowToEntry);
+  }
+};
+
+// packages/core/src/memory/topic-keys.ts
+function normalizeSummary(summary) {
+  return summary.toLowerCase().replace(/[^a-z0-9]+/gi, " ").trim();
+}
+function includesAny(text, needles) {
+  return needles.some((needle) => text.includes(needle));
+}
+function deriveTopicKey(input) {
+  if (input.memoryType !== "decision") {
+    return void 0;
+  }
+  const normalized = normalizeSummary(input.summary);
+  if (includesAny(normalized, ["sqlite", "postgresql", "postgres", "mysql"]) && includesAny(normalized, ["database", "store", "memory"])) {
+    return "database_choice";
+  }
+  if (includesAny(normalized, [
+    "oauth",
+    "github oauth",
+    "auth strategy",
+    "authentication strategy"
+  ]) && includesAny(normalized, ["auth", "authentication", "login"])) {
+    return "auth_strategy";
+  }
+  return void 0;
+}
+
+// packages/core/src/memory/durable-extractor.ts
+function parsePayload(payloadJson) {
+  if (!payloadJson) {
+    return void 0;
+  }
+  try {
+    return JSON.parse(payloadJson);
+  } catch {
+    return void 0;
+  }
+}
+function normalizeSentence(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function extractDecisionSummary(text) {
+  const normalized = normalizeSentence(text);
+  const match = normalized.match(/decision:\s*(.+)$/i);
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+  if (/^use\s+/i.test(normalized)) {
+    return normalized;
+  }
+  return void 0;
+}
+function extractStyleSummary(text) {
+  const normalized = normalizeSentence(text);
+  const lower = normalized.toLowerCase();
+  if (lower.includes("surgical") || lower.includes("avoid unrelated refactors") || lower.includes("prove it with tests")) {
+    return normalized;
+  }
+  return void 0;
+}
+function extractConstraintSummary(text) {
+  const normalized = normalizeSentence(text);
+  const lower = normalized.toLowerCase();
+  if (lower.includes("do not touch ") || lower.includes("keep codex as the primary validation path")) {
+    return normalized;
+  }
+  return void 0;
+}
+function buildCandidate(event, memoryType, summary) {
+  return {
+    topicKey: deriveTopicKey({ memoryType, summary }),
+    memoryType,
+    summary,
+    evidence: {
+      eventId: event.event_id,
+      kind: event.kind,
+      timestamp: event.timestamp,
+      sessionId: event.session_id ?? void 0
+    },
+    sourceEventId: event.event_id,
+    source: event.source
+  };
+}
+function extractDurableCandidatesFromEvent(event) {
+  const payload = parsePayload(event.payload_json);
+  if (!payload) {
+    return [];
+  }
+  const candidates = [];
+  const summaryText = typeof payload.summary === "string" ? payload.summary : void 0;
+  const promptText = typeof payload.prompt === "string" ? payload.prompt : void 0;
+  const responseText = typeof payload.response === "string" ? payload.response : void 0;
+  const decisionText = summaryText ?? responseText;
+  const decisionSummary = decisionText ? extractDecisionSummary(decisionText) : void 0;
+  if (decisionSummary) {
+    candidates.push(buildCandidate(event, "decision", decisionSummary));
+  }
+  const styleSummary = promptText ? extractStyleSummary(promptText) : void 0;
+  if (styleSummary) {
+    candidates.push(buildCandidate(event, "style", styleSummary));
+  }
+  const constraintSummary = promptText ? extractConstraintSummary(promptText) : void 0;
+  if (constraintSummary) {
+    candidates.push(buildCandidate(event, "constraint", constraintSummary));
+  }
+  return candidates;
+}
+
+// packages/core/src/memory/durable-merge.ts
+function normalizeSummary2(summary) {
+  return summary.toLowerCase().replace(/[^a-z0-9]+/gi, " ").trim();
+}
+function mergeDurableCandidate(existingEntries, candidate) {
+  const activeEntries = existingEntries.filter((entry) => entry.state === "active");
+  const matchingTopic = candidate.topicKey ? activeEntries.filter((entry) => entry.topicKey === candidate.topicKey) : activeEntries.filter((entry) => entry.memoryType === candidate.memoryType);
+  const candidateSummary = normalizeSummary2(candidate.summary);
+  const duplicate = matchingTopic.find(
+    (entry) => normalizeSummary2(entry.summary) === candidateSummary
+  );
+  if (duplicate) {
+    return {
+      action: "confirm_existing",
+      existingId: duplicate.id
+    };
+  }
+  const firstMatchingEntry = matchingTopic[0];
+  if (candidate.memoryType === "decision" && firstMatchingEntry) {
+    return {
+      action: "supersede_existing",
+      existingId: firstMatchingEntry.id
+    };
+  }
+  return { action: "insert_new_active" };
+}
+
+// packages/core/src/memory/durable-runner.ts
+var DEFAULT_SOURCE = "codex";
+var WATERMARK_PREFIX = "durable";
+function getWatermarkKey(source) {
+  return `${WATERMARK_PREFIX}.${source}.last_event_id`;
+}
+function getWatermark(db, source) {
+  const row = db.get("SELECT value FROM scan_state WHERE key = ?", [
+    getWatermarkKey(source)
+  ]);
+  return Number(row?.value ?? "0") || 0;
+}
+function setWatermark(db, source, eventId) {
+  db.run(
+    `INSERT INTO scan_state(key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+    [getWatermarkKey(source), String(eventId)]
+  );
+}
+function loadConversationEvents(db, source, lastEventId) {
+  return db.all(
+    `SELECT *
+     FROM conversation_events
+     WHERE source = ? AND id > ?
+     ORDER BY id ASC`,
+    [source, lastEventId]
+  );
+}
+function hasDurableFts(db) {
+  const row = db.get(
+    "SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type = 'table' AND name = ?",
+    ["durable_memories_fts"]
+  );
+  return (row?.cnt ?? 0) > 0;
+}
+function runDurableExtraction(db, options) {
+  const source = options?.source ?? DEFAULT_SOURCE;
+  const store = new DurableMemoryStore(db, hasDurableFts(db));
+  const lastEventId = getWatermark(db, source);
+  const events = loadConversationEvents(db, source, lastEventId);
+  const metrics = {
+    scanned: 0,
+    inserted: 0,
+    confirmed: 0,
+    superseded: 0,
+    ignored: 0,
+    watermarkEventId: lastEventId
+  };
+  for (const event of events) {
+    const candidates = extractDurableCandidatesFromEvent(event);
+    metrics.scanned++;
+    for (const candidate of candidates) {
+      const existingEntries = candidate.topicKey ? store.listByTopic(candidate.topicKey) : store.listByMemoryType(candidate.memoryType);
+      const decision = mergeDurableCandidate(existingEntries, candidate);
+      switch (decision.action) {
+        case "ignore":
+          metrics.ignored++;
+          break;
+        case "confirm_existing":
+          store.updateState(decision.existingId, "active");
+          metrics.confirmed++;
+          break;
+        case "insert_new_active":
+          store.insert({
+            topicKey: candidate.topicKey,
+            memoryType: candidate.memoryType,
+            summary: candidate.summary,
+            evidence: candidate.evidence,
+            sourceEventId: candidate.sourceEventId,
+            source: candidate.source,
+            state: "active"
+          });
+          metrics.inserted++;
+          break;
+        case "supersede_existing": {
+          const inserted = store.insert({
+            topicKey: candidate.topicKey,
+            memoryType: candidate.memoryType,
+            summary: candidate.summary,
+            evidence: candidate.evidence,
+            sourceEventId: candidate.sourceEventId,
+            source: candidate.source,
+            state: "active"
+          });
+          store.updateState(decision.existingId, "superseded", inserted.id);
+          metrics.superseded++;
+          break;
+        }
+      }
+    }
+    metrics.watermarkEventId = event.id;
+    setWatermark(db, source, event.id);
+  }
+  return metrics;
+}
+
+// packages/core/src/memory/episodic.ts
+function rowToEntry2(row) {
   return {
     id: row.id,
     layer: row.layer,
@@ -31191,14 +31984,14 @@ var EpisodicMemory = class {
       "SELECT id, layer, content, tags_json, created_at, updated_at, session_id FROM memories WHERE id = ?",
       [result.lastInsertRowid]
     );
-    return rowToEntry(row);
+    return rowToEntry2(row);
   }
   getRecent(limit = 50) {
     const rows = this.db.all(
       "SELECT id, layer, content, tags_json, created_at, updated_at, session_id FROM memories WHERE layer = ? ORDER BY created_at DESC LIMIT ?",
       ["episodic", limit]
     );
-    return rows.map(rowToEntry);
+    return rows.map(rowToEntry2);
   }
   getBufferTokens() {
     const rows = this.db.all("SELECT content FROM memories WHERE layer = ?", [
@@ -31229,12 +32022,12 @@ var EpisodicMemory = class {
       "SELECT id, layer, content, tags_json, created_at, updated_at, session_id FROM memories WHERE layer = ? AND session_id = ? ORDER BY created_at ASC",
       ["episodic", sessionId]
     );
-    return rows.map(rowToEntry);
+    return rows.map(rowToEntry2);
   }
 };
 
 // packages/core/src/memory/semantic.ts
-function rowToEntry2(row) {
+function rowToEntry3(row) {
   return {
     id: row.id,
     layer: row.layer,
@@ -31281,13 +32074,13 @@ var SemanticMemory = class {
         "SELECT * FROM memories WHERE layer='semantic' AND id IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?) ORDER BY updated_at DESC LIMIT ?",
         [sanitized, limit]
       );
-      return rows2.map(rowToEntry2);
+      return rows2.map(rowToEntry3);
     }
     const rows = this.db.all(
       "SELECT * FROM memories WHERE layer='semantic' AND content LIKE ? ORDER BY updated_at DESC LIMIT ?",
       [`%${query}%`, limit]
     );
-    return rows.map(rowToEntry2);
+    return rows.map(rowToEntry3);
   }
   remove(id) {
     const existing = this.db.get(
@@ -31311,7 +32104,7 @@ var SemanticMemory = class {
       "SELECT * FROM memories WHERE layer='semantic' ORDER BY updated_at DESC LIMIT ?",
       [limit]
     );
-    return rows.map(rowToEntry2);
+    return rows.map(rowToEntry3);
   }
   count() {
     const row = this.db.get(
@@ -31417,6 +32210,24 @@ function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
 var MAX_ENTRIES = 15;
 var MAX_LINE_CHARS = 100;
 function generateDecisions(db) {
+  const durableTotalRow = db.get(
+    "SELECT COUNT(*) AS total FROM durable_memories WHERE memory_type = 'decision' AND state = 'active'"
+  );
+  const durableTotal = durableTotalRow?.total ?? 0;
+  if (durableTotal > 0) {
+    const durableRows = db.all(
+      `SELECT summary, updated_at
+       FROM durable_memories
+       WHERE memory_type = 'decision' AND state = 'active'
+       ORDER BY updated_at DESC
+       LIMIT ?`,
+      [MAX_ENTRIES]
+    );
+    return formatDecisionLines(
+      durableRows.map((row) => row.summary),
+      durableTotal
+    );
+  }
   const totalRow = db.get(
     "SELECT COUNT(*) AS total FROM memories WHERE layer = 'semantic'"
   );
@@ -31428,11 +32239,17 @@ function generateDecisions(db) {
     "SELECT content, updated_at FROM memories WHERE layer = 'semantic' ORDER BY updated_at DESC LIMIT ?",
     [MAX_ENTRIES]
   );
-  const lines = rows.map((row) => {
-    const content = row.content.length > MAX_LINE_CHARS ? `${row.content.slice(0, MAX_LINE_CHARS)}...` : row.content;
+  return formatDecisionLines(
+    rows.map((row) => row.content),
+    total
+  );
+}
+function formatDecisionLines(entries, total) {
+  const lines = entries.map((entry) => {
+    const content = entry.length > MAX_LINE_CHARS ? `${entry.slice(0, MAX_LINE_CHARS)}...` : entry;
     return `- ${content}`;
   });
-  const older = total - rows.length;
+  const older = total - entries.length;
   if (older > 0) {
     lines.push(`  (+${older} older \u2014 use memory_search)`);
   }
@@ -31903,6 +32720,32 @@ function migrationV2(db, fts5) {
   db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_il_source ON ingest_log(source, source_event_id)");
   db.run("UPDATE schema_version SET version = ?", [2]);
 }
+function migrationV3(db, fts5) {
+  db.exec(`CREATE TABLE IF NOT EXISTS durable_memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_key TEXT,
+    memory_type TEXT NOT NULL,
+    state TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    evidence_json TEXT NOT NULL,
+    source_event_id TEXT,
+    source TEXT NOT NULL,
+    superseded_by_id INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dm_topic_key ON durable_memories(topic_key)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dm_state ON durable_memories(state)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dm_source_event_id ON durable_memories(source_event_id)");
+  if (fts5) {
+    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS durable_memories_fts USING fts5(
+      summary,
+      content=durable_memories,
+      content_rowid=id
+    )`);
+  }
+  db.run("UPDATE schema_version SET version = ?", [3]);
+}
 function extractFtsFromRow(kind, payloadJson) {
   const parts = [kind];
   if (!payloadJson) return parts.join(" ");
@@ -31955,6 +32798,14 @@ function ensureFts(db, fts5) {
       rebuildConversationFts(db);
     }
   }
+  if (!tableExists(db, "durable_memories_fts")) {
+    db.exec(`CREATE VIRTUAL TABLE durable_memories_fts USING fts5(
+      summary,
+      content=durable_memories,
+      content_rowid=id
+    )`);
+  }
+  db.exec("INSERT INTO durable_memories_fts(durable_memories_fts) VALUES ('rebuild')");
 }
 function runMigrations(db, fts5) {
   const currentVersion = getCurrentVersion(db);
@@ -31963,6 +32814,9 @@ function runMigrations(db, fts5) {
   }
   if (currentVersion < 2) {
     migrationV2(db, fts5);
+  }
+  if (currentVersion < 3) {
+    migrationV3(db, fts5);
   }
   ensureFts(db, fts5);
 }
@@ -32269,12 +33123,15 @@ function handleAudit(deps) {
 var CODEX_AUTO_IMPORT_DEBOUNCE_MS = 45e3;
 function coordinateCodexAutoImport(params) {
   const debounceMs = params.debounceMs ?? CODEX_AUTO_IMPORT_DEBOUNCE_MS;
-  const client = (params.detectClientEnv ?? detectClientEnv)();
-  if (client !== "codex") {
+  const runtime = resolveClientRuntime(params);
+  if (runtime.client !== "codex") {
     return {
       snapshot: {
         ...params.snapshot,
         clientDetected: false,
+        client: runtime.client,
+        clientSurface: runtime.surface,
+        detectionEvidence: [...runtime.evidence],
         debounceMs,
         lastStatus: "skipped_not_codex"
       },
@@ -32287,6 +33144,9 @@ function coordinateCodexAutoImport(params) {
       snapshot: {
         ...params.snapshot,
         clientDetected: true,
+        client: runtime.client,
+        clientSurface: runtime.surface,
+        detectionEvidence: [...runtime.evidence],
         debounceMs,
         lastStatus: "debounced"
       },
@@ -32297,6 +33157,9 @@ function coordinateCodexAutoImport(params) {
   const baseSnapshot = {
     ...params.snapshot,
     clientDetected: true,
+    client: runtime.client,
+    clientSurface: runtime.surface,
+    detectionEvidence: [...runtime.evidence],
     debounceMs,
     lastAttemptAt: params.now
   };
@@ -32324,6 +33187,39 @@ function coordinateCodexAutoImport(params) {
       processedInbox: false
     };
   }
+}
+function resolveClientRuntime(params) {
+  if (params.detectClientRuntime) {
+    return params.detectClientRuntime();
+  }
+  if (params.detectClientEnv) {
+    return runtimeFromLegacyClient(params.detectClientEnv());
+  }
+  return detectClientRuntime();
+}
+function runtimeFromLegacyClient(client) {
+  if (client === "codex") {
+    return {
+      client,
+      surface: "cli",
+      detected: true,
+      evidence: ["env:CODEX_HOME"]
+    };
+  }
+  if (client === "claude-code") {
+    return {
+      client,
+      surface: "cli",
+      detected: true,
+      evidence: ["env:CLAUDE_PLUGIN_ROOT"]
+    };
+  }
+  return {
+    client: "generic",
+    surface: "generic",
+    detected: false,
+    evidence: ["fallback:generic"]
+  };
 }
 function applyImportResult(snapshot, result, now) {
   return {
@@ -32364,6 +33260,7 @@ function collectCodexDiagnostics(deps) {
   if (!codexHome || codexHome.trim().length === 0) {
     return void 0;
   }
+  const runtime = detectClientRuntime(env);
   const captureMode = getCodexCaptureMode(env);
   const sessionsDir = resolveCodexSessionsDir({ env });
   const sessionsDirExists = existsSync7(sessionsDir);
@@ -32379,11 +33276,14 @@ function collectCodexDiagnostics(deps) {
     ["codex"]
   );
   return {
+    client: runtime.client,
+    clientSurface: runtime.surface,
+    detectionEvidence: [...runtime.evidence],
     captureMode,
-    sessionsDir,
+    sessionsDir: normalizePathForIdentity(sessionsDir),
     sessionsDirExists,
     rolloutFilesFound: rolloutFiles.length,
-    latestRolloutPath,
+    latestRolloutPath: latestRolloutPath ? normalizePathForIdentity(latestRolloutPath) : void 0,
     latestRolloutReadable: latestRolloutPath ? isReadable(latestRolloutPath) : void 0,
     importedEventCount,
     latestImportedSessionId: latestImported?.session_id ?? void 0,
@@ -32653,11 +33553,19 @@ function handleDoctor(deps) {
     }
   );
   if (deps.captureLevel === "metadata") {
-    checks.push({
-      name: "Capture level",
-      status: "ok",
-      message: "metadata (default, no raw content stored)"
-    });
+    const codexMetadata = deps.codexDiagnostics?.captureMode === "metadata";
+    checks.push(
+      codexMetadata ? {
+        name: "Capture level",
+        status: "warn",
+        message: "metadata (default, no raw content stored; limited conversational recall for Codex)",
+        fix: "Set LOCUS_CODEX_CAPTURE=redacted for practical Codex conversational recall."
+      } : {
+        name: "Capture level",
+        status: "ok",
+        message: "metadata (default, no raw content stored)"
+      }
+    );
   } else if (deps.captureLevel === "full") {
     checks.push({
       name: "Capture level",
@@ -32777,6 +33685,40 @@ function appendCodexChecks(checks, codexDiagnostics) {
       message: `LOCUS_CODEX_CAPTURE=${codexDiagnostics.captureMode}`
     }
   );
+  if (codexDiagnostics.captureMode === "off") {
+    checks.push({
+      name: "Codex recall readiness",
+      status: "warn",
+      message: "Codex capture is off; no Codex conversation events are imported for recall.",
+      fix: "Set LOCUS_CODEX_CAPTURE=redacted for practical Codex recall."
+    });
+  } else if (codexDiagnostics.captureMode === "metadata") {
+    checks.push({
+      name: "Codex recall readiness",
+      status: "warn",
+      message: "metadata capture is healthy for ingestion diagnostics, but limited conversational recall is expected.",
+      fix: "Set LOCUS_CODEX_CAPTURE=redacted for practical Codex conversational recall."
+    });
+  } else if (codexDiagnostics.captureMode === "full") {
+    checks.push({
+      name: "Codex recall readiness",
+      status: "warn",
+      message: "full capture can provide maximum recall, but raw conversation content is stored locally.",
+      fix: "Use LOCUS_CODEX_CAPTURE=redacted unless full transcripts are explicitly required."
+    });
+  } else {
+    checks.push({
+      name: "Codex recall readiness",
+      status: "ok",
+      message: "redacted capture supports practical bounded conversational recall."
+    });
+  }
+  checks.push({
+    name: "Codex desktop parity",
+    status: "warn",
+    message: "Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.",
+    fix: "Verify memory_status and memory_recall inside the target desktop/extension surface before claiming parity."
+  });
   checks.push(
     codexDiagnostics.importedEventCount > 0 ? {
       name: "Codex imported events",
@@ -32895,16 +33837,64 @@ function handleExplore(path, deps) {
 
 // packages/core/src/tools/forget.ts
 var BULK_DELETE_THRESHOLD = 5;
-function handleForget(query, deps, confirmToken) {
+function parseDurableId(query) {
+  const match = /^durable:(\d+)$/i.exec(query.trim());
+  if (!match) {
+    return null;
+  }
+  return Number(match[1]);
+}
+function parseTopicKey(query) {
+  const match = /^topic:(.+)$/i.exec(query.trim());
+  if (!match) {
+    return null;
+  }
+  const topicKey = (match[1] ?? "").trim();
+  return topicKey.length > 0 ? topicKey : null;
+}
+function resolveMatches(query, deps) {
+  const topicKey = parseTopicKey(query);
+  const durable = deps.durable;
+  if (topicKey !== null && durable) {
+    const matches2 = durable.listByTopic(topicKey);
+    return {
+      kind: "durable_topic",
+      count: matches2.length,
+      deleteAll: () => {
+        for (const entry of matches2) {
+          durable.removeById(entry.id);
+        }
+      }
+    };
+  }
   const matches = deps.semantic.search(query, 100);
-  const count = matches.length;
+  return {
+    kind: "semantic_query",
+    count: matches.length,
+    deleteAll: () => {
+      for (const entry of matches) {
+        deps.semantic.remove(entry.id);
+      }
+    }
+  };
+}
+function handleForget(query, deps, confirmToken) {
+  const durableId = parseDurableId(query);
+  if (durableId !== null && deps.durable) {
+    const deleted = deps.durable.removeById(durableId);
+    return {
+      status: "deleted",
+      deleted: deleted ? 1 : 0,
+      message: deleted ? "Deleted 1 entry." : "No matching entries found."
+    };
+  }
+  const matchSet = resolveMatches(query, deps);
+  const count = matchSet.count;
   if (count === 0) {
     return { status: "deleted", deleted: 0, message: "No matching entries found." };
   }
   if (count <= BULK_DELETE_THRESHOLD) {
-    for (const entry of matches) {
-      deps.semantic.remove(entry.id);
-    }
+    matchSet.deleteAll();
     return {
       status: "deleted",
       deleted: count,
@@ -32923,9 +33913,7 @@ function handleForget(query, deps, confirmToken) {
   if (!deps.tokenStore.consume(confirmToken)) {
     return { status: "error", message: "Invalid or expired confirmation token." };
   }
-  for (const entry of matches) {
-    deps.semantic.remove(entry.id);
-  }
+  matchSet.deleteAll();
   return {
     status: "deleted",
     deleted: count,
@@ -32994,6 +33982,7 @@ function handleImportCodex(params, deps) {
         captureLevel: deps.captureLevel,
         fts5Available: deps.fts5Available
       });
+      deps.runDurableExtraction?.(deps.db, { source: "codex" });
       const storedEventIds = loadIngestedCodexEventIds(deps.db);
       imported = Array.from(currentRunEventIds).filter(
         (eventId) => storedEventIds.has(eventId)
@@ -33133,10 +34122,642 @@ function handlePurge(deps, confirmToken) {
   };
 }
 
+// packages/core/src/tools/search.ts
+function parseExports2(json2) {
+  if (!json2) return [];
+  try {
+    return JSON.parse(json2);
+  } catch {
+    return [];
+  }
+}
+function summarizePayload(kind, payloadJson) {
+  if (!payloadJson) return kind;
+  try {
+    const payload = JSON.parse(payloadJson);
+    switch (kind) {
+      case "user_prompt": {
+        const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
+        return prompt.length > 120 ? `${prompt.slice(0, 117)}...` : prompt;
+      }
+      case "ai_response": {
+        const response = typeof payload.response === "string" ? payload.response : "";
+        return response.length > 120 ? `${response.slice(0, 117)}...` : response;
+      }
+      case "tool_use": {
+        const tool = typeof payload.tool === "string" ? payload.tool : "";
+        const files = Array.isArray(payload.files) ? payload.files : [];
+        const status = typeof payload.status === "string" ? payload.status : "";
+        const fileStr = files.length > 0 ? ` [${files.join(", ")}]` : "";
+        return `${tool}${fileStr} (${status})`;
+      }
+      case "file_diff": {
+        const path = typeof payload.path === "string" ? payload.path : "";
+        const added = typeof payload.added === "number" ? payload.added : 0;
+        const removed = typeof payload.removed === "number" ? payload.removed : 0;
+        return `${path} (+${added}/-${removed})`;
+      }
+      case "session_start": {
+        const tool = typeof payload.tool === "string" ? payload.tool : "";
+        return `session_start: ${tool}`;
+      }
+      case "session_end": {
+        const summary = typeof payload.summary === "string" ? payload.summary : "";
+        return summary ? `session_end: ${summary}` : "session_end";
+      }
+      default:
+        return kind;
+    }
+  } catch {
+    return kind;
+  }
+}
+function setStartOfDay(date5, mode) {
+  if (mode === "utc") {
+    date5.setUTCHours(0, 0, 0, 0);
+    return;
+  }
+  date5.setHours(0, 0, 0, 0);
+}
+function resolveTimeRange(range, referenceNow, mode = "local") {
+  const now = referenceNow ?? Date.now();
+  if (range.relative) {
+    switch (range.relative) {
+      case "today": {
+        const start = new Date(now);
+        setStartOfDay(start, mode);
+        return { from: start.getTime(), to: now };
+      }
+      case "yesterday": {
+        const startOfToday = new Date(now);
+        setStartOfDay(startOfToday, mode);
+        const startOfYesterday = new Date(startOfToday);
+        if (mode === "utc") {
+          startOfYesterday.setUTCDate(startOfYesterday.getUTCDate() - 1);
+        } else {
+          startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        }
+        return { from: startOfYesterday.getTime(), to: startOfToday.getTime() };
+      }
+      case "this_week": {
+        const monday = new Date(now);
+        const dayOfWeek = mode === "utc" ? monday.getUTCDay() : monday.getDay();
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        if (mode === "utc") {
+          monday.setUTCDate(monday.getUTCDate() - diff);
+        } else {
+          monday.setDate(monday.getDate() - diff);
+        }
+        setStartOfDay(monday, mode);
+        return { from: monday.getTime(), to: now };
+      }
+      case "last_7d":
+        return { from: now - 7 * 24 * 3600 * 1e3, to: now };
+      case "last_30d":
+        return { from: now - 30 * 24 * 3600 * 1e3, to: now };
+    }
+  }
+  return {
+    from: range.from ?? 0,
+    to: range.to ?? now
+  };
+}
+function searchStructural(query, db) {
+  const results = [];
+  const lowerQuery = query.toLowerCase();
+  const files = db.all("SELECT * FROM files");
+  for (const file2 of files) {
+    const exports = parseExports2(file2.exports_json);
+    let exportMatched = false;
+    for (const exp of exports) {
+      if (exp.name.toLowerCase().includes(lowerQuery)) {
+        results.push({
+          layer: "structural",
+          content: `${file2.relative_path} -> ${exp.name}()`,
+          relevance: 1,
+          source: file2.relative_path
+        });
+        exportMatched = true;
+      }
+    }
+    if (!exportMatched && file2.relative_path.toLowerCase().includes(lowerQuery)) {
+      results.push({
+        layer: "structural",
+        content: file2.relative_path,
+        relevance: 0.5,
+        source: file2.relative_path
+      });
+    }
+  }
+  return results;
+}
+function searchEpisodic(query, db) {
+  const lowerQuery = query.toLowerCase();
+  const rows = db.all(
+    "SELECT * FROM memories WHERE layer='episodic' AND content LIKE ? ORDER BY updated_at DESC",
+    [`%${lowerQuery}%`]
+  );
+  return rows.map((row) => ({
+    layer: "episodic",
+    content: row.content,
+    relevance: 0.6,
+    source: `session:${row.session_id ?? "unknown"}`
+  }));
+}
+function searchDurable(query, db, fts5) {
+  let rows = [];
+  if (fts5) {
+    const sanitized = sanitizeFtsQuery(query);
+    if (sanitized) {
+      try {
+        rows = db.all(
+          `SELECT dm.id, dm.summary, dm.updated_at
+           FROM durable_memories_fts dfts
+           JOIN durable_memories dm ON dm.id = dfts.rowid
+           WHERE dfts MATCH ? AND dm.state = 'active'
+           ORDER BY dm.updated_at DESC, dm.id DESC
+           LIMIT 10`,
+          [sanitized]
+        );
+      } catch {
+        rows = [];
+      }
+    }
+  }
+  if (rows.length === 0) {
+    rows = db.all(
+      `SELECT id, summary, updated_at
+       FROM durable_memories
+       WHERE state = 'active' AND summary LIKE ?
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 10`,
+      [`%${query}%`]
+    );
+  }
+  return rows.map((row) => ({
+    layer: "durable",
+    content: row.summary,
+    relevance: 0.9,
+    source: `durable:${row.id}`
+  }));
+}
+function buildWhereClause(resolved, kind, source, filePath) {
+  const clauses = [];
+  const params = [];
+  if (resolved) {
+    clauses.push("ce.timestamp >= ?");
+    params.push(resolved.from);
+    clauses.push("ce.timestamp <= ?");
+    params.push(resolved.to);
+  }
+  if (kind) {
+    clauses.push("ce.kind = ?");
+    params.push(kind);
+  }
+  if (source) {
+    clauses.push("ce.source = ?");
+    params.push(source);
+  }
+  if (filePath) {
+    clauses.push("ce.event_id IN (SELECT event_id FROM event_files WHERE file_path = ?)");
+    params.push(filePath);
+  }
+  return { clauses, params };
+}
+function searchConversationFts(query, db, resolved, opts) {
+  const ftsQuery = sanitizeFtsQuery(query);
+  if (!ftsQuery) return [];
+  const { clauses, params } = buildWhereClause(resolved, opts.kind, opts.source, opts.filePath);
+  const whereStr = clauses.length > 0 ? `AND ${clauses.join(" AND ")}` : "";
+  const sql = `
+    SELECT ce.id, ce.event_id, ce.kind, ce.payload_json, ce.timestamp,
+           ce.significance, ce.session_id,
+           rank AS fts_rank
+    FROM conversation_fts
+    JOIN conversation_events ce ON ce.id = conversation_fts.rowid
+    WHERE conversation_fts MATCH ?
+    ${whereStr}
+    ORDER BY rank
+    LIMIT ? OFFSET ?
+  `;
+  const allParams = [ftsQuery, ...params, opts.limit, opts.offset];
+  let rows;
+  try {
+    rows = db.all(sql, allParams);
+  } catch {
+    return [];
+  }
+  return scoreConversationResults(rows);
+}
+function searchConversationLike(query, db, resolved, opts) {
+  const { clauses, params } = buildWhereClause(resolved, opts.kind, opts.source, opts.filePath);
+  clauses.push("ce.payload_json LIKE ?");
+  params.push(`%${query}%`);
+  const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+  const sql = `
+    SELECT ce.id, ce.event_id, ce.kind, ce.payload_json, ce.timestamp,
+           ce.significance, ce.session_id
+    FROM conversation_events ce
+    ${whereStr}
+    ORDER BY ce.timestamp DESC
+    LIMIT ? OFFSET ?
+  `;
+  const allParams = [...params, opts.limit, opts.offset];
+  let rows;
+  try {
+    rows = db.all(sql, allParams);
+  } catch {
+    return [];
+  }
+  if (rows.length === 0) return [];
+  const timestamps = rows.map((r) => r.timestamp);
+  const minTs = Math.min(...timestamps);
+  const maxTs = Math.max(...timestamps);
+  const range = maxTs - minTs;
+  return rows.map((row) => {
+    const recency = range > 0 ? (row.timestamp - minTs) / range : 1;
+    const relevance = 0.5 + 0.2 * recency;
+    return {
+      layer: "conversation",
+      content: summarizePayload(row.kind, row.payload_json),
+      relevance: Math.round(relevance * 100) / 100,
+      source: `${row.kind}:${row.event_id}`
+    };
+  });
+}
+function scoreConversationResults(rows) {
+  if (rows.length === 0) return [];
+  const scores = rows.map((r) => -r.fts_rank);
+  const maxScore = Math.max(...scores);
+  const timestamps = rows.map((r) => r.timestamp);
+  const minTs = Math.min(...timestamps);
+  const maxTs = Math.max(...timestamps);
+  const tsRange = maxTs - minTs;
+  return rows.map((row, i) => {
+    const rawScore = scores[i] ?? 0;
+    const ftsNormalized = maxScore > 0 ? rawScore / maxScore : 1;
+    const recency = tsRange > 0 ? (row.timestamp - minTs) / tsRange : 1;
+    const relevance = ftsNormalized + 0.2 * recency;
+    return {
+      layer: "conversation",
+      content: summarizePayload(row.kind, row.payload_json),
+      relevance: Math.round(relevance * 100) / 100,
+      source: `${row.kind}:${row.event_id}`
+    };
+  });
+}
+function handleSearch(query, deps, options) {
+  const { db, semantic, fts5 } = deps;
+  const convLimit = options?.limit ?? 20;
+  const convOffset = options?.offset ?? 0;
+  const structural = searchStructural(query, db);
+  const semanticEntries = semantic.search(query, 10);
+  const semanticResults = semanticEntries.map((entry) => ({
+    layer: "semantic",
+    content: entry.content,
+    relevance: 0.8,
+    source: `memory:${entry.id}`
+  }));
+  const durable = searchDurable(query, db, fts5);
+  const episodic = searchEpisodic(query, db);
+  let conversation = [];
+  const resolved = options?.timeRange ? resolveTimeRange(options.timeRange) : void 0;
+  const convOpts = {
+    kind: options?.kind,
+    source: options?.source,
+    filePath: options?.filePath,
+    limit: convLimit,
+    offset: convOffset
+  };
+  if (fts5) {
+    conversation = searchConversationFts(query, db, resolved, convOpts);
+  } else {
+    conversation = searchConversationLike(query, db, resolved, convOpts);
+  }
+  const combined = [...structural, ...durable, ...semanticResults, ...episodic, ...conversation];
+  combined.sort((a, b) => b.relevance - a.relevance);
+  return combined.slice(0, 20);
+}
+
+// packages/core/src/tools/timeline.ts
+function handleTimeline(deps, options) {
+  const { db } = deps;
+  const limit = options?.limit ?? 20;
+  const offset = options?.offset ?? 0;
+  const isSummary = options?.summary ?? false;
+  const clauses = [];
+  const params = [];
+  if (options?.timeRange) {
+    const resolved = resolveTimeRange(options.timeRange, options.now);
+    clauses.push("ce.timestamp >= ?");
+    params.push(resolved.from);
+    clauses.push("ce.timestamp <= ?");
+    params.push(resolved.to);
+  }
+  if (options?.kind) {
+    clauses.push("ce.kind = ?");
+    params.push(options.kind);
+  }
+  if (options?.filePath) {
+    clauses.push("ce.event_id IN (SELECT event_id FROM event_files WHERE file_path = ?)");
+    params.push(options.filePath);
+  }
+  const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+  const sql = `
+    SELECT ce.event_id, ce.kind, ce.timestamp, ce.significance,
+           ce.session_id, ce.payload_json
+    FROM conversation_events ce
+    ${whereStr}
+    ORDER BY ce.timestamp DESC
+    LIMIT ? OFFSET ?
+  `;
+  params.push(limit, offset);
+  const rows = db.all(sql, params);
+  return rows.map((row) => {
+    const entry = {
+      eventId: row.event_id,
+      kind: row.kind,
+      timestamp: row.timestamp,
+      significance: row.significance,
+      sessionId: row.session_id
+    };
+    if (!isSummary) {
+      entry.summary = summarizePayload(row.kind, row.payload_json);
+      const files = db.all("SELECT file_path FROM event_files WHERE event_id = ?", [
+        row.event_id
+      ]);
+      if (files.length > 0) {
+        entry.files = files.map((f) => f.file_path);
+      }
+    }
+    return entry;
+  });
+}
+
+// packages/core/src/tools/recall.ts
+var QUESTION_STOP_WORDS = /* @__PURE__ */ new Set([
+  "what",
+  "did",
+  "we",
+  "do",
+  "about",
+  "the",
+  "a",
+  "an",
+  "our",
+  "last",
+  "week",
+  "yesterday",
+  "today",
+  "just",
+  "decide",
+  "decided",
+  "fix",
+  "fixed"
+]);
+function parseQuestionTerms(question) {
+  const normalized = question.toLowerCase().replace(/[^a-z0-9\s]+/gi, " ");
+  return normalized.split(/\s+/).map((term) => term.trim()).filter((term) => term.length >= 3 && !QUESTION_STOP_WORDS.has(term));
+}
+function matchesTerms(text, terms) {
+  const normalized = text.toLowerCase();
+  if (terms.length === 0) {
+    return true;
+  }
+  return terms.some((term) => normalized.includes(term));
+}
+function parseRange(question, now) {
+  const lower = question.toLowerCase();
+  if (lower.includes("yesterday")) {
+    return buildResolvedRange("yesterday", { relative: "yesterday" }, now);
+  }
+  if (lower.includes("last week")) {
+    return buildResolvedRange("last week", { relative: "last_7d" }, now);
+  }
+  if (lower.includes("today")) {
+    return buildResolvedRange("today", { relative: "today" }, now);
+  }
+  return {};
+}
+function resolveRangeLabel(timeRange) {
+  if (timeRange.relative) {
+    return timeRange.relative;
+  }
+  return "custom";
+}
+function buildResolvedRange(label, timeRange, now) {
+  const resolved = resolveTimeRange(timeRange, now, "utc");
+  return {
+    timeRange,
+    resolvedRange: {
+      label,
+      from: resolved.from,
+      to: resolved.to,
+      fromIso: new Date(resolved.from).toISOString(),
+      toIso: new Date(resolved.to).toISOString()
+    }
+  };
+}
+function loadDurableCandidates(db, questionTerms, timeRange, now, limit) {
+  const params = [];
+  const clauses = ["memory_type = 'decision'", "state = 'active'"];
+  if (timeRange) {
+    const resolved = resolveTimeRange(timeRange, now);
+    clauses.push("updated_at >= ?");
+    params.push(resolved.from);
+    clauses.push("updated_at <= ?");
+    params.push(resolved.to);
+  }
+  const rows = db.all(
+    `SELECT id, summary, updated_at
+     FROM durable_memories
+     WHERE ${clauses.join(" AND ")}
+     ORDER BY updated_at DESC, id DESC
+     LIMIT ?`,
+    [...params, limit]
+  );
+  return rows.filter((row) => matchesTerms(row.summary, questionTerms)).map((row) => ({
+    headline: row.summary,
+    whyMatched: "durable decision memory",
+    eventIds: [],
+    durableMemoryIds: [row.id]
+  }));
+}
+function loadConversationCandidates(db, questionTerms, timeRange, now, limit) {
+  if (questionTerms.length > 0) {
+    const params = [];
+    const clauses = [];
+    if (timeRange) {
+      const resolved = resolveTimeRange(timeRange, now);
+      clauses.push("timestamp >= ?");
+      params.push(resolved.from);
+      clauses.push("timestamp <= ?");
+      params.push(resolved.to);
+    }
+    const termClauses = questionTerms.map(() => "LOWER(COALESCE(payload_json, ?)) LIKE ?");
+    const termParams = questionTerms.flatMap((term) => ["", `%${term.toLowerCase()}%`]);
+    clauses.push(`(${termClauses.join(" OR ")})`);
+    params.push(...termParams);
+    const rows = db.all(
+      `SELECT event_id, kind, payload_json, session_id
+       FROM conversation_events
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY timestamp DESC, id DESC
+       LIMIT ?`,
+      [...params, limit]
+    );
+    return rows.map((row) => ({
+      sessionId: row.session_id ?? void 0,
+      headline: summarizePayload(row.kind, row.payload_json),
+      whyMatched: "recent conversation context",
+      eventIds: [row.event_id],
+      durableMemoryIds: []
+    })).filter((candidate) => matchesTerms(candidate.headline, questionTerms));
+  }
+  const entries = handleTimeline(
+    { db },
+    {
+      timeRange,
+      summary: false,
+      limit,
+      now
+    }
+  );
+  return entries.filter(
+    (entry) => typeof entry.summary === "string" && matchesTerms(entry.summary, questionTerms)
+  ).map((entry) => ({
+    sessionId: entry.sessionId ?? void 0,
+    headline: entry.summary ?? entry.kind,
+    whyMatched: "recent conversation context",
+    eventIds: [entry.eventId],
+    durableMemoryIds: []
+  }));
+}
+function buildResult(question, candidates, resolvedRange) {
+  if (candidates.length === 0) {
+    return {
+      status: "no_memory",
+      question,
+      ...resolvedRange ? { resolvedRange } : {},
+      summary: "No matching memory found.",
+      candidates: []
+    };
+  }
+  if (candidates.length > 1) {
+    return {
+      status: "needs_clarification",
+      question,
+      ...resolvedRange ? { resolvedRange } : {},
+      summary: "I found multiple possible matches. Please clarify which one you mean.",
+      candidates
+    };
+  }
+  const candidate = candidates[0];
+  return {
+    status: "ok",
+    question,
+    ...resolvedRange ? { resolvedRange } : {},
+    summary: candidate.headline,
+    candidates: [candidate]
+  };
+}
+function handleRecall(question, deps, options) {
+  const now = options?.now ?? deps.now ?? Date.now();
+  const limit = Math.max(1, options?.limit ?? 10);
+  const questionTerms = parseQuestionTerms(question);
+  const questionRange = parseRange(question, now);
+  const explicitRange = options?.timeRange ? buildResolvedRange(resolveRangeLabel(options.timeRange), options.timeRange, now) : void 0;
+  const timeRange = explicitRange?.timeRange ?? questionRange.timeRange;
+  const resolvedRange = explicitRange?.resolvedRange ?? questionRange.resolvedRange;
+  const durableCandidates = loadDurableCandidates(deps.db, questionTerms, timeRange, now, limit);
+  const conversationCandidates = loadConversationCandidates(
+    deps.db,
+    questionTerms,
+    timeRange,
+    now,
+    limit
+  );
+  const candidates = [...durableCandidates, ...conversationCandidates];
+  return buildResult(question, candidates, resolvedRange);
+}
+
 // packages/core/src/tools/remember.ts
 function handleRemember(text, tags, deps) {
   const redacted = redact(text);
   return deps.semantic.add(redacted, tags);
+}
+
+// packages/core/src/memory/review.ts
+function createEmptyStateCounts() {
+  return {
+    active: 0,
+    stale: 0,
+    superseded: 0,
+    archivable: 0
+  };
+}
+function buildCandidate2(entry) {
+  if (entry.state === "superseded") {
+    return {
+      durableId: entry.id,
+      topicKey: entry.topicKey,
+      state: entry.state,
+      reason: "superseded_by_newer_memory",
+      recommendedAction: "delete",
+      summary: entry.summary,
+      supersededById: entry.supersededById,
+      updatedAt: entry.updatedAt
+    };
+  }
+  if (entry.state === "stale") {
+    return {
+      durableId: entry.id,
+      topicKey: entry.topicKey,
+      state: entry.state,
+      reason: "stale_low_value",
+      recommendedAction: "review",
+      summary: entry.summary,
+      supersededById: entry.supersededById,
+      updatedAt: entry.updatedAt
+    };
+  }
+  if (entry.state === "archivable") {
+    return {
+      durableId: entry.id,
+      topicKey: entry.topicKey,
+      state: entry.state,
+      reason: "aged_but_readable",
+      recommendedAction: "archive",
+      summary: entry.summary,
+      supersededById: entry.supersededById,
+      updatedAt: entry.updatedAt
+    };
+  }
+  return null;
+}
+function reviewDurableMemories(deps, options) {
+  const limit = options?.limit ?? 100;
+  const store = new DurableMemoryStore(deps.db, false);
+  const entries = store.listAll(limit);
+  const countsByState = entries.length > 0 ? store.countByState() : createEmptyStateCounts();
+  const candidates = entries.map((entry) => buildCandidate2(entry)).filter((candidate) => candidate !== null).slice(0, limit);
+  return {
+    totalCandidates: candidates.length,
+    countsByState,
+    candidates
+  };
+}
+
+// packages/core/src/tools/review.ts
+function handleReview(deps, options = {}) {
+  const effectiveLimit = Math.max(1, options.limit ?? 20);
+  const review = reviewDurableMemories(deps, { limit: 1e3 });
+  const filtered = review.candidates.filter((candidate) => options.state ? candidate.state === options.state : true).filter((candidate) => options.topicKey ? candidate.topicKey === options.topicKey : true).slice(0, effectiveLimit);
+  return {
+    totalCandidates: filtered.length,
+    countsByState: review.countsByState,
+    candidates: filtered.map((candidate) => ({ ...candidate }))
+  };
 }
 
 // packages/core/src/scanner/index.ts
@@ -33314,7 +34935,7 @@ var IMPORT_STATIC_RE = /^import\s+(type\s+)?.*?\s+from\s+['"]([^'"]+)['"]/;
 var IMPORT_DYNAMIC_RE = /(?:^|[^.\w])import\(\s*['"]([^'"]+)['"]\s*\)/g;
 var REEXPORT_NAMED_RE = /^export\s+(?:type\s+)?\{([^}]+)\}\s+from\s+['"]([^'"]+)['"]/;
 var REEXPORT_WILDCARD_RE = /^export\s+\*\s*(?:as\s+\w+\s+)?from\s+['"]([^'"]+)['"]/;
-function parseExports2(code) {
+function parseExports3(code) {
   const results = [];
   for (const rawLine of code.split("\n")) {
     const line = rawLine.trim();
@@ -33885,7 +35506,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
     let hasDynamicImport = false;
     if (language === "typescript" || language === "javascript") {
       const stripped = stripNonCode(content);
-      exports = parseExports2(stripped);
+      exports = parseExports3(stripped);
       imports = parseImports2(content);
       reExports = parseReExports2(content);
       hasDynamicImport = imports.some((imp) => imp.isDynamic);
@@ -33982,275 +35603,14 @@ async function handleScan(deps) {
   return scanProject(deps.projectPath, deps.db, deps.config, deps.scanDeps);
 }
 
-// packages/core/src/tools/search.ts
-function parseExports3(json2) {
-  if (!json2) return [];
-  try {
-    return JSON.parse(json2);
-  } catch {
-    return [];
-  }
-}
-function summarizePayload(kind, payloadJson) {
-  if (!payloadJson) return kind;
-  try {
-    const payload = JSON.parse(payloadJson);
-    switch (kind) {
-      case "user_prompt": {
-        const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
-        return prompt.length > 120 ? `${prompt.slice(0, 117)}...` : prompt;
-      }
-      case "ai_response": {
-        const response = typeof payload.response === "string" ? payload.response : "";
-        return response.length > 120 ? `${response.slice(0, 117)}...` : response;
-      }
-      case "tool_use": {
-        const tool = typeof payload.tool === "string" ? payload.tool : "";
-        const files = Array.isArray(payload.files) ? payload.files : [];
-        const status = typeof payload.status === "string" ? payload.status : "";
-        const fileStr = files.length > 0 ? ` [${files.join(", ")}]` : "";
-        return `${tool}${fileStr} (${status})`;
-      }
-      case "file_diff": {
-        const path = typeof payload.path === "string" ? payload.path : "";
-        const added = typeof payload.added === "number" ? payload.added : 0;
-        const removed = typeof payload.removed === "number" ? payload.removed : 0;
-        return `${path} (+${added}/-${removed})`;
-      }
-      case "session_start": {
-        const tool = typeof payload.tool === "string" ? payload.tool : "";
-        return `session_start: ${tool}`;
-      }
-      case "session_end": {
-        const summary = typeof payload.summary === "string" ? payload.summary : "";
-        return summary ? `session_end: ${summary}` : "session_end";
-      }
-      default:
-        return kind;
-    }
-  } catch {
-    return kind;
-  }
-}
-function resolveTimeRange(range) {
-  const now = Date.now();
-  if (range.relative) {
-    switch (range.relative) {
-      case "today": {
-        const start = /* @__PURE__ */ new Date();
-        start.setHours(0, 0, 0, 0);
-        return { from: start.getTime(), to: now };
-      }
-      case "yesterday": {
-        const startOfToday = /* @__PURE__ */ new Date();
-        startOfToday.setHours(0, 0, 0, 0);
-        const startOfYesterday = new Date(startOfToday);
-        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-        return { from: startOfYesterday.getTime(), to: startOfToday.getTime() };
-      }
-      case "this_week": {
-        const monday = /* @__PURE__ */ new Date();
-        const dayOfWeek = monday.getDay();
-        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-        monday.setDate(monday.getDate() - diff);
-        monday.setHours(0, 0, 0, 0);
-        return { from: monday.getTime(), to: now };
-      }
-      case "last_7d":
-        return { from: now - 7 * 24 * 3600 * 1e3, to: now };
-      case "last_30d":
-        return { from: now - 30 * 24 * 3600 * 1e3, to: now };
-    }
-  }
-  return {
-    from: range.from ?? 0,
-    to: range.to ?? now
-  };
-}
-function searchStructural(query, db) {
-  const results = [];
-  const lowerQuery = query.toLowerCase();
-  const files = db.all("SELECT * FROM files");
-  for (const file2 of files) {
-    const exports = parseExports3(file2.exports_json);
-    let exportMatched = false;
-    for (const exp of exports) {
-      if (exp.name.toLowerCase().includes(lowerQuery)) {
-        results.push({
-          layer: "structural",
-          content: `${file2.relative_path} -> ${exp.name}()`,
-          relevance: 1,
-          source: file2.relative_path
-        });
-        exportMatched = true;
-      }
-    }
-    if (!exportMatched && file2.relative_path.toLowerCase().includes(lowerQuery)) {
-      results.push({
-        layer: "structural",
-        content: file2.relative_path,
-        relevance: 0.5,
-        source: file2.relative_path
-      });
-    }
-  }
-  return results;
-}
-function searchEpisodic(query, db) {
-  const lowerQuery = query.toLowerCase();
-  const rows = db.all(
-    "SELECT * FROM memories WHERE layer='episodic' AND content LIKE ? ORDER BY updated_at DESC",
-    [`%${lowerQuery}%`]
-  );
-  return rows.map((row) => ({
-    layer: "episodic",
-    content: row.content,
-    relevance: 0.6,
-    source: `session:${row.session_id ?? "unknown"}`
-  }));
-}
-function buildWhereClause(resolved, kind, source, filePath) {
-  const clauses = [];
-  const params = [];
-  if (resolved) {
-    clauses.push("ce.timestamp >= ?");
-    params.push(resolved.from);
-    clauses.push("ce.timestamp <= ?");
-    params.push(resolved.to);
-  }
-  if (kind) {
-    clauses.push("ce.kind = ?");
-    params.push(kind);
-  }
-  if (source) {
-    clauses.push("ce.source = ?");
-    params.push(source);
-  }
-  if (filePath) {
-    clauses.push("ce.event_id IN (SELECT event_id FROM event_files WHERE file_path = ?)");
-    params.push(filePath);
-  }
-  return { clauses, params };
-}
-function searchConversationFts(query, db, resolved, opts) {
-  const ftsQuery = sanitizeFtsQuery(query);
-  if (!ftsQuery) return [];
-  const { clauses, params } = buildWhereClause(resolved, opts.kind, opts.source, opts.filePath);
-  const whereStr = clauses.length > 0 ? `AND ${clauses.join(" AND ")}` : "";
-  const sql = `
-    SELECT ce.id, ce.event_id, ce.kind, ce.payload_json, ce.timestamp,
-           ce.significance, ce.session_id,
-           rank AS fts_rank
-    FROM conversation_fts
-    JOIN conversation_events ce ON ce.id = conversation_fts.rowid
-    WHERE conversation_fts MATCH ?
-    ${whereStr}
-    ORDER BY rank
-    LIMIT ? OFFSET ?
-  `;
-  const allParams = [ftsQuery, ...params, opts.limit, opts.offset];
-  let rows;
-  try {
-    rows = db.all(sql, allParams);
-  } catch {
-    return [];
-  }
-  return scoreConversationResults(rows);
-}
-function searchConversationLike(query, db, resolved, opts) {
-  const { clauses, params } = buildWhereClause(resolved, opts.kind, opts.source, opts.filePath);
-  clauses.push("ce.payload_json LIKE ?");
-  params.push(`%${query}%`);
-  const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-  const sql = `
-    SELECT ce.id, ce.event_id, ce.kind, ce.payload_json, ce.timestamp,
-           ce.significance, ce.session_id
-    FROM conversation_events ce
-    ${whereStr}
-    ORDER BY ce.timestamp DESC
-    LIMIT ? OFFSET ?
-  `;
-  const allParams = [...params, opts.limit, opts.offset];
-  let rows;
-  try {
-    rows = db.all(sql, allParams);
-  } catch {
-    return [];
-  }
-  if (rows.length === 0) return [];
-  const timestamps = rows.map((r) => r.timestamp);
-  const minTs = Math.min(...timestamps);
-  const maxTs = Math.max(...timestamps);
-  const range = maxTs - minTs;
-  return rows.map((row) => {
-    const recency = range > 0 ? (row.timestamp - minTs) / range : 1;
-    const relevance = 0.5 + 0.2 * recency;
-    return {
-      layer: "conversation",
-      content: summarizePayload(row.kind, row.payload_json),
-      relevance: Math.round(relevance * 100) / 100,
-      source: `${row.kind}:${row.event_id}`
-    };
-  });
-}
-function scoreConversationResults(rows) {
-  if (rows.length === 0) return [];
-  const scores = rows.map((r) => -r.fts_rank);
-  const maxScore = Math.max(...scores);
-  const timestamps = rows.map((r) => r.timestamp);
-  const minTs = Math.min(...timestamps);
-  const maxTs = Math.max(...timestamps);
-  const tsRange = maxTs - minTs;
-  return rows.map((row, i) => {
-    const rawScore = scores[i] ?? 0;
-    const ftsNormalized = maxScore > 0 ? rawScore / maxScore : 1;
-    const recency = tsRange > 0 ? (row.timestamp - minTs) / tsRange : 1;
-    const relevance = ftsNormalized + 0.2 * recency;
-    return {
-      layer: "conversation",
-      content: summarizePayload(row.kind, row.payload_json),
-      relevance: Math.round(relevance * 100) / 100,
-      source: `${row.kind}:${row.event_id}`
-    };
-  });
-}
-function handleSearch(query, deps, options) {
-  const { db, semantic, fts5 } = deps;
-  const convLimit = options?.limit ?? 20;
-  const convOffset = options?.offset ?? 0;
-  const structural = searchStructural(query, db);
-  const semanticEntries = semantic.search(query, 10);
-  const semanticResults = semanticEntries.map((entry) => ({
-    layer: "semantic",
-    content: entry.content,
-    relevance: 0.8,
-    source: `memory:${entry.id}`
-  }));
-  const episodic = searchEpisodic(query, db);
-  let conversation = [];
-  const resolved = options?.timeRange ? resolveTimeRange(options.timeRange) : void 0;
-  const convOpts = {
-    kind: options?.kind,
-    source: options?.source,
-    filePath: options?.filePath,
-    limit: convLimit,
-    offset: convOffset
-  };
-  if (fts5) {
-    conversation = searchConversationFts(query, db, resolved, convOpts);
-  } else {
-    conversation = searchConversationLike(query, db, resolved, convOpts);
-  }
-  const combined = [...structural, ...semanticResults, ...episodic, ...conversation];
-  combined.sort((a, b) => b.relevance - a.relevance);
-  return combined.slice(0, 20);
-}
-
 // packages/core/src/tools/status.ts
 import { readdirSync as readdirSync7, statSync as statSync5 } from "node:fs";
 function getDefaultCodexAutoImportSnapshot() {
   return {
     clientDetected: false,
+    client: "generic",
+    clientSurface: "generic",
+    detectionEvidence: [],
     debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
     lastStatus: "idle",
     lastImported: 0,
@@ -34258,8 +35618,49 @@ function getDefaultCodexAutoImportSnapshot() {
     lastErrors: 0
   };
 }
+function buildCodexTruth(codexDiagnostics) {
+  if (!codexDiagnostics) {
+    return void 0;
+  }
+  const desktopMessage = "Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.";
+  if (codexDiagnostics.captureMode === "off") {
+    return {
+      recallReadiness: "disabled",
+      recommendedCaptureMode: "redacted",
+      desktopParity: "unverified",
+      recallMessage: "Codex capture is off, so Locus cannot import Codex conversation events for recall.",
+      desktopMessage
+    };
+  }
+  if (codexDiagnostics.captureMode === "metadata") {
+    return {
+      recallReadiness: "limited",
+      recommendedCaptureMode: "redacted",
+      desktopParity: "unverified",
+      recallMessage: "metadata capture imports structural session events and diagnostics, but conversational recall is intentionally limited.",
+      desktopMessage
+    };
+  }
+  if (codexDiagnostics.captureMode === "redacted") {
+    return {
+      recallReadiness: "practical",
+      recommendedCaptureMode: "redacted",
+      desktopParity: "unverified",
+      recallMessage: "redacted capture stores bounded, filtered conversation snippets for practical recall without full transcripts.",
+      desktopMessage
+    };
+  }
+  return {
+    recallReadiness: "maximum",
+    recommendedCaptureMode: "redacted",
+    desktopParity: "unverified",
+    recallMessage: "full capture stores raw conversation content and can provide maximum recall, but it is explicit warning territory.",
+    desktopMessage
+  };
+}
 function handleStatus(deps) {
   const { db, dbPath, config: config2 } = deps;
+  const durable = new DurableMemoryStore(db, false);
   const totalFilesRow = db.get("SELECT COUNT(*) AS cnt FROM files");
   const totalFiles = totalFilesRow?.cnt ?? 0;
   const skippedFilesRow = db.get(
@@ -34274,6 +35675,7 @@ function handleStatus(deps) {
     "SELECT COUNT(*) AS cnt FROM memories WHERE layer = 'episodic'"
   );
   const totalEpisodes = totalEpisodesRow?.cnt ?? 0;
+  const durableMemoryStates = durable.countByState();
   const lastScanRow = db.get("SELECT value FROM scan_state WHERE key = 'lastScan'");
   const lastScan = lastScanRow ? Number(lastScanRow.value) : 0;
   const lastStrategyRow = db.get(
@@ -34321,64 +35723,11 @@ function handleStatus(deps) {
     storageBackend: deps.backend,
     fts5Available: deps.fts5,
     searchEngine: deps.fts5 ? "FTS5" : "LIKE fallback",
+    durableMemoryStates,
     codexAutoImport: deps.codexAutoImportSnapshot ? { ...deps.codexAutoImportSnapshot } : getDefaultCodexAutoImportSnapshot(),
-    codexDiagnostics: deps.codexDiagnostics ? { ...deps.codexDiagnostics } : void 0
+    codexDiagnostics: deps.codexDiagnostics ? { ...deps.codexDiagnostics } : void 0,
+    codexTruth: buildCodexTruth(deps.codexDiagnostics)
   };
-}
-
-// packages/core/src/tools/timeline.ts
-function handleTimeline(deps, options) {
-  const { db } = deps;
-  const limit = options?.limit ?? 20;
-  const offset = options?.offset ?? 0;
-  const isSummary = options?.summary ?? false;
-  const clauses = [];
-  const params = [];
-  if (options?.timeRange) {
-    const resolved = resolveTimeRange(options.timeRange);
-    clauses.push("ce.timestamp >= ?");
-    params.push(resolved.from);
-    clauses.push("ce.timestamp <= ?");
-    params.push(resolved.to);
-  }
-  if (options?.kind) {
-    clauses.push("ce.kind = ?");
-    params.push(options.kind);
-  }
-  if (options?.filePath) {
-    clauses.push("ce.event_id IN (SELECT event_id FROM event_files WHERE file_path = ?)");
-    params.push(options.filePath);
-  }
-  const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-  const sql = `
-    SELECT ce.event_id, ce.kind, ce.timestamp, ce.significance,
-           ce.session_id, ce.payload_json
-    FROM conversation_events ce
-    ${whereStr}
-    ORDER BY ce.timestamp DESC
-    LIMIT ? OFFSET ?
-  `;
-  params.push(limit, offset);
-  const rows = db.all(sql, params);
-  return rows.map((row) => {
-    const entry = {
-      eventId: row.event_id,
-      kind: row.kind,
-      timestamp: row.timestamp,
-      significance: row.significance,
-      sessionId: row.session_id
-    };
-    if (!isSummary) {
-      entry.summary = summarizePayload(row.kind, row.payload_json);
-      const files = db.all("SELECT file_path FROM event_files WHERE event_id = ?", [
-        row.event_id
-      ]);
-      if (files.length > 0) {
-        entry.files = files.map((f) => f.file_path);
-      }
-    }
-    return entry;
-  });
 }
 
 // packages/core/src/server.ts
@@ -34415,6 +35764,9 @@ async function createServer(options) {
   const INGEST_DEBOUNCE_MS = 3e4;
   let codexAutoImportSnapshot = {
     clientDetected: false,
+    client: "generic",
+    clientSurface: "generic",
+    detectionEvidence: [],
     debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
     lastStatus: "idle",
     lastImported: 0,
@@ -34427,8 +35779,11 @@ async function createServer(options) {
       captureLevel: config2.captureLevel,
       fts5Available: fts5
     });
+    runDurableExtraction(db, { source: "codex" });
     _lastIngestMetrics = startupMetrics;
-    lastIngestTime = Date.now();
+    if (startupMetrics.processed > 0) {
+      lastIngestTime = Date.now();
+    }
     if (startupMetrics.processed > 0) {
       log(
         "info",
@@ -34469,6 +35824,39 @@ async function createServer(options) {
   server.tool("memory_explore", { path: external_exports3.string() }, async ({ path }) => ({
     content: [{ type: "text", text: handleExplore(path, { db }) }]
   }));
+  function runPreQueryCodexFlow(now) {
+    const autoImport = coordinateCodexAutoImport({
+      now,
+      snapshot: codexAutoImportSnapshot,
+      runImport: () => handleImportCodex(
+        { latestOnly: true },
+        {
+          db,
+          inboxDir,
+          captureLevel: config2.captureLevel,
+          fts5Available: fts5,
+          env: process.env,
+          processInbox,
+          runDurableExtraction,
+          importCodexSessionsToInbox
+        }
+      )
+    });
+    codexAutoImportSnapshot = autoImport.snapshot;
+    if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
+      try {
+        const metrics = processInbox(inboxDir, db, {
+          batchLimit: 50,
+          captureLevel: config2.captureLevel,
+          fts5Available: fts5
+        });
+        runDurableExtraction(db, { source: "codex" });
+        _lastIngestMetrics = metrics;
+        lastIngestTime = now;
+      } catch {
+      }
+    }
+  }
   server.tool(
     "memory_search",
     {
@@ -34493,35 +35881,7 @@ async function createServer(options) {
     },
     async ({ query, timeRange, filePath, kind, source, limit, offset }) => {
       const now = Date.now();
-      const autoImport = coordinateCodexAutoImport({
-        now,
-        snapshot: codexAutoImportSnapshot,
-        runImport: () => handleImportCodex(
-          { latestOnly: true },
-          {
-            db,
-            inboxDir,
-            captureLevel: config2.captureLevel,
-            fts5Available: fts5,
-            env: process.env,
-            processInbox,
-            importCodexSessionsToInbox
-          }
-        )
-      });
-      codexAutoImportSnapshot = autoImport.snapshot;
-      if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
-        try {
-          const metrics = processInbox(inboxDir, db, {
-            batchLimit: 50,
-            captureLevel: config2.captureLevel,
-            fts5Available: fts5
-          });
-          _lastIngestMetrics = metrics;
-          lastIngestTime = now;
-        } catch {
-        }
-      }
+      runPreQueryCodexFlow(now);
       const results = handleSearch(
         query,
         { db, semantic, fts5 },
@@ -34543,6 +35903,55 @@ async function createServer(options) {
         ]
       };
     }
+  );
+  server.tool(
+    "memory_recall",
+    {
+      question: external_exports3.string(),
+      timeRange: external_exports3.object({
+        from: external_exports3.number().optional(),
+        to: external_exports3.number().optional(),
+        relative: external_exports3.enum(["today", "yesterday", "this_week", "last_7d", "last_30d"]).optional()
+      }).optional().describe("Filter recall candidates by time range (absolute or relative)"),
+      limit: external_exports3.number().optional().describe("Max recall candidates to inspect per source (default 10)")
+    },
+    async ({ question, timeRange, limit }) => {
+      const now = Date.now();
+      runPreQueryCodexFlow(now);
+      const result = handleRecall(
+        question,
+        { db, now },
+        {
+          timeRange,
+          limit,
+          now
+        }
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result)
+          }
+        ]
+      };
+    }
+  );
+  server.tool(
+    "memory_review",
+    {
+      state: external_exports3.enum(["active", "stale", "superseded", "archivable"]).optional(),
+      topicKey: external_exports3.string().optional(),
+      limit: external_exports3.number().optional().describe("Max review candidates to return (default 20)")
+    },
+    async ({ state, topicKey, limit }) => ({
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(handleReview({ db }, { state, topicKey, limit }))
+        }
+      ]
+    })
   );
   server.tool(
     "memory_remember",
@@ -34572,6 +35981,7 @@ async function createServer(options) {
           fts5Available: fts5,
           env: process.env,
           processInbox,
+          runDurableExtraction,
           importCodexSessionsToInbox
         }
       );

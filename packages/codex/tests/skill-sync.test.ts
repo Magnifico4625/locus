@@ -124,9 +124,10 @@ describe('skill sync helpers', () => {
     });
 
     const installedSkillPath = join(codexHome, 'skills', 'locus-memory', 'SKILL.md');
+    const installedSkill = readFileSync(installedSkillPath, 'utf8');
     expect(output).toContain('Installed skill:');
-    expect(readFileSync(installedSkillPath, 'utf8')).toContain(
-      '# Locus -- Persistent Project Memory',
-    );
+    expect(installedSkill).toContain('# Locus -- Persistent Project Memory');
+    expect(installedSkill).toContain('memory_recall');
+    expect(installedSkill).toContain('Always check Locus before saying you do not remember');
   });
 });

@@ -47,11 +47,11 @@ describe('shouldImportCodexEvent', () => {
     ]);
   });
 
-  it('imports prompt and metadata events but skips assistant text in redacted mode', () => {
+  it('imports prompt, assistant, and metadata events in redacted mode for bounded filtering', () => {
     expect(allKinds.map((kind) => shouldImportCodexEvent('redacted', kind))).toEqual([
       true,
       true,
-      false,
+      true,
       true,
       true,
     ]);

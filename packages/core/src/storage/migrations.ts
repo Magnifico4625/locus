@@ -132,6 +132,36 @@ function migrationV2(db: DatabaseAdapter, fts5: boolean): void {
   db.run('UPDATE schema_version SET version = ?', [2]);
 }
 
+function migrationV3(db: DatabaseAdapter, fts5: boolean): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS durable_memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_key TEXT,
+    memory_type TEXT NOT NULL,
+    state TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    evidence_json TEXT NOT NULL,
+    source_event_id TEXT,
+    source TEXT NOT NULL,
+    superseded_by_id INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+
+  db.exec('CREATE INDEX IF NOT EXISTS idx_dm_topic_key ON durable_memories(topic_key)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_dm_state ON durable_memories(state)');
+  db.exec('CREATE INDEX IF NOT EXISTS idx_dm_source_event_id ON durable_memories(source_event_id)');
+
+  if (fts5) {
+    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS durable_memories_fts USING fts5(
+      summary,
+      content=durable_memories,
+      content_rowid=id
+    )`);
+  }
+
+  db.run('UPDATE schema_version SET version = ?', [3]);
+}
+
 // ─── FTS repair ──────────────────────────────────────────────────────────────
 
 interface ConversationRow {
@@ -223,6 +253,16 @@ export function ensureFts(db: DatabaseAdapter, fts5: boolean): void {
       rebuildConversationFts(db);
     }
   }
+
+  // 3. Ensure durable_memories_fts exists and is populated
+  if (!tableExists(db, 'durable_memories_fts')) {
+    db.exec(`CREATE VIRTUAL TABLE durable_memories_fts USING fts5(
+      summary,
+      content=durable_memories,
+      content_rowid=id
+    )`);
+  }
+  db.exec("INSERT INTO durable_memories_fts(durable_memories_fts) VALUES ('rebuild')");
 }
 
 export function runMigrations(db: DatabaseAdapter, fts5: boolean): void {
@@ -234,6 +274,10 @@ export function runMigrations(db: DatabaseAdapter, fts5: boolean): void {
 
   if (currentVersion < 2) {
     migrationV2(db, fts5);
+  }
+
+  if (currentVersion < 3) {
+    migrationV3(db, fts5);
   }
 
   // Always ensure FTS tables exist and are populated (fixes migration gap)

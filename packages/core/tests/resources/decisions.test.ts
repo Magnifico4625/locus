@@ -31,6 +31,32 @@ function insertEpisodicMemory(db: DatabaseAdapter, content: string, updatedAt?: 
   );
 }
 
+function insertDurableDecision(
+  db: DatabaseAdapter,
+  summary: string,
+  opts?: { topicKey?: string; state?: string; updatedAt?: number },
+): void {
+  const now = opts?.updatedAt ?? Date.now();
+  db.run(
+    `INSERT INTO durable_memories (
+      topic_key, memory_type, state, summary, evidence_json,
+      source_event_id, source, superseded_by_id, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      opts?.topicKey ?? null,
+      'decision',
+      opts?.state ?? 'active',
+      summary,
+      JSON.stringify({ test: true }),
+      null,
+      'codex',
+      null,
+      now,
+      now,
+    ],
+  );
+}
+
 describe('generateDecisions', () => {
   let tempDir: string;
   let adapter: NodeSqliteAdapter;
@@ -51,6 +77,40 @@ describe('generateDecisions', () => {
   it('returns "No decisions recorded yet." when DB is empty', () => {
     const result = generateDecisions(adapter);
     expect(result).toBe('No decisions recorded yet.');
+  });
+
+  it('prefers durable decisions over legacy semantic memories when durable entries exist', () => {
+    insertMemory(adapter, 'Legacy semantic decision should be ignored');
+    insertDurableDecision(adapter, 'Use SQLite for the local durable memory store.');
+
+    const result = generateDecisions(adapter);
+
+    expect(result).toContain('Use SQLite for the local durable memory store.');
+    expect(result).not.toContain('Legacy semantic decision should be ignored');
+  });
+
+  it('falls back to legacy semantic memories when durable decisions are empty', () => {
+    insertMemory(adapter, 'Fallback semantic decision');
+
+    const result = generateDecisions(adapter);
+
+    expect(result).toContain('Fallback semantic decision');
+  });
+
+  it('excludes superseded durable decisions from the output', () => {
+    insertDurableDecision(adapter, 'Use PostgreSQL for the dashboard store.', {
+      topicKey: 'database_choice',
+      state: 'superseded',
+    });
+    insertDurableDecision(adapter, 'Use SQLite for the local durable memory store.', {
+      topicKey: 'database_choice',
+      state: 'active',
+    });
+
+    const result = generateDecisions(adapter);
+
+    expect(result).toContain('Use SQLite for the local durable memory store.');
+    expect(result).not.toContain('Use PostgreSQL for the dashboard store.');
   });
 
   // ── Test 2: Single memory ──────────────────────────────────────────────────

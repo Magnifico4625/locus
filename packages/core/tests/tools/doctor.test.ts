@@ -230,6 +230,18 @@ describe('handleDoctor', () => {
     expect(capCheck?.message).toContain('redacted');
   });
 
+  it('warns that metadata capture is limited for conversational recall when Codex diagnostics are active', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexDiagnostics: codexDiagnostics({ captureMode: 'metadata' }),
+    } as never);
+
+    const capCheck = report.checks.find((c) => c.name === 'Capture level');
+    expect(capCheck?.status).toBe('warn');
+    expect(capCheck?.message).toContain('limited conversational recall');
+    expect(capCheck?.fix).toContain('redacted');
+  });
+
   // ── 8. Disk space: warn when < 100MB ─────────────────────────────────────
 
   it('marks Disk space warn when < 100 MB free', () => {
@@ -442,5 +454,17 @@ describe('handleDoctor', () => {
     expect(importedCheck?.status).toBe('warn');
     expect(importedCheck?.message).toContain('0 Codex events');
     expect(importedCheck?.fix).toContain('memory_import_codex');
+  });
+
+  it('adds an explicit desktop parity warning when Codex diagnostics are present', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexDiagnostics: codexDiagnostics(),
+    } as never);
+
+    const parityCheck = report.checks.find((c) => c.name === 'Codex desktop parity');
+    expect(parityCheck?.status).toBe('warn');
+    expect(parityCheck?.message).toContain('CLI');
+    expect(parityCheck?.message).toContain('desktop');
   });
 });

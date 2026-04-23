@@ -1,5 +1,6 @@
 import { closeSync, existsSync, openSync } from 'node:fs';
 import { findCodexRolloutFiles, getCodexCaptureMode, resolveCodexSessionsDir } from '@locus/codex';
+import { detectClientRuntime, normalizePathForIdentity } from '@locus/shared-runtime';
 import type { CodexDiagnosticsSnapshot, DatabaseAdapter } from '../types.js';
 
 export interface CodexDiagnosticsDeps {
@@ -25,6 +26,7 @@ export function collectCodexDiagnostics(
     return undefined;
   }
 
+  const runtime = detectClientRuntime(env);
   const captureMode = getCodexCaptureMode(env);
   const sessionsDir = resolveCodexSessionsDir({ env });
   const sessionsDirExists = existsSync(sessionsDir);
@@ -45,11 +47,14 @@ export function collectCodexDiagnostics(
   );
 
   return {
+    client: runtime.client,
+    clientSurface: runtime.surface,
+    detectionEvidence: [...runtime.evidence],
     captureMode,
-    sessionsDir,
+    sessionsDir: normalizePathForIdentity(sessionsDir),
     sessionsDirExists,
     rolloutFilesFound: rolloutFiles.length,
-    latestRolloutPath,
+    latestRolloutPath: latestRolloutPath ? normalizePathForIdentity(latestRolloutPath) : undefined,
     latestRolloutReadable: latestRolloutPath ? isReadable(latestRolloutPath) : undefined,
     importedEventCount,
     latestImportedSessionId: latestImported?.session_id ?? undefined,

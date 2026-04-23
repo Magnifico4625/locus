@@ -22,6 +22,38 @@ export type CodexNormalizedKind =
   | 'session_start'
   | 'session_end';
 
+export type CodexCaptureReason =
+  | 'noise'
+  | 'bug_context'
+  | 'decision'
+  | 'preference'
+  | 'next_step'
+  | 'general_context';
+
+export type CodexCapturePolicy = 'off' | 'metadata' | 'bounded_redacted' | 'full';
+
+export interface CodexCaptureAnnotations {
+  [key: string]: unknown;
+  capturePolicy?: Exclude<CodexCapturePolicy, 'off'>;
+  captureReason?: CodexCaptureReason;
+  truncated?: boolean;
+  retained?: boolean;
+  filtered?: boolean;
+}
+
+export interface CodexUserPromptPayload extends CodexCaptureAnnotations {
+  prompt: string;
+}
+
+export interface CodexAiResponsePayload extends CodexCaptureAnnotations {
+  response: string;
+  model?: string;
+}
+
+export interface CodexSessionEndPayload extends CodexCaptureAnnotations {
+  summary?: string;
+}
+
 export interface CodexNormalizedEvent {
   kind: CodexNormalizedKind;
   timestamp: number;
@@ -39,6 +71,15 @@ export interface CodexNormalizeResult {
 }
 
 export type CodexCaptureMode = 'off' | 'metadata' | 'redacted' | 'full';
+
+export interface CodexCaptureDecision {
+  event: CodexNormalizedEvent | null;
+  capturePolicy: CodexCapturePolicy;
+  captureReason?: CodexCaptureReason;
+  truncated: boolean;
+  retained: boolean;
+  filtered: boolean;
+}
 
 export interface CodexImportOptions {
   inboxDir: string;

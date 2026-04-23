@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { normalizePathForIdentity } from '@locus/shared-runtime';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../../src/storage/migrations.js';
 import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
@@ -282,6 +283,9 @@ describe('handleStatus', () => {
 
     expect(status.codexAutoImport).toEqual({
       clientDetected: false,
+      client: 'generic',
+      clientSurface: 'generic',
+      detectionEvidence: [],
       debounceMs: 45000,
       lastStatus: 'idle',
       lastImported: 0,
@@ -295,6 +299,9 @@ describe('handleStatus', () => {
       makeStatusDeps(adapter, tempDir, {
         codexAutoImportSnapshot: {
           clientDetected: true,
+          client: 'codex',
+          clientSurface: 'cli',
+          detectionEvidence: ['env:CODEX_HOME'],
           debounceMs: 45000,
           lastStatus: 'imported',
           lastAttemptAt: 1700000000000,
@@ -310,6 +317,9 @@ describe('handleStatus', () => {
 
     expect(status.codexAutoImport).toEqual({
       clientDetected: true,
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       debounceMs: 45000,
       lastStatus: 'imported',
       lastAttemptAt: 1700000000000,
@@ -326,11 +336,16 @@ describe('handleStatus', () => {
     const status = handleStatus({
       ...(makeStatusDeps(adapter, tempDir) as object),
       codexDiagnostics: {
+        client: 'codex',
+        clientSurface: 'cli',
+        detectionEvidence: ['env:CODEX_HOME'],
         captureMode: 'metadata',
-        sessionsDir: '/codex/sessions',
+        sessionsDir: normalizePathForIdentity('/codex/sessions'),
         sessionsDirExists: true,
         rolloutFilesFound: 3,
-        latestRolloutPath: '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+        latestRolloutPath: normalizePathForIdentity(
+          '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+        ),
         latestRolloutReadable: true,
         importedEventCount: 4,
         latestImportedSessionId: 'session-123',
@@ -339,15 +354,137 @@ describe('handleStatus', () => {
     } as never);
 
     expect((status as Record<string, unknown>).codexDiagnostics).toEqual({
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       captureMode: 'metadata',
-      sessionsDir: '/codex/sessions',
+      sessionsDir: normalizePathForIdentity('/codex/sessions'),
       sessionsDirExists: true,
       rolloutFilesFound: 3,
-      latestRolloutPath: '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+      latestRolloutPath: normalizePathForIdentity(
+        '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+      ),
       latestRolloutReadable: true,
       importedEventCount: 4,
       latestImportedSessionId: 'session-123',
       latestImportedTimestamp: 1700000000000,
+    });
+  });
+
+  it('exposes codex truth guidance when metadata capture is too weak for strong recall', () => {
+    const status = handleStatus({
+      ...(makeStatusDeps(adapter, tempDir, {
+        config: { ...LOCUS_DEFAULTS, captureLevel: 'metadata' },
+      }) as object),
+      codexDiagnostics: {
+        client: 'codex',
+        clientSurface: 'cli',
+        detectionEvidence: ['env:CODEX_HOME'],
+        captureMode: 'metadata',
+        sessionsDir: normalizePathForIdentity('/codex/sessions'),
+        sessionsDirExists: true,
+        rolloutFilesFound: 3,
+        latestRolloutPath: normalizePathForIdentity(
+          '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+        ),
+        latestRolloutReadable: true,
+        importedEventCount: 4,
+        latestImportedSessionId: 'session-123',
+        latestImportedTimestamp: 1700000000000,
+      },
+    } as never);
+
+    expect((status as Record<string, unknown>).codexTruth).toEqual({
+      recallReadiness: 'limited',
+      recommendedCaptureMode: 'redacted',
+      desktopParity: 'unverified',
+      recallMessage: expect.stringContaining('metadata'),
+      desktopMessage: expect.stringContaining('desktop'),
+    });
+  });
+
+  it('includes durable-memory state counts in status output', () => {
+    const now = Date.now();
+    adapter.run(
+      `INSERT INTO durable_memories (
+        topic_key, memory_type, state, summary, evidence_json,
+        source_event_id, source, superseded_by_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'auth_strategy',
+        'decision',
+        'active',
+        'Use GitHub OAuth',
+        '{}',
+        null,
+        'codex',
+        null,
+        now,
+        now,
+      ],
+    );
+    adapter.run(
+      `INSERT INTO durable_memories (
+        topic_key, memory_type, state, summary, evidence_json,
+        source_event_id, source, superseded_by_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'coding_style',
+        'style',
+        'stale',
+        'Prefer long block comments',
+        '{}',
+        null,
+        'manual',
+        null,
+        now,
+        now,
+      ],
+    );
+    adapter.run(
+      `INSERT INTO durable_memories (
+        topic_key, memory_type, state, summary, evidence_json,
+        source_event_id, source, superseded_by_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'database_choice',
+        'decision',
+        'superseded',
+        'Use PostgreSQL locally',
+        '{}',
+        null,
+        'codex',
+        1,
+        now,
+        now,
+      ],
+    );
+    adapter.run(
+      `INSERT INTO durable_memories (
+        topic_key, memory_type, state, summary, evidence_json,
+        source_event_id, source, superseded_by_id, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'meeting_notes',
+        'constraint',
+        'archivable',
+        'Archive old planning note',
+        '{}',
+        null,
+        'manual',
+        null,
+        now,
+        now,
+      ],
+    );
+
+    const status = handleStatus(makeStatusDeps(adapter, tempDir));
+
+    expect((status as Record<string, unknown>).durableMemoryStates).toEqual({
+      active: 1,
+      stale: 1,
+      superseded: 1,
+      archivable: 1,
     });
   });
 });

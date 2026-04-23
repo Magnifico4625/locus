@@ -45,6 +45,12 @@ interface EpisodicRow {
   session_id: string | null;
 }
 
+interface DurableRow {
+  id: number;
+  summary: string;
+  updated_at: number;
+}
+
 interface ConversationFtsRow {
   id: number;
   event_id: string;
@@ -127,37 +133,60 @@ export function summarizePayload(kind: string, payloadJson: string | null): stri
 
 // ─── Time Range Resolution ────────────────────────────────────────────────────
 
-interface ResolvedTimeRange {
+export interface ResolvedTimeRange {
   from: number;
   to: number;
+}
+
+type TimeResolutionMode = 'local' | 'utc';
+
+function setStartOfDay(date: Date, mode: TimeResolutionMode): void {
+  if (mode === 'utc') {
+    date.setUTCHours(0, 0, 0, 0);
+    return;
+  }
+
+  date.setHours(0, 0, 0, 0);
 }
 
 /**
  * Converts a TimeRange (possibly with relative strings) into absolute timestamps.
  */
-export function resolveTimeRange(range: TimeRange): ResolvedTimeRange {
-  const now = Date.now();
+export function resolveTimeRange(
+  range: TimeRange,
+  referenceNow?: number,
+  mode: TimeResolutionMode = 'local',
+): ResolvedTimeRange {
+  const now = referenceNow ?? Date.now();
 
   if (range.relative) {
     switch (range.relative) {
       case 'today': {
-        const start = new Date();
-        start.setHours(0, 0, 0, 0);
+        const start = new Date(now);
+        setStartOfDay(start, mode);
         return { from: start.getTime(), to: now };
       }
       case 'yesterday': {
-        const startOfToday = new Date();
-        startOfToday.setHours(0, 0, 0, 0);
+        const startOfToday = new Date(now);
+        setStartOfDay(startOfToday, mode);
         const startOfYesterday = new Date(startOfToday);
-        startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        if (mode === 'utc') {
+          startOfYesterday.setUTCDate(startOfYesterday.getUTCDate() - 1);
+        } else {
+          startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        }
         return { from: startOfYesterday.getTime(), to: startOfToday.getTime() };
       }
       case 'this_week': {
-        const monday = new Date();
-        const dayOfWeek = monday.getDay();
+        const monday = new Date(now);
+        const dayOfWeek = mode === 'utc' ? monday.getUTCDay() : monday.getDay();
         const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-        monday.setDate(monday.getDate() - diff);
-        monday.setHours(0, 0, 0, 0);
+        if (mode === 'utc') {
+          monday.setUTCDate(monday.getUTCDate() - diff);
+        } else {
+          monday.setDate(monday.getDate() - diff);
+        }
+        setStartOfDay(monday, mode);
         return { from: monday.getTime(), to: now };
       }
       case 'last_7d':
@@ -226,6 +255,47 @@ function searchEpisodic(query: string, db: DatabaseAdapter): SearchResult[] {
     content: row.content,
     relevance: 0.6,
     source: `session:${row.session_id ?? 'unknown'}`,
+  }));
+}
+
+function searchDurable(query: string, db: DatabaseAdapter, fts5: boolean): SearchResult[] {
+  let rows: DurableRow[] = [];
+
+  if (fts5) {
+    const sanitized = sanitizeFtsQuery(query);
+    if (sanitized) {
+      try {
+        rows = db.all<DurableRow>(
+          `SELECT dm.id, dm.summary, dm.updated_at
+           FROM durable_memories_fts dfts
+           JOIN durable_memories dm ON dm.id = dfts.rowid
+           WHERE dfts MATCH ? AND dm.state = 'active'
+           ORDER BY dm.updated_at DESC, dm.id DESC
+           LIMIT 10`,
+          [sanitized],
+        );
+      } catch {
+        rows = [];
+      }
+    }
+  }
+
+  if (rows.length === 0) {
+    rows = db.all<DurableRow>(
+      `SELECT id, summary, updated_at
+       FROM durable_memories
+       WHERE state = 'active' AND summary LIKE ?
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 10`,
+      [`%${query}%`],
+    );
+  }
+
+  return rows.map((row) => ({
+    layer: 'durable' as const,
+    content: row.summary,
+    relevance: 0.9,
+    source: `durable:${row.id}`,
   }));
 }
 
@@ -409,10 +479,13 @@ export function handleSearch(
     source: `memory:${entry.id}`,
   }));
 
-  // 3. Episodic results
+  // 3. Durable results
+  const durable = searchDurable(query, db, fts5);
+
+  // 4. Episodic results
   const episodic = searchEpisodic(query, db);
 
-  // 4. Conversation results (new in v3)
+  // 5. Conversation results (new in v3)
   let conversation: SearchResult[] = [];
   const resolved = options?.timeRange ? resolveTimeRange(options.timeRange) : undefined;
   const convOpts = {
@@ -430,7 +503,7 @@ export function handleSearch(
   }
 
   // Combine, sort by relevance DESC, limit to 20
-  const combined = [...structural, ...semanticResults, ...episodic, ...conversation];
+  const combined = [...structural, ...durable, ...semanticResults, ...episodic, ...conversation];
   combined.sort((a, b) => b.relevance - a.relevance);
 
   return combined.slice(0, 20);

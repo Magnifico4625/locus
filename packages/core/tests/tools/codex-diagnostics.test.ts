@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { normalizePathForIdentity } from '@locus/shared-runtime';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../../src/storage/migrations.js';
 import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
@@ -53,11 +54,16 @@ describe('collectCodexDiagnostics', () => {
     });
 
     expect(diagnostics).toMatchObject({
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       captureMode: 'metadata',
-      sessionsDir: join(codexHome, 'sessions'),
+      sessionsDir: normalizePathForIdentity(join(codexHome, 'sessions')),
       sessionsDirExists: true,
       rolloutFilesFound: 2,
-      latestRolloutPath: join(sessionsDir, 'rollout-2026-04-14T12-00-00.jsonl'),
+      latestRolloutPath: normalizePathForIdentity(
+        join(sessionsDir, 'rollout-2026-04-14T12-00-00.jsonl'),
+      ),
       latestRolloutReadable: true,
       importedEventCount: 0,
     });
@@ -104,6 +110,9 @@ describe('collectCodexDiagnostics', () => {
     });
 
     expect(diagnostics).toMatchObject({
+      client: 'codex',
+      clientSurface: 'cli',
+      detectionEvidence: ['env:CODEX_HOME'],
       captureMode: 'full',
       importedEventCount: 2,
       latestImportedSessionId: 'session-xyz',

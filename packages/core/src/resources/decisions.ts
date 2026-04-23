@@ -8,7 +8,33 @@ interface MemoryRow {
   updated_at: number;
 }
 
+interface DurableDecisionRow {
+  summary: string;
+  updated_at: number;
+}
+
 export function generateDecisions(db: DatabaseAdapter): string {
+  const durableTotalRow = db.get<{ total: number }>(
+    "SELECT COUNT(*) AS total FROM durable_memories WHERE memory_type = 'decision' AND state = 'active'",
+  );
+  const durableTotal = durableTotalRow?.total ?? 0;
+
+  if (durableTotal > 0) {
+    const durableRows = db.all<DurableDecisionRow>(
+      `SELECT summary, updated_at
+       FROM durable_memories
+       WHERE memory_type = 'decision' AND state = 'active'
+       ORDER BY updated_at DESC
+       LIMIT ?`,
+      [MAX_ENTRIES],
+    );
+
+    return formatDecisionLines(
+      durableRows.map((row) => row.summary),
+      durableTotal,
+    );
+  }
+
   const totalRow = db.get<{ total: number }>(
     "SELECT COUNT(*) AS total FROM memories WHERE layer = 'semantic'",
   );
@@ -23,15 +49,19 @@ export function generateDecisions(db: DatabaseAdapter): string {
     [MAX_ENTRIES],
   );
 
-  const lines: string[] = rows.map((row) => {
-    const content =
-      row.content.length > MAX_LINE_CHARS
-        ? `${row.content.slice(0, MAX_LINE_CHARS)}...`
-        : row.content;
+  return formatDecisionLines(
+    rows.map((row) => row.content),
+    total,
+  );
+}
+
+function formatDecisionLines(entries: string[], total: number): string {
+  const lines: string[] = entries.map((entry) => {
+    const content = entry.length > MAX_LINE_CHARS ? `${entry.slice(0, MAX_LINE_CHARS)}...` : entry;
     return `- ${content}`;
   });
 
-  const older = total - rows.length;
+  const older = total - entries.length;
   if (older > 0) {
     lines.push(`  (+${older} older — use memory_search)`);
   }

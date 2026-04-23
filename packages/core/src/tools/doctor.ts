@@ -179,11 +179,22 @@ export function handleDoctor(deps: DoctorDeps): DoctorReport {
 
   // 7. Capture level
   if (deps.captureLevel === 'metadata') {
-    checks.push({
-      name: 'Capture level',
-      status: 'ok',
-      message: 'metadata (default, no raw content stored)',
-    });
+    const codexMetadata = deps.codexDiagnostics?.captureMode === 'metadata';
+    checks.push(
+      codexMetadata
+        ? {
+            name: 'Capture level',
+            status: 'warn',
+            message:
+              'metadata (default, no raw content stored; limited conversational recall for Codex)',
+            fix: 'Set LOCUS_CODEX_CAPTURE=redacted for practical Codex conversational recall.',
+          }
+        : {
+            name: 'Capture level',
+            status: 'ok',
+            message: 'metadata (default, no raw content stored)',
+          },
+    );
   } else if (deps.captureLevel === 'full') {
     checks.push({
       name: 'Capture level',
@@ -328,6 +339,45 @@ function appendCodexChecks(
           message: `LOCUS_CODEX_CAPTURE=${codexDiagnostics.captureMode}`,
         },
   );
+
+  if (codexDiagnostics.captureMode === 'off') {
+    checks.push({
+      name: 'Codex recall readiness',
+      status: 'warn',
+      message: 'Codex capture is off; no Codex conversation events are imported for recall.',
+      fix: 'Set LOCUS_CODEX_CAPTURE=redacted for practical Codex recall.',
+    });
+  } else if (codexDiagnostics.captureMode === 'metadata') {
+    checks.push({
+      name: 'Codex recall readiness',
+      status: 'warn',
+      message:
+        'metadata capture is healthy for ingestion diagnostics, but limited conversational recall is expected.',
+      fix: 'Set LOCUS_CODEX_CAPTURE=redacted for practical Codex conversational recall.',
+    });
+  } else if (codexDiagnostics.captureMode === 'full') {
+    checks.push({
+      name: 'Codex recall readiness',
+      status: 'warn',
+      message:
+        'full capture can provide maximum recall, but raw conversation content is stored locally.',
+      fix: 'Use LOCUS_CODEX_CAPTURE=redacted unless full transcripts are explicitly required.',
+    });
+  } else {
+    checks.push({
+      name: 'Codex recall readiness',
+      status: 'ok',
+      message: 'redacted capture supports practical bounded conversational recall.',
+    });
+  }
+
+  checks.push({
+    name: 'Codex desktop parity',
+    status: 'warn',
+    message:
+      'Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.',
+    fix: 'Verify memory_status and memory_recall inside the target desktop/extension surface before claiming parity.',
+  });
 
   checks.push(
     codexDiagnostics.importedEventCount > 0

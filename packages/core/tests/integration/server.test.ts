@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { normalizePathForIdentity } from '@locus/shared-runtime';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { generateDecisions } from '../../src/resources/decisions.js';
 import { generateProjectMap } from '../../src/resources/project-map.js';
@@ -118,14 +119,28 @@ describe('createServer', () => {
     }
   });
 
+  it('registers memory_recall without breaking startup', async () => {
+    const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'recall-tool.db') });
+    try {
+      expect(getRegisteredToolNames(ctx2.server)).toContain('memory_recall');
+      expect(ctx2.db).toBeDefined();
+      expect(ctx2.server).toBeDefined();
+    } finally {
+      ctx2.cleanup();
+    }
+  });
+
   it('initialises memory_status with a default codex auto-import snapshot', async () => {
     const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'codex-status.db') });
     try {
       const statusText = await callTextTool(ctx2, 'memory_status', {});
       const status = JSON.parse(statusText) as MemoryStatus;
 
-      expect(status.codexAutoImport).toEqual({
+      expect(status.codexAutoImport).toMatchObject({
+        client: 'generic',
+        clientSurface: 'generic',
         clientDetected: false,
+        detectionEvidence: [],
         debounceMs: 45000,
         lastStatus: 'idle',
         lastImported: 0,
@@ -160,10 +175,12 @@ describe('createServer', () => {
 
         expect(status.codexDiagnostics).toMatchObject({
           captureMode: 'metadata',
-          sessionsDir: join(codexHome, 'sessions'),
+          sessionsDir: normalizePathForIdentity(join(codexHome, 'sessions')),
           sessionsDirExists: true,
           rolloutFilesFound: 1,
-          latestRolloutPath: join(sessionsDir, 'rollout-2026-04-14T12-00-00.jsonl'),
+          latestRolloutPath: normalizePathForIdentity(
+            join(sessionsDir, 'rollout-2026-04-14T12-00-00.jsonl'),
+          ),
           latestRolloutReadable: true,
           importedEventCount: 0,
         });
