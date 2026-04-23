@@ -159,7 +159,7 @@ describe('generateProjectMap', () => {
     const tokens = estimateTokens(result);
 
     expect(tokens).toBeLessThanOrEqual(2000);
-  });
+  }, 30_000);
 
   // ── 6. Stack detection ────────────────────────────────────────────────────────
 

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-04-23
+
+### Added
+- Track A Codex memory trust release with validated `redacted` conversational recall for Codex CLI
+- `memory_recall` as the recommended summary-first path for questions about previous work, decisions, and dated context
+- Durable-memory cleanup/review workflow so agents can propose stale or superseded memory cleanup without deleting automatically
+- Runtime truth diagnostics that separate Codex CLI validation from unverified Codex desktop / extension parity
+
+### Changed
+- Codex documentation now recommends `LOCUS_CODEX_CAPTURE=redacted` plus `LOCUS_CAPTURE_LEVEL=redacted` for practical recall
+- `memory_recall` now searches matching `conversation_events` beyond the latest timeline window before falling back to recent events
+- README, Codex docs, acceptance matrix, and GitHub Pages landing page now describe Track A as shipped behavior, not future work
+- Release validation now includes real local live recall checks against Codex CLI `0.123.0`
+
+### Fixed
+- Codex CLI `0.123.0` JSONL compatibility: payload-wrapped records using `raw.payload.type` are now normalized correctly
+- Live Codex dialogue markers are now imported and searchable in `redacted` mode without explicit `memory_remember`
+- `memory_recall` no longer returns `no_memory` simply because a matching event is older than the default recent timeline window
+
+### Security
+- Refreshed `package-lock.json` with `npm audit fix --package-lock-only --ignore-scripts`; `npm audit --audit-level=moderate` now reports 0 vulnerabilities
+
+### Notes
+- `needs_clarification` remains valid when multiple matching Codex conversation events exist; ranking polish for duplicate-heavy recalls remains future UX work
+- Codex desktop / extension parity is still reported as unverified until validated in that surface
+
 ## [3.3.0] - 2026-04-15
 
 ### Added
@@ -151,7 +177,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PostToolUse hook for automatic capture
 - `memory_scan`, `memory_search`, `memory_explore`, `memory_remember`, `memory_forget`, `memory_purge`, `memory_status`, `memory_doctor`, `memory_audit` tools
 
-[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.3.0...HEAD
+[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.4.0...HEAD
+[3.4.0]: https://github.com/Magnifico4625/locus/compare/v3.3.0...v3.4.0
 [3.3.0]: https://github.com/Magnifico4625/locus/compare/v3.1.1...v3.3.0
 [3.1.1]: https://github.com/Magnifico4625/locus/compare/v3.1.0...v3.1.1
 [3.1.0]: https://github.com/Magnifico4625/locus/compare/v3.0.5...v3.1.0

@@ -22,7 +22,7 @@ Locus solves this with three persistent memory layers:
 
 **New in v3.0 — Carbon Copy:** Zero-cost passive capture of prompts, AI responses, and file changes via an inbox-based event protocol. A 4-phase ingest pipeline processes events into searchable conversation history — no tokens consumed on write, only on recall.
 
-**New in v3.3 — Codex Release:** Codex now ships as a validated product line with manual import, auto-import before search, doctor/status diagnostics, skill sync, repo-local plugin packaging, and VS Code extension docs.
+**New in v3.4 — Codex Memory Trust:** Codex CLI now has validated practical conversational recall in `redacted` mode. Live Codex dialogue can be imported from rollout JSONL, searched through `memory_search`, and summarized through `memory_recall` without requiring explicit `memory_remember`.
 
 **Track A Codex recall truth:** Codex CLI is the primary validated path for useful recall. `metadata` remains the safe default for diagnostics and minimal capture, but it is not strong conversational memory. For practical Codex recall, use `LOCUS_CODEX_CAPTURE=redacted` with `LOCUS_CAPTURE_LEVEL=redacted`. `full` is available only as explicit warning territory.
 
@@ -96,11 +96,13 @@ Repo-local plugin packaging is also available for local Codex onboarding:
 - plugin sync helper: `npm run sync:codex-plugin`
 
 > **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 14 MCP tools and 3 resources work immediately. Before `memory_search`, Locus auto-imports the newest Codex rollout session with a local debounce window. `memory_status` now exposes structured Codex diagnostics plus `codexTruth`, `memory_doctor` adds Codex-specific health checks, and `memory_import_codex` remains available when you want explicit control, filtered import, or manual catch-up across older sessions.
-> Last documented validation target: Codex docs generation and Codex CLI `0.120.0` surface as of April 13, 2026.
+> Last documented validation target: Codex CLI `0.123.0` surface as of April 23, 2026.
 
 Manual MCP setup remains fully supported. The local plugin bundle is an optional packaging layer for repo-local onboarding, not a replacement requirement.
 
 Recent Codex history becomes searchable automatically when you use `memory_search`, but recall quality depends on capture mode. `metadata` proves import health and preserves limited session context. `redacted` is the recommended practical mode for useful conversational recall. `full` stores the most content and must be treated as explicit opt-in.
+
+`memory_recall` is summary-first and can recover useful Codex context from imported conversation events and durable decisions. If several events match the same question, it may return `needs_clarification`; that is expected when the same marker or decision appears in prompts, session summaries, and follow-up diagnostics.
 
 Recommended Codex workflow:
 
@@ -371,17 +373,18 @@ The MCP server is fully functional without hooks. Here's what you get:
 
 These tools cover the structural and semantic memory layers — your AI assistant will remember your project structure and decisions between sessions without any hooks.
 
-**Requires hooks (Claude Code only in v3.0):**
+**Requires a capture adapter:**
 
 | Tool | What it needs |
 |------|--------------|
-| `memory_timeline` | Conversation events captured by hooks |
+| `memory_timeline` | Conversation events captured by Claude hooks or Codex JSONL import |
 | `memory_search` with `timeRange`, `filePath`, `kind` filters | Conversation event data |
-| `memory://recent` resource (conversation stats section) | Activity data from hooks |
+| `memory_recall` over recent dialogue | Conversation events plus durable decisions |
+| `memory://recent` resource (conversation stats section) | Activity data from a capture adapter |
 
-The conversation layer (Carbon Copy) passively records what files you touched, what tools were used, and optionally what you asked — but this requires hooks to write events into the inbox. Without hooks, these features return empty results.
+The conversation layer (Carbon Copy) passively records what files you touched, what tools were used, and optionally what you asked. Claude Code writes through hooks. Codex CLI uses rollout JSONL import with auto-import before search/recall plus manual `memory_import_codex`. Other IDEs still need future adapter work for passive conversation capture.
 
-**Bottom line:** ~75% of tools work fully without hooks. The core value — "AI remembers your project between sessions" — works everywhere. Passive conversation history is the part that needs hooks, and broader IDE adapter support remains a future release track.
+**Bottom line:** the core value — "AI remembers your project between sessions" — works anywhere MCP tools are exposed. Passive conversation history works today for Claude Code and Codex CLI; broader IDE adapter support remains a future release track.
 
 ### How is Locus different from CLAUDE.md?
 
@@ -397,7 +400,7 @@ Locus has 4 layers of protection: (1) metadata-only storage by default — no fi
 
 ### When will Cursor / Windsurf get full hook support?
 
-The next Codex-focused release track will target richer conversational recall through `redacted` / `full` capture modes plus additional IDE adapters such as `@locus/log-tailer`. See the [Roadmap](#roadmap) below.
+The next Codex-focused release track will target one-command install, marketplace packaging, recall ranking polish, and additional IDE adapters such as `@locus/log-tailer`. See the [Roadmap](#roadmap) below.
 
 ## Roadmap
 
@@ -407,8 +410,8 @@ The next Codex-focused release track will target richer conversational recall th
 | v3.0.5 | Released | FTS5 self-healing indexes, 12-point doctor, FTS health audit |
 | v3.1 | Released | Multi-client architecture: `@locus/shared-runtime` (client-aware paths), `@locus/codex` (Codex CLI skill + config) |
 | v3.1.1 | Released | Fix: hooks failed in plugin cache due to bare module import of `@locus/shared-runtime` |
-| v3.3 | **Current** | Codex release: manual import, auto-import before search, doctor/status diagnostics, skill sync, VS Code docs, repo-local plugin packaging |
-| v3.4 | Planned | Codex memory trust release: validated useful recall, honest diagnostics/docs, richer `redacted` recall path |
+| v3.3 | Released | Codex release: manual import, auto-import before search, doctor/status diagnostics, skill sync, VS Code docs, repo-local plugin packaging |
+| v3.4 | **Current** | Codex memory trust release: validated useful recall in `redacted`, current Codex JSONL compatibility, honest diagnostics/docs |
 | v4.0 | Planned | HTML dashboard for memory visualization |
 
 ## Development

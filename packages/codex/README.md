@@ -66,13 +66,13 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 - Summary-first recall through `memory_recall`
 - `codexTruth` status guidance that separates import health from recall usefulness
 
-Last documented validation target: Codex docs generation and Codex CLI `0.120.0` surface as of April 13, 2026.
+Last documented validation target: Codex CLI `0.123.0` surface as of April 23, 2026.
 
 Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is reported as unverified until checked there.
 
 ## Codex JSONL Import
 
-Phase 1 built the adapter foundation. Phase 2 exposed it through MCP. Phase 3 added bounded auto-import before `memory_search`. Track A adds acceptance-backed truth: `metadata` is limited recall, `redacted` is the recommended practical mode, and diagnostics must say when desktop/extension parity is unverified.
+Phase 1 built the adapter foundation. Phase 2 exposed it through MCP. Phase 3 added bounded auto-import before `memory_search`. Track A adds acceptance-backed truth: `metadata` is limited recall, `redacted` is the recommended practical mode, and diagnostics must say when desktop/extension parity is unverified. `v3.4.0` also validates current Codex payload-wrapped JSONL records and prevents `memory_recall` from missing older matching conversation events just because they are outside the recent timeline window.
 
 ### Auto-import before search
 

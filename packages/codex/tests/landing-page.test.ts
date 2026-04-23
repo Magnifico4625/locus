@@ -12,10 +12,11 @@ describe('GitHub Pages landing page', () => {
     expect(existsSync(indexPath)).toBe(true);
   });
 
-  it('describes the current v3.3.0 product state honestly', () => {
+  it('describes the current v3.4.0 product state honestly', () => {
     const html = readFileSync(indexPath, 'utf-8');
 
-    expect(html).toContain('v3.3.0');
+    expect(html).toContain('v3.4.0');
+    expect(html).toContain('redacted');
     expect(html).toContain('Codex');
     expect(html).toContain('Claude Code');
     expect(html).not.toContain('v3.1.0 is out');
