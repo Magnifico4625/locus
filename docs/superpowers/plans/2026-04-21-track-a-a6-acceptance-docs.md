@@ -216,27 +216,27 @@ Expected: docs commit created.
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-21-track-a-a6-acceptance-docs.md`
 
-- [ ] Run the full Track A validation subset.
+- [x] Run the full Track A validation subset.
 
 Run: `npm test -- packages/core/tests/integration/track-a-recall-acceptance.test.ts packages/core/tests/integration/track-a-desktop-diagnostics.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/recall.test.ts packages/core/tests/integration/recall-tool.test.ts packages/core/tests/memory/durable.test.ts packages/core/tests/memory/durable-extractor.test.ts packages/core/tests/memory/review.test.ts packages/codex/tests/capture.test.ts packages/codex/tests/importer.test.ts`
 Expected: PASS.
 
-- [ ] Run workspace typecheck.
+- [x] Run workspace typecheck.
 
 Run: `npm run typecheck`
 Expected: PASS.
 
-- [ ] Commit the validation checkpoint.
+- [x] Commit the validation checkpoint.
 
 Run: `git add docs/superpowers/plans/2026-04-21-track-a-a6-acceptance-docs.md`
 Expected: plan doc staged if updated.
 
-- [ ] Commit.
+- [x] Commit.
 
 Run: `git commit -m "chore(codex): complete track a a6 validation"`
 Expected: final A6 validation commit created.
 
-- [ ] Tag the checkpoint.
+- [x] Tag the checkpoint.
 
 Run: `git tag -a track-a-a6-local -m "Track A A6 acceptance and docs local checkpoint"`
 Expected: tag created locally.
