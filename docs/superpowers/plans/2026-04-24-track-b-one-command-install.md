@@ -1,0 +1,1112 @@
+# Track B One-Command Install Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Make Locus installable into Codex CLI with one command through a publishable `locus-memory` npm package, while keeping marketplace packaging thin and manual MCP setup supported.
+
+**Architecture:** Add a dedicated `packages/cli` package for user-facing commands and install orchestration. Keep `packages/core` as the MCP runtime and `packages/codex` as the Codex adapter asset/helper package. The root package becomes the public `locus-memory` package and publishes built runtime assets plus the CLI entrypoint; marketplace output is generated into `dist/marketplace/` and deployed separately.
+
+**Tech Stack:** Node.js >=22, TypeScript, esbuild, Vitest, npm workspaces, Codex CLI `0.124.0`, Codex MCP config, Codex plugin marketplace JSON.
+
+---
+
+## Source Documents
+
+- Design spec: `docs/superpowers/specs/2026-04-24-track-b-one-command-install-design.md`
+- Roadmap: `docs/roadmap/codex-next.md`
+- Existing Codex adapter: `packages/codex/`
+- Existing local plugin bundle: `plugins/locus-memory/`
+- Existing repo marketplace: `.agents/plugins/marketplace.json`
+
+## Scope
+
+In scope:
+
+- publishable package shape for `locus-memory`
+- `locus-memory` CLI commands:
+  - `mcp`
+  - `install codex`
+  - `doctor codex`
+  - `uninstall codex`
+- Codex installer with `redacted` defaults
+- idempotency, backup, and ownership behavior
+- version-pinned runtime MCP command
+- skill install into `$CODEX_HOME/skills/locus-memory/SKILL.md`
+- generated marketplace bundle in `dist/marketplace/`
+- package tarball and Codex install acceptance checks
+- docs and roadmap truth updates
+
+Out of scope:
+
+- richer recall ranking
+- dashboard UI
+- official OpenAI marketplace inclusion as a hard dependency
+- secondary IDE adapters
+- Claude Code behavior changes
+- automatic mutation of a second marketplace repository by a local npm script
+
+## File Structure
+
+Create:
+
+- `packages/cli/package.json`
+- `packages/cli/tsconfig.json`
+- `packages/cli/src/index.ts`
+- `packages/cli/src/commands/mcp.ts`
+- `packages/cli/src/commands/install-codex.ts`
+- `packages/cli/src/commands/doctor-codex.ts`
+- `packages/cli/src/commands/uninstall-codex.ts`
+- `packages/cli/src/codex/config.ts`
+- `packages/cli/src/codex/paths.ts`
+- `packages/cli/src/codex/skill.ts`
+- `packages/cli/src/codex/commands.ts`
+- `packages/cli/src/codex/report.ts`
+- `packages/cli/src/package-info.ts`
+- `packages/cli/tests/cli.test.ts`
+- `packages/cli/tests/codex-config.test.ts`
+- `packages/cli/tests/codex-install.test.ts`
+- `packages/cli/tests/codex-doctor.test.ts`
+- `packages/cli/tests/codex-uninstall.test.ts`
+- `packages/cli/tests/package-info.test.ts`
+- `scripts/sync-codex-marketplace.mjs`
+- `packages/codex/tests/marketplace-bundle.test.ts`
+- `packages/codex/tests/package-contract.test.ts`
+- `docs/releases/v3.5.0.md`
+
+Modify:
+
+- `package.json`
+- `package-lock.json`
+- `esbuild.config.ts`
+- `packages/codex/src/skill-sync.ts`
+- `packages/codex/src/plugin-sync.ts`
+- `packages/codex/src/index.ts`
+- `packages/codex/package.json`
+- `packages/codex/README.md`
+- `packages/core/package.json`
+- `packages/shared-runtime/package.json`
+- `plugins/locus-memory/.mcp.json`
+- `plugins/locus-memory/.codex-plugin/plugin.json`
+- `.agents/plugins/marketplace.json`
+- `README.md`
+- `docs/codex-vscode-extension.md`
+- `docs/codex-acceptance-matrix.md`
+- `docs/roadmap/codex-next.md`
+- `docs/index.html`
+- `packages/codex/config/config.toml.example`
+- `CHANGELOG.md`
+
+Do not modify:
+
+- `packages/claude-code/**` unless a shared contract test proves a required change
+- `packages/core/src/**` except build/export wiring if absolutely required for `mcp`
+- memory schema/migrations unless a test proves packaging cannot work otherwise
+
+---
+
+## Task B0: Planning Baseline
+
+**Files:**
+- Modify: `docs/superpowers/plans/2026-04-24-track-b-one-command-install.md`
+
+- [ ] **Step 1: Verify branch and clean tree**
+
+Run:
+
+```bash
+git status --short --branch
+git log --oneline --decorate -n 5
+```
+
+Expected: branch `docs/track-b-one-command-install`, clean tree after this plan commit is complete, and `v3.4.0` on `main`.
+
+- [ ] **Step 2: Confirm source facts**
+
+Run:
+
+```bash
+codex --version
+codex mcp add --help
+codex plugin marketplace add --help
+npm view locus-memory name version description --json
+```
+
+Expected:
+
+- Codex CLI reports `0.124.0` or newer.
+- `codex mcp add` supports repeated `--env`.
+- `codex plugin marketplace add` exists.
+- `npm view locus-memory` returns `E404` until the package is published.
+
+- [ ] **Step 3: Commit the implementation plan**
+
+Run:
+
+```bash
+git add docs/superpowers/plans/2026-04-24-track-b-one-command-install.md
+git commit -m "docs(codex): plan track b one-command install"
+```
+
+Expected: docs-only planning commit.
+
+---
+
+## Task B1: Publishable Package Contract
+
+**Files:**
+- Modify: `package.json`
+- Modify: `package-lock.json`
+- Modify: `esbuild.config.ts`
+- Create: `packages/codex/tests/package-contract.test.ts`
+
+- [ ] **Step 1: Write failing package contract tests**
+
+Create `packages/codex/tests/package-contract.test.ts` with tests that assert:
+
+- root `package.json` name is `locus-memory`
+- root package is not private
+- root package has `bin.locus-memory`
+- root package `files` includes `dist/`, `README.md`, and `LICENSE`
+- root package `main` points to built MCP runtime
+- root package has `prepublishOnly`
+- `package-lock.json` root package version matches root `package.json`
+
+Run:
+
+```bash
+npm test -- packages/codex/tests/package-contract.test.ts
+```
+
+Expected: FAIL because package is still private and has no `bin`.
+
+- [ ] **Step 2: Update root package metadata minimally**
+
+Modify `package.json`:
+
+- remove or set `"private": false`
+- add:
+
+```json
+"bin": {
+  "locus-memory": "dist/cli.js"
+}
+```
+
+- ensure `files` includes:
+
+```json
+[
+  "dist/",
+  "packages/codex/skills/locus-memory/SKILL.md",
+  "LICENSE",
+  "README.md"
+]
+```
+
+Do not publish yet.
+
+- [ ] **Step 3: Update build output plan**
+
+Modify `esbuild.config.ts` so it builds:
+
+- `packages/core/src/server.ts` to `dist/server.js`
+- `packages/cli/src/index.ts` to `dist/cli.js`
+
+Keep the shebang banner for both outputs.
+
+- [ ] **Step 4: Refresh lockfile without scripts**
+
+Run:
+
+```bash
+npm install --package-lock-only --ignore-scripts
+```
+
+Expected: `package-lock.json` reflects root package publish metadata and new workspace if already added later. If this task runs before `packages/cli` exists, lockfile update may be repeated in Task B2.
+
+- [ ] **Step 5: Verify package contract tests**
+
+Run:
+
+```bash
+npm test -- packages/codex/tests/package-contract.test.ts
+```
+
+Expected: PASS after metadata changes that do not require CLI implementation.
+
+- [ ] **Step 6: Commit**
+
+Run:
+
+```bash
+git add package.json package-lock.json esbuild.config.ts packages/codex/tests/package-contract.test.ts
+git commit -m "chore(package): define publishable locus package contract"
+```
+
+---
+
+## Task B2: CLI Package Skeleton
+
+**Files:**
+- Create: `packages/cli/package.json`
+- Create: `packages/cli/tsconfig.json`
+- Create: `packages/cli/src/index.ts`
+- Create: `packages/cli/src/commands/mcp.ts`
+- Create: `packages/cli/src/package-info.ts`
+- Create: `packages/cli/tests/cli.test.ts`
+- Create: `packages/cli/tests/package-info.test.ts`
+- Modify: `package.json`
+- Modify: `package-lock.json`
+
+- [ ] **Step 1: Write failing CLI tests**
+
+Create tests that execute `packages/cli/src/index.ts` through Node/Vitest helpers or import command functions directly.
+
+Required assertions:
+
+- `--help` includes `locus-memory mcp`
+- `--help` includes `install codex`
+- unknown command exits non-zero with concise usage
+- `resolvePackageVersion()` returns root package version
+- `buildRuntimePackageSpecifier()` returns `locus-memory@<version>` and never `@latest`
+
+Run:
+
+```bash
+npm test -- packages/cli/tests/cli.test.ts packages/cli/tests/package-info.test.ts
+```
+
+Expected: FAIL because package does not exist.
+
+- [ ] **Step 2: Add `@locus/cli` workspace**
+
+Create `packages/cli/package.json`:
+
+```json
+{
+  "name": "@locus/cli",
+  "version": "3.5.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@locus/codex": "*",
+    "@locus/shared-runtime": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
+```
+
+Use the release version selected for Track B. If implementation targets `3.5.0`, all package versions should move together in a later version task.
+
+- [ ] **Step 3: Add TypeScript config**
+
+Create `packages/cli/tsconfig.json` aligned with existing package configs:
+
+```json
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node", "vitest/globals"]
+  },
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
+}
+```
+
+- [ ] **Step 4: Implement minimal CLI router**
+
+Create `packages/cli/src/index.ts` with a small router:
+
+- `--help` / `help`
+- `mcp`
+- `install codex`
+- `doctor codex`
+- `uninstall codex`
+
+Only `mcp` is allowed to call runtime startup in this task; other commands can return clear "not implemented" until later tasks.
+
+- [ ] **Step 5: Implement `mcp` command**
+
+Create `packages/cli/src/commands/mcp.ts` that dynamically imports the built server entrypoint or reuses the existing server module path after build.
+
+If direct import of `packages/core/src/server.ts` is not safe for published runtime, make `dist/cli.js mcp` import `./server.js` after build.
+
+- [ ] **Step 6: Implement package info helpers**
+
+Create `packages/cli/src/package-info.ts`:
+
+- `resolvePackageVersion()`
+- `buildRuntimePackageSpecifier(version)`
+- `isLatestSpecifier(specifier)`
+
+Tests must enforce pinned version for runtime config.
+
+- [ ] **Step 7: Refresh lockfile**
+
+Run:
+
+```bash
+npm install --package-lock-only --ignore-scripts
+```
+
+Expected: `packages/cli` appears as a workspace package.
+
+- [ ] **Step 8: Verify CLI tests**
+
+Run:
+
+```bash
+npm test -- packages/cli/tests/cli.test.ts packages/cli/tests/package-info.test.ts
+npm -w @locus/cli run typecheck
+```
+
+Expected: PASS.
+
+- [ ] **Step 9: Commit**
+
+Run:
+
+```bash
+git add packages/cli package.json package-lock.json
+git commit -m "feat(cli): add locus command skeleton"
+```
+
+---
+
+## Task B3: Codex Install Model And Skill Install
+
+**Files:**
+- Create: `packages/cli/src/codex/paths.ts`
+- Create: `packages/cli/src/codex/skill.ts`
+- Create: `packages/cli/src/codex/report.ts`
+- Create: `packages/cli/tests/codex-install.test.ts`
+- Modify: `packages/cli/src/commands/install-codex.ts`
+- Modify: `packages/codex/src/skill-sync.ts`
+- Modify: `packages/codex/src/index.ts`
+
+- [ ] **Step 1: Write failing installer model tests**
+
+Tests should cover:
+
+- default Codex home resolves to `~/.codex`
+- explicit `CODEX_HOME` is respected
+- installer creates `$CODEX_HOME/skills/locus-memory/`
+- installer writes `SKILL.md`
+- identical skill is `unchanged`
+- differing skill is backed up when overwrite is enabled
+- backup filename includes timestamp, not only `.bak`
+- install result reports `created`, `updated`, `unchanged`, `backed_up`, or `skipped`
+
+Run:
+
+```bash
+npm test -- packages/cli/tests/codex-install.test.ts
+```
+
+Expected: FAIL because installer helpers do not exist.
+
+- [ ] **Step 2: Extend reusable skill sync**
+
+Modify `packages/codex/src/skill-sync.ts` to support timestamped backups:
+
+- keep backward compatibility for existing tests where possible
+- add option `backupSuffix?: string`
+- default new installer behavior should create timestamped backups
+
+Export required helpers from `packages/codex/src/index.ts`.
+
+- [ ] **Step 3: Implement Codex path helpers**
+
+Create `packages/cli/src/codex/paths.ts`:
+
+- `resolveCodexHome(env)`
+- `resolveCodexConfigPath(env)`
+- `resolveCodexSkillPath(env, skillName)`
+- tilde expansion
+- Windows-safe path handling
+
+Prefer reusing `packages/codex/src/paths.ts` where contracts match.
+
+- [ ] **Step 4: Implement skill install helper**
+
+Create `packages/cli/src/codex/skill.ts`:
+
+- read packaged canonical skill
+- create target directory
+- compare content
+- write or skip
+- backup differing file when requested
+
+- [ ] **Step 5: Implement report model**
+
+Create `packages/cli/src/codex/report.ts` with typed operations:
+
+```ts
+export type InstallAction = 'created' | 'updated' | 'unchanged' | 'backed_up' | 'skipped';
+```
+
+Return structured results first; format human text at command boundary.
+
+- [ ] **Step 6: Wire `install codex --dry-run`**
+
+Modify `packages/cli/src/commands/install-codex.ts` so:
+
+- `--dry-run` reports intended skill path and MCP command
+- no file writes happen in dry-run
+- default capture mode is `redacted`
+
+- [ ] **Step 7: Verify tests**
+
+Run:
+
+```bash
+npm test -- packages/cli/tests/codex-install.test.ts packages/codex/tests/skill-sync.test.ts
+npm -w @locus/cli run typecheck
+npm -w @locus/codex run typecheck
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Commit**
+
+Run:
+
+```bash
+git add packages/cli packages/codex/src/skill-sync.ts packages/codex/src/index.ts packages/codex/tests/skill-sync.test.ts
+git commit -m "feat(cli): install codex skill safely"
+```
+
+---
+
+## Task B4: Codex MCP Config And Idempotency
+
+**Files:**
+- Create: `packages/cli/src/codex/config.ts`
+- Create: `packages/cli/src/codex/commands.ts`
+- Create: `packages/cli/tests/codex-config.test.ts`
+- Modify: `packages/cli/src/commands/install-codex.ts`
+- Modify: `packages/cli/src/commands/doctor-codex.ts`
+- Modify: `packages/cli/src/commands/uninstall-codex.ts`
+
+- [ ] **Step 1: Write failing config tests**
+
+Tests should cover:
+
+- generated MCP command uses `npx` on non-Windows
+- generated MCP command uses `npx.cmd` on Windows
+- generated args include `-y`, `locus-memory@<installed-version>`, `mcp`
+- generated args never include `@latest`
+- env defaults include `LOCUS_LOG=error`, `LOCUS_CODEX_CAPTURE=redacted`, `LOCUS_CAPTURE_LEVEL=redacted`
+- existing package-owned config is classified as update/unchanged
+- existing manual `node /path/to/locus/dist/server.js` config is classified as manual migration needed
+- TOML write path creates backup before direct edit
+- `codex mcp add` command builder includes repeated `--env`
+
+Run:
+
+```bash
+npm test -- packages/cli/tests/codex-config.test.ts
+```
+
+Expected: FAIL.
+
+- [ ] **Step 2: Implement command builders**
+
+Create `packages/cli/src/codex/commands.ts`:
+
+- `buildCodexMcpAddArgs(config)`
+- `buildCodexMcpRemoveArgs(name)`
+- `detectNpxCommand(platform)`
+- no shell string concatenation for executable/args
+
+- [ ] **Step 3: Implement config model**
+
+Create `packages/cli/src/codex/config.ts`:
+
+- config classification types
+- generated MCP server shape
+- minimal TOML block rendering if direct edit fallback is needed
+- backup path helper
+
+Avoid broad TOML parsing unless needed. Prefer `codex mcp add/remove`.
+
+- [ ] **Step 4: Wire install command**
+
+`locus-memory install codex --yes` should:
+
+- run `codex mcp add` with pinned package specifier
+- install skill
+- print structured summary
+
+For tests, command execution must be injectable/mocked.
+
+- [ ] **Step 5: Wire doctor command**
+
+`locus-memory doctor codex` should:
+
+- report Node version
+- report Codex availability/version if command runner can execute it
+- report Codex home/config/skill paths
+- report expected runtime package specifier
+- avoid mutating files
+
+- [ ] **Step 6: Wire uninstall command**
+
+`locus-memory uninstall codex --yes` should:
+
+- run `codex mcp remove locus` when owned
+- leave memory data untouched
+- optionally remove or preserve skill according to plan policy
+
+For first implementation, preserve skill by default and print its path.
+
+- [ ] **Step 7: Verify tests**
+
+Run:
+
+```bash
+npm test -- packages/cli/tests/codex-config.test.ts packages/cli/tests/codex-install.test.ts packages/cli/tests/codex-doctor.test.ts packages/cli/tests/codex-uninstall.test.ts
+npm -w @locus/cli run typecheck
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Commit**
+
+Run:
+
+```bash
+git add packages/cli
+git commit -m "feat(cli): configure codex mcp install flow"
+```
+
+---
+
+## Task B5: Marketplace Bundle Generation
+
+**Files:**
+- Create: `scripts/sync-codex-marketplace.mjs`
+- Create: `packages/codex/tests/marketplace-bundle.test.ts`
+- Modify: `package.json`
+- Modify: `packages/codex/src/plugin-sync.ts`
+- Modify: `packages/codex/src/index.ts`
+- Modify: `plugins/locus-memory/.mcp.json`
+- Modify: `plugins/locus-memory/.codex-plugin/plugin.json`
+- Modify: `.agents/plugins/marketplace.json`
+
+- [ ] **Step 1: Write failing marketplace bundle tests**
+
+Tests should assert:
+
+- sync script generates `dist/marketplace/.agents/plugins/marketplace.json`
+- generated plugin exists at `dist/marketplace/plugins/locus-memory`
+- generated plugin `.mcp.json` uses `npx` or `npx.cmd` policy appropriate for distribution
+- generated `.mcp.json` uses `locus-memory@<version>` and never `@latest`
+- generated `.mcp.json` uses `redacted` capture defaults
+- generated skill equals canonical skill
+- script does not require or mutate a second git repository
+
+Run:
+
+```bash
+npm test -- packages/codex/tests/marketplace-bundle.test.ts
+```
+
+Expected: FAIL.
+
+- [ ] **Step 2: Implement marketplace sync script**
+
+Create `scripts/sync-codex-marketplace.mjs`:
+
+- reads root package version
+- creates `dist/marketplace/`
+- writes marketplace JSON
+- writes plugin manifest
+- writes public `.mcp.json`
+- copies canonical skill
+- prints output paths
+
+No git commands.
+
+- [ ] **Step 3: Add npm script**
+
+Modify root `package.json`:
+
+```json
+"sync:codex-marketplace": "node scripts/sync-codex-marketplace.mjs"
+```
+
+- [ ] **Step 4: Update local plugin expectations carefully**
+
+Keep repo-local `plugins/locus-memory/.mcp.json` local-dev-friendly unless implementation decides to switch it too.
+
+Generated `dist/marketplace/plugins/locus-memory/.mcp.json` must be public-package-friendly.
+
+- [ ] **Step 5: Verify marketplace tests**
+
+Run:
+
+```bash
+npm test -- packages/codex/tests/plugin-bundle.test.ts packages/codex/tests/marketplace-bundle.test.ts
+npm run sync:codex-marketplace
+```
+
+Expected: PASS and generated files appear under `dist/marketplace/`.
+
+- [ ] **Step 6: Commit**
+
+Run:
+
+```bash
+git add scripts/sync-codex-marketplace.mjs package.json packages/codex/src/plugin-sync.ts packages/codex/src/index.ts packages/codex/tests/marketplace-bundle.test.ts plugins/locus-memory/.mcp.json plugins/locus-memory/.codex-plugin/plugin.json .agents/plugins/marketplace.json
+git commit -m "feat(codex): generate marketplace distribution bundle"
+```
+
+---
+
+## Task B6: Package Tarball Acceptance
+
+**Files:**
+- Create or modify: `packages/codex/tests/package-contract.test.ts`
+- Modify: `package.json`
+- Modify: `esbuild.config.ts`
+- Modify: `.gitignore` if generated tarballs need ignore rules
+
+- [ ] **Step 1: Write failing pack smoke test**
+
+Add tests or a script-backed test that validates:
+
+- `npm pack --dry-run --json` includes `dist/server.js`
+- includes `dist/cli.js`
+- includes `packages/codex/skills/locus-memory/SKILL.md`
+- excludes tests and source files not needed at runtime
+- package has `bin.locus-memory`
+
+Run:
+
+```bash
+npm test -- packages/codex/tests/package-contract.test.ts
+```
+
+Expected: FAIL until build/files are correct.
+
+- [ ] **Step 2: Build package outputs**
+
+Run:
+
+```bash
+npm run build
+```
+
+Expected: creates `dist/server.js` and `dist/cli.js`.
+
+- [ ] **Step 3: Inspect npm pack dry run**
+
+Run:
+
+```bash
+npm pack --dry-run --json
+```
+
+Expected: output includes only intended runtime files.
+
+- [ ] **Step 4: Pack local tarball**
+
+Run:
+
+```bash
+npm pack
+```
+
+Expected: creates `locus-memory-<version>.tgz`.
+
+- [ ] **Step 5: Smoke CLI from tarball**
+
+Run in a temporary directory:
+
+```bash
+npm install C:\path\to\locus-memory-<version>.tgz
+npx locus-memory --help
+npx locus-memory doctor codex
+```
+
+Expected:
+
+- help works
+- doctor runs without mutating config
+- no TypeScript runtime required
+
+- [ ] **Step 6: Do not commit tarball**
+
+Remove or ignore generated `.tgz` after validation.
+
+- [ ] **Step 7: Verify tests**
+
+Run:
+
+```bash
+npm test -- packages/codex/tests/package-contract.test.ts packages/cli/tests
+npm run build
+```
+
+Expected: PASS.
+
+- [ ] **Step 8: Commit**
+
+Run:
+
+```bash
+git add package.json package-lock.json esbuild.config.ts packages/codex/tests/package-contract.test.ts packages/cli .gitignore
+git commit -m "test(package): validate npm tarball runtime"
+```
+
+---
+
+## Task B7: Local Codex Install Smoke
+
+**Files:**
+- Modify: `docs/superpowers/plans/2026-04-24-track-b-one-command-install.md`
+
+- [ ] **Step 1: Archive current local Codex config state**
+
+Run:
+
+```bash
+codex mcp get locus
+codex mcp list
+```
+
+Expected: current state recorded in terminal output. Do not manually edit user config.
+
+- [ ] **Step 2: Install from local tarball**
+
+Run:
+
+```bash
+npx -y .\locus-memory-<version>.tgz install codex --yes
+```
+
+Expected:
+
+- command completes
+- MCP server configured as package runtime
+- skill path created or updated
+- report shows operations
+
+- [ ] **Step 3: Verify Codex MCP config**
+
+Run:
+
+```bash
+codex mcp get locus
+codex mcp list
+```
+
+Expected:
+
+- command is `npx` or `npx.cmd`
+- args include `locus-memory@<version>` and `mcp`
+- env includes `redacted` capture values
+- no `@latest` in recurring runtime command
+
+- [ ] **Step 4: Run installer again**
+
+Run:
+
+```bash
+npx -y .\locus-memory-<version>.tgz install codex --yes
+```
+
+Expected:
+
+- mostly `unchanged`
+- no duplicate server entries
+
+- [ ] **Step 5: Fresh Codex runtime check**
+
+Restart Codex session and run:
+
+```text
+memory_status
+```
+
+Expected:
+
+- Locus tools visible
+- capture level reports `redacted`
+- Codex diagnostics present
+
+- [ ] **Step 6: Uninstall smoke**
+
+Run:
+
+```bash
+npx -y .\locus-memory-<version>.tgz uninstall codex --yes
+codex mcp list
+```
+
+Expected:
+
+- Locus MCP entry removed or disabled according to implemented policy
+- memory data remains untouched
+
+- [ ] **Step 7: Reinstall after uninstall**
+
+Run:
+
+```bash
+npx -y .\locus-memory-<version>.tgz install codex --yes
+codex mcp get locus
+```
+
+Expected: install works again cleanly.
+
+- [ ] **Step 8: Commit plan checkbox update**
+
+Run:
+
+```bash
+git add docs/superpowers/plans/2026-04-24-track-b-one-command-install.md
+git commit -m "docs(codex): record track b install smoke"
+```
+
+---
+
+## Task B8: Documentation And Roadmap Truth Pass
+
+**Files:**
+- Modify: `README.md`
+- Modify: `packages/codex/README.md`
+- Modify: `packages/codex/config/config.toml.example`
+- Modify: `docs/codex-vscode-extension.md`
+- Modify: `docs/codex-acceptance-matrix.md`
+- Modify: `docs/roadmap/codex-next.md`
+- Modify: `docs/index.html`
+- Modify: `CHANGELOG.md`
+- Create: `docs/releases/v3.5.0.md`
+- Modify: `packages/codex/tests/landing-page.test.ts`
+
+- [ ] **Step 1: Write failing docs/product tests**
+
+Update or add tests asserting:
+
+- landing page mentions `v3.5.0` or Track B current state
+- README contains `npx -y locus-memory@latest install codex`
+- README still contains manual MCP fallback
+- README does not claim desktop/extension parity as validated
+- Codex config example uses package runtime and pinned version for recurring MCP setup
+
+Run:
+
+```bash
+npm test -- packages/codex/tests/landing-page.test.ts packages/codex/tests/package-contract.test.ts
+```
+
+Expected: FAIL until docs are updated.
+
+- [ ] **Step 2: Update README Quick Start**
+
+Make Codex CLI Quick Start start with:
+
+```bash
+npx -y locus-memory@latest install codex
+```
+
+Move `codex mcp add locus -- node /path/to/locus/dist/server.js` into development/manual fallback.
+
+- [ ] **Step 3: Update Codex package docs**
+
+Update `packages/codex/README.md`:
+
+- install command
+- doctor command
+- uninstall command
+- migration from manual MCP
+- marketplace repo as distribution layer
+- desktop/extension caveat
+
+- [ ] **Step 4: Update config example**
+
+Update `packages/codex/config/config.toml.example`:
+
+- package runtime example first
+- pinned version in recurring config
+- Windows `npx.cmd` note
+- direct repo path as development fallback
+
+- [ ] **Step 5: Update acceptance matrix and roadmap**
+
+Update:
+
+- `docs/codex-acceptance-matrix.md`
+- `docs/roadmap/codex-next.md`
+
+Mark Track A as publicly released in `v3.4.0`.
+
+Describe Track B as active or completed according to implementation state.
+
+- [ ] **Step 6: Update landing page**
+
+Update `docs/index.html` and relevant tests:
+
+- version / current release text
+- one-command install section
+- honest note about desktop/extension parity
+
+Run:
+
+```bash
+npm run build:site
+npm test -- packages/codex/tests/landing-page.test.ts
+```
+
+- [ ] **Step 7: Add release notes**
+
+Create `docs/releases/v3.5.0.md`:
+
+- summary
+- one-command install
+- npm package
+- marketplace bundle generation
+- validation summary
+- known limitations
+
+- [ ] **Step 8: Verify docs search**
+
+Run:
+
+```bash
+rg -n "dist/server.js|coming soon|v3.4|v3.5|one-command|npx -y locus-memory|desktop" README.md packages/codex/README.md docs/codex-vscode-extension.md docs/roadmap/codex-next.md docs/index.html docs/releases/v3.5.0.md
+```
+
+Expected: no stale primary-install claims.
+
+- [ ] **Step 9: Commit**
+
+Run:
+
+```bash
+git add README.md packages/codex/README.md packages/codex/config/config.toml.example docs/codex-vscode-extension.md docs/codex-acceptance-matrix.md docs/roadmap/codex-next.md docs/index.html docs/releases/v3.5.0.md packages/codex/tests/landing-page.test.ts CHANGELOG.md
+git commit -m "docs(codex): document one-command install release"
+```
+
+---
+
+## Task B9: Final Validation And Release Prep
+
+**Files:**
+- Modify: `package.json`
+- Modify: `package-lock.json`
+- Modify: `packages/core/package.json`
+- Modify: `packages/codex/package.json`
+- Modify: `packages/cli/package.json`
+- Modify: `packages/shared-runtime/package.json`
+- Modify: `plugins/locus-memory/.codex-plugin/plugin.json`
+- Modify: `docs/superpowers/plans/2026-04-24-track-b-one-command-install.md`
+
+- [ ] **Step 1: Align versions**
+
+Set all public/workspace/plugin versions to the selected release version, likely `3.5.0`.
+
+Run:
+
+```bash
+npm install --package-lock-only --ignore-scripts
+```
+
+- [ ] **Step 2: Run targeted tests**
+
+Run:
+
+```bash
+npm test -- packages/cli/tests packages/codex/tests/package-contract.test.ts packages/codex/tests/marketplace-bundle.test.ts packages/codex/tests/plugin-bundle.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step 3: Run full validation**
+
+Run:
+
+```bash
+npm run build
+npm run check
+npm audit --audit-level=moderate
+npm pack --dry-run --json
+git diff --check
+```
+
+Expected:
+
+- build passes
+- full check passes
+- audit reports 0 vulnerabilities or documented non-blocking dev-only issue
+- pack dry run includes intended files
+- diff check clean
+
+- [ ] **Step 4: Generate marketplace bundle**
+
+Run:
+
+```bash
+npm run sync:codex-marketplace
+```
+
+Expected: `dist/marketplace/` generated and checked by tests.
+
+- [ ] **Step 5: Review final diff**
+
+Run:
+
+```bash
+git status --short --branch
+git diff --stat main...HEAD
+git log --oneline --decorate main..HEAD
+```
+
+- [ ] **Step 6: Update plan checkboxes**
+
+Mark completed tasks in this file.
+
+- [ ] **Step 7: Final commit**
+
+Run:
+
+```bash
+git add package.json package-lock.json packages/core/package.json packages/codex/package.json packages/cli/package.json packages/shared-runtime/package.json plugins/locus-memory/.codex-plugin/plugin.json docs/superpowers/plans/2026-04-24-track-b-one-command-install.md
+git commit -m "chore(release): prepare v3.5.0"
+```
+
+- [ ] **Step 8: Create local checkpoint tag**
+
+Run:
+
+```bash
+git tag -a track-b-one-command-install-local -m "Track B one-command install local checkpoint"
+```
+
+---
+
+## Execution Notes
+
+- Keep `@latest` only in the user-run install command.
+- Never write `@latest` into recurring MCP runtime config.
+- Prefer `codex mcp add/remove` over direct TOML edits.
+- If direct TOML edits become necessary, create backup first and keep mutation narrow.
+- Do not let `sync:codex-marketplace` commit or push another repository.
+- Preserve manual MCP fallback docs until package install is proven from tarball and, later, from npm registry.
+- Do not publish to npm until local tarball install and Codex smoke checks pass.
+- Do not claim Codex desktop / extension parity until tested in that surface.
