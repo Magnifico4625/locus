@@ -170,6 +170,7 @@ Create `packages/codex/tests/package-contract.test.ts` with tests that assert:
 - root package `main` points to built MCP runtime
 - root package has `prepublishOnly`
 - `package-lock.json` root package version matches root `package.json`
+- package contract records a maximum expected tarball/runtime size budget for `dist/cli.js` and `dist/server.js`
 
 Run:
 
@@ -213,6 +214,8 @@ Modify `esbuild.config.ts` so it builds:
 - `packages/cli/src/index.ts` to `dist/cli.js`
 
 Keep the shebang banner for both outputs.
+
+Do not blindly bundle the full MCP server into `dist/cli.js`. The CLI bundle should keep install/doctor/uninstall logic separate and make `locus-memory mcp` locate `dist/server.js` through a stable relative path from `import.meta.url` after build. Add a test or package-contract assertion that catches accidental server duplication in `dist/cli.js` by checking the file is materially smaller than `dist/server.js`.
 
 - [ ] **Step 4: Refresh lockfile without scripts**
 
@@ -268,6 +271,8 @@ Required assertions:
 - `--help` includes `install codex`
 - unknown command exits non-zero with concise usage
 - `resolvePackageVersion()` returns root package version
+- `resolvePackageVersion()` still returns the root version when called from a nested path under `packages/cli`
+- `findPackageRoot()` walks upward from `import.meta.url` or an injected start directory until it finds the root package named `locus-memory`
 - `buildRuntimePackageSpecifier()` returns `locus-memory@<version>` and never `@latest`
 
 Run:
@@ -349,10 +354,13 @@ If direct import of `packages/core/src/server.ts` is not safe for published runt
 Create `packages/cli/src/package-info.ts`:
 
 - `resolvePackageVersion()`
+- `findPackageRoot(startDir)`
 - `buildRuntimePackageSpecifier(version)`
 - `isLatestSpecifier(specifier)`
 
 Tests must enforce pinned version for runtime config.
+
+Do not assume the current working directory is the repository root. The published CLI may run from an npm cache path, a project directory, or a nested workspace. Package version discovery must work from the built CLI location and should have injectable start paths for tests.
 
 - [ ] **Step 7: Refresh lockfile**
 
@@ -512,6 +520,11 @@ Tests should cover:
 - env defaults include `LOCUS_LOG=error`, `LOCUS_CODEX_CAPTURE=redacted`, `LOCUS_CAPTURE_LEVEL=redacted`
 - existing package-owned config is classified as update/unchanged
 - existing manual `node /path/to/locus/dist/server.js` config is classified as manual migration needed
+- Windows-style dirty paths are rendered safely in any fallback TOML:
+  - drive-letter paths such as `C:\Users\Admin\My Project\dist\server.js`
+  - paths with spaces
+  - paths with backslashes
+  - paths with literal double quotes rejected or escaped deliberately
 - TOML write path creates backup before direct edit
 - `codex mcp add` command builder includes repeated `--env`
 
@@ -542,6 +555,8 @@ Create `packages/cli/src/codex/config.ts`:
 - backup path helper
 
 Avoid broad TOML parsing unless needed. Prefer `codex mcp add/remove`.
+
+If fallback TOML rendering is implemented, add a dedicated `quoteTomlBasicString(value)` or equivalent helper and test it with Windows paths that include spaces and backslashes. Do not hand-concatenate unescaped paths into TOML.
 
 - [ ] **Step 4: Wire install command**
 
