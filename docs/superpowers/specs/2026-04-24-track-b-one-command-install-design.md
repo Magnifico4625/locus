@@ -23,6 +23,11 @@ npx -y locus-memory@latest install codex
 
 After that, a normal Codex CLI session should expose Locus MCP tools, use the recommended `redacted` capture mode, and give users a clear diagnostic path if something is wrong.
 
+Important distinction:
+
+- `@latest` is acceptable for the one-time install command users run manually.
+- The MCP runtime command written into Codex config should pin a concrete package version such as `locus-memory@3.5.0`, not `@latest`, so normal Codex startup does not depend on checking the npm registry every time.
+
 ---
 
 ## Current State
@@ -148,7 +153,7 @@ Expected use inside Codex config:
 ```toml
 [mcp_servers.locus]
 command = "npx"
-args = ["-y", "locus-memory@3.x", "mcp"]
+args = ["-y", "locus-memory@3.5.0", "mcp"]
 
 [mcp_servers.locus.env]
 LOCUS_LOG = "error"
@@ -157,6 +162,8 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 ```
 
 On Windows, the generated config may use `npx.cmd` if needed.
+
+The runtime config should pin the package version installed by the installer. It should not write `locus-memory@latest` for the recurring MCP command.
 
 ### `locus-memory install codex`
 
@@ -169,6 +176,8 @@ Responsibilities:
 - detect Codex CLI version
 - configure MCP server with safe default env values
 - install or update the Codex skill
+- create `$CODEX_HOME/skills/locus-memory/` when missing
+- write the packaged `SKILL.md` to `$CODEX_HOME/skills/locus-memory/SKILL.md`
 - preserve existing manual users where possible
 - show a concise verification command
 
@@ -249,8 +258,10 @@ codex mcp add locus \
   --env LOCUS_LOG=error \
   --env LOCUS_CODEX_CAPTURE=redacted \
   --env LOCUS_CAPTURE_LEVEL=redacted \
-  -- npx -y locus-memory@<version> mcp
+  -- npx -y locus-memory@<installed-version> mcp
 ```
+
+The installer should never write `locus-memory@latest` into Codex's recurring MCP command. It should resolve its own package version and pin that version in generated config. This keeps regular Codex startup more predictable and lets npm reuse its local cache. Users can upgrade intentionally by rerunning the installer from a newer package version.
 
 If `codex mcp add` cannot express a required setting reliably on a supported platform, the installer may edit `~/.codex/config.toml`, but only with:
 
@@ -333,7 +344,15 @@ The main repo should own a sync/generation script, likely:
 npm run sync:codex-marketplace
 ```
 
-That script should generate the marketplace bundle from canonical sources:
+That script should generate the marketplace bundle from canonical sources into a local output directory, for example:
+
+```text
+dist/marketplace/
+```
+
+The script should not directly commit to or push another Git repository. Publishing the generated bundle to `Magnifico4625/locus-codex-marketplace` should be a separate release step, either manual or later automated through GitHub Actions.
+
+The generated bundle should be built from:
 
 - package version
 - plugin metadata
@@ -347,7 +366,7 @@ Plugin `.mcp.json` for public distribution should use the npm runtime:
   "mcpServers": {
     "locus": {
       "command": "npx",
-      "args": ["-y", "locus-memory@3.x", "mcp"],
+      "args": ["-y", "locus-memory@3.5.0", "mcp"],
       "env": {
         "LOCUS_LOG": "error",
         "LOCUS_CODEX_CAPTURE": "redacted",
@@ -359,6 +378,17 @@ Plugin `.mcp.json` for public distribution should use the npm runtime:
 ```
 
 The repo-local dev plugin may keep a local path mode, but public marketplace output must not depend on `../../dist/server.js`.
+
+### Marketplace Release Flow
+
+The release flow should be explicit:
+
+1. generate marketplace bundle into `dist/marketplace/`
+2. inspect and test generated files
+3. copy or publish that bundle into the separate marketplace repository
+4. commit and push the marketplace repository as its own release step
+
+This keeps the main repository as the source of truth while avoiding brittle local scripts that mutate a second checkout implicitly.
 
 ---
 
@@ -392,7 +422,7 @@ npx -y locus-memory@latest install codex
 Manual setup becomes a fallback:
 
 ```bash
-codex mcp add locus -- npx -y locus-memory@latest mcp
+codex mcp add locus -- npx -y locus-memory@3.5.0 mcp
 ```
 
 Repo clone + `dist/server.js` becomes a development path, not the primary user path.
@@ -432,6 +462,7 @@ Required validation layers:
 - idempotency classification
 - backup naming
 - skill copy/update behavior
+- `$CODEX_HOME/skills/locus-memory/` creation behavior
 - marketplace bundle generation
 - version alignment checks
 
@@ -585,13 +616,16 @@ Scope:
 3. **Version drift**
    npm package, plugin manifest, marketplace entry, docs, and generated bundle can drift unless checked automatically.
 
-4. **Windows command mismatch**
+4. **Recurring npm registry dependency**
+   Writing `locus-memory@latest` into the recurring MCP command can slow startup and break offline launches. Generated MCP config should pin the installed package version.
+
+5. **Windows command mismatch**
    `npx` vs `npx.cmd`, spaces in paths, and TOML escaping can break the most important local validation environment.
 
-5. **Desktop parity claims**
+6. **Desktop parity claims**
    Desktop/extension behavior may lag CLI. Docs and diagnostics must avoid claiming parity without runtime evidence.
 
-6. **Manual user regression**
+7. **Manual user regression**
    Users who already configured `node /path/to/locus/dist/server.js` should not be broken by the new installer.
 
 ---
