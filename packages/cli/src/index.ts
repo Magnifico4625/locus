@@ -1,6 +1,10 @@
 import { fileURLToPath } from 'node:url';
-import { formatInstallCodexDryRun } from './commands/install-codex.js';
+import type { CodexMcpServerConfig } from './codex/config.js';
+import { formatDoctorCodex } from './commands/doctor-codex.js';
+import { formatInstallCodexDryRun, runInstallCodex } from './commands/install-codex.js';
 import { runMcp } from './commands/mcp.js';
+import { type CommandRunner, defaultCommandRunner } from './commands/runner.js';
+import { runUninstallCodex } from './commands/uninstall-codex.js';
 import { resolvePackageVersion } from './package-info.js';
 
 export interface CliIo {
@@ -11,6 +15,9 @@ export interface CliIo {
 export interface CliOptions {
   startDir?: string;
   env?: Record<string, string | undefined>;
+  commandRunner?: CommandRunner;
+  readMcpServer?: () => CodexMcpServerConfig | undefined;
+  platform?: NodeJS.Platform;
 }
 
 const usage = `Usage: locus-memory <command>
@@ -54,6 +61,39 @@ export async function runCli(
   if (command === 'install' && subcommand === 'codex' && argv.includes('--dry-run')) {
     io.stdout(formatInstallCodexDryRun({ env: options.env, startDir: options.startDir }));
     return 0;
+  }
+
+  if (command === 'install' && subcommand === 'codex' && argv.includes('--yes')) {
+    const result = await runInstallCodex({
+      env: options.env,
+      startDir: options.startDir,
+      commandRunner: options.commandRunner ?? defaultCommandRunner,
+      platform: options.platform,
+    });
+    io.stdout(result.output);
+    return result.exitCode;
+  }
+
+  if (command === 'doctor' && subcommand === 'codex') {
+    io.stdout(
+      await formatDoctorCodex({
+        env: options.env,
+        startDir: options.startDir,
+        commandRunner: options.commandRunner ?? defaultCommandRunner,
+        readMcpServer: options.readMcpServer,
+      }),
+    );
+    return 0;
+  }
+
+  if (command === 'uninstall' && subcommand === 'codex' && argv.includes('--yes')) {
+    const result = await runUninstallCodex({
+      env: options.env,
+      commandRunner: options.commandRunner ?? defaultCommandRunner,
+      readMcpServer: options.readMcpServer,
+    });
+    io.stdout(result.output);
+    return result.exitCode;
   }
 
   if (

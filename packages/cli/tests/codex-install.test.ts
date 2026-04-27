@@ -11,6 +11,7 @@ import { installCodexSkill } from '../src/codex/skill.js';
 import { runCli } from '../src/index.js';
 
 const tempDirs: string[] = [];
+const repoRoot = join(import.meta.dirname, '..', '..', '..');
 
 function makeTempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'locus-cli-codex-install-'));
@@ -141,5 +142,45 @@ describe('codex install model', () => {
     expect(stdout.join('\n')).toContain(join(codexHome, 'skills', 'locus-memory', 'SKILL.md'));
     expect(stdout.join('\n')).toContain('LOCUS_CODEX_CAPTURE=redacted');
     expect(existsSync(join(codexHome, 'skills'))).toBe(false);
+  });
+
+  it('installs Codex MCP config and skill with a lock when confirmed', async () => {
+    const codexHome = makeTempDir();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex', '--yes'], io, {
+      env: { CODEX_HOME: codexHome },
+      startDir: repoRoot,
+      platform: 'linux',
+      commandRunner: async (command, args) => {
+        commands.push({ command, args });
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(commands[0]).toEqual({
+      command: 'codex',
+      args: expect.arrayContaining([
+        'mcp',
+        'add',
+        'locus',
+        '--',
+        'npx',
+        '-y',
+        'locus-memory@3.4.0',
+        'mcp',
+      ]),
+    });
+    expect(commands[1]).toEqual({
+      command: 'npm',
+      args: ['exec', '-y', 'locus-memory@3.4.0', '--', '--help'],
+    });
+    expect(existsSync(join(codexHome, '.locus-install.lock'))).toBe(false);
+    expect(readFileSync(join(codexHome, 'skills', 'locus-memory', 'SKILL.md'), 'utf8')).toContain(
+      'memory_recall',
+    );
+    expect(stdout.join('\n')).toContain('Skill: created');
   });
 });

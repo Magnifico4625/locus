@@ -570,7 +570,7 @@ git commit -m "feat(cli): install codex skill safely"
 - Modify: `packages/cli/src/commands/doctor-codex.ts`
 - Modify: `packages/cli/src/commands/uninstall-codex.ts`
 
-- [ ] **Step 1: Write failing config tests**
+- [x] **Step 1: Write failing config tests**
 
 Tests should cover:
 
@@ -606,7 +606,7 @@ npm test -- packages/cli/tests/codex-config.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement command builders**
+- [x] **Step 2: Implement command builders**
 
 Create `packages/cli/src/codex/commands.ts`:
 
@@ -615,7 +615,7 @@ Create `packages/cli/src/codex/commands.ts`:
 - `detectNpxCommand(platform)`
 - no shell string concatenation for executable/args
 
-- [ ] **Step 3: Implement config model**
+- [x] **Step 3: Implement config model**
 
 Create `packages/cli/src/codex/config.ts`:
 
@@ -629,7 +629,7 @@ Avoid broad TOML parsing unless needed. Prefer `codex mcp add/remove`.
 
 If fallback TOML rendering is implemented, add a dedicated `quoteTomlBasicString(value)` or equivalent helper and test it with Windows paths that include spaces and backslashes. Do not hand-concatenate unescaped paths into TOML.
 
-- [ ] **Step 4: Wire install command**
+- [x] **Step 4: Wire install command**
 
 `locus-memory install codex --yes` should:
 
@@ -644,7 +644,7 @@ If fallback TOML rendering is implemented, add a dedicated `quoteTomlBasicString
 
 For tests, command execution must be injectable/mocked.
 
-- [ ] **Step 5: Wire doctor command**
+- [x] **Step 5: Wire doctor command**
 
 `locus-memory doctor codex` should:
 
@@ -656,7 +656,7 @@ For tests, command execution must be injectable/mocked.
 - report if the current config is package-owned, manual-locus, foreign-locus, or missing
 - avoid mutating files
 
-- [ ] **Step 6: Wire uninstall command**
+- [x] **Step 6: Wire uninstall command**
 
 `locus-memory uninstall codex --yes` should:
 
@@ -666,7 +666,7 @@ For tests, command execution must be injectable/mocked.
 
 For first implementation, preserve skill by default and print its path.
 
-- [ ] **Step 7: Verify tests**
+- [x] **Step 7: Verify tests**
 
 Run:
 
@@ -677,7 +677,7 @@ npm -w @locus/cli run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 Run:
 
