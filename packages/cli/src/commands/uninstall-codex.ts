@@ -1,5 +1,9 @@
 import { buildCodexMcpRemoveArgs } from '../codex/commands.js';
-import { type CodexMcpServerConfig, classifyMcpOwnership } from '../codex/config.js';
+import {
+  type CodexMcpServerConfig,
+  classifyMcpOwnership,
+  parseCodexMcpGetOutput,
+} from '../codex/config.js';
 import { resolveCodexSkillPath } from '../codex/paths.js';
 import type { CommandRunner } from './runner.js';
 
@@ -13,7 +17,10 @@ export async function runUninstallCodex(options: UninstallCodexOptions): Promise
   exitCode: number;
   output: string;
 }> {
-  const ownership = classifyMcpOwnership(options.readMcpServer?.());
+  const config =
+    options.readMcpServer?.() ??
+    parseCodexMcpGetOutput((await options.commandRunner('codex', ['mcp', 'get', 'locus'])).stdout);
+  const ownership = classifyMcpOwnership(config);
   const lines = [`Ownership: ${ownership}`];
 
   if (ownership === 'package-owned') {

@@ -1,5 +1,8 @@
-import { cleanupInterruptedInstall } from '../codex/cleanup.js';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import { cleanupInterruptedInstall, findInterruptedInstallTempFiles } from '../codex/cleanup.js';
 import { buildCodexMcpAddArgs } from '../codex/commands.js';
+import { classifyMcpOwnership, parseCodexMcpGetOutput } from '../codex/config.js';
 import { acquireInstallLock } from '../codex/lock.js';
 import { resolveCodexHome, resolveCodexSkillPath } from '../codex/paths.js';
 import { installCodexSkill } from '../codex/skill.js';
@@ -21,6 +24,8 @@ export function formatInstallCodexDryRun(options: InstallCodexDryRunOptions = {}
   const codexHome = resolveCodexHome(env);
   const skillPath = resolveCodexSkillPath(env, 'locus-memory');
   const runtimeSpecifier = buildRuntimePackageSpecifier(resolvePackageVersion(options.startDir));
+  const lockPath = join(codexHome, '.locus-install.lock');
+  const tempFiles = findInterruptedInstallTempFiles(codexHome);
 
   return [
     'Locus Codex install dry-run',
@@ -28,6 +33,8 @@ export function formatInstallCodexDryRun(options: InstallCodexDryRunOptions = {}
     `Skill path: ${skillPath}`,
     `MCP runtime: npx -y ${runtimeSpecifier} mcp`,
     'Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error',
+    `Install lock: ${existsSync(lockPath) ? `present at ${lockPath}` : 'none'}`,
+    `Stale temp files: ${tempFiles.length}`,
   ].join('\n');
 }
 
@@ -50,6 +57,33 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
 
   try {
     const cleanup = cleanupInterruptedInstall(codexHome);
+    const existing = await options.commandRunner('codex', ['mcp', 'get', 'locus']);
+    const ownership = classifyMcpOwnership(
+      existing.exitCode === 0 ? parseCodexMcpGetOutput(existing.stdout) : undefined,
+    );
+
+    if (ownership === 'foreign-locus') {
+      return {
+        exitCode: 1,
+        output:
+          'Existing MCP entry: foreign-locus\nRefusing to overwrite a non-Locus Codex MCP entry named locus.',
+      };
+    }
+
+    if (ownership === 'manual-locus' || ownership === 'package-owned') {
+      const removeResult = await options.commandRunner('codex', ['mcp', 'remove', 'locus']);
+      if (removeResult.exitCode !== 0) {
+        return {
+          exitCode: 1,
+          output: [
+            `Existing MCP entry: ${ownership}`,
+            'Partial state: existing MCP entry was not changed because removal failed.',
+            removeResult.stderr.trim(),
+          ].join('\n'),
+        };
+      }
+    }
+
     const addResult = await options.commandRunner(
       'codex',
       buildCodexMcpAddArgs({
@@ -83,6 +117,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
       exitCode: skill.error ? 1 : 0,
       output: [
         'Locus Codex install complete',
+        `Existing MCP entry: ${ownership}`,
         `Cleanup: removed ${cleanup.removed.length} stale temp file(s)`,
         `MCP: ${addResult.exitCode === 0 ? 'configured' : 'failed'}`,
         `Runtime cache: ${cacheResult.exitCode === 0 ? 'warmed' : 'skipped'}`,

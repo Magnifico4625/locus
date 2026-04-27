@@ -7,10 +7,22 @@ export interface CleanupResult {
 
 export function cleanupInterruptedInstall(codexHome: string): CleanupResult {
   const removed: string[] = [];
+  const tempFiles = findInterruptedInstallTempFiles(codexHome);
+
+  for (const path of tempFiles) {
+    rmSync(path, { force: true });
+    removed.push(path);
+  }
+
+  return { removed };
+}
+
+export function findInterruptedInstallTempFiles(codexHome: string): string[] {
   const skillDir = join(codexHome, 'skills', 'locus-memory');
+  const tempFiles: string[] = [];
 
   if (!existsSync(skillDir)) {
-    return { removed };
+    return tempFiles;
   }
 
   for (const entry of readdirSync(skillDir)) {
@@ -23,9 +35,8 @@ export function cleanupInterruptedInstall(codexHome: string): CleanupResult {
       continue;
     }
 
-    rmSync(path, { force: true });
-    removed.push(path);
+    tempFiles.push(path);
   }
 
-  return { removed };
+  return tempFiles;
 }

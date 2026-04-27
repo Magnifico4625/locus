@@ -873,7 +873,7 @@ git commit -m "test(package): validate npm tarball runtime"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-24-track-b-one-command-install.md`
 
-- [ ] **Step 1: Archive current local Codex config state**
+- [x] **Step 1: Archive current local Codex config state**
 
 Run:
 
@@ -884,7 +884,7 @@ codex mcp list
 
 Expected: current state recorded in terminal output. Do not manually edit user config.
 
-- [ ] **Step 2: Install from local tarball**
+- [x] **Step 2: Install from local tarball**
 
 Run:
 
@@ -901,7 +901,7 @@ Expected:
 - install lock is acquired and released
 - npm runtime cache warming is attempted or explicitly skipped with a warning
 
-- [ ] **Step 3: Verify Codex MCP config**
+- [x] **Step 3: Verify Codex MCP config**
 
 Run:
 
@@ -917,7 +917,7 @@ Expected:
 - env includes `redacted` capture values
 - no `@latest` in recurring runtime command
 
-- [ ] **Step 4: Run installer again**
+- [x] **Step 4: Run installer again**
 
 Run:
 
@@ -931,7 +931,7 @@ Expected:
 - no duplicate server entries
 - no stale locks or temp files are left behind
 
-- [ ] **Step 5: Simulate interrupted cleanup**
+- [x] **Step 5: Simulate interrupted cleanup**
 
 Create a stale Locus temp file and stale lock in a disposable fake `CODEX_HOME`, then run:
 
@@ -947,6 +947,8 @@ Expected:
 
 - [ ] **Step 6: Fresh Codex runtime check**
 
+Pending user restart. Current-session `memory_status` responds with `captureLevel=redacted` and Codex diagnostics, but a fresh Codex session is required to prove the new package-owned `npx.cmd -y locus-memory@3.4.0 mcp` runtime is the active MCP server.
+
 Restart Codex session and run:
 
 ```text
@@ -959,7 +961,7 @@ Expected:
 - capture level reports `redacted`
 - Codex diagnostics present
 
-- [ ] **Step 7: Uninstall smoke**
+- [x] **Step 7: Uninstall smoke**
 
 Run:
 
@@ -973,7 +975,7 @@ Expected:
 - Locus MCP entry removed or disabled according to implemented policy
 - memory data remains untouched
 
-- [ ] **Step 8: Reinstall after uninstall**
+- [x] **Step 8: Reinstall after uninstall**
 
 Run:
 
@@ -984,7 +986,7 @@ codex mcp get locus
 
 Expected: install works again cleanly.
 
-- [ ] **Step 9: Commit plan checkbox update**
+- [x] **Step 9: Commit plan checkbox update**
 
 Run:
 

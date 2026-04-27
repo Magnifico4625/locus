@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 // packages/cli/src/index.ts
-import { fileURLToPath as fileURLToPath4 } from "node:url";
+import { fileURLToPath as fileURLToPath5 } from "node:url";
 
 // packages/cli/src/codex/config.ts
 import { copyFileSync } from "node:fs";
@@ -20,10 +20,21 @@ function classifyMcpOwnership(config) {
   if (/^npx(?:\.cmd)?$/i.test(command) && args.some((arg) => /^locus-memory@/.test(arg))) {
     return "package-owned";
   }
-  if (command === "node" && /locus/i.test(joinedArgs) && /dist[\\/]+server\.js/i.test(joinedArgs)) {
+  if (command === "node" && /dist[\\/]+server\.js/i.test(joinedArgs)) {
     return "manual-locus";
   }
   return "foreign-locus";
+}
+function parseCodexMcpGetOutput(output) {
+  if (!output.trim()) {
+    return void 0;
+  }
+  const command = output.match(/^\s*command:\s*(.+)$/im)?.[1]?.trim();
+  const argsLine = output.match(/^\s*args:\s*(.*)$/im)?.[1]?.trim();
+  return {
+    command,
+    args: argsLine ? argsLine.split(/\s+/) : []
+  };
 }
 
 // packages/cli/src/codex/paths.ts
@@ -107,14 +118,27 @@ async function formatDoctorCodex(options) {
   ].join("\n");
 }
 
+// packages/cli/src/commands/install-codex.ts
+import { existsSync as existsSync8 } from "node:fs";
+import { join as join9 } from "node:path";
+
 // packages/cli/src/codex/cleanup.ts
 import { existsSync as existsSync2, readdirSync, rmSync, statSync } from "node:fs";
 import { join as join2 } from "node:path";
 function cleanupInterruptedInstall(codexHome) {
   const removed = [];
+  const tempFiles = findInterruptedInstallTempFiles(codexHome);
+  for (const path of tempFiles) {
+    rmSync(path, { force: true });
+    removed.push(path);
+  }
+  return { removed };
+}
+function findInterruptedInstallTempFiles(codexHome) {
   const skillDir = join2(codexHome, "skills", "locus-memory");
+  const tempFiles = [];
   if (!existsSync2(skillDir)) {
-    return { removed };
+    return tempFiles;
   }
   for (const entry of readdirSync(skillDir)) {
     if (!entry.endsWith(".locus-tmp")) {
@@ -124,10 +148,9 @@ function cleanupInterruptedInstall(codexHome) {
     if (!statSync(path).isFile()) {
       continue;
     }
-    rmSync(path, { force: true });
-    removed.push(path);
+    tempFiles.push(path);
   }
-  return { removed };
+  return tempFiles;
 }
 
 // packages/cli/src/codex/commands.ts
@@ -224,6 +247,7 @@ import {
   writeFileSync as writeFileSync4
 } from "node:fs";
 import { dirname as dirname4 } from "node:path";
+import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // packages/codex/src/ids.ts
 import { createHash } from "node:crypto";
@@ -260,7 +284,7 @@ function resolveCanonicalCodexSkillPath() {
 
 // packages/cli/src/codex/skill.ts
 function installCodexSkill(options = {}) {
-  const sourcePath = options.sourcePath ?? resolveCanonicalCodexSkillPath();
+  const sourcePath = options.sourcePath ?? resolvePackagedCodexSkillPath();
   const targetPath = resolveCodexSkillPath(options.env, "locus-memory");
   const sourceContent = readFileSync6(sourcePath, "utf8");
   try {
@@ -301,6 +325,18 @@ function installCodexSkill(options = {}) {
     };
   }
 }
+function resolvePackagedCodexSkillPath() {
+  const candidates = [
+    resolveCanonicalCodexSkillPath(),
+    fileURLToPath4(new URL("../packages/codex/skills/locus-memory/SKILL.md", import.meta.url))
+  ];
+  for (const candidate of candidates) {
+    if (existsSync7(candidate)) {
+      return candidate;
+    }
+  }
+  return candidates[0] ?? resolveCanonicalCodexSkillPath();
+}
 function backupSkill(targetPath, now) {
   const backupPath = `${targetPath}.${timestamp(now)}.bak`;
   copyFileSync4(targetPath, backupPath);
@@ -328,12 +364,16 @@ function formatInstallCodexDryRun(options = {}) {
   const codexHome = resolveCodexHome(env);
   const skillPath = resolveCodexSkillPath(env, "locus-memory");
   const runtimeSpecifier = buildRuntimePackageSpecifier(resolvePackageVersion(options.startDir));
+  const lockPath = join9(codexHome, ".locus-install.lock");
+  const tempFiles = findInterruptedInstallTempFiles(codexHome);
   return [
     "Locus Codex install dry-run",
     `Codex home: ${codexHome}`,
     `Skill path: ${skillPath}`,
     `MCP runtime: npx -y ${runtimeSpecifier} mcp`,
-    "Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error"
+    "Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error",
+    `Install lock: ${existsSync8(lockPath) ? `present at ${lockPath}` : "none"}`,
+    `Stale temp files: ${tempFiles.length}`
   ].join("\n");
 }
 async function runInstallCodex(options) {
@@ -350,6 +390,29 @@ async function runInstallCodex(options) {
   }
   try {
     const cleanup = cleanupInterruptedInstall(codexHome);
+    const existing = await options.commandRunner("codex", ["mcp", "get", "locus"]);
+    const ownership = classifyMcpOwnership(
+      existing.exitCode === 0 ? parseCodexMcpGetOutput(existing.stdout) : void 0
+    );
+    if (ownership === "foreign-locus") {
+      return {
+        exitCode: 1,
+        output: "Existing MCP entry: foreign-locus\nRefusing to overwrite a non-Locus Codex MCP entry named locus."
+      };
+    }
+    if (ownership === "manual-locus" || ownership === "package-owned") {
+      const removeResult = await options.commandRunner("codex", ["mcp", "remove", "locus"]);
+      if (removeResult.exitCode !== 0) {
+        return {
+          exitCode: 1,
+          output: [
+            `Existing MCP entry: ${ownership}`,
+            "Partial state: existing MCP entry was not changed because removal failed.",
+            removeResult.stderr.trim()
+          ].join("\n")
+        };
+      }
+    }
     const addResult = await options.commandRunner(
       "codex",
       buildCodexMcpAddArgs({
@@ -380,6 +443,7 @@ async function runInstallCodex(options) {
       exitCode: skill.error ? 1 : 0,
       output: [
         "Locus Codex install complete",
+        `Existing MCP entry: ${ownership}`,
         `Cleanup: removed ${cleanup.removed.length} stale temp file(s)`,
         `MCP: ${addResult.exitCode === 0 ? "configured" : "failed"}`,
         `Runtime cache: ${cacheResult.exitCode === 0 ? "warmed" : "skipped"}`,
@@ -406,7 +470,8 @@ import { promisify } from "node:util";
 var execFileAsync = promisify(execFile);
 var defaultCommandRunner = async (command, args) => {
   try {
-    const result = await execFileAsync(command, args, {
+    const [resolvedCommand, resolvedArgs] = resolveCommandForPlatform(command, args);
+    const result = await execFileAsync(resolvedCommand, resolvedArgs, {
       encoding: "utf8",
       windowsHide: true
     });
@@ -424,10 +489,29 @@ var defaultCommandRunner = async (command, args) => {
     };
   }
 };
+function resolveCommandForPlatform(command, args) {
+  if (process.platform !== "win32") {
+    return [command, args];
+  }
+  return [
+    process.env.ComSpec ?? "cmd.exe",
+    ["/d", "/s", "/c", buildWindowsCommandLine(command, args)]
+  ];
+}
+function buildWindowsCommandLine(command, args) {
+  return [command, ...args].map(quoteWindowsArg).join(" ");
+}
+function quoteWindowsArg(value) {
+  if (!/[ \t"]/u.test(value)) {
+    return value;
+  }
+  return `"${value.replaceAll('"', '\\"')}"`;
+}
 
 // packages/cli/src/commands/uninstall-codex.ts
 async function runUninstallCodex(options) {
-  const ownership = classifyMcpOwnership(options.readMcpServer?.());
+  const config = options.readMcpServer?.() ?? parseCodexMcpGetOutput((await options.commandRunner("codex", ["mcp", "get", "locus"])).stdout);
+  const ownership = classifyMcpOwnership(config);
   const lines = [`Ownership: ${ownership}`];
   if (ownership === "package-owned") {
     const result = await options.commandRunner("codex", buildCodexMcpRemoveArgs("locus"));
@@ -517,7 +601,7 @@ async function runCli(argv = process.argv.slice(2), io = {
   io.stderr(usage);
   return 1;
 }
-var isDirectRun = process.argv[1] === fileURLToPath4(import.meta.url);
+var isDirectRun = process.argv[1] === fileURLToPath5(import.meta.url);
 if (isDirectRun) {
   const exitCode = await runCli();
   process.exitCode = exitCode;

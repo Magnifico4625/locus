@@ -7,6 +7,7 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { resolveCanonicalCodexSkillPath } from '@locus/codex';
 import { resolveCodexSkillPath } from './paths.js';
 import type { InstallOperation, PermissionError } from './report.js';
@@ -27,7 +28,7 @@ export interface InstallCodexSkillResult extends InstallOperation {
 }
 
 export function installCodexSkill(options: InstallCodexSkillOptions = {}): InstallCodexSkillResult {
-  const sourcePath = options.sourcePath ?? resolveCanonicalCodexSkillPath();
+  const sourcePath = options.sourcePath ?? resolvePackagedCodexSkillPath();
   const targetPath = resolveCodexSkillPath(options.env, 'locus-memory');
   const sourceContent = readFileSync(sourcePath, 'utf8');
 
@@ -74,6 +75,21 @@ export function installCodexSkill(options: InstallCodexSkillOptions = {}): Insta
       },
     };
   }
+}
+
+export function resolvePackagedCodexSkillPath(): string {
+  const candidates = [
+    resolveCanonicalCodexSkillPath(),
+    fileURLToPath(new URL('../packages/codex/skills/locus-memory/SKILL.md', import.meta.url)),
+  ];
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return candidates[0] ?? resolveCanonicalCodexSkillPath();
 }
 
 function backupSkill(targetPath: string, now: Date): InstallOperation {

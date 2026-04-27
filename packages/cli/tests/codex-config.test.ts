@@ -62,6 +62,12 @@ describe('codex mcp config model', () => {
     expect(
       classifyMcpOwnership({
         command: 'node',
+        args: ['C:\\Users\\Admin\\gemini-project\\ClaudeMagnificoMem\\dist\\server.js'],
+      }),
+    ).toBe('manual-locus');
+    expect(
+      classifyMcpOwnership({
+        command: 'node',
         args: ['C:/other/server.js'],
       }),
     ).toBe('foreign-locus');

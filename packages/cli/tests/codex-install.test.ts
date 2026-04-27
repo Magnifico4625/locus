@@ -71,6 +71,15 @@ describe('codex install model', () => {
     expect(existsSync(`${result.targetPath}.locus-tmp`)).toBe(false);
   });
 
+  it('resolves the packaged canonical skill from source layout', () => {
+    const result = installCodexSkill({
+      env: { CODEX_HOME: makeTempDir() },
+    });
+
+    expect(result.action).toBe('created');
+    expect(readFileSync(result.targetPath, 'utf8')).toContain('memory_recall');
+  });
+
   it('reports unchanged for identical skill content', () => {
     const root = makeTempDir();
     const targetPath = join(root, 'codex-home', 'skills', 'locus-memory', 'SKILL.md');
@@ -144,6 +153,26 @@ describe('codex install model', () => {
     expect(existsSync(join(codexHome, 'skills'))).toBe(false);
   });
 
+  it('dry-run reports stale lock and temp files without removing them', async () => {
+    const codexHome = makeTempDir();
+    const staleTemp = join(codexHome, 'skills', 'locus-memory', 'SKILL.md.locus-tmp');
+    const staleLock = join(codexHome, '.locus-install.lock');
+    mkdirSync(join(codexHome, 'skills', 'locus-memory'), { recursive: true });
+    writeFileSync(staleTemp, '# partial\n', 'utf8');
+    writeFileSync(staleLock, '{}', 'utf8');
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex', '--dry-run'], io, {
+      env: { CODEX_HOME: codexHome },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.join('\n')).toContain(`Install lock: present at ${staleLock}`);
+    expect(stdout.join('\n')).toContain('Stale temp files: 1');
+    expect(existsSync(staleTemp)).toBe(true);
+    expect(existsSync(staleLock)).toBe(true);
+  });
+
   it('installs Codex MCP config and skill with a lock when confirmed', async () => {
     const codexHome = makeTempDir();
     const commands: Array<{ command: string; args: string[] }> = [];
@@ -162,6 +191,10 @@ describe('codex install model', () => {
     expect(exitCode).toBe(0);
     expect(commands[0]).toEqual({
       command: 'codex',
+      args: ['mcp', 'get', 'locus'],
+    });
+    expect(commands[1]).toEqual({
+      command: 'codex',
       args: expect.arrayContaining([
         'mcp',
         'add',
@@ -173,7 +206,7 @@ describe('codex install model', () => {
         'mcp',
       ]),
     });
-    expect(commands[1]).toEqual({
+    expect(commands[2]).toEqual({
       command: 'npm',
       args: ['exec', '-y', 'locus-memory@3.4.0', '--', '--help'],
     });
@@ -182,5 +215,37 @@ describe('codex install model', () => {
       'memory_recall',
     );
     expect(stdout.join('\n')).toContain('Skill: created');
+  });
+
+  it('migrates an existing manual locus MCP entry before adding package runtime', async () => {
+    const codexHome = makeTempDir();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex', '--yes'], io, {
+      env: { CODEX_HOME: codexHome },
+      startDir: repoRoot,
+      platform: 'linux',
+      commandRunner: async (command, args) => {
+        commands.push({ command, args });
+        if (args.join(' ') === 'mcp get locus') {
+          return {
+            exitCode: 0,
+            stdout: 'locus\n  command: node\n  args: C:\\Users\\Admin\\locus\\dist\\server.js\n',
+            stderr: '',
+          };
+        }
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(commands.map((entry) => entry.args.join(' '))).toEqual([
+      'mcp get locus',
+      'mcp remove locus',
+      expect.stringContaining('mcp add'),
+      'exec -y locus-memory@3.4.0 -- --help',
+    ]);
+    expect(stdout.join('\n')).toContain('Existing MCP entry: manual-locus');
   });
 });

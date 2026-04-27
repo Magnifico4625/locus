@@ -36,4 +36,30 @@ describe('codex uninstall command', () => {
     expect(commands).toEqual([{ command: 'codex', args: ['mcp', 'remove', 'locus'] }]);
     expect(stdout.join('\n')).toContain('Skill preserved:');
   });
+
+  it('detects package-owned MCP config through codex mcp get when no reader is injected', async () => {
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['uninstall', 'codex', '--yes'], io, {
+      commandRunner: async (command, args) => {
+        commands.push({ command, args });
+        if (args.join(' ') === 'mcp get locus') {
+          return {
+            exitCode: 0,
+            stdout: 'locus\n  command: npx.cmd\n  args: -y locus-memory@3.4.0 mcp\n',
+            stderr: '',
+          };
+        }
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(commands.map((entry) => entry.args.join(' '))).toEqual([
+      'mcp get locus',
+      'mcp remove locus',
+    ]);
+    expect(stdout.join('\n')).toContain('Ownership: package-owned');
+  });
 });

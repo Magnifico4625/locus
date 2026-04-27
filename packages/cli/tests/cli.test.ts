@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildWindowsCommandLine } from '../src/commands/runner.js';
 import { runCli } from '../src/index.js';
 
 function createIo() {
@@ -52,5 +53,14 @@ describe('locus-memory cli', () => {
 
     expect(exitCode).toBe(1);
     expect(stderr.join('\n')).toContain('not implemented');
+  });
+
+  it('quotes Windows command lines for shim commands without shell=true', () => {
+    expect(buildWindowsCommandLine('codex', ['mcp', 'add', 'locus', '--', 'npx.cmd'])).toBe(
+      'codex mcp add locus -- npx.cmd',
+    );
+    expect(buildWindowsCommandLine('node', ['C:\\Program Files\\Locus\\dist\\server.js'])).toBe(
+      'node "C:\\Program Files\\Locus\\dist\\server.js"',
+    );
   });
 });

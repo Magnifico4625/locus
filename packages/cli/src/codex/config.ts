@@ -38,11 +38,25 @@ export function classifyMcpOwnership(config?: CodexMcpServerConfig): CodexMcpOwn
     return 'package-owned';
   }
 
-  if (command === 'node' && /locus/i.test(joinedArgs) && /dist[\\/]+server\.js/i.test(joinedArgs)) {
+  if (command === 'node' && /dist[\\/]+server\.js/i.test(joinedArgs)) {
     return 'manual-locus';
   }
 
   return 'foreign-locus';
+}
+
+export function parseCodexMcpGetOutput(output: string): CodexMcpServerConfig | undefined {
+  if (!output.trim()) {
+    return undefined;
+  }
+
+  const command = output.match(/^\s*command:\s*(.+)$/im)?.[1]?.trim();
+  const argsLine = output.match(/^\s*args:\s*(.*)$/im)?.[1]?.trim();
+
+  return {
+    command,
+    args: argsLine ? argsLine.split(/\s+/) : [],
+  };
 }
 
 export function quoteTomlBasicString(value: string): string {
