@@ -778,7 +778,7 @@ git commit -m "feat(codex): generate marketplace distribution bundle"
 - Modify: `esbuild.config.ts`
 - Modify: `.gitignore` if generated tarballs need ignore rules
 
-- [ ] **Step 1: Write failing pack smoke test**
+- [x] **Step 1: Write failing pack smoke test**
 
 Add tests or a script-backed test that validates:
 
@@ -796,7 +796,7 @@ npm test -- packages/codex/tests/package-contract.test.ts
 
 Expected: FAIL until build/files are correct.
 
-- [ ] **Step 2: Build package outputs**
+- [x] **Step 2: Build package outputs**
 
 Run:
 
@@ -806,7 +806,7 @@ npm run build
 
 Expected: creates `dist/server.js` and `dist/cli.js`.
 
-- [ ] **Step 3: Inspect npm pack dry run**
+- [x] **Step 3: Inspect npm pack dry run**
 
 Run:
 
@@ -816,7 +816,7 @@ npm pack --dry-run --json
 
 Expected: output includes only intended runtime files.
 
-- [ ] **Step 4: Pack local tarball**
+- [x] **Step 4: Pack local tarball**
 
 Run:
 
@@ -826,7 +826,7 @@ npm pack
 
 Expected: creates `locus-memory-<version>.tgz`.
 
-- [ ] **Step 5: Smoke CLI from tarball**
+- [x] **Step 5: Smoke CLI from tarball**
 
 Run in a temporary directory:
 
@@ -842,11 +842,11 @@ Expected:
 - doctor runs without mutating config
 - no TypeScript runtime required
 
-- [ ] **Step 6: Do not commit tarball**
+- [x] **Step 6: Do not commit tarball**
 
 Remove or ignore generated `.tgz` after validation.
 
-- [ ] **Step 7: Verify tests**
+- [x] **Step 7: Verify tests**
 
 Run:
 
@@ -857,7 +857,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 Run:
 

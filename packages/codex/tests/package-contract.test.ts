@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -29,7 +30,8 @@ describe('publishable package contract', () => {
     expect(packageJson.bin?.['locus-memory']).toBe('dist/cli.js');
     expect(packageJson.files).toEqual(
       expect.arrayContaining([
-        'dist/',
+        'dist/server.js',
+        'dist/cli.js',
         'packages/codex/skills/locus-memory/SKILL.md',
         'LICENSE',
         'README.md',
@@ -88,6 +90,37 @@ describe('publishable package contract', () => {
     const serverPath = join(root, 'dist/server.js');
     if (existsSync(cliPath) && existsSync(serverPath)) {
       expect(statSync(cliPath).size).toBeLessThan(statSync(serverPath).size);
+    }
+  });
+
+  it('packs only intended npm runtime files', () => {
+    const npmExecPath = process.env.npm_execpath;
+    expect(npmExecPath).toBeTruthy();
+
+    const output = execFileSync(
+      process.execPath,
+      [npmExecPath ?? '', 'pack', '--dry-run', '--json'],
+      {
+        cwd: root,
+        encoding: 'utf8',
+      },
+    );
+    const [pack] = JSON.parse(output) as Array<{
+      files?: Array<{ path?: string }>;
+      bin?: Record<string, string>;
+    }>;
+    const files = new Set(pack?.files?.map((file) => file.path));
+
+    expect(files).toContain('dist/server.js');
+    expect(files).toContain('dist/cli.js');
+    expect(files).toContain('packages/codex/skills/locus-memory/SKILL.md');
+    expect(files).toContain('README.md');
+    expect(files).toContain('LICENSE');
+    expect(files).not.toContain('dist/marketplace/.agents/plugins/marketplace.json');
+
+    for (const file of files) {
+      expect(file).not.toMatch(/^packages\/(?:core|cli|codex)\/src\//);
+      expect(file).not.toMatch(/\.test\.(?:ts|js)$/);
     }
   });
 });

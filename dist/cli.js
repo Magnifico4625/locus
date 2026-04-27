@@ -221,7 +221,7 @@ import {
   mkdirSync as mkdirSync5,
   readFileSync as readFileSync6,
   renameSync as renameSync2,
-  writeFileSync as writeFileSync3
+  writeFileSync as writeFileSync4
 } from "node:fs";
 import { dirname as dirname4 } from "node:path";
 
@@ -245,14 +245,14 @@ import { readdirSync as readdirSync2 } from "node:fs";
 import { basename as basename2, join as join6, resolve as resolve4 } from "node:path";
 
 // packages/codex/src/plugin-sync.ts
-import { copyFileSync as copyFileSync2, existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync4 } from "node:fs";
-import { dirname as dirname2, resolve as resolve5 } from "node:path";
+import { copyFileSync as copyFileSync2, existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync4, rmSync as rmSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { dirname as dirname2, join as join7, resolve as resolve5 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/codex/src/skill-sync.ts
 import { copyFileSync as copyFileSync3, existsSync as existsSync6, mkdirSync as mkdirSync4, readFileSync as readFileSync5 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
-import { dirname as dirname3, join as join7, resolve as resolve6 } from "node:path";
+import { dirname as dirname3, join as join8, resolve as resolve6 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 function resolveCanonicalCodexSkillPath() {
   return resolve6(fileURLToPath3(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
@@ -309,7 +309,7 @@ function backupSkill(targetPath, now) {
     path: backupPath
   };
 }
-function writeAtomically(targetPath, content, writeFile = writeFileSync3) {
+function writeAtomically(targetPath, content, writeFile = writeFileSync4) {
   const tempPath = `${targetPath}.locus-tmp`;
   writeFile(tempPath, content, "utf8");
   renameSync2(tempPath, targetPath);

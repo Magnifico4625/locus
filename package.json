@@ -12,7 +12,8 @@
     "locus-memory": "dist/cli.js"
   },
   "files": [
-    "dist/",
+    "dist/server.js",
+    "dist/cli.js",
     "packages/codex/skills/locus-memory/SKILL.md",
     "LICENSE",
     "README.md"
