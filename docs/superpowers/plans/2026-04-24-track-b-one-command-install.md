@@ -119,7 +119,7 @@ Do not modify:
 **Files:**
 - Modify: `docs/superpowers/plans/2026-04-24-track-b-one-command-install.md`
 
-- [ ] **Step 1: Verify branch and clean tree**
+- [x] **Step 1: Verify branch and clean tree**
 
 Run:
 
@@ -130,7 +130,7 @@ git log --oneline --decorate -n 5
 
 Expected: branch `docs/track-b-one-command-install`, clean tree after this plan commit is complete, and `v3.4.0` on `main`.
 
-- [ ] **Step 2: Confirm source facts**
+- [x] **Step 2: Confirm source facts**
 
 Run:
 
@@ -148,7 +148,7 @@ Expected:
 - `codex plugin marketplace add` exists.
 - `npm view locus-memory` returns `E404` until the package is published.
 
-- [ ] **Step 3: Commit the implementation plan**
+- [x] **Step 3: Commit the implementation plan**
 
 Run:
 
