@@ -444,7 +444,7 @@ git commit -m "feat(cli): add locus command skeleton"
 - Modify: `packages/codex/src/skill-sync.ts`
 - Modify: `packages/codex/src/index.ts`
 
-- [ ] **Step 1: Write failing installer model tests**
+- [x] **Step 1: Write failing installer model tests**
 
 Tests should cover:
 
@@ -470,7 +470,7 @@ npm test -- packages/cli/tests/codex-install.test.ts packages/cli/tests/codex-lo
 
 Expected: FAIL because installer helpers do not exist.
 
-- [ ] **Step 2: Extend reusable skill sync**
+- [x] **Step 2: Extend reusable skill sync**
 
 Modify `packages/codex/src/skill-sync.ts` to support timestamped backups:
 
@@ -480,7 +480,7 @@ Modify `packages/codex/src/skill-sync.ts` to support timestamped backups:
 
 Export required helpers from `packages/codex/src/index.ts`.
 
-- [ ] **Step 3: Implement Codex path helpers**
+- [x] **Step 3: Implement Codex path helpers**
 
 Create `packages/cli/src/codex/paths.ts`:
 
@@ -492,7 +492,7 @@ Create `packages/cli/src/codex/paths.ts`:
 
 Prefer reusing `packages/codex/src/paths.ts` where contracts match.
 
-- [ ] **Step 4: Implement skill install helper**
+- [x] **Step 4: Implement skill install helper**
 
 Create `packages/cli/src/codex/skill.ts`:
 
@@ -503,7 +503,7 @@ Create `packages/cli/src/codex/skill.ts`:
 - backup differing file when requested
 - write through a temporary file followed by rename
 
-- [ ] **Step 5: Implement install lock and interrupted cleanup helpers**
+- [x] **Step 5: Implement install lock and interrupted cleanup helpers**
 
 Create `packages/cli/src/codex/lock.ts`:
 
@@ -518,7 +518,7 @@ Create `packages/cli/src/codex/cleanup.ts`:
 - removes safe stale temp files
 - never deletes memory databases or non-Locus files
 
-- [ ] **Step 6: Implement report model**
+- [x] **Step 6: Implement report model**
 
 Create `packages/cli/src/codex/report.ts` with typed operations:
 
@@ -528,7 +528,7 @@ export type InstallAction = 'created' | 'updated' | 'unchanged' | 'backed_up' | 
 
 Return structured results first; format human text at command boundary.
 
-- [ ] **Step 7: Wire `install codex --dry-run`**
+- [x] **Step 7: Wire `install codex --dry-run`**
 
 Modify `packages/cli/src/commands/install-codex.ts` so:
 
@@ -537,7 +537,7 @@ Modify `packages/cli/src/commands/install-codex.ts` so:
 - default capture mode is `redacted`
 - protected directory / permission errors are reported as `permission_denied` and do not claim success
 
-- [ ] **Step 8: Verify tests**
+- [x] **Step 8: Verify tests**
 
 Run:
 
@@ -549,7 +549,7 @@ npm -w @locus/codex run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 

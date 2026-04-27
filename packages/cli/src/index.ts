@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { formatInstallCodexDryRun } from './commands/install-codex.js';
 import { runMcp } from './commands/mcp.js';
 import { resolvePackageVersion } from './package-info.js';
 
@@ -9,6 +10,7 @@ export interface CliIo {
 
 export interface CliOptions {
   startDir?: string;
+  env?: Record<string, string | undefined>;
 }
 
 const usage = `Usage: locus-memory <command>
@@ -47,6 +49,11 @@ export async function runCli(
 
   if (command === 'mcp') {
     return runMcp();
+  }
+
+  if (command === 'install' && subcommand === 'codex' && argv.includes('--dry-run')) {
+    io.stdout(formatInstallCodexDryRun({ env: options.env, startDir: options.startDir }));
+    return 0;
   }
 
   if (

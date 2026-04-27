@@ -14,6 +14,7 @@ export interface SkillSyncOptions {
   env?: Record<string, string | undefined>;
   overwrite?: boolean;
   backup?: boolean;
+  backupSuffix?: string;
 }
 
 export interface SkillSyncResult {
@@ -59,7 +60,7 @@ export function copyCodexSkill(options: SkillSyncOptions = {}): SkillSyncResult 
     }
 
     if (options.backup) {
-      backupPath = `${targetPath}.bak`;
+      backupPath = `${targetPath}${options.backupSuffix ?? '.bak'}`;
       copyFileSync(targetPath, backupPath);
     }
   }

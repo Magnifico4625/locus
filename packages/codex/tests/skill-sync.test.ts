@@ -109,6 +109,27 @@ describe('skill sync helpers', () => {
     expect(readFileSync(`${targetPath}.bak`, 'utf8')).toBe('# local modified skill\n');
   });
 
+  it('supports timestamped backup suffixes for installers', () => {
+    const root = makeTempDir();
+    const sourcePath = join(root, 'repo-skill.md');
+    const targetPath = join(root, 'installed', 'skills', 'locus-memory', 'SKILL.md');
+
+    mkdirSync(join(root, 'installed', 'skills', 'locus-memory'), { recursive: true });
+    writeFileSync(sourcePath, '# canonical skill\n', 'utf8');
+    writeFileSync(targetPath, '# local modified skill\n', 'utf8');
+
+    const result = copyCodexSkill({
+      sourcePath,
+      targetPath,
+      overwrite: true,
+      backup: true,
+      backupSuffix: '.20260427T102030000Z.bak',
+    });
+
+    expect(result.backupPath).toBe(`${targetPath}.20260427T102030000Z.bak`);
+    expect(readFileSync(result.backupPath ?? '', 'utf8')).toBe('# local modified skill\n');
+  });
+
   it('supports the node sync script end-to-end', () => {
     const root = makeTempDir();
     const codexHome = join(root, 'codex-home');

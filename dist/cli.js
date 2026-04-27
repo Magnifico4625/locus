@@ -3,20 +3,37 @@
 // packages/cli/src/index.ts
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
-// packages/cli/src/commands/mcp.ts
-async function runMcp() {
-  await import(new URL("./server.js", import.meta.url).href);
-  return 0;
+// packages/cli/src/codex/paths.ts
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
+function resolveCodexHome(env = process.env) {
+  const configured = env.CODEX_HOME;
+  if (configured && configured.trim().length > 0) {
+    return resolve(expandTilde(configured));
+  }
+  return join(homedir(), ".codex");
+}
+function resolveCodexSkillPath(env = process.env, skillName = "locus-memory") {
+  return join(resolveCodexHome(env), "skills", skillName, "SKILL.md");
+}
+function expandTilde(pathValue) {
+  if (pathValue === "~") {
+    return homedir();
+  }
+  if (pathValue.startsWith("~/") || pathValue.startsWith("~\\")) {
+    return join(homedir(), pathValue.slice(2));
+  }
+  return pathValue;
 }
 
 // packages/cli/src/package-info.ts
 import { existsSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve as resolve2 } from "node:path";
 import { fileURLToPath } from "node:url";
 function findPackageRoot(startDir = dirname(fileURLToPath(import.meta.url))) {
-  let current = resolve(startDir);
+  let current = resolve2(startDir);
   while (true) {
-    const packagePath = resolve(current, "package.json");
+    const packagePath = resolve2(current, "package.json");
     if (existsSync(packagePath)) {
       const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
       if (packageJson.name === "locus-memory") {
@@ -33,12 +50,36 @@ function findPackageRoot(startDir = dirname(fileURLToPath(import.meta.url))) {
 function resolvePackageVersion(startDir) {
   const root = findPackageRoot(startDir);
   const packageJson = JSON.parse(
-    readFileSync(resolve(root, "package.json"), "utf8")
+    readFileSync(resolve2(root, "package.json"), "utf8")
   );
   if (!packageJson.version) {
     throw new Error("Root package.json is missing version");
   }
   return packageJson.version;
+}
+function buildRuntimePackageSpecifier(version) {
+  return `locus-memory@${version}`;
+}
+
+// packages/cli/src/commands/install-codex.ts
+function formatInstallCodexDryRun(options = {}) {
+  const env = options.env ?? process.env;
+  const codexHome = resolveCodexHome(env);
+  const skillPath = resolveCodexSkillPath(env, "locus-memory");
+  const runtimeSpecifier = buildRuntimePackageSpecifier(resolvePackageVersion(options.startDir));
+  return [
+    "Locus Codex install dry-run",
+    `Codex home: ${codexHome}`,
+    `Skill path: ${skillPath}`,
+    `MCP runtime: npx -y ${runtimeSpecifier} mcp`,
+    "Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error"
+  ].join("\n");
+}
+
+// packages/cli/src/commands/mcp.ts
+async function runMcp() {
+  await import(new URL("./server.js", import.meta.url).href);
+  return 0;
 }
 
 // packages/cli/src/index.ts
@@ -69,6 +110,10 @@ async function runCli(argv = process.argv.slice(2), io = {
   }
   if (command === "mcp") {
     return runMcp();
+  }
+  if (command === "install" && subcommand === "codex" && argv.includes("--dry-run")) {
+    io.stdout(formatInstallCodexDryRun({ env: options.env, startDir: options.startDir }));
+    return 0;
   }
   if ((command === "install" || command === "doctor" || command === "uninstall") && subcommand === "codex") {
     io.stderr(`${command} codex: ${notImplemented}`);
