@@ -700,7 +700,7 @@ git commit -m "feat(cli): configure codex mcp install flow"
 - Modify: `plugins/locus-memory/.codex-plugin/plugin.json`
 - Modify: `.agents/plugins/marketplace.json`
 
-- [ ] **Step 1: Write failing marketplace bundle tests**
+- [x] **Step 1: Write failing marketplace bundle tests**
 
 Tests should assert:
 
@@ -720,7 +720,7 @@ npm test -- packages/codex/tests/marketplace-bundle.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement marketplace sync script**
+- [x] **Step 2: Implement marketplace sync script**
 
 Create `scripts/sync-codex-marketplace.mjs`:
 
@@ -734,7 +734,7 @@ Create `scripts/sync-codex-marketplace.mjs`:
 
 No git commands.
 
-- [ ] **Step 3: Add npm script**
+- [x] **Step 3: Add npm script**
 
 Modify root `package.json`:
 
@@ -742,13 +742,13 @@ Modify root `package.json`:
 "sync:codex-marketplace": "node scripts/sync-codex-marketplace.mjs"
 ```
 
-- [ ] **Step 4: Update local plugin expectations carefully**
+- [x] **Step 4: Update local plugin expectations carefully**
 
 Keep repo-local `plugins/locus-memory/.mcp.json` local-dev-friendly unless implementation decides to switch it too.
 
 Generated `dist/marketplace/plugins/locus-memory/.mcp.json` must be public-package-friendly.
 
-- [ ] **Step 5: Verify marketplace tests**
+- [x] **Step 5: Verify marketplace tests**
 
 Run:
 
@@ -759,7 +759,7 @@ npm run sync:codex-marketplace
 
 Expected: PASS and generated files appear under `dist/marketplace/`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
