@@ -24,6 +24,8 @@ Locus solves this with three persistent memory layers:
 
 **New in v3.4 — Codex Memory Trust:** Codex CLI now has validated practical conversational recall in `redacted` mode. Live Codex dialogue can be imported from rollout JSONL, searched through `memory_search`, and summarized through `memory_recall` without requiring explicit `memory_remember`.
 
+**New in v3.5 — One-command Codex install:** Locus is packaged as the public `locus-memory` npm runtime with a Codex installer, doctor, uninstall command, and generated marketplace bundle. The recurring MCP runtime is version-pinned; `@latest` is used only for the one-time install command.
+
 **Track A Codex recall truth:** Codex CLI is the primary validated path for useful recall. `metadata` remains the safe default for diagnostics and minimal capture, but it is not strong conversational memory. For practical Codex recall, use `LOCUS_CODEX_CAPTURE=redacted` with `LOCUS_CAPTURE_LEVEL=redacted`. `full` is available only as explicit warning territory.
 
 Locus stores metadata only by default. No raw file content is ever written to disk unless you explicitly opt in.
@@ -70,7 +72,36 @@ Once installed, Locus auto-injects 3 resources into every conversation — no co
 
 ### Codex CLI
 
-Add Locus as an MCP server:
+Install Locus for Codex with one command:
+
+```bash
+npx -y locus-memory@latest install codex
+```
+
+Then restart Codex and verify:
+
+```bash
+npx -y locus-memory@latest doctor codex
+```
+
+To remove the MCP entry while preserving local memory data:
+
+```bash
+npx -y locus-memory@latest uninstall codex --yes
+```
+
+The installer:
+
+- installs the canonical Codex skill into `$CODEX_HOME/skills/locus-memory/SKILL.md`
+- configures the `locus` MCP server with `redacted` capture defaults
+- writes a recurring runtime command pinned to the installed package version, not `@latest`
+- preserves existing manual setup unless it can classify it as a Locus migration
+
+### Manual MCP fallback
+
+Manual MCP setup remains supported for development, local checkouts, and users who do not want npm-based install.
+
+Add Locus as an MCP server from a local checkout:
 
 ```bash
 codex mcp add locus -- node /path/to/locus/dist/server.js
@@ -94,11 +125,12 @@ Repo-local plugin packaging is also available for local Codex onboarding:
 - plugin bundle: [plugins/locus-memory](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/plugins/locus-memory)
 - repo marketplace: [.agents/plugins/marketplace.json](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/.agents/plugins/marketplace.json)
 - plugin sync helper: `npm run sync:codex-plugin`
+- marketplace bundle generator: `npm run sync:codex-marketplace`
 
 > **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 14 MCP tools and 3 resources work immediately. Before `memory_search`, Locus auto-imports the newest Codex rollout session with a local debounce window. `memory_status` now exposes structured Codex diagnostics plus `codexTruth`, `memory_doctor` adds Codex-specific health checks, and `memory_import_codex` remains available when you want explicit control, filtered import, or manual catch-up across older sessions.
 > Last documented validation target: Codex CLI `0.123.0` surface as of April 23, 2026.
 
-Manual MCP setup remains fully supported. The local plugin bundle is an optional packaging layer for repo-local onboarding, not a replacement requirement.
+Manual MCP setup remains fully supported. The local plugin bundle and generated marketplace bundle are packaging layers, not second sources of product logic.
 
 Recent Codex history becomes searchable automatically when you use `memory_search`, but recall quality depends on capture mode. `metadata` proves import health and preserves limited session context. `redacted` is the recommended practical mode for useful conversational recall. `full` stores the most content and must be treated as explicit opt-in.
 
@@ -400,7 +432,7 @@ Locus has 4 layers of protection: (1) metadata-only storage by default — no fi
 
 ### When will Cursor / Windsurf get full hook support?
 
-The next Codex-focused release track will target one-command install, marketplace packaging, recall ranking polish, and additional IDE adapters such as `@locus/log-tailer`. See the [Roadmap](#roadmap) below.
+The next Codex-focused release tracks target recall ranking polish, dashboard UX, and additional IDE adapters such as `@locus/log-tailer`. See the [Roadmap](#roadmap) below.
 
 ## Roadmap
 
@@ -411,7 +443,8 @@ The next Codex-focused release track will target one-command install, marketplac
 | v3.1 | Released | Multi-client architecture: `@locus/shared-runtime` (client-aware paths), `@locus/codex` (Codex CLI skill + config) |
 | v3.1.1 | Released | Fix: hooks failed in plugin cache due to bare module import of `@locus/shared-runtime` |
 | v3.3 | Released | Codex release: manual import, auto-import before search, doctor/status diagnostics, skill sync, VS Code docs, repo-local plugin packaging |
-| v3.4 | **Current** | Codex memory trust release: validated useful recall in `redacted`, current Codex JSONL compatibility, honest diagnostics/docs |
+| v3.4 | Released | Codex memory trust release: validated useful recall in `redacted`, current Codex JSONL compatibility, honest diagnostics/docs |
+| v3.5 | **Current** | One-command Codex install: npm runtime, installer/doctor/uninstall commands, generated marketplace bundle, manual MCP fallback preserved |
 | v4.0 | Planned | HTML dashboard for memory visualization |
 
 ## Development

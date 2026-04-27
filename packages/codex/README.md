@@ -4,7 +4,33 @@ Codex CLI adapter for [Locus](https://github.com/Magnifico4625/locus) persistent
 
 ## Quick Start
 
-### 1. Add MCP Server
+### 1. Install for Codex
+
+```bash
+npx -y locus-memory@latest install codex
+```
+
+The installer writes the canonical skill to `$CODEX_HOME/skills/locus-memory/SKILL.md` and configures the `locus` MCP server with `redacted` capture defaults.
+
+### 2. Verify and diagnose
+
+```bash
+npx -y locus-memory@latest doctor codex
+```
+
+Then restart Codex and ask for `memory_status` or a small `memory_search`.
+
+### 3. Uninstall MCP entry
+
+```bash
+npx -y locus-memory@latest uninstall codex --yes
+```
+
+Uninstall removes the package-owned MCP entry but leaves local memory data untouched.
+
+### Manual MCP fallback
+
+Manual setup is still supported for development checkouts and users who prefer direct MCP config:
 
 ```bash
 codex mcp add locus -- node /path/to/locus/dist/server.js
@@ -12,7 +38,7 @@ codex mcp add locus -- node /path/to/locus/dist/server.js
 
 Or edit `~/.codex/config.toml` directly (see `config/config.toml.example`).
 
-### 2. Install Skill (optional)
+### Skill-only sync fallback
 
 Sync the canonical repo skill into your local Codex skills directory:
 
@@ -22,29 +48,26 @@ npm run sync:codex-skill
 
 This writes `packages/codex/skills/locus-memory/SKILL.md` into `$CODEX_HOME/skills/locus-memory/SKILL.md`, usually `~/.codex/skills/locus-memory/SKILL.md`.
 
-### 2a. Repo-Local Plugin Bundle (optional)
+### Repo-local plugin and marketplace bundles
 
 The repo also contains a local plugin bundle:
 
 - plugin bundle: [plugins/locus-memory](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/plugins/locus-memory)
 - repo marketplace: [.agents/plugins/marketplace.json](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/.agents/plugins/marketplace.json)
+- generated public marketplace bundle: `dist/marketplace/`
 
 To keep the plugin bundle aligned with the canonical skill:
 
 ```bash
 npm run sync:codex-plugin
+npm run sync:codex-marketplace
 ```
 
 Command roles:
 
 - `npm run sync:codex-plugin` updates the repo-local plugin bundle
+- `npm run sync:codex-marketplace` generates the public distribution bundle without committing or pushing another repository
 - `npm run sync:codex-skill` updates the installed skill-only path for manual MCP setups
-
-### 3. Verify
-
-```bash
-codex "Search memory for recent decisions"
-```
 
 For useful conversational recall, configure Codex with `redacted` capture:
 
@@ -66,7 +89,7 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 - Summary-first recall through `memory_recall`
 - `codexTruth` status guidance that separates import health from recall usefulness
 
-Last documented validation target: Codex CLI `0.123.0` surface as of April 23, 2026.
+Last documented recall validation target: Codex CLI `0.123.0` surface as of April 23, 2026. Install smoke during Track B used Codex CLI `0.125.0` locally before npm publish.
 
 Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is reported as unverified until checked there.
 
@@ -195,5 +218,6 @@ See [Codex Acceptance Matrix](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/d
 
 ## What's Coming
 
-- self-serve public plugin publishing is still not the target path here; Phase 7 is repo-local packaging only
-- npm package for `npx` one-liner install
+- post-publish validation for the registry-hosted `locus-memory@3.5.0` runtime
+- recall ranking polish for duplicate-heavy sessions
+- dashboard and secondary IDE adapter work after the Codex-first path is strong

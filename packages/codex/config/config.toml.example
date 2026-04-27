@@ -1,30 +1,43 @@
 # Locus Memory -- MCP server configuration for Codex CLI
-# Copy the relevant block into ~/.codex/config.toml
-# The same Codex MCP config is the starting point for the Codex VS Code extension.
+# Copy the relevant block into ~/.codex/config.toml only if you are not using:
+#   npx -y locus-memory@latest install codex
+#
+# The same Codex MCP config is the starting point for the Codex VS Code extension,
+# but desktop / extension parity remains unverified until tested in that surface.
 
-# Option A: Direct path (after git clone)
+# Option A: Package runtime (recommended after npm publish)
+# Use a pinned package version in recurring MCP config. Do not use @latest here.
 [mcp_servers.locus]
-command = "node"
-args = ["/path/to/locus/dist/server.js"]
+command = "npx"
+args = ["-y", "locus-memory@3.5.0", "mcp"]
 
 [mcp_servers.locus.env]
 LOCUS_LOG = "error"
-LOCUS_CODEX_CAPTURE = "metadata"
-LOCUS_CAPTURE_LEVEL = "metadata"
-# CODEX_HOME is auto-detected by Codex CLI -- no need to set it manually
-# After cloning the repo, run `npm run sync:codex-skill` to install/update the local Codex skill
-# After changing this file, restart Codex CLI or run `Developer: Reload Window` in VS Code
-# If you are on Windows, prefer `C:/path/to/locus/dist/server.js` or escaped backslashes in TOML strings
+LOCUS_CODEX_CAPTURE = "redacted"
+LOCUS_CAPTURE_LEVEL = "redacted"
+# CODEX_HOME is auto-detected by Codex CLI in normal use.
+# After changing this file, restart Codex CLI or run `Developer: Reload Window` in VS Code.
 
-# Option B: npx (after npm publish -- coming soon)
+# Option B: Windows package runtime
 # [mcp_servers.locus]
-# command = "npx"
-# args = ["-y", "@locus-memory/mcp-server"]
+# command = "npx.cmd"
+# args = ["-y", "locus-memory@3.5.0", "mcp"]
 #
 # [mcp_servers.locus.env]
 # LOCUS_LOG = "error"
+# LOCUS_CODEX_CAPTURE = "redacted"
+# LOCUS_CAPTURE_LEVEL = "redacted"
 
-# Option C: Windows (use npx.cmd instead of npx)
+# Option C: Direct local checkout fallback for development
 # [mcp_servers.locus]
-# command = "npx.cmd"
-# args = ["-y", "@locus-memory/mcp-server"]
+# command = "node"
+# args = ["C:/path/to/locus/dist/server.js"]
+#
+# [mcp_servers.locus.env]
+# LOCUS_LOG = "error"
+# LOCUS_CODEX_CAPTURE = "redacted"
+# LOCUS_CAPTURE_LEVEL = "redacted"
+#
+# Windows TOML note:
+# Prefer forward slashes like "C:/path/to/locus/dist/server.js" or escaped
+# backslashes like "C:\\path\\to\\locus\\dist\\server.js".

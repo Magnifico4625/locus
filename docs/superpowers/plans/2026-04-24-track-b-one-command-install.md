@@ -1022,7 +1022,7 @@ git commit -m "docs(codex): record track b install smoke"
 - Create: `docs/releases/v3.5.0.md`
 - Modify: `packages/codex/tests/landing-page.test.ts`
 
-- [ ] **Step 1: Write failing docs/product tests**
+- [x] **Step 1: Write failing docs/product tests**
 
 Update or add tests asserting:
 
@@ -1040,7 +1040,7 @@ npm test -- packages/codex/tests/landing-page.test.ts packages/codex/tests/packa
 
 Expected: FAIL until docs are updated.
 
-- [ ] **Step 2: Update README Quick Start**
+- [x] **Step 2: Update README Quick Start**
 
 Make Codex CLI Quick Start start with:
 
@@ -1050,7 +1050,7 @@ npx -y locus-memory@latest install codex
 
 Move `codex mcp add locus -- node /path/to/locus/dist/server.js` into development/manual fallback.
 
-- [ ] **Step 3: Update Codex package docs**
+- [x] **Step 3: Update Codex package docs**
 
 Update `packages/codex/README.md`:
 
@@ -1061,7 +1061,7 @@ Update `packages/codex/README.md`:
 - marketplace repo as distribution layer
 - desktop/extension caveat
 
-- [ ] **Step 4: Update config example**
+- [x] **Step 4: Update config example**
 
 Update `packages/codex/config/config.toml.example`:
 
@@ -1070,7 +1070,7 @@ Update `packages/codex/config/config.toml.example`:
 - Windows `npx.cmd` note
 - direct repo path as development fallback
 
-- [ ] **Step 5: Update acceptance matrix and roadmap**
+- [x] **Step 5: Update acceptance matrix and roadmap**
 
 Update:
 
@@ -1081,7 +1081,7 @@ Mark Track A as publicly released in `v3.4.0`.
 
 Describe Track B as active or completed according to implementation state.
 
-- [ ] **Step 6: Update landing page**
+- [x] **Step 6: Update landing page**
 
 Update `docs/index.html` and relevant tests:
 
@@ -1096,7 +1096,7 @@ npm run build:site
 npm test -- packages/codex/tests/landing-page.test.ts
 ```
 
-- [ ] **Step 7: Add release notes**
+- [x] **Step 7: Add release notes**
 
 Create `docs/releases/v3.5.0.md`:
 
@@ -1107,7 +1107,7 @@ Create `docs/releases/v3.5.0.md`:
 - validation summary
 - known limitations
 
-- [ ] **Step 8: Verify docs search**
+- [x] **Step 8: Verify docs search**
 
 Run:
 
@@ -1117,7 +1117,7 @@ rg -n "dist/server.js|coming soon|v3.4|v3.5|one-command|npx -y locus-memory|desk
 
 Expected: no stale primary-install claims.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 Run:
 

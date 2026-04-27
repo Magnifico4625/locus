@@ -2,7 +2,7 @@
 
 **Date:** 2026-04-16  
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** Track A closed the first Codex memory-trust gap locally. The next focus is release preparation, one-command install, and product polish around that stronger memory core.
+**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is preparing the `v3.5.0` one-command Codex install release around that stronger memory core.
 
 ---
 
@@ -18,8 +18,8 @@ Unlike [codex.md](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/roadmap/
 
 Current planning window:
 
-- **Late April 2026** — memory trust gap closure, recall validation, and Codex-facing diagnostics completed locally
-- **May 2026** — one-command install, desktop polish, and richer product UX around the stronger memory path
+- **Late April 2026** — memory trust gap closure, recall validation, Codex-facing diagnostics, and one-command install implementation
+- **May 2026** — post-publish install validation, desktop polish, dashboard planning, and richer product UX around the stronger memory path
 - **Later** — secondary clients and broader memory platform UX
 
 ---
@@ -44,7 +44,7 @@ Rules:
 
 **Priority:** `P0`  
 **Target window:** late April 2026 into May 2026  
-**Current status:** completed locally on branch `feature/track-a-a6-acceptance-docs`; checkpoint tag `track-a-a6-local`; public release status still depends on merge/release flow.
+**Current status:** released publicly in `v3.4.0`; checkpoint tag `v3.4.0`.
 **Why it matters:** the current product story is ahead of the lived Codex experience. `metadata` mode plus fragile Codex client detection can produce a system that is diagnostically alive but not yet useful as persistent conversational memory. Before scaling install, Locus needs to earn trust as actual memory.
 
 ### Goal
@@ -85,7 +85,7 @@ Make Codex users able to rely on Locus for meaningful project recall: recent dia
 
 ### Release intent
 
-Highest-priority candidate scope for the next Codex-focused release line, likely **`v3.4`** in whole or in part.
+Shipped in **`v3.4.0`**.
 
 ### Delivered Locally
 
@@ -109,6 +109,7 @@ Validation evidence from `A6`:
 
 **Priority:** `P0`  
 **Target window:** May 2026 and after the first memory-trust work lands  
+**Current status:** implementation active on branch `docs/track-b-one-command-install`; local tarball and Codex install smoke checks are substantially complete, with registry-hosted post-publish validation intentionally deferred to B10.
 **Why it matters:** once the Codex memory path is trustworthy, the next major UX win is reducing installation from a repo-driven setup to a simple marketplace-based or package-driven flow.
 
 ### Goal
@@ -123,6 +124,8 @@ Make Locus installable for Codex users with the smallest possible setup burden, 
 - npm package for one-command `npx` / packaged install flow
 - migration guide from manual MCP setup to marketplace/package install
 - documented fallback path when marketplace or extension behavior differs from Codex CLI
+- `locus-memory install codex`, `doctor codex`, and `uninstall codex` CLI commands
+- generated marketplace bundle under `dist/marketplace/` without mutating a second git repository
 
 ### Key constraints
 
@@ -138,7 +141,7 @@ Make Locus installable for Codex users with the smallest possible setup burden, 
 
 ### Release intent
 
-Candidate scope for **`v3.4.x`** once the first memory-trust fixes have landed.
+Candidate scope for **`v3.5.0`**.
 
 ---
 
@@ -337,9 +340,9 @@ This is a planning suggestion, not a hard contract.
 
 | Release | Primary intent |
 |---------|----------------|
-| `v3.4` | ship the completed Track A memory-trust work: reliable auto-import, validated recall, automatic high-value memory persistence, honest diagnostics/docs |
-| `v3.4.x` | one-command install foundations: marketplace repo, packaged runtime, install UX cleanup |
-| `v3.5` | richer Codex conversational recall (`redacted` / `full`) and stronger capture/privacy UX |
+| `v3.4` | shipped Track A memory-trust work: reliable auto-import, validated recall, automatic high-value memory persistence, honest diagnostics/docs |
+| `v3.5` | one-command install foundations: npm runtime, installer/doctor/uninstall, marketplace bundle generation, install UX cleanup |
+| `v3.6` | richer Codex conversational recall (`redacted` / `full`) and stronger capture/privacy UX |
 | `v4.0` | HTML dashboard + broader product-grade memory visibility |
 
 Secondary IDE adapters should be scheduled only when they do not block the Codex-first path above.
@@ -348,18 +351,14 @@ Secondary IDE adapters should be scheduled only when they do not block the Codex
 
 ## Immediate Next Candidates
 
-1. Prepare Track A for merge and public release:
-   - review branch diff
-   - run release-readiness checks
-   - prepare PR/release notes
-   - keep local checkpoint tag `track-a-a6-local` until release is cut
-2. Plan Track B one-command install:
-   - npm package / `npx`
-   - marketplace repository
-   - packaged runtime
-3. Continue improving high-value memory persistence quality after Track A ships:
+1. Finish Track B release preparation:
+   - docs truth pass
+   - version alignment
+   - final validation
+   - npm publish and B10 post-publish validation
+2. Continue improving high-value memory persistence quality after Track B ships:
    - accepted decisions
    - user preferences
    - collaboration style
    - stable project constraints
-4. Decide whether the dashboard starts as read-only diagnostics or as a broader memory browser from day one.
+3. Decide whether the dashboard starts as read-only diagnostics or as a broader memory browser from day one.

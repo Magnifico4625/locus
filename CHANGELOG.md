@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-04-27
+
+### Added
+- Public `locus-memory` npm package contract with `locus-memory` CLI entrypoint
+- `locus-memory install codex` for one-command Codex setup with skill install, package-owned MCP config, redacted defaults, and install locking
+- `locus-memory doctor codex` and `locus-memory uninstall codex` for diagnostics and safe removal of the MCP entry while preserving memory data
+- Generated Codex marketplace distribution bundle under `dist/marketplace/`
+- Package tarball acceptance tests for `dist/server.js`, `dist/cli.js`, and the canonical Codex skill
+
+### Changed
+- Codex docs now lead with `npx -y locus-memory@latest install codex`
+- Recurring MCP runtime config is version-pinned to `locus-memory@3.5.0`; `@latest` is only for the user-run installer command
+- Manual `node /path/to/locus/dist/server.js` setup is now documented as the development/manual fallback
+
+### Fixed
+- Installer now preflights the pinned npm runtime before mutating Codex MCP config, preventing pre-publish or offline installs from leaving a broken recurring `npx` runtime
+- Windows command execution now avoids shell deprecation warnings and quotes dirty paths safely
+- Existing manual Locus MCP entries are classified more reliably during migration
+
+### Notes
+- Registry-hosted post-publish validation is tracked separately in B10 and must pass before claiming the npm-hosted runtime is publicly proven
+- Codex desktop / extension parity remains unverified until tested in that surface
+
 ## [3.4.0] - 2026-04-23
 
 ### Added
@@ -177,7 +200,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PostToolUse hook for automatic capture
 - `memory_scan`, `memory_search`, `memory_explore`, `memory_remember`, `memory_forget`, `memory_purge`, `memory_status`, `memory_doctor`, `memory_audit` tools
 
-[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.4.0...HEAD
+[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.5.0...HEAD
+[3.5.0]: https://github.com/Magnifico4625/locus/compare/v3.4.0...v3.5.0
 [3.4.0]: https://github.com/Magnifico4625/locus/compare/v3.3.0...v3.4.0
 [3.3.0]: https://github.com/Magnifico4625/locus/compare/v3.1.1...v3.3.0
 [3.1.1]: https://github.com/Magnifico4625/locus/compare/v3.1.0...v3.1.1
