@@ -30,7 +30,10 @@ In scope:
   - `uninstall codex`
 - Codex installer with `redacted` defaults
 - idempotency, backup, and ownership behavior
+- install lock / race-condition protection
+- interrupted install cleanup
 - version-pinned runtime MCP command
+- npm cache/network resilience checks for the pinned runtime command
 - skill install into `$CODEX_HOME/skills/locus-memory/SKILL.md`
 - generated marketplace bundle in `dist/marketplace/`
 - package tarball and Codex install acceptance checks
@@ -60,17 +63,24 @@ Create:
 - `packages/cli/src/codex/paths.ts`
 - `packages/cli/src/codex/skill.ts`
 - `packages/cli/src/codex/commands.ts`
+- `packages/cli/src/codex/lock.ts`
+- `packages/cli/src/codex/cleanup.ts`
 - `packages/cli/src/codex/report.ts`
+- `packages/cli/src/version-consistency.ts`
 - `packages/cli/src/package-info.ts`
 - `packages/cli/tests/cli.test.ts`
 - `packages/cli/tests/codex-config.test.ts`
 - `packages/cli/tests/codex-install.test.ts`
 - `packages/cli/tests/codex-doctor.test.ts`
 - `packages/cli/tests/codex-uninstall.test.ts`
+- `packages/cli/tests/codex-lock.test.ts`
+- `packages/cli/tests/codex-cleanup.test.ts`
+- `packages/cli/tests/version-consistency.test.ts`
 - `packages/cli/tests/package-info.test.ts`
 - `scripts/sync-codex-marketplace.mjs`
 - `packages/codex/tests/marketplace-bundle.test.ts`
 - `packages/codex/tests/package-contract.test.ts`
+- `packages/codex/tests/post-publish-validation.test.ts`
 - `docs/releases/v3.5.0.md`
 
 Modify:
@@ -171,6 +181,7 @@ Create `packages/codex/tests/package-contract.test.ts` with tests that assert:
 - root package has `prepublishOnly`
 - `package-lock.json` root package version matches root `package.json`
 - package contract records a maximum expected tarball/runtime size budget for `dist/cli.js` and `dist/server.js`
+- root version, workspace versions, plugin manifest version, and package-lock root version are checked early, not only in the release task
 
 Run:
 
@@ -237,7 +248,20 @@ npm test -- packages/codex/tests/package-contract.test.ts
 
 Expected: PASS after metadata changes that do not require CLI implementation.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 6: Add early version consistency test**
+
+Extend `packages/codex/tests/package-contract.test.ts` or add a helper that checks these files agree before any publish-related work continues:
+
+- `package.json`
+- `package-lock.json`
+- `packages/core/package.json`
+- `packages/codex/package.json`
+- `packages/shared-runtime/package.json`
+- `plugins/locus-memory/.codex-plugin/plugin.json`
+
+Expected: PASS on the current version before Track B version bump, and later PASS again after all versions move to `3.5.0`.
+
+- [ ] **Step 7: Commit**
 
 Run:
 
@@ -379,11 +403,22 @@ Run:
 ```bash
 npm test -- packages/cli/tests/cli.test.ts packages/cli/tests/package-info.test.ts
 npm -w @locus/cli run typecheck
+npm run lint
 ```
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [ ] **Step 9: Verify version consistency still passes**
+
+Run:
+
+```bash
+npm test -- packages/cli/tests/version-consistency.test.ts packages/codex/tests/package-contract.test.ts
+```
+
+Expected: PASS. This catches package/plugin version drift before Task B9.
+
+- [ ] **Step 10: Commit**
 
 Run:
 
@@ -399,8 +434,12 @@ git commit -m "feat(cli): add locus command skeleton"
 **Files:**
 - Create: `packages/cli/src/codex/paths.ts`
 - Create: `packages/cli/src/codex/skill.ts`
+- Create: `packages/cli/src/codex/lock.ts`
+- Create: `packages/cli/src/codex/cleanup.ts`
 - Create: `packages/cli/src/codex/report.ts`
 - Create: `packages/cli/tests/codex-install.test.ts`
+- Create: `packages/cli/tests/codex-lock.test.ts`
+- Create: `packages/cli/tests/codex-cleanup.test.ts`
 - Modify: `packages/cli/src/commands/install-codex.ts`
 - Modify: `packages/codex/src/skill-sync.ts`
 - Modify: `packages/codex/src/index.ts`
@@ -417,11 +456,16 @@ Tests should cover:
 - differing skill is backed up when overwrite is enabled
 - backup filename includes timestamp, not only `.bak`
 - install result reports `created`, `updated`, `unchanged`, `backed_up`, or `skipped`
+- install lock prevents two concurrent installers from mutating the same Codex home
+- stale lock files are detected and reported with an actionable message
+- interrupted temp files are either cleaned up or ignored safely on the next run
+- writes use temp-file-then-rename where direct file writes are needed
+- UAC/protected-directory failures return actionable errors instead of partial success
 
 Run:
 
 ```bash
-npm test -- packages/cli/tests/codex-install.test.ts
+npm test -- packages/cli/tests/codex-install.test.ts packages/cli/tests/codex-lock.test.ts packages/cli/tests/codex-cleanup.test.ts
 ```
 
 Expected: FAIL because installer helpers do not exist.
@@ -457,8 +501,24 @@ Create `packages/cli/src/codex/skill.ts`:
 - compare content
 - write or skip
 - backup differing file when requested
+- write through a temporary file followed by rename
 
-- [ ] **Step 5: Implement report model**
+- [ ] **Step 5: Implement install lock and interrupted cleanup helpers**
+
+Create `packages/cli/src/codex/lock.ts`:
+
+- lock path under `$CODEX_HOME/.locus-install.lock`
+- atomic lock create where possible
+- stale lock detection with timestamp/process metadata
+- explicit release in `finally`
+
+Create `packages/cli/src/codex/cleanup.ts`:
+
+- detects stale `.tmp` files created by Locus installer
+- removes safe stale temp files
+- never deletes memory databases or non-Locus files
+
+- [ ] **Step 6: Implement report model**
 
 Create `packages/cli/src/codex/report.ts` with typed operations:
 
@@ -468,27 +528,28 @@ export type InstallAction = 'created' | 'updated' | 'unchanged' | 'backed_up' | 
 
 Return structured results first; format human text at command boundary.
 
-- [ ] **Step 6: Wire `install codex --dry-run`**
+- [ ] **Step 7: Wire `install codex --dry-run`**
 
 Modify `packages/cli/src/commands/install-codex.ts` so:
 
 - `--dry-run` reports intended skill path and MCP command
 - no file writes happen in dry-run
 - default capture mode is `redacted`
+- protected directory / permission errors are reported as `permission_denied` and do not claim success
 
-- [ ] **Step 7: Verify tests**
+- [ ] **Step 8: Verify tests**
 
 Run:
 
 ```bash
-npm test -- packages/cli/tests/codex-install.test.ts packages/codex/tests/skill-sync.test.ts
+npm test -- packages/cli/tests/codex-install.test.ts packages/cli/tests/codex-lock.test.ts packages/cli/tests/codex-cleanup.test.ts packages/codex/tests/skill-sync.test.ts
 npm -w @locus/cli run typecheck
 npm -w @locus/codex run typecheck
 ```
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 Run:
 
@@ -520,6 +581,11 @@ Tests should cover:
 - env defaults include `LOCUS_LOG=error`, `LOCUS_CODEX_CAPTURE=redacted`, `LOCUS_CAPTURE_LEVEL=redacted`
 - existing package-owned config is classified as update/unchanged
 - existing manual `node /path/to/locus/dist/server.js` config is classified as manual migration needed
+- ownership states are explicit:
+  - `package-owned`
+  - `manual-locus`
+  - `foreign-locus`
+  - `missing`
 - Windows-style dirty paths are rendered safely in any fallback TOML:
   - drive-letter paths such as `C:\Users\Admin\My Project\dist\server.js`
   - paths with spaces
@@ -527,6 +593,10 @@ Tests should cover:
   - paths with literal double quotes rejected or escaped deliberately
 - TOML write path creates backup before direct edit
 - `codex mcp add` command builder includes repeated `--env`
+- network/cache status is represented in doctor output:
+  - pinned package specifier
+  - whether the installer attempted to warm npm cache
+  - warning that first run after cache cleanup requires network
 
 Run:
 
@@ -553,6 +623,7 @@ Create `packages/cli/src/codex/config.ts`:
 - generated MCP server shape
 - minimal TOML block rendering if direct edit fallback is needed
 - backup path helper
+- ownership classifier
 
 Avoid broad TOML parsing unless needed. Prefer `codex mcp add/remove`.
 
@@ -562,9 +633,14 @@ If fallback TOML rendering is implemented, add a dedicated `quoteTomlBasicString
 
 `locus-memory install codex --yes` should:
 
+- acquire install lock
+- run interrupted cleanup before writing
 - run `codex mcp add` with pinned package specifier
+- warm the pinned npm runtime cache where practical
 - install skill
 - print structured summary
+- release install lock in `finally`
+- if a later phase fails after an earlier phase succeeded, report the partial state explicitly and print exact remediation commands instead of pretending the install rolled back completely
 
 For tests, command execution must be injectable/mocked.
 
@@ -576,6 +652,8 @@ For tests, command execution must be injectable/mocked.
 - report Codex availability/version if command runner can execute it
 - report Codex home/config/skill paths
 - report expected runtime package specifier
+- report whether runtime cache warming was attempted or skipped
+- report if the current config is package-owned, manual-locus, foreign-locus, or missing
 - avoid mutating files
 
 - [ ] **Step 6: Wire uninstall command**
@@ -820,6 +898,8 @@ Expected:
 - MCP server configured as package runtime
 - skill path created or updated
 - report shows operations
+- install lock is acquired and released
+- npm runtime cache warming is attempted or explicitly skipped with a warning
 
 - [ ] **Step 3: Verify Codex MCP config**
 
@@ -849,8 +929,23 @@ Expected:
 
 - mostly `unchanged`
 - no duplicate server entries
+- no stale locks or temp files are left behind
 
-- [ ] **Step 5: Fresh Codex runtime check**
+- [ ] **Step 5: Simulate interrupted cleanup**
+
+Create a stale Locus temp file and stale lock in a disposable fake `CODEX_HOME`, then run:
+
+```bash
+npx -y .\locus-memory-<version>.tgz install codex --yes --dry-run
+```
+
+Expected:
+
+- stale state is detected
+- safe stale temp files are cleaned or reported
+- no memory data is touched
+
+- [ ] **Step 6: Fresh Codex runtime check**
 
 Restart Codex session and run:
 
@@ -864,7 +959,7 @@ Expected:
 - capture level reports `redacted`
 - Codex diagnostics present
 
-- [ ] **Step 6: Uninstall smoke**
+- [ ] **Step 7: Uninstall smoke**
 
 Run:
 
@@ -878,7 +973,7 @@ Expected:
 - Locus MCP entry removed or disabled according to implemented policy
 - memory data remains untouched
 
-- [ ] **Step 7: Reinstall after uninstall**
+- [ ] **Step 8: Reinstall after uninstall**
 
 Run:
 
@@ -889,7 +984,7 @@ codex mcp get locus
 
 Expected: install works again cleanly.
 
-- [ ] **Step 8: Commit plan checkbox update**
+- [ ] **Step 9: Commit plan checkbox update**
 
 Run:
 
@@ -1111,6 +1206,102 @@ Run:
 
 ```bash
 git tag -a track-b-one-command-install-local -m "Track B one-command install local checkpoint"
+```
+
+---
+
+## Task B10: Post-Publish Validation
+
+**Files:**
+- Modify: `docs/releases/v3.5.0.md`
+- Modify: `docs/superpowers/plans/2026-04-24-track-b-one-command-install.md`
+
+This task runs only after the npm package, GitHub release, and marketplace artifact are published. It is a release verification gate, not a substitute for local tarball acceptance.
+
+- [ ] **Step 1: Verify npm registry metadata**
+
+Run:
+
+```bash
+npm view locus-memory@3.5.0 version dist.tarball dist.integrity bin --json
+```
+
+Expected:
+
+- version is `3.5.0`
+- package exposes the expected `locus-memory` bin
+- tarball URL and integrity are present
+
+- [ ] **Step 2: Verify one-command install entrypoint from registry**
+
+Use a disposable `CODEX_HOME` and run:
+
+```bash
+npx -y locus-memory@3.5.0 --help
+npx -y locus-memory@3.5.0 doctor codex
+npx -y locus-memory@3.5.0 install codex --yes --dry-run
+```
+
+Expected:
+
+- CLI starts from npm registry
+- doctor reports environment state without mutation
+- dry-run reports pinned recurring runtime command
+- no `@latest` is written into recurring MCP configuration
+
+- [ ] **Step 3: Verify real install in a disposable Codex home**
+
+Run the installer against a disposable Codex home, not the user's primary Codex config:
+
+```bash
+npx -y locus-memory@3.5.0 install codex --yes
+npx -y locus-memory@3.5.0 doctor codex
+```
+
+Expected:
+
+- MCP entry is package-owned
+- skill is installed
+- capture defaults are `redacted`
+- install lock and temp files are not left behind
+
+- [ ] **Step 4: Verify marketplace artifact**
+
+Check the generated marketplace distribution and the marketplace repository/release process used for this release.
+
+Expected:
+
+- plugin manifest version matches `3.5.0`
+- plugin MCP config uses a pinned runtime package specifier
+- marketplace repository is a thin distribution layer, not a second source of product logic
+
+- [ ] **Step 5: Verify public release surfaces**
+
+Check:
+
+- GitHub release page
+- README install section
+- project landing page
+- `docs/releases/v3.5.0.md`
+
+Expected: all public surfaces tell the same install story and do not claim unverified Codex desktop / extension parity.
+
+- [ ] **Step 6: Document rollback/hotfix path if validation fails**
+
+If post-publish validation fails:
+
+- prefer a patch release over rewriting history
+- document the failure and workaround in the release notes
+- use `npm deprecate locus-memory@3.5.0 "<reason>"` only if the published package is misleading or unsafe
+- avoid `npm unpublish` unless the package is truly broken and npm policy/time window makes it safe
+
+- [ ] **Step 7: Commit post-publish notes**
+
+Run:
+
+```bash
+git add docs/releases/v3.5.0.md docs/superpowers/plans/2026-04-24-track-b-one-command-install.md
+git commit -m "docs(release): record v3.5.0 post-publish validation"
 ```
 
 ---
