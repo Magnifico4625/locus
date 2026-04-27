@@ -68,10 +68,10 @@ describe('publishable package contract', () => {
   it('builds separate MCP server and CLI entrypoints', () => {
     const esbuildConfig = readFileSync(join(root, 'esbuild.config.ts'), 'utf8');
 
-    expect(esbuildConfig).toContain("packages/core/src/server.ts");
-    expect(esbuildConfig).toContain("dist/server.js");
-    expect(esbuildConfig).toContain("packages/cli/src/index.ts");
-    expect(esbuildConfig).toContain("dist/cli.js");
+    expect(esbuildConfig).toContain('packages/core/src/server.ts');
+    expect(esbuildConfig).toContain('dist/server.js');
+    expect(esbuildConfig).toContain('packages/cli/src/index.ts');
+    expect(esbuildConfig).toContain('dist/cli.js');
   });
 
   it('records bundle size budgets and prevents obvious CLI/server duplication', () => {

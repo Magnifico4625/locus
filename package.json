@@ -29,7 +29,7 @@
     "format": "biome format --write .",
     "sync:codex-plugin": "node scripts/sync-codex-plugin.mjs",
     "sync:codex-skill": "node scripts/sync-codex-skill.mjs",
-    "typecheck": "npm -w @locus/core run typecheck && npm -w @locus/codex run typecheck",
+    "typecheck": "npm -w @locus/core run typecheck && npm -w @locus/codex run typecheck && npm -w @locus/cli run typecheck",
     "check": "npm run typecheck && npm run lint && npm run test",
     "prepublishOnly": "npm run check && npm run build"
   },

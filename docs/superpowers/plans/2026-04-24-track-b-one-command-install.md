@@ -285,7 +285,7 @@ git commit -m "chore(package): define publishable locus package contract"
 - Modify: `package.json`
 - Modify: `package-lock.json`
 
-- [ ] **Step 1: Write failing CLI tests**
+- [x] **Step 1: Write failing CLI tests**
 
 Create tests that execute `packages/cli/src/index.ts` through Node/Vitest helpers or import command functions directly.
 
@@ -307,7 +307,7 @@ npm test -- packages/cli/tests/cli.test.ts packages/cli/tests/package-info.test.
 
 Expected: FAIL because package does not exist.
 
-- [ ] **Step 2: Add `@locus/cli` workspace**
+- [x] **Step 2: Add `@locus/cli` workspace**
 
 Create `packages/cli/package.json`:
 
@@ -336,7 +336,7 @@ Create `packages/cli/package.json`:
 
 Use the release version selected for Track B. If implementation targets `3.5.0`, all package versions should move together in a later version task.
 
-- [ ] **Step 3: Add TypeScript config**
+- [x] **Step 3: Add TypeScript config**
 
 Create `packages/cli/tsconfig.json` aligned with existing package configs:
 
@@ -355,7 +355,7 @@ Create `packages/cli/tsconfig.json` aligned with existing package configs:
 }
 ```
 
-- [ ] **Step 4: Implement minimal CLI router**
+- [x] **Step 4: Implement minimal CLI router**
 
 Create `packages/cli/src/index.ts` with a small router:
 
@@ -367,13 +367,13 @@ Create `packages/cli/src/index.ts` with a small router:
 
 Only `mcp` is allowed to call runtime startup in this task; other commands can return clear "not implemented" until later tasks.
 
-- [ ] **Step 5: Implement `mcp` command**
+- [x] **Step 5: Implement `mcp` command**
 
 Create `packages/cli/src/commands/mcp.ts` that dynamically imports the built server entrypoint or reuses the existing server module path after build.
 
 If direct import of `packages/core/src/server.ts` is not safe for published runtime, make `dist/cli.js mcp` import `./server.js` after build.
 
-- [ ] **Step 6: Implement package info helpers**
+- [x] **Step 6: Implement package info helpers**
 
 Create `packages/cli/src/package-info.ts`:
 
@@ -386,7 +386,7 @@ Tests must enforce pinned version for runtime config.
 
 Do not assume the current working directory is the repository root. The published CLI may run from an npm cache path, a project directory, or a nested workspace. Package version discovery must work from the built CLI location and should have injectable start paths for tests.
 
-- [ ] **Step 7: Refresh lockfile**
+- [x] **Step 7: Refresh lockfile**
 
 Run:
 
@@ -396,7 +396,7 @@ npm install --package-lock-only --ignore-scripts
 
 Expected: `packages/cli` appears as a workspace package.
 
-- [ ] **Step 8: Verify CLI tests**
+- [x] **Step 8: Verify CLI tests**
 
 Run:
 
@@ -408,7 +408,7 @@ npm run lint
 
 Expected: PASS.
 
-- [ ] **Step 9: Verify version consistency still passes**
+- [x] **Step 9: Verify version consistency still passes**
 
 Run:
 
@@ -418,7 +418,7 @@ npm test -- packages/cli/tests/version-consistency.test.ts packages/codex/tests/
 
 Expected: PASS. This catches package/plugin version drift before Task B9.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 Run:
 

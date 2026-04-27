@@ -39,7 +39,7 @@
   "files": {
     "includes": [
       "**",
-      "!**/dist/",
+      "!**/dist",
       "!**/node_modules/",
       "!**/coverage/",
       "!**/*.md",
