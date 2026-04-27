@@ -169,7 +169,7 @@ Expected: docs-only planning commit.
 - Modify: `esbuild.config.ts`
 - Create: `packages/codex/tests/package-contract.test.ts`
 
-- [ ] **Step 1: Write failing package contract tests**
+- [x] **Step 1: Write failing package contract tests**
 
 Create `packages/codex/tests/package-contract.test.ts` with tests that assert:
 
@@ -191,7 +191,7 @@ npm test -- packages/codex/tests/package-contract.test.ts
 
 Expected: FAIL because package is still private and has no `bin`.
 
-- [ ] **Step 2: Update root package metadata minimally**
+- [x] **Step 2: Update root package metadata minimally**
 
 Modify `package.json`:
 
@@ -217,7 +217,7 @@ Modify `package.json`:
 
 Do not publish yet.
 
-- [ ] **Step 3: Update build output plan**
+- [x] **Step 3: Update build output plan**
 
 Modify `esbuild.config.ts` so it builds:
 
@@ -228,7 +228,7 @@ Keep the shebang banner for both outputs.
 
 Do not blindly bundle the full MCP server into `dist/cli.js`. The CLI bundle should keep install/doctor/uninstall logic separate and make `locus-memory mcp` locate `dist/server.js` through a stable relative path from `import.meta.url` after build. Add a test or package-contract assertion that catches accidental server duplication in `dist/cli.js` by checking the file is materially smaller than `dist/server.js`.
 
-- [ ] **Step 4: Refresh lockfile without scripts**
+- [x] **Step 4: Refresh lockfile without scripts**
 
 Run:
 
@@ -238,7 +238,7 @@ npm install --package-lock-only --ignore-scripts
 
 Expected: `package-lock.json` reflects root package publish metadata and new workspace if already added later. If this task runs before `packages/cli` exists, lockfile update may be repeated in Task B2.
 
-- [ ] **Step 5: Verify package contract tests**
+- [x] **Step 5: Verify package contract tests**
 
 Run:
 
@@ -248,7 +248,7 @@ npm test -- packages/codex/tests/package-contract.test.ts
 
 Expected: PASS after metadata changes that do not require CLI implementation.
 
-- [ ] **Step 6: Add early version consistency test**
+- [x] **Step 6: Add early version consistency test**
 
 Extend `packages/codex/tests/package-contract.test.ts` or add a helper that checks these files agree before any publish-related work continues:
 
@@ -261,7 +261,7 @@ Extend `packages/codex/tests/package-contract.test.ts` or add a helper that chec
 
 Expected: PASS on the current version before Track B version bump, and later PASS again after all versions move to `3.5.0`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 

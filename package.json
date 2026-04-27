@@ -3,13 +3,17 @@
   "version": "3.4.0",
   "description": "Persistent project-aware memory for AI coding tools. Built on MCP. Knows your project, remembers your decisions, costs almost nothing.",
   "type": "module",
-  "private": true,
+  "private": false,
   "workspaces": [
     "packages/*"
   ],
   "main": "dist/server.js",
+  "bin": {
+    "locus-memory": "dist/cli.js"
+  },
   "files": [
     "dist/",
+    "packages/codex/skills/locus-memory/SKILL.md",
     "LICENSE",
     "README.md"
   ],
