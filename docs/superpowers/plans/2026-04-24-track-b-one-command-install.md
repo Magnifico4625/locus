@@ -886,6 +886,8 @@ Expected: current state recorded in terminal output. Do not manually edit user c
 
 - [x] **Step 2: Install from local tarball**
 
+Result update from local smoke: a tarball-run installer must not leave recurring Codex config pointing at `locus-memory@3.4.0` until that package exists in npm. The installer now preflights `npm exec -y locus-memory@<version> -- --help` before mutating Codex config. If the package is unavailable, it aborts with "No Codex MCP config was changed." Package-owned fresh runtime validation moves to post-publish validation.
+
 Run:
 
 ```bash
@@ -894,14 +896,23 @@ npx -y .\locus-memory-<version>.tgz install codex --yes
 
 Expected:
 
-- command completes
-- MCP server configured as package runtime
-- skill path created or updated
+- before npm publish: command aborts without mutating Codex config when the pinned runtime package is unavailable
+- after npm publish: command completes, MCP server is configured as package runtime, and skill path is created or updated
 - report shows operations
 - install lock is acquired and released
-- npm runtime cache warming is attempted or explicitly skipped with a warning
+- npm runtime cache warming is attempted before Codex config mutation
 
 - [x] **Step 3: Verify Codex MCP config**
+
+Pre-publish local config was restored to the known-good local development runtime:
+
+```text
+command: node
+args: C:\Users\Admin\gemini-project\ClaudeMagnificoMem\dist\server.js
+env: CODEX_HOME, LOCUS_CAPTURE_LEVEL=redacted, LOCUS_CODEX_CAPTURE=redacted, LOCUS_LOG=error
+```
+
+Package-owned `npx.cmd -y locus-memory@<version> mcp` verification is deferred to B10 after npm publish.
 
 Run:
 
@@ -947,7 +958,7 @@ Expected:
 
 - [ ] **Step 6: Fresh Codex runtime check**
 
-Pending user restart. Current-session `memory_status` responds with `captureLevel=redacted` and Codex diagnostics, but a fresh Codex session is required to prove the new package-owned `npx.cmd -y locus-memory@3.4.0 mcp` runtime is the active MCP server.
+Pending after publish. Current-session `memory_status` responds with `captureLevel=redacted` and Codex diagnostics. Before npm publish, fresh local sessions should use the restored local `node dist/server.js` runtime. Package-owned fresh runtime must be validated in B10 after the npm package exists.
 
 Restart Codex session and run:
 

@@ -390,6 +390,24 @@ async function runInstallCodex(options) {
   }
   try {
     const cleanup = cleanupInterruptedInstall(codexHome);
+    const cacheResult = await options.commandRunner("npm", [
+      "exec",
+      "-y",
+      runtimeSpecifier,
+      "--",
+      "--help"
+    ]);
+    if (cacheResult.exitCode !== 0) {
+      return {
+        exitCode: 1,
+        output: [
+          `Runtime package unavailable: ${runtimeSpecifier}`,
+          "No Codex MCP config was changed.",
+          "This is expected before the package is published to npm unless it already exists in the npm cache.",
+          cacheResult.stderr.trim()
+        ].filter(Boolean).join("\n")
+      };
+    }
     const existing = await options.commandRunner("codex", ["mcp", "get", "locus"]);
     const ownership = classifyMcpOwnership(
       existing.exitCode === 0 ? parseCodexMcpGetOutput(existing.stdout) : void 0
@@ -431,13 +449,6 @@ async function runInstallCodex(options) {
         ].join("\n")
       };
     }
-    const cacheResult = await options.commandRunner("npm", [
-      "exec",
-      "-y",
-      runtimeSpecifier,
-      "--",
-      "--help"
-    ]);
     const skill = installCodexSkill({ env, overwrite: true, backup: true });
     return {
       exitCode: skill.error ? 1 : 0,

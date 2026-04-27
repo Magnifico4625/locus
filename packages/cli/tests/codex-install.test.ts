@@ -190,10 +190,14 @@ describe('codex install model', () => {
 
     expect(exitCode).toBe(0);
     expect(commands[0]).toEqual({
+      command: 'npm',
+      args: ['exec', '-y', 'locus-memory@3.4.0', '--', '--help'],
+    });
+    expect(commands[1]).toEqual({
       command: 'codex',
       args: ['mcp', 'get', 'locus'],
     });
-    expect(commands[1]).toEqual({
+    expect(commands[2]).toEqual({
       command: 'codex',
       args: expect.arrayContaining([
         'mcp',
@@ -206,15 +210,36 @@ describe('codex install model', () => {
         'mcp',
       ]),
     });
-    expect(commands[2]).toEqual({
-      command: 'npm',
-      args: ['exec', '-y', 'locus-memory@3.4.0', '--', '--help'],
-    });
     expect(existsSync(join(codexHome, '.locus-install.lock'))).toBe(false);
     expect(readFileSync(join(codexHome, 'skills', 'locus-memory', 'SKILL.md'), 'utf8')).toContain(
       'memory_recall',
     );
     expect(stdout.join('\n')).toContain('Skill: created');
+  });
+
+  it('does not mutate Codex config when the pinned runtime package is unavailable', async () => {
+    const codexHome = makeTempDir();
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex', '--yes'], io, {
+      env: { CODEX_HOME: codexHome },
+      startDir: repoRoot,
+      commandRunner: async (command, args) => {
+        commands.push({ command, args });
+        return { exitCode: 1, stdout: '', stderr: 'package not found' };
+      },
+    });
+
+    expect(exitCode).toBe(1);
+    expect(commands).toEqual([
+      {
+        command: 'npm',
+        args: ['exec', '-y', 'locus-memory@3.4.0', '--', '--help'],
+      },
+    ]);
+    expect(stdout.join('\n')).toContain('Runtime package unavailable');
+    expect(existsSync(join(codexHome, 'skills'))).toBe(false);
   });
 
   it('migrates an existing manual locus MCP entry before adding package runtime', async () => {
@@ -241,10 +266,10 @@ describe('codex install model', () => {
 
     expect(exitCode).toBe(0);
     expect(commands.map((entry) => entry.args.join(' '))).toEqual([
+      'exec -y locus-memory@3.4.0 -- --help',
       'mcp get locus',
       'mcp remove locus',
       expect.stringContaining('mcp add'),
-      'exec -y locus-memory@3.4.0 -- --help',
     ]);
     expect(stdout.join('\n')).toContain('Existing MCP entry: manual-locus');
   });
