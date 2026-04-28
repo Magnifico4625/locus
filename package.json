@@ -51,7 +51,7 @@
   "homepage": "https://github.com/Magnifico4625/locus",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Magnifico4625/locus.git"
+    "url": "git+https://github.com/Magnifico4625/locus.git"
   },
   "bugs": {
     "url": "https://github.com/Magnifico4625/locus/issues"
