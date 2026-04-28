@@ -33,13 +33,13 @@ describe('codex doctor command', () => {
       },
       readMcpServer: () => ({
         command: 'npx',
-        args: ['-y', 'locus-memory@3.5.0', 'mcp'],
+        args: ['-y', 'locus-memory@3.5.1', 'mcp'],
       }),
     });
 
     expect(exitCode).toBe(0);
     expect(stdout.join('\n')).toContain('Codex version: codex-cli 0.125.0');
-    expect(stdout.join('\n')).toContain('Runtime package: locus-memory@3.5.0');
+    expect(stdout.join('\n')).toContain('Runtime package: locus-memory@3.5.1');
     expect(stdout.join('\n')).toContain('Ownership: package-owned');
     expect(stdout.join('\n')).toContain('Cache warming: not attempted by doctor');
     expect(stdout.join('\n')).toContain('first run after cache cleanup requires network');

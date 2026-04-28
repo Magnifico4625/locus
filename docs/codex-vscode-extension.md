@@ -55,7 +55,8 @@ Equivalent package-runtime config in `~/.codex/config.toml`:
 ```toml
 [mcp_servers.locus]
 command = "npx"
-args = ["-y", "locus-memory@3.5.0", "mcp"]
+args = ["-y", "locus-memory@3.5.1", "mcp"]
+cwd = "/home/<you>/.codex"
 
 [mcp_servers.locus.env]
 LOCUS_LOG = "error"
@@ -68,7 +69,8 @@ On Windows, use `npx.cmd`:
 ```toml
 [mcp_servers.locus]
 command = "npx.cmd"
-args = ["-y", "locus-memory@3.5.0", "mcp"]
+args = ["-y", "locus-memory@3.5.1", "mcp"]
+cwd = "C:\\Users\\<you>\\.codex"
 ```
 
 Manual MCP fallback for local development:

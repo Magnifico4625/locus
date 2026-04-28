@@ -2,9 +2,9 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanupInterruptedInstall, findInterruptedInstallTempFiles } from '../codex/cleanup.js';
 import { buildCodexMcpAddArgs } from '../codex/commands.js';
-import { classifyMcpOwnership, parseCodexMcpGetOutput } from '../codex/config.js';
+import { classifyMcpOwnership, parseCodexMcpGetOutput, setMcpServerCwd } from '../codex/config.js';
 import { acquireInstallLock } from '../codex/lock.js';
-import { resolveCodexHome, resolveCodexSkillPath } from '../codex/paths.js';
+import { resolveCodexConfigPath, resolveCodexHome, resolveCodexSkillPath } from '../codex/paths.js';
 import { installCodexSkill } from '../codex/skill.js';
 import { buildRuntimePackageSpecifier, resolvePackageVersion } from '../package-info.js';
 import type { CommandRunner } from './runner.js';
@@ -32,6 +32,7 @@ export function formatInstallCodexDryRun(options: InstallCodexDryRunOptions = {}
     `Codex home: ${codexHome}`,
     `Skill path: ${skillPath}`,
     `MCP runtime: npx -y ${runtimeSpecifier} mcp`,
+    `MCP cwd: ${codexHome}`,
     'Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error',
     `Install lock: ${existsSync(lockPath) ? `present at ${lockPath}` : 'none'}`,
     `Stale temp files: ${tempFiles.length}`,
@@ -126,6 +127,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
       };
     }
 
+    const cwdResult = setMcpServerCwd(resolveCodexConfigPath(env), 'locus', codexHome);
     const skill = installCodexSkill({ env, overwrite: true, backup: true });
 
     return {
@@ -135,6 +137,8 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
         `Existing MCP entry: ${ownership}`,
         `Cleanup: removed ${cleanup.removed.length} stale temp file(s)`,
         `MCP: ${addResult.exitCode === 0 ? 'configured' : 'failed'}`,
+        `MCP cwd: ${cwdResult.action === 'updated' ? codexHome : 'not updated'}`,
+        cwdResult.backupPath ? `Config backup: ${cwdResult.backupPath}` : undefined,
         `Runtime cache: ${cacheResult.exitCode === 0 ? 'warmed' : 'skipped'}`,
         `Skill: ${skill.action}`,
         `Skill path: ${skill.targetPath}`,

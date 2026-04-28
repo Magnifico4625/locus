@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.1] - 2026-04-28
+
+### Fixed
+- Codex npm runtime installs now write `cwd = "$CODEX_HOME"` into the `locus` MCP config. This prevents Windows `npx.cmd -y locus-memory@<version> mcp` from resolving against a project-local package/workspace named `locus-memory` when Codex is launched inside the Locus repository.
+
+### Changed
+- Current package-owned recurring MCP runtime config is pinned to `locus-memory@3.5.1`.
+
 ## [3.5.0] - 2026-04-27
 
 ### Added
@@ -200,7 +208,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PostToolUse hook for automatic capture
 - `memory_scan`, `memory_search`, `memory_explore`, `memory_remember`, `memory_forget`, `memory_purge`, `memory_status`, `memory_doctor`, `memory_audit` tools
 
-[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.5.0...HEAD
+[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.5.1...HEAD
+[3.5.1]: https://github.com/Magnifico4625/locus/compare/v3.5.0...v3.5.1
 [3.5.0]: https://github.com/Magnifico4625/locus/compare/v3.4.0...v3.5.0
 [3.4.0]: https://github.com/Magnifico4625/locus/compare/v3.3.0...v3.4.0
 [3.3.0]: https://github.com/Magnifico4625/locus/compare/v3.1.1...v3.3.0

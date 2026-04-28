@@ -218,6 +218,6 @@ See [Codex Acceptance Matrix](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/d
 
 ## What's Coming
 
-- post-publish validation for the registry-hosted `locus-memory@3.5.0` runtime
+- Codex desktop / extension validation for the registry-hosted `locus-memory@3.5.1` runtime
 - recall ranking polish for duplicate-heavy sessions
 - dashboard and secondary IDE adapter work after the Codex-first path is strong

@@ -184,6 +184,18 @@ describe('codex install model', () => {
       platform: 'linux',
       commandRunner: async (command, args) => {
         commands.push({ command, args });
+        if (args.includes('add')) {
+          writeFileSync(
+            join(codexHome, 'config.toml'),
+            [
+              '[mcp_servers.locus]',
+              'command = "npx"',
+              'args = ["-y", "locus-memory@3.5.1", "mcp"]',
+              '',
+            ].join('\n'),
+            'utf8',
+          );
+        }
         return { exitCode: 0, stdout: '', stderr: '' };
       },
     });
@@ -191,7 +203,7 @@ describe('codex install model', () => {
     expect(exitCode).toBe(0);
     expect(commands[0]).toEqual({
       command: 'npm',
-      args: ['exec', '-y', 'locus-memory@3.5.0', '--', '--help'],
+      args: ['exec', '-y', 'locus-memory@3.5.1', '--', '--help'],
     });
     expect(commands[1]).toEqual({
       command: 'codex',
@@ -206,7 +218,7 @@ describe('codex install model', () => {
         '--',
         'npx',
         '-y',
-        'locus-memory@3.5.0',
+        'locus-memory@3.5.1',
         'mcp',
       ]),
     });
@@ -214,6 +226,10 @@ describe('codex install model', () => {
     expect(readFileSync(join(codexHome, 'skills', 'locus-memory', 'SKILL.md'), 'utf8')).toContain(
       'memory_recall',
     );
+    expect(readFileSync(join(codexHome, 'config.toml'), 'utf8')).toContain(
+      `cwd = "${codexHome.replaceAll('\\', '\\\\')}"`,
+    );
+    expect(stdout.join('\n')).toContain(`MCP cwd: ${codexHome}`);
     expect(stdout.join('\n')).toContain('Skill: created');
   });
 
@@ -235,7 +251,7 @@ describe('codex install model', () => {
     expect(commands).toEqual([
       {
         command: 'npm',
-        args: ['exec', '-y', 'locus-memory@3.5.0', '--', '--help'],
+        args: ['exec', '-y', 'locus-memory@3.5.1', '--', '--help'],
       },
     ]);
     expect(stdout.join('\n')).toContain('Runtime package unavailable');
@@ -260,13 +276,25 @@ describe('codex install model', () => {
             stderr: '',
           };
         }
+        if (args.includes('add')) {
+          writeFileSync(
+            join(codexHome, 'config.toml'),
+            [
+              '[mcp_servers.locus]',
+              'command = "npx"',
+              'args = ["-y", "locus-memory@3.5.1", "mcp"]',
+              '',
+            ].join('\n'),
+            'utf8',
+          );
+        }
         return { exitCode: 0, stdout: '', stderr: '' };
       },
     });
 
     expect(exitCode).toBe(0);
     expect(commands.map((entry) => entry.args.join(' '))).toEqual([
-      'exec -y locus-memory@3.5.0 -- --help',
+      'exec -y locus-memory@3.5.1 -- --help',
       'mcp get locus',
       'mcp remove locus',
       expect.stringContaining('mcp add'),

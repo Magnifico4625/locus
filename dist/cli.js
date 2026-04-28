@@ -4,7 +4,7 @@
 import { fileURLToPath as fileURLToPath5 } from "node:url";
 
 // packages/cli/src/codex/config.ts
-import { copyFileSync } from "node:fs";
+import { copyFileSync, readFileSync, writeFileSync } from "node:fs";
 var defaultCodexMcpEnv = {
   LOCUS_LOG: "error",
   LOCUS_CODEX_CAPTURE: "redacted",
@@ -31,10 +31,55 @@ function parseCodexMcpGetOutput(output) {
   }
   const command = output.match(/^\s*command:\s*(.+)$/im)?.[1]?.trim();
   const argsLine = output.match(/^\s*args:\s*(.*)$/im)?.[1]?.trim();
+  const cwdLine = output.match(/^\s*cwd:\s*(.*)$/im)?.[1]?.trim();
   return {
     command,
-    args: argsLine ? argsLine.split(/\s+/) : []
+    args: argsLine ? argsLine.split(/\s+/) : [],
+    cwd: cwdLine && cwdLine !== "-" ? cwdLine : void 0
   };
+}
+function quoteTomlBasicString(value) {
+  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
+}
+function createConfigBackup(configPath, now = /* @__PURE__ */ new Date()) {
+  const backupPath = `${configPath}.${timestamp(now)}.bak`;
+  copyFileSync(configPath, backupPath);
+  return backupPath;
+}
+function setMcpServerCwd(configPath, name, cwd, now = /* @__PURE__ */ new Date()) {
+  const text = readFileSync(configPath, "utf8");
+  const headerPattern = new RegExp(`^\\[mcp_servers\\.${escapeRegExp(name)}\\]\\s*$`, "m");
+  const headerMatch = headerPattern.exec(text);
+  if (!headerMatch) {
+    return { action: "missing" };
+  }
+  const sectionStart = headerMatch.index;
+  const afterHeader = sectionStart + headerMatch[0].length;
+  const nextSectionMatch = /^\[/m.exec(text.slice(afterHeader));
+  const sectionEnd = nextSectionMatch ? afterHeader + nextSectionMatch.index : text.length;
+  const before = text.slice(0, sectionStart);
+  const section = text.slice(sectionStart, sectionEnd);
+  const after = text.slice(sectionEnd);
+  const cwdLine = `cwd = ${quoteTomlBasicString(cwd)}`;
+  const backupPath = createConfigBackup(configPath, now);
+  let updatedSection;
+  if (/^cwd\s*=/m.test(section)) {
+    updatedSection = section.replace(/^cwd\s*=.*$/m, cwdLine);
+  } else if (/^args\s*=/m.test(section)) {
+    updatedSection = section.replace(/^(args\s*=.*)$/m, `$1
+${cwdLine}`);
+  } else {
+    updatedSection = section.replace(/^(\[mcp_servers\.[^\]]+\])\s*$/m, `$1
+${cwdLine}`);
+  }
+  writeFileSync(configPath, `${before}${updatedSection}${after}`, "utf8");
+  return { action: "updated", backupPath };
+}
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function timestamp(date) {
+  return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".", "");
 }
 
 // packages/cli/src/codex/paths.ts
@@ -64,7 +109,7 @@ function expandTilde(pathValue) {
 }
 
 // packages/cli/src/package-info.ts
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync as readFileSync2 } from "node:fs";
 import { dirname, resolve as resolve2 } from "node:path";
 import { fileURLToPath } from "node:url";
 function findPackageRoot(startDir = dirname(fileURLToPath(import.meta.url))) {
@@ -72,7 +117,7 @@ function findPackageRoot(startDir = dirname(fileURLToPath(import.meta.url))) {
   while (true) {
     const packagePath = resolve2(current, "package.json");
     if (existsSync(packagePath)) {
-      const packageJson = JSON.parse(readFileSync(packagePath, "utf8"));
+      const packageJson = JSON.parse(readFileSync2(packagePath, "utf8"));
       if (packageJson.name === "locus-memory") {
         return current;
       }
@@ -87,7 +132,7 @@ function findPackageRoot(startDir = dirname(fileURLToPath(import.meta.url))) {
 function resolvePackageVersion(startDir) {
   const root = findPackageRoot(startDir);
   const packageJson = JSON.parse(
-    readFileSync(resolve2(root, "package.json"), "utf8")
+    readFileSync2(resolve2(root, "package.json"), "utf8")
   );
   if (!packageJson.version) {
     throw new Error("Root package.json is missing version");
@@ -178,7 +223,7 @@ function buildCodexMcpRemoveArgs(name) {
 }
 
 // packages/cli/src/codex/lock.ts
-import { existsSync as existsSync3, mkdirSync, readFileSync as readFileSync2, rmSync as rmSync2, writeFileSync } from "node:fs";
+import { existsSync as existsSync3, mkdirSync, readFileSync as readFileSync3, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { join as join3 } from "node:path";
 var defaultStaleAfterMs = 15 * 60 * 1e3;
 function acquireInstallLock(codexHome, options = {}) {
@@ -194,7 +239,7 @@ function acquireInstallLock(codexHome, options = {}) {
     };
   }
   try {
-    writeFileSync(
+    writeFileSync2(
       lockPath,
       JSON.stringify(
         {
@@ -227,7 +272,7 @@ function isStaleLock(lockPath, options) {
   const staleAfterMs = options.staleAfterMs ?? defaultStaleAfterMs;
   const now = options.now ?? /* @__PURE__ */ new Date();
   try {
-    const lock = JSON.parse(readFileSync2(lockPath, "utf8"));
+    const lock = JSON.parse(readFileSync3(lockPath, "utf8"));
     if (!lock.createdAt) {
       return false;
     }
@@ -242,9 +287,9 @@ import {
   copyFileSync as copyFileSync4,
   existsSync as existsSync7,
   mkdirSync as mkdirSync5,
-  readFileSync as readFileSync6,
+  readFileSync as readFileSync7,
   renameSync as renameSync2,
-  writeFileSync as writeFileSync4
+  writeFileSync as writeFileSync5
 } from "node:fs";
 import { dirname as dirname4 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
@@ -254,10 +299,10 @@ import { createHash } from "node:crypto";
 import { basename } from "node:path";
 
 // packages/codex/src/importer.ts
-import { readFileSync as readFileSync3 } from "node:fs";
+import { readFileSync as readFileSync4 } from "node:fs";
 
 // packages/codex/src/inbox-writer.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync2, renameSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { existsSync as existsSync4, mkdirSync as mkdirSync2, renameSync, writeFileSync as writeFileSync3 } from "node:fs";
 import { join as join4 } from "node:path";
 
 // packages/codex/src/paths.ts
@@ -269,12 +314,12 @@ import { readdirSync as readdirSync2 } from "node:fs";
 import { basename as basename2, join as join6, resolve as resolve4 } from "node:path";
 
 // packages/codex/src/plugin-sync.ts
-import { copyFileSync as copyFileSync2, existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync4, rmSync as rmSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { copyFileSync as copyFileSync2, existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync5, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
 import { dirname as dirname2, join as join7, resolve as resolve5 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/codex/src/skill-sync.ts
-import { copyFileSync as copyFileSync3, existsSync as existsSync6, mkdirSync as mkdirSync4, readFileSync as readFileSync5 } from "node:fs";
+import { copyFileSync as copyFileSync3, existsSync as existsSync6, mkdirSync as mkdirSync4, readFileSync as readFileSync6 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { dirname as dirname3, join as join8, resolve as resolve6 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
@@ -286,11 +331,11 @@ function resolveCanonicalCodexSkillPath() {
 function installCodexSkill(options = {}) {
   const sourcePath = options.sourcePath ?? resolvePackagedCodexSkillPath();
   const targetPath = resolveCodexSkillPath(options.env, "locus-memory");
-  const sourceContent = readFileSync6(sourcePath, "utf8");
+  const sourceContent = readFileSync7(sourcePath, "utf8");
   try {
     mkdirSync5(dirname4(targetPath), { recursive: true });
     if (existsSync7(targetPath)) {
-      const targetContent = readFileSync6(targetPath, "utf8");
+      const targetContent = readFileSync7(targetPath, "utf8");
       if (targetContent === sourceContent) {
         return { action: "unchanged", path: targetPath, targetPath };
       }
@@ -338,19 +383,19 @@ function resolvePackagedCodexSkillPath() {
   return candidates[0] ?? resolveCanonicalCodexSkillPath();
 }
 function backupSkill(targetPath, now) {
-  const backupPath = `${targetPath}.${timestamp(now)}.bak`;
+  const backupPath = `${targetPath}.${timestamp2(now)}.bak`;
   copyFileSync4(targetPath, backupPath);
   return {
     action: "backed_up",
     path: backupPath
   };
 }
-function writeAtomically(targetPath, content, writeFile = writeFileSync4) {
+function writeAtomically(targetPath, content, writeFile = writeFileSync5) {
   const tempPath = `${targetPath}.locus-tmp`;
   writeFile(tempPath, content, "utf8");
   renameSync2(tempPath, targetPath);
 }
-function timestamp(date) {
+function timestamp2(date) {
   return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".", "");
 }
 function isPermissionError(error) {
@@ -371,6 +416,7 @@ function formatInstallCodexDryRun(options = {}) {
     `Codex home: ${codexHome}`,
     `Skill path: ${skillPath}`,
     `MCP runtime: npx -y ${runtimeSpecifier} mcp`,
+    `MCP cwd: ${codexHome}`,
     "Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error",
     `Install lock: ${existsSync8(lockPath) ? `present at ${lockPath}` : "none"}`,
     `Stale temp files: ${tempFiles.length}`
@@ -449,6 +495,7 @@ async function runInstallCodex(options) {
         ].join("\n")
       };
     }
+    const cwdResult = setMcpServerCwd(resolveCodexConfigPath(env), "locus", codexHome);
     const skill = installCodexSkill({ env, overwrite: true, backup: true });
     return {
       exitCode: skill.error ? 1 : 0,
@@ -457,6 +504,8 @@ async function runInstallCodex(options) {
         `Existing MCP entry: ${ownership}`,
         `Cleanup: removed ${cleanup.removed.length} stale temp file(s)`,
         `MCP: ${addResult.exitCode === 0 ? "configured" : "failed"}`,
+        `MCP cwd: ${cwdResult.action === "updated" ? codexHome : "not updated"}`,
+        cwdResult.backupPath ? `Config backup: ${cwdResult.backupPath}` : void 0,
         `Runtime cache: ${cacheResult.exitCode === 0 ? "warmed" : "skipped"}`,
         `Skill: ${skill.action}`,
         `Skill path: ${skill.targetPath}`,

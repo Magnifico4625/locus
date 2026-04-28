@@ -3,7 +3,7 @@
 **Date:** 2026-04-16  
 **Last updated:** 2026-04-28
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B shipped to npm as `locus-memory@3.5.0`; final GitHub push/release publication is the next release-management step.
+**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B shipped to npm as `locus-memory@3.5.0`, with a `v3.5.1` Windows/Codex startup hotfix prepared; final GitHub push/release publication is the next release-management step.
 
 ---
 
@@ -110,7 +110,7 @@ Validation evidence from `A6`:
 
 **Priority:** `P0`  
 **Target window:** May 2026 and after the first memory-trust work lands  
-**Current status:** completed and published to npm as `locus-memory@3.5.0`; registry-hosted `npx` install and local Codex config migration are validated. GitHub push/release publication is pending.
+**Current status:** completed and published to npm as `locus-memory@3.5.0`; registry-hosted `npx` install and local Codex config migration are validated. A `v3.5.1` hotfix is prepared to write a safe Codex MCP `cwd`, preventing Windows `npx` from resolving the local monorepo workspace when Codex is launched inside the Locus repository. GitHub push/release publication is pending.
 **Why it matters:** once the Codex memory path is trustworthy, the next major UX win is reducing installation from a repo-driven setup to a simple marketplace-based or package-driven flow.
 
 ### Goal
@@ -142,7 +142,7 @@ Make Locus installable for Codex users with the smallest possible setup burden, 
 
 ### Release intent
 
-Shipped as **`v3.5.0`** for npm and local Codex CLI install validation.
+Shipped as **`v3.5.0`** for npm and local Codex CLI install validation. Follow-up hotfix **`v3.5.1`** sets the recurring Codex MCP `cwd` to `$CODEX_HOME`.
 
 ### Delivered
 
@@ -152,6 +152,7 @@ Shipped as **`v3.5.0`** for npm and local Codex CLI install validation.
 - `locus-memory doctor codex`
 - `locus-memory uninstall codex`
 - pinned recurring MCP runtime: `npx.cmd -y locus-memory@3.5.0 mcp` on Windows
+- `v3.5.1` recurring MCP config writes `cwd = "$CODEX_HOME"` so `npx` starts outside the Locus monorepo
 - redacted capture defaults for installed Codex config
 - safe install behavior: backups, lock, cleanup, idempotent skill install
 - generated marketplace bundle under `dist/marketplace/`

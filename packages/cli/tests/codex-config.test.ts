@@ -13,6 +13,7 @@ import {
   createConfigBackup,
   quoteTomlBasicString,
   renderMcpTomlBlock,
+  setMcpServerCwd,
 } from '../src/codex/config.js';
 
 const tempDirs: string[] = [];
@@ -34,9 +35,14 @@ describe('codex mcp config model', () => {
     expect(detectNpxCommand('linux')).toBe('npx');
     expect(detectNpxCommand('win32')).toBe('npx.cmd');
 
-    const server = buildMcpServerConfig({ version: '3.5.0', platform: 'win32' });
+    const server = buildMcpServerConfig({
+      version: '3.5.1',
+      platform: 'win32',
+      cwd: 'C:\\Users\\Admin\\.codex',
+    });
     expect(server.command).toBe('npx.cmd');
-    expect(server.args).toEqual(['-y', 'locus-memory@3.5.0', 'mcp']);
+    expect(server.args).toEqual(['-y', 'locus-memory@3.5.1', 'mcp']);
+    expect(server.cwd).toBe('C:\\Users\\Admin\\.codex');
     expect(server.args.join(' ')).not.toContain('@latest');
     expect(server.env).toEqual({
       LOCUS_LOG: 'error',
@@ -50,7 +56,8 @@ describe('codex mcp config model', () => {
     expect(
       classifyMcpOwnership({
         command: 'npx',
-        args: ['-y', 'locus-memory@3.5.0', 'mcp'],
+        args: ['-y', 'locus-memory@3.5.1', 'mcp'],
+        cwd: 'C:/Users/Admin/.codex',
       }),
     ).toBe('package-owned');
     expect(
@@ -80,9 +87,8 @@ describe('codex mcp config model', () => {
       '"C:\\\\Users\\\\Admin\\\\My Project\\\\dist\\\\server.js"',
     );
     expect(quoteTomlBasicString('C:\\bad"path')).toContain('\\"');
-    expect(renderMcpTomlBlock('locus', { command: 'node', args: [path], env: {} })).toContain(
-      '"C:\\\\Users\\\\Admin\\\\My Project\\\\dist\\\\server.js"',
-    );
+    const rendered = renderMcpTomlBlock('locus', { command: 'node', args: [path], env: {} });
+    expect(rendered).toContain('"C:\\\\Users\\\\Admin\\\\My Project\\\\dist\\\\server.js"');
   });
 
   it('creates a backup before direct config edits', () => {
@@ -99,7 +105,7 @@ describe('codex mcp config model', () => {
   it('builds codex mcp add/remove args without shell concatenation', () => {
     const addArgs = buildCodexMcpAddArgs({
       name: 'locus',
-      version: '3.5.0',
+      version: '3.5.1',
       platform: 'linux',
     });
 
@@ -116,9 +122,69 @@ describe('codex mcp config model', () => {
       '--',
       'npx',
       '-y',
-      'locus-memory@3.5.0',
+      'locus-memory@3.5.1',
       'mcp',
     ]);
     expect(buildCodexMcpRemoveArgs('locus')).toEqual(['mcp', 'remove', 'locus']);
+  });
+
+  it('adds a safe cwd to the locus MCP TOML block after codex mcp add', () => {
+    const root = makeTempDir();
+    const configPath = join(root, 'config.toml');
+    writeFileSync(
+      configPath,
+      [
+        '[mcp_servers.locus]',
+        'command = "npx.cmd"',
+        'args = ["-y", "locus-memory@3.5.1", "mcp"]',
+        '',
+        '[mcp_servers.locus.env]',
+        'LOCUS_CAPTURE_LEVEL = "redacted"',
+        '',
+        '[projects."C:\\\\Users\\\\Admin\\\\project"]',
+        'trust_level = "trusted"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const result = setMcpServerCwd(
+      configPath,
+      'locus',
+      'C:\\Users\\Admin\\.codex',
+      new Date('2026-04-28T13:30:00.000Z'),
+    );
+
+    expect(result.action).toBe('updated');
+    expect(result.backupPath).toMatch(/config\.toml\.20260428T133000000Z\.bak$/);
+    expect(readFileSync(configPath, 'utf8')).toContain('cwd = "C:\\\\Users\\\\Admin\\\\.codex"');
+    expect(readFileSync(configPath, 'utf8')).toContain('[mcp_servers.locus.env]');
+  });
+
+  it('updates an existing cwd in the locus MCP TOML block', () => {
+    const root = makeTempDir();
+    const configPath = join(root, 'config.toml');
+    writeFileSync(
+      configPath,
+      [
+        '[mcp_servers.locus]',
+        'command = "npx.cmd"',
+        'args = ["-y", "locus-memory@3.5.1", "mcp"]',
+        'cwd = "C:\\\\old"',
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const result = setMcpServerCwd(
+      configPath,
+      'locus',
+      'C:\\Users\\Admin\\.codex',
+      new Date('2026-04-28T13:30:00.000Z'),
+    );
+
+    expect(result.action).toBe('updated');
+    expect(readFileSync(configPath, 'utf8')).toContain('cwd = "C:\\\\Users\\\\Admin\\\\.codex"');
+    expect(readFileSync(configPath, 'utf8')).not.toContain('cwd = "C:\\\\old"');
   });
 });

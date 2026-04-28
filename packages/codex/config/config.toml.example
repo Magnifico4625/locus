@@ -9,7 +9,9 @@
 # Use a pinned package version in recurring MCP config. Do not use @latest here.
 [mcp_servers.locus]
 command = "npx"
-args = ["-y", "locus-memory@3.5.0", "mcp"]
+args = ["-y", "locus-memory@3.5.1", "mcp"]
+# Set cwd outside project workspaces so npx resolves the registry package, not a local package with the same name.
+cwd = "/home/<you>/.codex"
 
 [mcp_servers.locus.env]
 LOCUS_LOG = "error"
@@ -21,7 +23,8 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 # Option B: Windows package runtime
 # [mcp_servers.locus]
 # command = "npx.cmd"
-# args = ["-y", "locus-memory@3.5.0", "mcp"]
+# args = ["-y", "locus-memory@3.5.1", "mcp"]
+# cwd = "C:\\Users\\<you>\\.codex"
 #
 # [mcp_servers.locus.env]
 # LOCUS_LOG = "error"
