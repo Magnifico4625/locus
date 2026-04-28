@@ -3,7 +3,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     globals: true,
-    include: ['packages/core/tests/**/*.test.ts', 'packages/codex/tests/**/*.test.ts'],
+    include: [
+      'packages/core/tests/**/*.test.ts',
+      'packages/codex/tests/**/*.test.ts',
+      'packages/cli/tests/**/*.test.ts',
+    ],
     coverage: {
       provider: 'v8',
       include: ['packages/core/src/**/*.ts'],

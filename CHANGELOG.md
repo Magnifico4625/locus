@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.3] - 2026-04-28
+
+### Changed
+- Published the final Track B Codex install release state with README, GitHub Pages, release notes, config examples, and tests aligned to `locus-memory@3.5.3`.
+- GitHub Pages now exposes a copyable Codex install command: `npx -y locus-memory@latest install codex`.
+
+### Notes
+- Includes the `v3.5.1` safe MCP `cwd` fix and the `v3.5.2` `doctor codex` ownership detection fix in the public GitHub release story.
+
+## [3.5.2] - 2026-04-28
+
+### Fixed
+- `locus-memory doctor codex` now reads the real `codex mcp get locus` entry when no test reader is injected, so package-owned installs report `Ownership: package-owned` instead of `missing`.
+
+## [3.5.1] - 2026-04-28
+
+### Fixed
+- Codex npm runtime installs now write `cwd = "$CODEX_HOME"` into the `locus` MCP config. This prevents Windows `npx.cmd -y locus-memory@<version> mcp` from resolving against a project-local package/workspace named `locus-memory` when Codex is launched inside the Locus repository.
+
+### Changed
+- Current package-owned recurring MCP runtime config is pinned to `locus-memory@3.5.1`.
+
+## [3.5.0] - 2026-04-27
+
+### Added
+- Public `locus-memory` npm package contract with `locus-memory` CLI entrypoint
+- `locus-memory install codex` for one-command Codex setup with skill install, package-owned MCP config, redacted defaults, and install locking
+- `locus-memory doctor codex` and `locus-memory uninstall codex` for diagnostics and safe removal of the MCP entry while preserving memory data
+- Generated Codex marketplace distribution bundle under `dist/marketplace/`
+- Package tarball acceptance tests for `dist/server.js`, `dist/cli.js`, and the canonical Codex skill
+
+### Changed
+- Codex docs now lead with `npx -y locus-memory@latest install codex`
+- Recurring MCP runtime config is version-pinned to `locus-memory@3.5.0`; `@latest` is only for the user-run installer command
+- Manual `node /path/to/locus/dist/server.js` setup is now documented as the development/manual fallback
+
+### Fixed
+- Installer now preflights the pinned npm runtime before mutating Codex MCP config, preventing pre-publish or offline installs from leaving a broken recurring `npx` runtime
+- Windows command execution now avoids shell deprecation warnings and quotes dirty paths safely
+- Existing manual Locus MCP entries are classified more reliably during migration
+
+### Notes
+- Registry-hosted post-publish validation is tracked separately in B10 and must pass before claiming the npm-hosted runtime is publicly proven
+- Codex desktop / extension parity remains unverified until tested in that surface
+
 ## [3.4.0] - 2026-04-23
 
 ### Added
@@ -177,7 +222,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PostToolUse hook for automatic capture
 - `memory_scan`, `memory_search`, `memory_explore`, `memory_remember`, `memory_forget`, `memory_purge`, `memory_status`, `memory_doctor`, `memory_audit` tools
 
-[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.4.0...HEAD
+[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.5.3...HEAD
+[3.5.3]: https://github.com/Magnifico4625/locus/compare/v3.5.2...v3.5.3
+[3.5.2]: https://github.com/Magnifico4625/locus/compare/v3.5.1...v3.5.2
+[3.5.1]: https://github.com/Magnifico4625/locus/compare/v3.5.0...v3.5.1
+[3.5.0]: https://github.com/Magnifico4625/locus/compare/v3.4.0...v3.5.0
 [3.4.0]: https://github.com/Magnifico4625/locus/compare/v3.3.0...v3.4.0
 [3.3.0]: https://github.com/Magnifico4625/locus/compare/v3.1.1...v3.3.0
 [3.1.1]: https://github.com/Magnifico4625/locus/compare/v3.1.0...v3.1.1

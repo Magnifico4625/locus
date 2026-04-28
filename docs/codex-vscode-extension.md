@@ -26,17 +26,21 @@ Until validated inside a specific extension build, Locus reports Codex desktop/e
 ## Prerequisites
 
 - Node.js `>= 22`
-- a local Locus checkout with built server output in `dist/server.js`
 - Codex installed and signed in
 - access to the Codex configuration used by the extension
+- for the one-command path: network access to npm during install
+- for the manual fallback: a local Locus checkout with built server output in `dist/server.js`
 
 ## Add Locus As An MCP Server
 
 Preferred path:
 
 ```bash
-codex mcp add locus -- node /path/to/locus/dist/server.js
+npx -y locus-memory@latest install codex
+npx -y locus-memory@latest doctor codex
 ```
+
+The installer configures Codex with the package runtime and `redacted` capture defaults. The recurring MCP command is pinned to the installed package version, not `@latest`.
 
 Optional repo-local plugin packaging also exists in this repository:
 
@@ -46,7 +50,30 @@ Optional repo-local plugin packaging also exists in this repository:
 
 Treat that plugin bundle as an extra local onboarding path. Manual MCP setup stays the stable documented fallback.
 
-Equivalent config in `~/.codex/config.toml`:
+Equivalent package-runtime config in `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.locus]
+command = "npx"
+args = ["-y", "locus-memory@3.5.3", "mcp"]
+cwd = "/home/<you>/.codex"
+
+[mcp_servers.locus.env]
+LOCUS_LOG = "error"
+LOCUS_CODEX_CAPTURE = "redacted"
+LOCUS_CAPTURE_LEVEL = "redacted"
+```
+
+On Windows, use `npx.cmd`:
+
+```toml
+[mcp_servers.locus]
+command = "npx.cmd"
+args = ["-y", "locus-memory@3.5.3", "mcp"]
+cwd = "C:\\Users\\<you>\\.codex"
+```
+
+Manual MCP fallback for local development:
 
 ```toml
 [mcp_servers.locus]

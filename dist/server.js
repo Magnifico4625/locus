@@ -6799,7 +6799,7 @@ var require_dist = __commonJS({
 });
 
 // packages/core/src/server.ts
-import { basename as basename4, dirname as dirname6, join as join11 } from "node:path";
+import { basename as basename4, dirname as dirname6, join as join12 } from "node:path";
 
 // packages/codex/src/bounded-snippets.ts
 var USER_CHAR_LIMIT = 280;
@@ -7727,14 +7727,14 @@ function matchesFilters(event, options) {
 }
 
 // packages/codex/src/plugin-sync.ts
-import { copyFileSync, existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2 } from "node:fs";
-import { dirname, resolve as resolve3 } from "node:path";
+import { copyFileSync, existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
+import { dirname, join as join4, resolve as resolve3 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // packages/codex/src/skill-sync.ts
 import { copyFileSync as copyFileSync2, existsSync as existsSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync3 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { dirname as dirname2, join as join4, resolve as resolve4 } from "node:path";
+import { dirname as dirname2, join as join5, resolve as resolve4 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/shared-runtime/detect-client.js
@@ -7784,11 +7784,11 @@ function projectHash(projectRoot) {
 
 // packages/shared-runtime/resolve-storage.js
 import { homedir as homedir3 } from "node:os";
-import { join as join5 } from "node:path";
+import { join as join6 } from "node:path";
 function expandTilde2(p) {
   if (p === "~") return homedir3();
   if (p.startsWith("~/") || p.startsWith("~\\")) {
-    return join5(homedir3(), p.slice(2));
+    return join6(homedir3(), p.slice(2));
   }
   return p;
 }
@@ -7799,21 +7799,21 @@ function resolveStorageRoot() {
   const client = detectClientEnv();
   const home = homedir3();
   if (client === "codex") {
-    return join5(expandTilde2(process.env.CODEX_HOME), "memory");
+    return join6(expandTilde2(process.env.CODEX_HOME), "memory");
   }
   if (client === "claude-code") {
-    return join5(home, ".claude", "memory");
+    return join6(home, ".claude", "memory");
   }
-  return join5(home, ".locus", "memory");
+  return join6(home, ".locus", "memory");
 }
 function resolveProjectStorageDir(projectRoot) {
-  return join5(resolveStorageRoot(), `locus-${projectHash(projectRoot)}`);
+  return join6(resolveStorageRoot(), `locus-${projectHash(projectRoot)}`);
 }
 function resolveDbPath(projectRoot) {
-  return join5(resolveProjectStorageDir(projectRoot), "locus.db");
+  return join6(resolveProjectStorageDir(projectRoot), "locus.db");
 }
 function resolveLogPath() {
-  return join5(resolveStorageRoot(), "locus.log");
+  return join6(resolveStorageRoot(), "locus.log");
 }
 
 // node_modules/zod/v3/helpers/util.js
@@ -31108,7 +31108,7 @@ var StdioServerTransport = class {
 
 // packages/core/src/ingest/pipeline.ts
 import { readdirSync as readdirSync2, readFileSync as readFileSync4, unlinkSync } from "node:fs";
-import { join as join6 } from "node:path";
+import { join as join7 } from "node:path";
 
 // packages/core/src/security/file-ignore.ts
 var DENYLIST_FILES = [
@@ -31361,7 +31361,7 @@ function processInbox(inboxDir, db, options) {
     toProcess = files;
   }
   for (const filename of toProcess) {
-    const filePath = join6(inboxDir, filename);
+    const filePath = join7(inboxDir, filename);
     let raw;
     try {
       raw = readFileSync4(filePath, "utf-8");
@@ -32118,7 +32118,7 @@ var SemanticMemory = class {
 import { execFileSync } from "node:child_process";
 import { existsSync as existsSync5, readdirSync as readdirSync3 } from "node:fs";
 import { homedir as homedir4 } from "node:os";
-import { dirname as dirname4, join as join7, resolve as resolve5 } from "node:path";
+import { dirname as dirname4, join as join8, resolve as resolve5 } from "node:path";
 var PROJECT_MARKERS = [
   "package.json",
   "pyproject.toml",
@@ -32177,7 +32177,7 @@ function hasAnyMarker(dir, markers, deps) {
         if (entry.endsWith(ext)) return true;
       }
     } else {
-      if (deps.fileExists(join7(dir, marker))) return true;
+      if (deps.fileExists(join8(dir, marker))) return true;
     }
   }
   return false;
@@ -32854,7 +32854,7 @@ var NodeSqliteAdapter = class {
 };
 
 // packages/core/src/storage/sql-js.ts
-import { writeFileSync as writeFileSync2 } from "node:fs";
+import { writeFileSync as writeFileSync3 } from "node:fs";
 var SAVE_DEBOUNCE_MS = 5e3;
 var SqlJsAdapter = class {
   db;
@@ -32926,7 +32926,7 @@ var SqlJsAdapter = class {
   }
   saveToDisk() {
     const data = this.db.export();
-    writeFileSync2(this.dbPath, Buffer.from(data));
+    writeFileSync3(this.dbPath, Buffer.from(data));
   }
   scheduleSave() {
     if (this.saveTimer !== null) {
@@ -33923,7 +33923,7 @@ function handleForget(query, deps, confirmToken) {
 
 // packages/core/src/tools/import-codex.ts
 import { readdirSync as readdirSync4, readFileSync as readFileSync6 } from "node:fs";
-import { join as join8 } from "node:path";
+import { join as join9 } from "node:path";
 function handleImportCodex(params, deps) {
   const captureMode = resolveCodexCaptureMode(deps.env);
   if (captureMode === "off") {
@@ -34042,7 +34042,7 @@ function collectNewInboxEventIds(inboxDir, before) {
         continue;
       }
       try {
-        const parsed = JSON.parse(readFileSync6(join8(inboxDir, file2), "utf-8"));
+        const parsed = JSON.parse(readFileSync6(join9(inboxDir, file2), "utf-8"));
         if (typeof parsed.event_id === "string" && parsed.event_id.length > 0) {
           eventIds.add(parsed.event_id);
         }
@@ -34057,7 +34057,7 @@ function collectNewInboxEventIds(inboxDir, before) {
 
 // packages/core/src/tools/purge.ts
 import { readdirSync as readdirSync5, statSync as statSync3, unlinkSync as unlinkSync3 } from "node:fs";
-import { join as join9 } from "node:path";
+import { join as join10 } from "node:path";
 function getDbSizeBytes(dbPath) {
   try {
     return statSync3(dbPath).size;
@@ -34108,7 +34108,7 @@ function handlePurge(deps, confirmToken) {
       const inboxFiles = readdirSync5(deps.inboxDir).filter((f) => f.endsWith(".json"));
       for (const f of inboxFiles) {
         try {
-          unlinkSync3(join9(deps.inboxDir, f));
+          unlinkSync3(join10(deps.inboxDir, f));
         } catch {
         }
       }
@@ -34763,7 +34763,7 @@ function handleReview(deps, options = {}) {
 // packages/core/src/scanner/index.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
 import { existsSync as existsSync8, readdirSync as readdirSync6, readFileSync as readFileSync7, statSync as statSync4 } from "node:fs";
-import { extname, join as join10, relative } from "node:path";
+import { extname, join as join11, relative } from "node:path";
 
 // packages/core/src/scanner/aliases.ts
 function loadPathAliases(rawPaths) {
@@ -35171,7 +35171,7 @@ function gitExec(args, cwd) {
 }
 var defaultScanDeps = {
   isGitRepo(path) {
-    return existsSync8(join10(path, ".git"));
+    return existsSync8(join11(path, ".git"));
   },
   getHead(path) {
     try {
@@ -35211,7 +35211,7 @@ var defaultScanDeps = {
         return;
       }
       for (const entry of entries) {
-        const fullPath = join10(dir, entry);
+        const fullPath = join11(dir, entry);
         try {
           const stat = statSync4(fullPath);
           if (stat.isDirectory()) {
@@ -35349,7 +35349,7 @@ function walkDirectory(dir, basePath) {
       return;
     }
     for (const entry of entries) {
-      const fullPath = join10(current, entry);
+      const fullPath = join11(current, entry);
       try {
         const stat = statSync4(fullPath);
         if (stat.isDirectory()) {
@@ -35365,7 +35365,7 @@ function walkDirectory(dir, basePath) {
   return results;
 }
 function loadProjectAliases(projectPath) {
-  const tsconfigPath = join10(projectPath, "tsconfig.json");
+  const tsconfigPath = join11(projectPath, "tsconfig.json");
   if (!existsSync8(tsconfigPath)) return {};
   try {
     const content = readFileSync7(tsconfigPath, "utf-8");
@@ -35471,7 +35471,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
       skippedFiles++;
       continue;
     }
-    const fullPath = join10(projectPath, relPath);
+    const fullPath = join11(projectPath, relPath);
     let stat;
     try {
       stat = statSync4(fullPath);
@@ -35738,7 +35738,7 @@ async function createServer(options) {
   const dbPath = options?.dbPath ?? resolveDbPath(root);
   const logPath = resolveLogPath();
   const { db, backend, fts5 } = await initStorage(dbPath);
-  const inboxDir = join11(dirname6(dbPath), "inbox");
+  const inboxDir = join12(dirname6(dbPath), "inbox");
   const config2 = { ...LOCUS_DEFAULTS };
   const envCapture = process.env.LOCUS_CAPTURE_LEVEL;
   if (envCapture === "metadata" || envCapture === "redacted" || envCapture === "full") {

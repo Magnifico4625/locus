@@ -7,25 +7,32 @@ describe('GitHub Pages landing page', () => {
   const repoRoot = resolve(process.cwd());
   const siteDir = resolve(repoRoot, 'docs');
   const indexPath = resolve(siteDir, 'index.html');
+  const readRepoFile = (relativePath: string) =>
+    readFileSync(resolve(repoRoot, relativePath), 'utf-8');
 
   it('ships a dedicated index.html for GitHub Pages', () => {
     expect(existsSync(indexPath)).toBe(true);
   });
 
-  it('describes the current v3.4.0 product state honestly', () => {
+  it('describes the current v3.5.3 product state honestly', () => {
     const html = readFileSync(indexPath, 'utf-8');
 
-    expect(html).toContain('v3.4.0');
+    expect(html).toContain('v3.5.3');
+    expect(html).toContain('one-command install');
+    expect(html).toContain('npx -y locus-memory@latest install codex');
+    expect(html).toContain('copy-install-button');
     expect(html).toContain('redacted');
     expect(html).toContain('Codex');
     expect(html).toContain('Claude Code');
     expect(html).not.toContain('v3.1.0 is out');
+    expect(html).not.toContain('desktop / extension parity is validated');
   });
 
   it('uses real public CTAs instead of a fake install command', () => {
     const html = readFileSync(indexPath, 'utf-8');
 
     expect(html).toContain('https://github.com/Magnifico4625/locus');
+    expect(html).toContain('Copy command');
     expect(html).not.toContain('$ git clone .../locus');
   });
 
@@ -34,5 +41,25 @@ describe('GitHub Pages landing page', () => {
 
     expect(html).not.toContain('cdn.tailwindcss.com');
     expect(html).toContain('./app.css');
+  });
+
+  it('keeps Codex install documentation honest and package-first', () => {
+    const readme = readRepoFile('README.md');
+    const codexReadme = readRepoFile('packages/codex/README.md');
+    const configExample = readRepoFile('packages/codex/config/config.toml.example');
+
+    expect(readme).toContain('npx -y locus-memory@latest install codex');
+    expect(readme).toContain('Manual MCP fallback');
+    expect(readme).toContain('codex mcp add locus -- node /path/to/locus/dist/server.js');
+    expect(readme).not.toContain('desktop/extension parity is validated');
+
+    expect(codexReadme).toContain('npx -y locus-memory@latest install codex');
+    expect(codexReadme).toContain('doctor codex');
+    expect(codexReadme).toContain('uninstall codex');
+
+    expect(configExample).toContain('locus-memory@3.5.3');
+    expect(configExample).toContain('npx.cmd');
+    expect(configExample).not.toContain('args = ["-y", "locus-memory@latest", "mcp"]');
+    expect(configExample).not.toContain('coming soon');
   });
 });
