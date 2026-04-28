@@ -1,6 +1,6 @@
 {
   "name": "locus-memory",
-  "version": "3.5.2",
+  "version": "3.5.3",
   "description": "Persistent project-aware memory for Codex via Locus MCP and skill packaging.",
   "author": {
     "name": "Magnifico4625",

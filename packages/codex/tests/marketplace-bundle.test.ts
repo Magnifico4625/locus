@@ -43,7 +43,7 @@ describe('codex marketplace bundle generation', () => {
     }>(pluginMcpPath);
 
     expect(['npx', 'npx.cmd']).toContain(mcp.mcpServers?.locus?.command);
-    expect(mcp.mcpServers?.locus?.args).toEqual(['-y', 'locus-memory@3.5.2', 'mcp']);
+    expect(mcp.mcpServers?.locus?.args).toEqual(['-y', 'locus-memory@3.5.3', 'mcp']);
     expect(mcp.mcpServers?.locus?.args?.join(' ')).not.toContain('@latest');
     expect(mcp.mcpServers?.locus?.env).toEqual({
       LOCUS_LOG: 'error',

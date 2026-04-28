@@ -33,7 +33,7 @@ describe('locus-memory cli', () => {
     const exitCode = await runCli(['--version'], io, { startDir: import.meta.dirname });
 
     expect(exitCode).toBe(0);
-    expect(stdout.join('\n')).toContain('3.5.2');
+    expect(stdout.join('\n')).toContain('3.5.3');
   });
 
   it('rejects unknown commands with concise usage', async () => {

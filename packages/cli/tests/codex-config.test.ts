@@ -36,12 +36,12 @@ describe('codex mcp config model', () => {
     expect(detectNpxCommand('win32')).toBe('npx.cmd');
 
     const server = buildMcpServerConfig({
-      version: '3.5.2',
+      version: '3.5.3',
       platform: 'win32',
       cwd: 'C:\\Users\\Admin\\.codex',
     });
     expect(server.command).toBe('npx.cmd');
-    expect(server.args).toEqual(['-y', 'locus-memory@3.5.2', 'mcp']);
+    expect(server.args).toEqual(['-y', 'locus-memory@3.5.3', 'mcp']);
     expect(server.cwd).toBe('C:\\Users\\Admin\\.codex');
     expect(server.args.join(' ')).not.toContain('@latest');
     expect(server.env).toEqual({
@@ -56,7 +56,7 @@ describe('codex mcp config model', () => {
     expect(
       classifyMcpOwnership({
         command: 'npx',
-        args: ['-y', 'locus-memory@3.5.2', 'mcp'],
+        args: ['-y', 'locus-memory@3.5.3', 'mcp'],
         cwd: 'C:/Users/Admin/.codex',
       }),
     ).toBe('package-owned');
@@ -105,7 +105,7 @@ describe('codex mcp config model', () => {
   it('builds codex mcp add/remove args without shell concatenation', () => {
     const addArgs = buildCodexMcpAddArgs({
       name: 'locus',
-      version: '3.5.2',
+      version: '3.5.3',
       platform: 'linux',
     });
 
@@ -122,7 +122,7 @@ describe('codex mcp config model', () => {
       '--',
       'npx',
       '-y',
-      'locus-memory@3.5.2',
+      'locus-memory@3.5.3',
       'mcp',
     ]);
     expect(buildCodexMcpRemoveArgs('locus')).toEqual(['mcp', 'remove', 'locus']);
@@ -136,7 +136,7 @@ describe('codex mcp config model', () => {
       [
         '[mcp_servers.locus]',
         'command = "npx.cmd"',
-        'args = ["-y", "locus-memory@3.5.2", "mcp"]',
+        'args = ["-y", "locus-memory@3.5.3", "mcp"]',
         '',
         '[mcp_servers.locus.env]',
         'LOCUS_CAPTURE_LEVEL = "redacted"',
@@ -169,7 +169,7 @@ describe('codex mcp config model', () => {
       [
         '[mcp_servers.locus]',
         'command = "npx.cmd"',
-        'args = ["-y", "locus-memory@3.5.2", "mcp"]',
+        'args = ["-y", "locus-memory@3.5.3", "mcp"]',
         'cwd = "C:\\\\old"',
         '',
       ].join('\n'),

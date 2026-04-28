@@ -3,7 +3,7 @@
 **Date:** 2026-04-16  
 **Last updated:** 2026-04-28
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B shipped to npm as `locus-memory@3.5.0`, with `v3.5.1`/`v3.5.2` Codex install hotfixes prepared; final GitHub push/release publication is the next release-management step.
+**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is published to npm through `locus-memory@3.5.3`; GitHub PR/release publication is the remaining release-management step.
 
 ---
 
@@ -110,7 +110,7 @@ Validation evidence from `A6`:
 
 **Priority:** `P0`  
 **Target window:** May 2026 and after the first memory-trust work lands  
-**Current status:** completed and published to npm as `locus-memory@3.5.0`; registry-hosted `npx` install and local Codex config migration are validated. `v3.5.1` writes a safe Codex MCP `cwd`, preventing Windows `npx` from resolving the local monorepo workspace when Codex is launched inside the Locus repository. `v3.5.2` fixes `doctor codex` ownership detection for the real `codex mcp get locus` path. GitHub push/release publication is pending.
+**Current status:** completed and published to npm as `locus-memory@3.5.3`; registry-hosted `npx` install, local Codex config migration, `doctor codex`, `codex mcp get locus`, and raw MCP `initialize` are validated from `$CODEX_HOME`. `v3.5.1` writes a safe Codex MCP `cwd`, preventing Windows `npx` from resolving the local monorepo workspace when Codex is launched inside the Locus repository. `v3.5.2` fixes `doctor codex` ownership detection for the real `codex mcp get locus` path. `v3.5.3` aligns package version, README, release notes, tests, and GitHub Pages for the public one-command install story.
 **Why it matters:** once the Codex memory path is trustworthy, the next major UX win is reducing installation from a repo-driven setup to a simple marketplace-based or package-driven flow.
 
 ### Goal
@@ -142,7 +142,7 @@ Make Locus installable for Codex users with the smallest possible setup burden, 
 
 ### Release intent
 
-Shipped as **`v3.5.0`** for npm and local Codex CLI install validation. Follow-up hotfix **`v3.5.1`** sets the recurring Codex MCP `cwd` to `$CODEX_HOME`; **`v3.5.2`** fixes package-owned doctor ownership detection.
+Shipped as **`v3.5.0`** for npm and local Codex CLI install validation. Follow-up hotfix **`v3.5.1`** sets the recurring Codex MCP `cwd` to `$CODEX_HOME`; **`v3.5.2`** fixes package-owned doctor ownership detection; **`v3.5.3`** is the public one-command install release candidate for GitHub publication.
 
 ### Delivered
 

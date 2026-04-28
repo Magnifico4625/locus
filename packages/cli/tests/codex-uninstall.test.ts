@@ -28,7 +28,7 @@ describe('codex uninstall command', () => {
       },
       readMcpServer: () => ({
         command: 'npx',
-        args: ['-y', 'locus-memory@3.5.2', 'mcp'],
+        args: ['-y', 'locus-memory@3.5.3', 'mcp'],
       }),
     });
 
@@ -47,7 +47,7 @@ describe('codex uninstall command', () => {
         if (args.join(' ') === 'mcp get locus') {
           return {
             exitCode: 0,
-            stdout: 'locus\n  command: npx.cmd\n  args: -y locus-memory@3.5.2 mcp\n',
+            stdout: 'locus\n  command: npx.cmd\n  args: -y locus-memory@3.5.3 mcp\n',
             stderr: '',
           };
         }

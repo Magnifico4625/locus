@@ -89,7 +89,7 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 - Summary-first recall through `memory_recall`
 - `codexTruth` status guidance that separates import health from recall usefulness
 
-Last documented recall validation target: Codex CLI `0.123.0` surface as of April 23, 2026. Install smoke during Track B used Codex CLI `0.125.0` locally before npm publish.
+Last documented recall validation target: Codex CLI `0.125.0` surface as of April 28, 2026. Install smoke during Track B used the registry-hosted `locus-memory@3.5.3` package locally after npm publish.
 
 Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is reported as unverified until checked there.
 
@@ -218,6 +218,6 @@ See [Codex Acceptance Matrix](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/d
 
 ## What's Coming
 
-- Codex desktop / extension validation for the registry-hosted `locus-memory@3.5.2` runtime
+- Codex desktop / extension validation for the registry-hosted `locus-memory@3.5.3` runtime
 - recall ranking polish for duplicate-heavy sessions
 - dashboard and secondary IDE adapter work after the Codex-first path is strong

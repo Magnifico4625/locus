@@ -14,11 +14,13 @@ describe('GitHub Pages landing page', () => {
     expect(existsSync(indexPath)).toBe(true);
   });
 
-  it('describes the current v3.5.2 product state honestly', () => {
+  it('describes the current v3.5.3 product state honestly', () => {
     const html = readFileSync(indexPath, 'utf-8');
 
-    expect(html).toContain('v3.5.2');
+    expect(html).toContain('v3.5.3');
     expect(html).toContain('one-command install');
+    expect(html).toContain('npx -y locus-memory@latest install codex');
+    expect(html).toContain('copy-install-button');
     expect(html).toContain('redacted');
     expect(html).toContain('Codex');
     expect(html).toContain('Claude Code');
@@ -30,6 +32,7 @@ describe('GitHub Pages landing page', () => {
     const html = readFileSync(indexPath, 'utf-8');
 
     expect(html).toContain('https://github.com/Magnifico4625/locus');
+    expect(html).toContain('Copy command');
     expect(html).not.toContain('$ git clone .../locus');
   });
 
@@ -54,7 +57,7 @@ describe('GitHub Pages landing page', () => {
     expect(codexReadme).toContain('doctor codex');
     expect(codexReadme).toContain('uninstall codex');
 
-    expect(configExample).toContain('locus-memory@3.5.2');
+    expect(configExample).toContain('locus-memory@3.5.3');
     expect(configExample).toContain('npx.cmd');
     expect(configExample).not.toContain('args = ["-y", "locus-memory@latest", "mcp"]');
     expect(configExample).not.toContain('coming soon');

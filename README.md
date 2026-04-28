@@ -24,7 +24,7 @@ Locus solves this with three persistent memory layers:
 
 **New in v3.4 — Codex Memory Trust:** Codex CLI now has validated practical conversational recall in `redacted` mode. Live Codex dialogue can be imported from rollout JSONL, searched through `memory_search`, and summarized through `memory_recall` without requiring explicit `memory_remember`.
 
-**New in v3.5 — One-command Codex install:** Locus is packaged as the public `locus-memory` npm runtime with a Codex installer, doctor, uninstall command, and generated marketplace bundle. The recurring MCP runtime is version-pinned; `@latest` is used only for the one-time install command.
+**New in v3.5.3 — One-command Codex install:** Locus is packaged as the public `locus-memory` npm runtime with a Codex installer, doctor, uninstall command, and generated marketplace bundle. The recurring MCP runtime is version-pinned, runs from `$CODEX_HOME` to avoid local `npx` workspace resolution issues, and `doctor codex` now reports package-owned installs correctly.
 
 **Track A Codex recall truth:** Codex CLI is the primary validated path for useful recall. `metadata` remains the safe default for diagnostics and minimal capture, but it is not strong conversational memory. For practical Codex recall, use `LOCUS_CODEX_CAPTURE=redacted` with `LOCUS_CAPTURE_LEVEL=redacted`. `full` is available only as explicit warning territory.
 
@@ -128,7 +128,7 @@ Repo-local plugin packaging is also available for local Codex onboarding:
 - marketplace bundle generator: `npm run sync:codex-marketplace`
 
 > **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 14 MCP tools and 3 resources work immediately. Before `memory_search`, Locus auto-imports the newest Codex rollout session with a local debounce window. `memory_status` now exposes structured Codex diagnostics plus `codexTruth`, `memory_doctor` adds Codex-specific health checks, and `memory_import_codex` remains available when you want explicit control, filtered import, or manual catch-up across older sessions.
-> Last documented validation target: Codex CLI `0.123.0` surface as of April 23, 2026.
+> Last documented validation target: Codex CLI `0.125.0` surface as of April 28, 2026.
 
 Manual MCP setup remains fully supported. The local plugin bundle and generated marketplace bundle are packaging layers, not second sources of product logic.
 

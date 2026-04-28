@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.5.3] - 2026-04-28
+
+### Changed
+- Published the final Track B Codex install release state with README, GitHub Pages, release notes, config examples, and tests aligned to `locus-memory@3.5.3`.
+- GitHub Pages now exposes a copyable Codex install command: `npx -y locus-memory@latest install codex`.
+
+### Notes
+- Includes the `v3.5.1` safe MCP `cwd` fix and the `v3.5.2` `doctor codex` ownership detection fix in the public GitHub release story.
+
 ## [3.5.2] - 2026-04-28
 
 ### Fixed
@@ -213,7 +222,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PostToolUse hook for automatic capture
 - `memory_scan`, `memory_search`, `memory_explore`, `memory_remember`, `memory_forget`, `memory_purge`, `memory_status`, `memory_doctor`, `memory_audit` tools
 
-[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.5.2...HEAD
+[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.5.3...HEAD
+[3.5.3]: https://github.com/Magnifico4625/locus/compare/v3.5.2...v3.5.3
 [3.5.2]: https://github.com/Magnifico4625/locus/compare/v3.5.1...v3.5.2
 [3.5.1]: https://github.com/Magnifico4625/locus/compare/v3.5.0...v3.5.1
 [3.5.0]: https://github.com/Magnifico4625/locus/compare/v3.4.0...v3.5.0

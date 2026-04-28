@@ -1,6 +1,6 @@
 {
   "name": "@locus/claude-code",
-  "version": "3.5.2",
+  "version": "3.5.3",
   "private": true,
   "type": "module",
   "description": "Claude Code hooks adapter for Locus memory plugin",
