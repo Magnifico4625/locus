@@ -11,15 +11,15 @@ const repoRoot = join(import.meta.dirname, '..', '..', '..');
 
 describe('package info helpers', () => {
   it('resolves the root package version', () => {
-    expect(resolvePackageVersion(repoRoot)).toBe('3.4.0');
+    expect(resolvePackageVersion(repoRoot)).toBe('3.5.0');
   });
 
   it('resolves the root package version from a nested cli path', () => {
-    expect(resolvePackageVersion(join(repoRoot, 'packages', 'cli', 'src'))).toBe('3.4.0');
+    expect(resolvePackageVersion(join(repoRoot, 'packages', 'cli', 'src'))).toBe('3.5.0');
   });
 
   it('resolves the root package version with the default module-relative start path', () => {
-    expect(resolvePackageVersion()).toBe('3.4.0');
+    expect(resolvePackageVersion()).toBe('3.5.0');
   });
 
   it('finds the locus package root by walking upward', () => {
@@ -27,8 +27,8 @@ describe('package info helpers', () => {
   });
 
   it('builds a pinned runtime package specifier', () => {
-    expect(buildRuntimePackageSpecifier('3.4.0')).toBe('locus-memory@3.4.0');
-    expect(isLatestSpecifier(buildRuntimePackageSpecifier('3.4.0'))).toBe(false);
+    expect(buildRuntimePackageSpecifier('3.5.0')).toBe('locus-memory@3.5.0');
+    expect(isLatestSpecifier(buildRuntimePackageSpecifier('3.5.0'))).toBe(false);
   });
 
   it('detects latest specifiers as unsafe for recurring runtime config', () => {

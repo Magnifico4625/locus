@@ -1,6 +1,6 @@
 {
   "name": "@locus/shared-runtime",
-  "version": "3.4.0",
+  "version": "3.5.0",
   "type": "module",
   "description": "Shared path resolution and client detection for Locus monorepo",
   "exports": {

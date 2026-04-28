@@ -34,9 +34,9 @@ describe('codex mcp config model', () => {
     expect(detectNpxCommand('linux')).toBe('npx');
     expect(detectNpxCommand('win32')).toBe('npx.cmd');
 
-    const server = buildMcpServerConfig({ version: '3.4.0', platform: 'win32' });
+    const server = buildMcpServerConfig({ version: '3.5.0', platform: 'win32' });
     expect(server.command).toBe('npx.cmd');
-    expect(server.args).toEqual(['-y', 'locus-memory@3.4.0', 'mcp']);
+    expect(server.args).toEqual(['-y', 'locus-memory@3.5.0', 'mcp']);
     expect(server.args.join(' ')).not.toContain('@latest');
     expect(server.env).toEqual({
       LOCUS_LOG: 'error',
@@ -50,7 +50,7 @@ describe('codex mcp config model', () => {
     expect(
       classifyMcpOwnership({
         command: 'npx',
-        args: ['-y', 'locus-memory@3.4.0', 'mcp'],
+        args: ['-y', 'locus-memory@3.5.0', 'mcp'],
       }),
     ).toBe('package-owned');
     expect(
@@ -99,7 +99,7 @@ describe('codex mcp config model', () => {
   it('builds codex mcp add/remove args without shell concatenation', () => {
     const addArgs = buildCodexMcpAddArgs({
       name: 'locus',
-      version: '3.4.0',
+      version: '3.5.0',
       platform: 'linux',
     });
 
@@ -116,7 +116,7 @@ describe('codex mcp config model', () => {
       '--',
       'npx',
       '-y',
-      'locus-memory@3.4.0',
+      'locus-memory@3.5.0',
       'mcp',
     ]);
     expect(buildCodexMcpRemoveArgs('locus')).toEqual(['mcp', 'remove', 'locus']);

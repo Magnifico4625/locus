@@ -191,7 +191,7 @@ describe('codex install model', () => {
     expect(exitCode).toBe(0);
     expect(commands[0]).toEqual({
       command: 'npm',
-      args: ['exec', '-y', 'locus-memory@3.4.0', '--', '--help'],
+      args: ['exec', '-y', 'locus-memory@3.5.0', '--', '--help'],
     });
     expect(commands[1]).toEqual({
       command: 'codex',
@@ -206,7 +206,7 @@ describe('codex install model', () => {
         '--',
         'npx',
         '-y',
-        'locus-memory@3.4.0',
+        'locus-memory@3.5.0',
         'mcp',
       ]),
     });
@@ -235,7 +235,7 @@ describe('codex install model', () => {
     expect(commands).toEqual([
       {
         command: 'npm',
-        args: ['exec', '-y', 'locus-memory@3.4.0', '--', '--help'],
+        args: ['exec', '-y', 'locus-memory@3.5.0', '--', '--help'],
       },
     ]);
     expect(stdout.join('\n')).toContain('Runtime package unavailable');
@@ -266,7 +266,7 @@ describe('codex install model', () => {
 
     expect(exitCode).toBe(0);
     expect(commands.map((entry) => entry.args.join(' '))).toEqual([
-      'exec -y locus-memory@3.4.0 -- --help',
+      'exec -y locus-memory@3.5.0 -- --help',
       'mcp get locus',
       'mcp remove locus',
       expect.stringContaining('mcp add'),

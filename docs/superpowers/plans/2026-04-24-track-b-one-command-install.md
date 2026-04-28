@@ -1140,7 +1140,7 @@ git commit -m "docs(codex): document one-command install release"
 - Modify: `plugins/locus-memory/.codex-plugin/plugin.json`
 - Modify: `docs/superpowers/plans/2026-04-24-track-b-one-command-install.md`
 
-- [ ] **Step 1: Align versions**
+- [x] **Step 1: Align versions**
 
 Set all public/workspace/plugin versions to the selected release version, likely `3.5.0`.
 
@@ -1150,7 +1150,7 @@ Run:
 npm install --package-lock-only --ignore-scripts
 ```
 
-- [ ] **Step 2: Run targeted tests**
+- [x] **Step 2: Run targeted tests**
 
 Run:
 
@@ -1160,7 +1160,7 @@ npm test -- packages/cli/tests packages/codex/tests/package-contract.test.ts pac
 
 Expected: PASS.
 
-- [ ] **Step 3: Run full validation**
+- [x] **Step 3: Run full validation**
 
 Run:
 
@@ -1180,7 +1180,7 @@ Expected:
 - pack dry run includes intended files
 - diff check clean
 
-- [ ] **Step 4: Generate marketplace bundle**
+- [x] **Step 4: Generate marketplace bundle**
 
 Run:
 
@@ -1190,7 +1190,7 @@ npm run sync:codex-marketplace
 
 Expected: `dist/marketplace/` generated and checked by tests.
 
-- [ ] **Step 5: Review final diff**
+- [x] **Step 5: Review final diff**
 
 Run:
 
@@ -1200,11 +1200,11 @@ git diff --stat main...HEAD
 git log --oneline --decorate main..HEAD
 ```
 
-- [ ] **Step 6: Update plan checkboxes**
+- [x] **Step 6: Update plan checkboxes**
 
 Mark completed tasks in this file.
 
-- [ ] **Step 7: Final commit**
+- [x] **Step 7: Final commit**
 
 Run:
 
@@ -1213,7 +1213,7 @@ git add package.json package-lock.json packages/core/package.json packages/codex
 git commit -m "chore(release): prepare v3.5.0"
 ```
 
-- [ ] **Step 8: Create local checkpoint tag**
+- [x] **Step 8: Create local checkpoint tag**
 
 Run:
 
