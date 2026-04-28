@@ -4,6 +4,8 @@
 
 **Goal:** Make Locus installable into Codex CLI with one command through a publishable `locus-memory` npm package, while keeping marketplace packaging thin and manual MCP setup supported.
 
+**Current status:** Track B implementation and npm/local post-publish validation are complete as of 2026-04-28. `locus-memory@3.5.0` is published to npm, one-command install is validated from the registry in a disposable `CODEX_HOME`, and the local Codex config has been migrated to the published package runtime. Final GitHub push/release publication remains the next release-management step.
+
 **Architecture:** Add a dedicated `packages/cli` package for user-facing commands and install orchestration. Keep `packages/core` as the MCP runtime and `packages/codex` as the Codex adapter asset/helper package. The root package becomes the public `locus-memory` package and publishes built runtime assets plus the CLI entrypoint; marketplace output is generated into `dist/marketplace/` and deployed separately.
 
 **Tech Stack:** Node.js >=22, TypeScript, esbuild, Vitest, npm workspaces, Codex CLI `0.124.0`, Codex MCP config, Codex plugin marketplace JSON.
@@ -912,7 +914,7 @@ args: C:\Users\Admin\gemini-project\ClaudeMagnificoMem\dist\server.js
 env: CODEX_HOME, LOCUS_CAPTURE_LEVEL=redacted, LOCUS_CODEX_CAPTURE=redacted, LOCUS_LOG=error
 ```
 
-Package-owned `npx.cmd -y locus-memory@<version> mcp` verification is deferred to B10 after npm publish.
+Package-owned `npx.cmd -y locus-memory@3.5.0 mcp` verification was completed in B10 after npm publish, including a disposable `CODEX_HOME` install and the local Codex config migration.
 
 Run:
 
@@ -956,9 +958,16 @@ Expected:
 - safe stale temp files are cleaned or reported
 - no memory data is touched
 
-- [ ] **Step 6: Fresh Codex runtime check**
+- [x] **Step 6: Fresh Codex runtime check**
 
-Pending after publish. Current-session `memory_status` responds with `captureLevel=redacted` and Codex diagnostics. Before npm publish, fresh local sessions should use the restored local `node dist/server.js` runtime. Package-owned fresh runtime must be validated in B10 after the npm package exists.
+Completed after npm publish. The local Codex config now uses the package-owned runtime:
+
+```text
+command: npx.cmd
+args: -y locus-memory@3.5.0 mcp
+```
+
+`codex mcp list`, `codex mcp get locus`, and `npx -y locus-memory@3.5.0 doctor codex` all see the installed package runtime. The doctor reports `Ownership: missing` for the migrated legacy/manual entry, which is non-blocking and should be handled later as a cleanup/migration improvement.
 
 Restart Codex session and run:
 
@@ -1229,9 +1238,9 @@ git tag -a track-b-one-command-install-local -m "Track B one-command install loc
 - Modify: `docs/releases/v3.5.0.md`
 - Modify: `docs/superpowers/plans/2026-04-24-track-b-one-command-install.md`
 
-This task runs only after the npm package, GitHub release, and marketplace artifact are published. It is a release verification gate, not a substitute for local tarball acceptance.
+This task runs after npm publication and before final GitHub release publication. It is a release verification gate, not a substitute for local tarball acceptance. GitHub release page verification remains part of the final GitHub push/release workflow because it cannot be completed before the branch is pushed and the release is created.
 
-- [ ] **Step 1: Verify npm registry metadata**
+- [x] **Step 1: Verify npm registry metadata**
 
 Run:
 
@@ -1245,7 +1254,19 @@ Expected:
 - package exposes the expected `locus-memory` bin
 - tarball URL and integrity are present
 
-- [ ] **Step 2: Verify one-command install entrypoint from registry**
+Result:
+
+```json
+{
+  "version": "3.5.0",
+  "dist.tarball": "https://registry.npmjs.org/locus-memory/-/locus-memory-3.5.0.tgz",
+  "bin": {
+    "locus-memory": "dist/cli.js"
+  }
+}
+```
+
+- [x] **Step 2: Verify one-command install entrypoint from registry**
 
 Use a disposable `CODEX_HOME` and run:
 
@@ -1262,7 +1283,14 @@ Expected:
 - dry-run reports pinned recurring runtime command
 - no `@latest` is written into recurring MCP configuration
 
-- [ ] **Step 3: Verify real install in a disposable Codex home**
+Result:
+
+- `npx -y locus-memory@3.5.0 --version` returned `3.5.0`
+- `npx -y locus-memory@3.5.0 --help` showed `mcp`, `install codex`, `doctor codex`, and `uninstall codex`
+- `npx -y locus-memory@3.5.0 doctor codex` ran without mutation
+- `npx -y locus-memory@3.5.0 install codex --yes --dry-run` reported `npx -y locus-memory@3.5.0 mcp`
+
+- [x] **Step 3: Verify real install in a disposable Codex home**
 
 Run the installer against a disposable Codex home, not the user's primary Codex config:
 
@@ -1278,7 +1306,25 @@ Expected:
 - capture defaults are `redacted`
 - install lock and temp files are not left behind
 
-- [ ] **Step 4: Verify marketplace artifact**
+Result:
+
+- disposable `CODEX_HOME` install completed
+- generated `config.toml` used:
+
+```toml
+[mcp_servers.locus]
+command = "npx.cmd"
+args = ["-y", "locus-memory@3.5.0", "mcp"]
+
+[mcp_servers.locus.env]
+LOCUS_CAPTURE_LEVEL = "redacted"
+LOCUS_CODEX_CAPTURE = "redacted"
+LOCUS_LOG = "error"
+```
+
+- `skills/locus-memory/SKILL.md` existed after install
+
+- [x] **Step 4: Verify marketplace artifact**
 
 Check the generated marketplace distribution and the marketplace repository/release process used for this release.
 
@@ -1288,7 +1334,14 @@ Expected:
 - plugin MCP config uses a pinned runtime package specifier
 - marketplace repository is a thin distribution layer, not a second source of product logic
 
-- [ ] **Step 5: Verify public release surfaces**
+Result:
+
+- local `dist/marketplace/` generation is validated by tests and `npm run sync:codex-marketplace`
+- generated marketplace config uses pinned `locus-memory@3.5.0`
+- no second marketplace repository is mutated by the sync script
+- publishing/pushing a separate marketplace repository remains a distribution step outside this repo-local plan
+
+- [x] **Step 5: Verify prepared public release surfaces**
 
 Check:
 
@@ -1297,9 +1350,15 @@ Check:
 - project landing page
 - `docs/releases/v3.5.0.md`
 
-Expected: all public surfaces tell the same install story and do not claim unverified Codex desktop / extension parity.
+Expected: all prepared public surfaces tell the same install story and do not claim unverified Codex desktop / extension parity. The live GitHub release page is verified in the final GitHub release publication step.
 
-- [ ] **Step 6: Document rollback/hotfix path if validation fails**
+Result:
+
+- README, Codex docs, landing page, changelog, and `docs/releases/v3.5.0.md` were updated for the `v3.5.0` install story
+- GitHub release page verification is pending final GitHub release creation
+- docs do not claim validated Codex desktop / extension parity
+
+- [x] **Step 6: Document rollback/hotfix path if validation fails**
 
 If post-publish validation fails:
 
@@ -1308,7 +1367,7 @@ If post-publish validation fails:
 - use `npm deprecate locus-memory@3.5.0 "<reason>"` only if the published package is misleading or unsafe
 - avoid `npm unpublish` unless the package is truly broken and npm policy/time window makes it safe
 
-- [ ] **Step 7: Commit post-publish notes**
+- [x] **Step 7: Commit post-publish notes**
 
 Run:
 
@@ -1316,6 +1375,8 @@ Run:
 git add docs/releases/v3.5.0.md docs/superpowers/plans/2026-04-24-track-b-one-command-install.md
 git commit -m "docs(release): record v3.5.0 post-publish validation"
 ```
+
+Result: this documentation update records the post-publish validation and should be committed before the GitHub push/release step.
 
 ---
 

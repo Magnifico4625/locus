@@ -1,8 +1,9 @@
 # Codex Next Roadmap
 
 **Date:** 2026-04-16  
+**Last updated:** 2026-04-28
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is preparing the `v3.5.0` one-command Codex install release around that stronger memory core.
+**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B shipped to npm as `locus-memory@3.5.0`; final GitHub push/release publication is the next release-management step.
 
 ---
 
@@ -19,7 +20,7 @@ Unlike [codex.md](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/roadmap/
 Current planning window:
 
 - **Late April 2026** — memory trust gap closure, recall validation, Codex-facing diagnostics, and one-command install implementation
-- **May 2026** — post-publish install validation, desktop polish, dashboard planning, and richer product UX around the stronger memory path
+- **May 2026** — GitHub release publication, desktop polish, dashboard planning, and richer product UX around the stronger memory path
 - **Later** — secondary clients and broader memory platform UX
 
 ---
@@ -109,7 +110,7 @@ Validation evidence from `A6`:
 
 **Priority:** `P0`  
 **Target window:** May 2026 and after the first memory-trust work lands  
-**Current status:** implementation active on branch `docs/track-b-one-command-install`; local tarball and Codex install smoke checks are substantially complete, with registry-hosted post-publish validation intentionally deferred to B10.
+**Current status:** completed and published to npm as `locus-memory@3.5.0`; registry-hosted `npx` install and local Codex config migration are validated. GitHub push/release publication is pending.
 **Why it matters:** once the Codex memory path is trustworthy, the next major UX win is reducing installation from a repo-driven setup to a simple marketplace-based or package-driven flow.
 
 ### Goal
@@ -141,7 +142,33 @@ Make Locus installable for Codex users with the smallest possible setup burden, 
 
 ### Release intent
 
-Candidate scope for **`v3.5.0`**.
+Shipped as **`v3.5.0`** for npm and local Codex CLI install validation.
+
+### Delivered
+
+- public `locus-memory@3.5.0` npm package
+- `locus-memory mcp`
+- `locus-memory install codex`
+- `locus-memory doctor codex`
+- `locus-memory uninstall codex`
+- pinned recurring MCP runtime: `npx.cmd -y locus-memory@3.5.0 mcp` on Windows
+- redacted capture defaults for installed Codex config
+- safe install behavior: backups, lock, cleanup, idempotent skill install
+- generated marketplace bundle under `dist/marketplace/`
+- manual MCP fallback preserved in docs
+
+Validation evidence:
+
+- `npm publish` prepublish gate passed: typecheck, lint, `105` test files / `1098` tests, and build.
+- `npm view locus-memory@3.5.0` confirmed registry metadata and `bin`.
+- `npx -y locus-memory@3.5.0 --version` returned `3.5.0` from outside the monorepo.
+- Disposable `CODEX_HOME` install created `config.toml` and `skills/locus-memory/SKILL.md`.
+- Local Codex config was migrated to the package runtime and `codex mcp list/get locus` confirmed the entry.
+
+Known follow-up:
+
+- `doctor codex` can report `Ownership: missing` for migrated legacy/manual entries; runtime works, but a future migration can claim ownership explicitly.
+- Codex desktop / extension parity remains unverified and must not be claimed until tested.
 
 ---
 
@@ -183,7 +210,7 @@ Turn Codex memory from “recent context is finally trustworthy” into “recen
 
 ### Release intent
 
-Most likely **`v3.4.x` or `v3.5`**, depending on how much of the baseline trust work and packaging work land first.
+Best treated as **`v3.6`** candidate work now that Track A shipped in `v3.4.0` and Track B shipped to npm as `v3.5.0`.
 
 ---
 
@@ -212,7 +239,7 @@ Reduce friction and confusion for Codex users outside the pure CLI path, without
 
 ### Release intent
 
-Can land incrementally alongside `v3.4`.
+Can land incrementally after the `v3.5.0` release publication work, without claiming parity before direct validation.
 
 ---
 
@@ -282,7 +309,7 @@ Extend passive memory capture beyond Codex and Claude Code into other IDE ecosys
 
 ### Release intent
 
-Best treated as **post-`v3.4` / `v3.5`** work unless packaging and richer recall land faster than expected.
+Best treated as **post-`v3.5`** work unless richer Codex recall and dashboard work land faster than expected.
 
 ---
 
@@ -341,7 +368,7 @@ This is a planning suggestion, not a hard contract.
 | Release | Primary intent |
 |---------|----------------|
 | `v3.4` | shipped Track A memory-trust work: reliable auto-import, validated recall, automatic high-value memory persistence, honest diagnostics/docs |
-| `v3.5` | one-command install foundations: npm runtime, installer/doctor/uninstall, marketplace bundle generation, install UX cleanup |
+| `v3.5` | shipped one-command install foundations: npm runtime, installer/doctor/uninstall, marketplace bundle generation, install UX cleanup |
 | `v3.6` | richer Codex conversational recall (`redacted` / `full`) and stronger capture/privacy UX |
 | `v4.0` | HTML dashboard + broader product-grade memory visibility |
 
@@ -351,11 +378,11 @@ Secondary IDE adapters should be scheduled only when they do not block the Codex
 
 ## Immediate Next Candidates
 
-1. Finish Track B release preparation:
-   - docs truth pass
-   - version alignment
-   - final validation
-   - npm publish and B10 post-publish validation
+1. Finish GitHub release publication for Track B:
+   - push the release branch
+   - open/review/merge PR intentionally
+   - create the final GitHub release/tag
+   - verify README, landing page, and release notes from the public GitHub surfaces
 2. Continue improving high-value memory persistence quality after Track B ships:
    - accepted decisions
    - user preferences
