@@ -148,7 +148,8 @@ async function formatDoctorCodex(options) {
   const env = options.env ?? process.env;
   const version = resolvePackageVersion(options.startDir);
   const codexVersion = await options.commandRunner("codex", ["--version"]);
-  const ownership = classifyMcpOwnership(options.readMcpServer?.());
+  const config = options.readMcpServer?.() ?? parseCodexMcpGetOutput((await options.commandRunner("codex", ["mcp", "get", "locus"])).stdout);
+  const ownership = classifyMcpOwnership(config);
   return [
     "Locus Codex doctor",
     `Node version: ${process.version}`,

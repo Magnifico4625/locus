@@ -1,4 +1,8 @@
-import { type CodexMcpServerConfig, classifyMcpOwnership } from '../codex/config.js';
+import {
+  type CodexMcpServerConfig,
+  classifyMcpOwnership,
+  parseCodexMcpGetOutput,
+} from '../codex/config.js';
 import { resolveCodexConfigPath, resolveCodexHome, resolveCodexSkillPath } from '../codex/paths.js';
 import { buildRuntimePackageSpecifier, resolvePackageVersion } from '../package-info.js';
 import type { CommandRunner } from './runner.js';
@@ -14,7 +18,10 @@ export async function formatDoctorCodex(options: DoctorCodexOptions): Promise<st
   const env = options.env ?? process.env;
   const version = resolvePackageVersion(options.startDir);
   const codexVersion = await options.commandRunner('codex', ['--version']);
-  const ownership = classifyMcpOwnership(options.readMcpServer?.());
+  const config =
+    options.readMcpServer?.() ??
+    parseCodexMcpGetOutput((await options.commandRunner('codex', ['mcp', 'get', 'locus'])).stdout);
+  const ownership = classifyMcpOwnership(config);
 
   return [
     'Locus Codex doctor',

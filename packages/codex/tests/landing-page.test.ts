@@ -14,10 +14,10 @@ describe('GitHub Pages landing page', () => {
     expect(existsSync(indexPath)).toBe(true);
   });
 
-  it('describes the current v3.5.1 product state honestly', () => {
+  it('describes the current v3.5.2 product state honestly', () => {
     const html = readFileSync(indexPath, 'utf-8');
 
-    expect(html).toContain('v3.5.1');
+    expect(html).toContain('v3.5.2');
     expect(html).toContain('one-command install');
     expect(html).toContain('redacted');
     expect(html).toContain('Codex');
@@ -54,7 +54,7 @@ describe('GitHub Pages landing page', () => {
     expect(codexReadme).toContain('doctor codex');
     expect(codexReadme).toContain('uninstall codex');
 
-    expect(configExample).toContain('locus-memory@3.5.1');
+    expect(configExample).toContain('locus-memory@3.5.2');
     expect(configExample).toContain('npx.cmd');
     expect(configExample).not.toContain('args = ["-y", "locus-memory@latest", "mcp"]');
     expect(configExample).not.toContain('coming soon');

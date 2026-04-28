@@ -4,7 +4,7 @@
 
 **Goal:** Make Locus installable into Codex CLI with one command through a publishable `locus-memory` npm package, while keeping marketplace packaging thin and manual MCP setup supported.
 
-**Current status:** Track B implementation and npm/local post-publish validation are complete as of 2026-04-28. `locus-memory@3.5.0` is published to npm, one-command install is validated from the registry in a disposable `CODEX_HOME`, and the local Codex config has been migrated to the published package runtime. A `v3.5.1` Windows/Codex startup hotfix is prepared to write a safe MCP `cwd = "$CODEX_HOME"` and avoid `npx` resolving the local monorepo workspace when Codex is launched from the Locus repository. Final GitHub push/release publication remains the next release-management step.
+**Current status:** Track B implementation and npm/local post-publish validation are complete as of 2026-04-28. `locus-memory@3.5.0` is published to npm, one-command install is validated from the registry in a disposable `CODEX_HOME`, and the local Codex config has been migrated to the published package runtime. `v3.5.1` adds safe MCP `cwd = "$CODEX_HOME"` startup behavior; `v3.5.2` fixes `doctor codex` ownership detection for the real `codex mcp get locus` path. Final GitHub push/release publication remains the next release-management step.
 
 **Architecture:** Add a dedicated `packages/cli` package for user-facing commands and install orchestration. Keep `packages/core` as the MCP runtime and `packages/codex` as the Codex adapter asset/helper package. The root package becomes the public `locus-memory` package and publishes built runtime assets plus the CLI entrypoint; marketplace output is generated into `dist/marketplace/` and deployed separately.
 

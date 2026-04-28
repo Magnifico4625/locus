@@ -33,15 +33,44 @@ describe('codex doctor command', () => {
       },
       readMcpServer: () => ({
         command: 'npx',
-        args: ['-y', 'locus-memory@3.5.1', 'mcp'],
+        args: ['-y', 'locus-memory@3.5.2', 'mcp'],
       }),
     });
 
     expect(exitCode).toBe(0);
     expect(stdout.join('\n')).toContain('Codex version: codex-cli 0.125.0');
-    expect(stdout.join('\n')).toContain('Runtime package: locus-memory@3.5.1');
+    expect(stdout.join('\n')).toContain('Runtime package: locus-memory@3.5.2');
     expect(stdout.join('\n')).toContain('Ownership: package-owned');
     expect(stdout.join('\n')).toContain('Cache warming: not attempted by doctor');
     expect(stdout.join('\n')).toContain('first run after cache cleanup requires network');
+  });
+
+  it('detects package-owned MCP config through codex mcp get when no reader is injected', async () => {
+    const commands: Array<{ command: string; args: string[] }> = [];
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['doctor', 'codex'], io, {
+      env: { CODEX_HOME: 'C:/tmp/codex-home' },
+      startDir: repoRoot,
+      commandRunner: async (command, args) => {
+        commands.push({ command, args });
+        if (command === 'codex' && args[0] === '--version') {
+          return { exitCode: 0, stdout: 'codex-cli 0.125.0\n', stderr: '' };
+        }
+        if (command === 'codex' && args.join(' ') === 'mcp get locus') {
+          return {
+            exitCode: 0,
+            stdout:
+              'locus\n  command: npx.cmd\n  args: -y locus-memory@3.5.2 mcp\n  cwd: C:\\Users\\Admin\\.codex\n',
+            stderr: '',
+          };
+        }
+        return { exitCode: 1, stdout: '', stderr: 'not configured' };
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(commands.map((entry) => entry.args.join(' '))).toEqual(['--version', 'mcp get locus']);
+    expect(stdout.join('\n')).toContain('Ownership: package-owned');
   });
 });
