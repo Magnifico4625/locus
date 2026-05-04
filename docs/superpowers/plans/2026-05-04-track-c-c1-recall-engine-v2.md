@@ -274,11 +274,14 @@ Return:
 
 - normalized terms
 - stop-word-filtered terms
+- RU stem-lite term variants for common morphology, for example
+  `ошибки` / `ошибку` / `ошибка` -> `ошибк`
 - intent
 - temporal range from C1.2
 - topic hints, if obvious
 
-Do not overfit to Locus-only terms; keep this deterministic and small.
+Do not overfit to Locus-only terms; keep this deterministic and small. Do not
+add Snowball, Porter, or another stemming dependency in C1.
 
 - [ ] **Step 3: Verify parser**
 
@@ -341,6 +344,11 @@ Implement loaders:
 - timeline fallback when terms are empty
 
 Use parameterized SQL. Do not introduce N+1 event file queries.
+
+For conversation FTS, do not rely on the existing quoted `sanitizeFtsQuery()`
+behavior for recall morphology. Add a recall-specific FTS query builder that
+can use safe prefix terms such as `ошибк*` for normalized RU stems. If FTS5 is
+unavailable, fall back to `LIKE` over normalized term variants.
 
 - [ ] **Step 3: Verify loader through recall tests**
 

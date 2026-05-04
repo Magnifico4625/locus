@@ -6,6 +6,12 @@
 
 **Architecture:** Add a small CLI hook command and optional installer flag. Hooks should read Codex hook JSON from stdin, fail open, use short timeouts in generated config, and never write heavy transcript content directly. Pre-query JSONL/transcript import remains canonical.
 
+Hook commands must not open SQLite and must not call the Locus MCP server.
+If a hook needs to persist a trigger, it may only perform an atomic file write
+through temp-file-then-rename, preferably into an inbox-compatible or dedicated
+trigger queue. This avoids `SQLITE_BUSY` and cross-process DB races while the
+MCP server is running.
+
 **Tech Stack:** TypeScript, Vitest, `packages/cli`, `packages/codex` plugin packaging helpers, Codex hooks JSON config, no core schema changes.
 
 ---
@@ -30,6 +36,8 @@ Out of scope:
 - hook-first memory capture
 - blocking prompts/tool calls
 - PostToolUse broad capture
+- direct SQLite writes from hook commands
+- MCP tool calls from hook commands
 - replacing JSONL/transcript import
 
 ## File Structure
@@ -108,6 +116,9 @@ Assert:
 - invalid event exits non-zero
 - malformed stdin fails open with valid JSON where Codex expects JSON
 - `Stop` output is JSON, never plain text
+- hook command does not open SQLite
+- hook command does not call MCP
+- any persisted marker is written atomically through temp-file-then-rename
 
 Run:
 
@@ -126,6 +137,10 @@ Read stdin JSON, parse defensively, return minimal hook output:
 - `Stop`: no blocking, trigger marker only if implemented safely
 
 Do not call MCP from hook command.
+Do not open SQLite from hook command.
+If a marker is needed, write only a small JSON file atomically. Prefer a
+dedicated trigger queue if the marker is operational metadata rather than a real
+conversation event.
 
 - [ ] **Step 3: Verify command tests**
 
