@@ -38,7 +38,7 @@
 
 ## Checkpoint Convention
 
-- [ ] Before `C1`, create baseline tag: `track-c-baseline-2026-05-04`
+- [x] Before `C1`, create baseline tag: `track-c-baseline-2026-05-04`
 - [ ] After `C1`, tag: `track-c-c1-local`
 - [ ] After `C2`, tag: `track-c-c2-local`
 - [ ] After `C3`, tag: `track-c-c3-local`

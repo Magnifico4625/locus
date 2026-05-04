@@ -65,7 +65,7 @@ Do not modify:
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-c1-recall-engine-v2.md`
 
-- [ ] **Step 1: Verify clean branch**
+- [x] **Step 1: Verify clean branch**
 
 Run:
 
@@ -76,7 +76,7 @@ git log --oneline -5
 
 Expected: clean tree, latest planning commits present.
 
-- [ ] **Step 2: Create baseline tag if not already present**
+- [x] **Step 2: Create baseline tag if not already present**
 
 Run:
 
@@ -86,7 +86,7 @@ git tag -a track-c-baseline-2026-05-04 -m "Track C baseline before recall engine
 
 Expected: tag created. If it already exists, do not recreate it.
 
-- [ ] **Step 3: Run current recall tests**
+- [x] **Step 3: Run current recall tests**
 
 Run:
 
@@ -96,7 +96,7 @@ npm test -- packages/core/tests/tools/recall.test.ts packages/core/tests/integra
 
 Expected: PASS before changes.
 
-- [ ] **Step 4: Commit plan checkbox update**
+- [x] **Step 4: Commit plan checkbox update**
 
 Run:
 
