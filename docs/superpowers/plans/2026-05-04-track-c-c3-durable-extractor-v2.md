@@ -181,6 +181,9 @@ Use canonical English topic keys and RU/EN synonym lists. Keep registry data clo
 - [ ] **Step 3: Keep legacy `deriveTopicKey()` API**
 
 Make `topic-keys.ts` delegate to registry so existing imports do not break.
+Mark the old function as a compatibility wrapper with a short `@deprecated`
+comment pointing new code to `topic-key-registry.ts`; do not maintain two
+parallel implementations.
 
 - [ ] **Step 4: Verify registry**
 
@@ -354,7 +357,15 @@ Expected: FAIL if C1 loader/scoring only handles old memory types.
 
 - [ ] **Step 2: Update loader/scoring minimally**
 
-Map query intents to new durable memory types.
+Map query intents to the new durable memory types explicitly:
+
+- `rejected_alternative` for "why did we reject/отказались" questions
+- `next_step` for "what remains/что осталось" questions
+- `validation_fact` for "what was verified/какие проверки" questions
+- `style`, `preference`, and `constraint` for user workflow and rule questions
+
+Keep this as a small compatibility extension to the C1 loader/scoring, not a
+rewrite of the recall engine.
 
 - [ ] **Step 3: Verify recall and durable tests**
 

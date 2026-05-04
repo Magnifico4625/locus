@@ -82,7 +82,10 @@ codex features list
 codex plugin --help
 ```
 
-Expected: hooks are available and documented. If hook support is unavailable locally, stop and move C5 to future release.
+Expected: hooks are available and documented. `codex features list` is supported
+by current Codex CLI builds, but if an older local CLI lacks that subcommand,
+fall back to `codex --help` plus the official Hooks docs before deciding. If
+hook support is unavailable locally, stop and move C5 to a future release.
 
 - [ ] **Step 2: Re-read official docs**
 
@@ -90,6 +93,9 @@ Check:
 
 - https://developers.openai.com/codex/hooks
 - https://developers.openai.com/codex/plugins/build
+- Confirm docs still describe `[features] codex_hooks = true`, command hooks
+  receiving JSON on `stdin`, and current event names such as `UserPromptSubmit`
+  and `Stop`.
 
 Expected: event names and config shape still match this plan.
 

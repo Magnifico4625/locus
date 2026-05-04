@@ -48,6 +48,7 @@ Modify:
 - `docs/roadmap/codex-next.md`
 - `docs/index.html`
 - `packages/codex/tests/landing-page.test.ts`
+- `packages/codex/tests/skill-sync.test.ts`
 - `CHANGELOG.md`
 
 Do not modify:
@@ -148,6 +149,11 @@ LOCUS_CODEX_CAPTURE=redacted
 LOCUS_CAPTURE_LEVEL=redacted
 ```
 
+Set both variables deliberately: `LOCUS_CODEX_CAPTURE` controls the Codex JSONL
+adapter before events are written to inbox, while `LOCUS_CAPTURE_LEVEL` controls
+the core ingest/server capture gate. Track C acceptance needs both layers in
+`redacted` mode.
+
 Assert these tool calls:
 
 - `memory_recall({ question: "что мы делали вчера?" })`
@@ -198,6 +204,7 @@ git commit -m "test(core): prove track c redacted recall"
 - Modify: `packages/codex/skills/locus-memory/SKILL.md`
 - Modify: `plugins/locus-memory/skills/locus-memory/SKILL.md`
 - Modify: `packages/codex/tests/plugin-bundle.test.ts` if needed
+- Modify: `packages/codex/tests/skill-sync.test.ts` if bundled skill sync expectations change
 
 - [ ] **Step 1: Update skill behavior**
 
@@ -224,7 +231,7 @@ Expected: PASS.
 Run:
 
 ```bash
-git add packages/codex/skills/locus-memory/SKILL.md plugins/locus-memory/skills/locus-memory/SKILL.md packages/codex/tests/plugin-bundle.test.ts
+git add packages/codex/skills/locus-memory/SKILL.md plugins/locus-memory/skills/locus-memory/SKILL.md packages/codex/tests/plugin-bundle.test.ts packages/codex/tests/skill-sync.test.ts
 git commit -m "docs(codex): teach skill richer recall flow"
 ```
 

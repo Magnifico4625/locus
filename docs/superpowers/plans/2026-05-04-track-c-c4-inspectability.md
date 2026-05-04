@@ -34,6 +34,11 @@ Create:
 - `packages/core/src/memory/evidence.ts`
 - `packages/core/tests/memory/evidence.test.ts`
 
+`evidence.ts` is an output helper for existing `Record<string, unknown>`
+durable evidence. It must safely normalize and format `evidence_json`-derived
+objects for review/audit/doctor output; it must not introduce a new storage
+model or replace `DurableMemoryEntry.evidence`.
+
 Modify:
 
 - `packages/core/src/types.ts`
@@ -120,7 +125,11 @@ Expected: FAIL.
 
 - [ ] **Step 2: Implement safe evidence helpers**
 
-Implement helpers that never throw on malformed JSON-derived evidence.
+Implement helpers that never throw on malformed JSON-derived evidence. The
+helpers should normalize existing `Record<string, unknown>` values into concise
+display fields such as confidence, reason, matched pattern, source event, and
+session; they should not parse DB rows directly or become a new persistence
+abstraction.
 
 - [ ] **Step 3: Verify evidence helpers**
 
@@ -231,7 +240,10 @@ Expected: FAIL.
 
 - [ ] **Step 2: Implement audit summary**
 
-Use lightweight SQL over `conversation_events.payload_json`. Avoid expensive full-table JSON parsing beyond reasonable limits.
+Use lightweight SQL over `conversation_events.payload_json`. Avoid unbounded
+full-table JSON parsing: inspect at most the latest 1000 Codex conversation
+events, and prefer a recent time window such as the last 30 days when available.
+Keep the limit as a named constant so future tuning is explicit.
 
 - [ ] **Step 3: Verify audit**
 

@@ -42,11 +42,16 @@ Modify:
 - `packages/codex/tests/inbox-event.test.ts`
 - `packages/codex/tests/importer.test.ts`
 - `packages/codex/tests/core-compat.test.ts`
+- `packages/codex/tests/relevance.test.ts`
+- `packages/codex/tests/redaction.test.ts`
 
-Create:
+Test ownership notes:
 
-- `packages/codex/tests/relevance.test.ts` if no focused relevance test exists
-- `packages/codex/tests/redaction.test.ts` if redaction tests need isolation
+- `packages/codex/tests/relevance.test.ts` already exists; extend it in place.
+- Redaction coverage currently exists in `capture.test.ts`. Create focused
+  `redaction.test.ts` for v2 and move/split the relevant cases deliberately;
+  keep at most one smoke assertion in `capture.test.ts` to avoid duplicate
+  maintenance.
 
 Do not modify:
 
@@ -147,7 +152,7 @@ git commit -m "feat(codex): expand capture reason contract"
 
 **Files:**
 - Modify: `packages/codex/src/relevance.ts`
-- Create: `packages/codex/tests/relevance.test.ts`
+- Modify: `packages/codex/tests/relevance.test.ts`
 
 - [ ] **Step 1: Write failing relevance tests**
 
@@ -263,6 +268,7 @@ git commit -m "feat(codex): bound snippets by capture reason"
 **Files:**
 - Modify: `packages/codex/src/capture.ts`
 - Create: `packages/codex/tests/redaction.test.ts`
+- Modify: `packages/codex/tests/capture.test.ts`
 - Modify: `packages/codex/tests/inbox-event.test.ts`
 
 - [ ] **Step 1: Write failing redaction tests**
@@ -299,7 +305,7 @@ Add `redactionApplied` to retained redacted/full user/assistant/session summary 
 Run:
 
 ```bash
-npm test -- packages/codex/tests/redaction.test.ts packages/codex/tests/inbox-event.test.ts packages/codex/tests/core-compat.test.ts
+npm test -- packages/codex/tests/redaction.test.ts packages/codex/tests/capture.test.ts packages/codex/tests/inbox-event.test.ts packages/codex/tests/core-compat.test.ts
 npm -w @locus/codex run typecheck
 ```
 
@@ -310,7 +316,7 @@ Expected: PASS.
 Run:
 
 ```bash
-git add packages/codex/src/capture.ts packages/codex/tests/redaction.test.ts packages/codex/tests/inbox-event.test.ts packages/codex/tests/core-compat.test.ts
+git add packages/codex/src/capture.ts packages/codex/tests/redaction.test.ts packages/codex/tests/capture.test.ts packages/codex/tests/inbox-event.test.ts packages/codex/tests/core-compat.test.ts
 git commit -m "feat(codex): strengthen redacted secret filtering"
 ```
 

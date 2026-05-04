@@ -191,7 +191,11 @@ Cover:
 - `5 дней назад`
 - `что делали в пятницу`
 
-Use a fixed `now`, for example `2026-05-04T12:00:00.000Z`.
+Use a fixed numeric `now`, for example:
+
+```ts
+const now = Date.parse('2026-05-04T12:00:00.000Z');
+```
 
 Run:
 
@@ -312,6 +316,10 @@ git commit -m "feat(core): parse recall query intent"
 - Modify: `packages/core/src/recall/index.ts`
 - Test: `packages/core/tests/recall/scoring.test.ts`
 - Test: `packages/core/tests/tools/recall.test.ts`
+
+Note: `packages/core/src/recall/` is new in Track C. This task creates
+`candidate-loader.ts` for the first time; later C1/C3 tasks may modify it after
+that initial creation.
 
 - [ ] **Step 1: Write failing candidate loader tests**
 
