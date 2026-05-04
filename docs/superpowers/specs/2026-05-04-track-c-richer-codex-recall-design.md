@@ -320,6 +320,8 @@ Goals:
 - stable topic keys for supersede semantics
 - less accidental collision
 - clearer review and audit output
+- language-normalized keys so equivalent RU/EN statements map to the same
+  canonical English topic key
 
 Example topic keys:
 
@@ -332,6 +334,17 @@ Example topic keys:
 - `release_validation`
 - `database_choice`
 - `auth_strategy`
+
+Language mapping rules:
+
+- Topic keys must be canonical English identifiers.
+- RU/EN synonyms must converge to the same key when they describe the same
+  product or architecture topic.
+- Example: `Мы решили использовать PostgreSQL` and `Decided to use PostgreSQL`
+  must both derive `database_choice`.
+- Do not generate translated duplicate keys such as `выбор_базы`.
+- If confidence in the mapping is low, prefer no topic key over a wrong topic
+  key that could corrupt supersede behavior.
 
 Merge semantics:
 
@@ -523,16 +536,21 @@ Create separate implementation plans after this spec is reviewed:
   - scoring
   - grouping
   - backward-compatible result shape
+  - expose optional `candidateGroups` immediately for clarification UX
 - `C2` Capture/Relevance v2:
   - richer capture reasons
   - better noise filtering
   - assistant summary retention
   - redaction improvements
+  - per-capture-reason snippet limits under a global hard maximum
 - `C3` Durable Extractor v2:
   - pattern families
   - topic-key registry
+  - RU/EN language-normalized topic mapping
   - confidence/evidence
   - merge/supersede semantics
+  - drop low-confidence extractor candidates instead of storing review-only
+    durable memory noise
 - `C4` Inspectability:
   - review/audit/status/doctor improvements
   - user-visible why-stored output
@@ -542,6 +560,7 @@ Create separate implementation plans after this spec is reviewed:
   - install flag or plugin packaging
   - doctor diagnostics
   - fail-open behavior
+  - allowed to slip to `v3.6.x`; not a `v3.6.0` release gate
 - `C6` Acceptance And Docs Truth Pass:
   - real fixture matrix
   - docs updates
@@ -568,15 +587,22 @@ and git checkpoints.
 
 ---
 
-## Open Questions For Implementation Plans
+## Decisions For Implementation Plans
 
-These do not block the design:
+The following planning decisions are now fixed for C1-C6:
 
-- Should low-confidence candidates be dropped or stored as review-only rows?
-- Should hook support land in `v3.6.0` or be allowed to slip to `v3.6.x`?
-- Should `redacted` snippet limits change globally or per capture reason?
-- Should `memory_recall` expose `candidateGroups` immediately or only after
-  internal grouping stabilizes?
+- Low-confidence extractor candidates should be dropped, not stored as
+  review-only durable memory rows. Raw redacted conversation context may still
+  exist in `conversation_events` if capture policy retained it.
+- Hook support is optional and may slip to `v3.6.x`. C1-C4 must prove recall
+  quality without depending on hooks.
+- Redacted snippets should use per-capture-reason limits under a global hard
+  maximum. For example, `bug_context` may keep more context than `style`.
+- `memory_recall` should expose optional `candidateGroups` immediately while
+  preserving the existing `candidates` field for compatibility.
+- Topic keys must use language-normalized canonical English identifiers so RU
+  and EN statements about the same decision participate in the same
+  dedup/supersede behavior.
 
 ---
 
