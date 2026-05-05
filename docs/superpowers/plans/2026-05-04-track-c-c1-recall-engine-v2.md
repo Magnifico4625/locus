@@ -115,7 +115,7 @@ Expected: docs-only checkpoint if checkboxes changed.
 - Modify: `packages/core/src/types.ts`
 - Test: `packages/core/tests/tools/recall.test.ts`
 
-- [ ] **Step 1: Write failing contract tests**
+- [x] **Step 1: Write failing contract tests**
 
 Add assertions that `memory_recall` can include optional fields while old fields remain:
 
@@ -137,7 +137,7 @@ npm test -- packages/core/tests/tools/recall.test.ts
 
 Expected: FAIL because `candidateGroups` does not exist.
 
-- [ ] **Step 2: Extend TypeScript types only**
+- [x] **Step 2: Extend TypeScript types only**
 
 Add optional types:
 
@@ -149,7 +149,7 @@ Add optional types:
 
 Keep existing required fields unchanged.
 
-- [ ] **Step 3: Run typecheck and tests**
+- [x] **Step 3: Run typecheck and tests**
 
 Run:
 
@@ -160,7 +160,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS or only test still failing until later tasks if test requires behavior.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

@@ -228,6 +228,25 @@ describe('handleRecall', () => {
 
     expect(result.status).toBe('needs_clarification');
     expect(result.candidates).toHaveLength(2);
+    expect(result).toMatchObject({
+      status: 'needs_clarification',
+      question: expect.any(String),
+      summary: expect.any(String),
+      candidates: expect.any(Array),
+      candidateGroups: expect.any(Array),
+    });
+    expect(result.candidateGroups).toEqual([
+      expect.objectContaining({
+        id: 'session:sess-billing',
+        heading: expect.stringContaining('billing retry fixes'),
+        candidates: [expect.objectContaining({ sessionId: 'sess-billing' })],
+      }),
+      expect.objectContaining({
+        id: 'session:sess-auth',
+        heading: expect.stringContaining('auth login fixes'),
+        candidates: [expect.objectContaining({ sessionId: 'sess-auth' })],
+      }),
+    ]);
   });
 
   it('returns no_memory when neither durable nor conversation context matches', () => {

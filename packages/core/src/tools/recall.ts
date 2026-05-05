@@ -1,6 +1,7 @@
 import type {
   DatabaseAdapter,
   MemoryRecallCandidate,
+  MemoryRecallCandidateGroup,
   MemoryRecallResolvedRange,
   MemoryRecallResult,
   TimeRange,
@@ -243,6 +244,7 @@ function buildResult(
       ...(resolvedRange ? { resolvedRange } : {}),
       summary: 'I found multiple possible matches. Please clarify which one you mean.',
       candidates,
+      candidateGroups: buildCandidateGroups(candidates),
     };
   }
 
@@ -282,4 +284,30 @@ export function handleRecall(
 
   const candidates = [...durableCandidates, ...conversationCandidates];
   return buildResult(question, candidates, resolvedRange);
+}
+
+function buildCandidateGroups(candidates: MemoryRecallCandidate[]): MemoryRecallCandidateGroup[] {
+  return candidates.map((candidate, index) => {
+    const eventIds = [...candidate.eventIds];
+    const durableMemoryIds = [...candidate.durableMemoryIds];
+    const id = candidate.sessionId
+      ? `session:${candidate.sessionId}`
+      : durableMemoryIds[0] !== undefined
+        ? `durable:${durableMemoryIds[0]}`
+        : eventIds[0] !== undefined
+          ? `event:${eventIds[0]}`
+          : `candidate:${index}`;
+
+    return {
+      id,
+      heading: candidate.headline,
+      whyMatched: candidate.whyMatched,
+      candidates: [candidate],
+      eventIds,
+      durableMemoryIds,
+      ...(candidate.sessionId ? { sessionId: candidate.sessionId } : {}),
+      ...(candidate.topicKey ? { topicKey: candidate.topicKey } : {}),
+      ...(candidate.confidence ? { confidence: candidate.confidence } : {}),
+    };
+  });
 }

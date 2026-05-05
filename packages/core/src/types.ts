@@ -139,6 +139,18 @@ export interface SearchResult {
 
 export type MemoryRecallStatus = 'ok' | 'no_memory' | 'needs_clarification';
 
+export type MemoryRecallIntent =
+  | 'decision'
+  | 'work_summary'
+  | 'bug_context'
+  | 'preference_style'
+  | 'rejected_alternative'
+  | 'next_step'
+  | 'validation_fact'
+  | 'general';
+
+export type MemoryRecallConfidence = 'high' | 'medium' | 'low';
+
 export interface MemoryRecallResolvedRange {
   label: string;
   from: number;
@@ -153,6 +165,25 @@ export interface MemoryRecallCandidate {
   whyMatched: string;
   eventIds: string[];
   durableMemoryIds: number[];
+  intent?: MemoryRecallIntent;
+  confidence?: MemoryRecallConfidence;
+  score?: number;
+  topicKey?: string;
+  matchedTerms?: string[];
+  captureReason?: string;
+  sourceKind?: 'durable' | 'conversation';
+}
+
+export interface MemoryRecallCandidateGroup {
+  id: string;
+  heading: string;
+  whyMatched: string;
+  candidates: MemoryRecallCandidate[];
+  eventIds: string[];
+  durableMemoryIds: number[];
+  sessionId?: string;
+  topicKey?: string;
+  confidence?: MemoryRecallConfidence;
 }
 
 export interface MemoryRecallResult {
@@ -161,6 +192,10 @@ export interface MemoryRecallResult {
   resolvedRange?: MemoryRecallResolvedRange;
   summary: string;
   candidates: MemoryRecallCandidate[];
+  matchedIntent?: MemoryRecallIntent;
+  matchedTopics?: string[];
+  confidence?: MemoryRecallConfidence;
+  candidateGroups?: MemoryRecallCandidateGroup[];
 }
 
 // ─── Scanner ───
