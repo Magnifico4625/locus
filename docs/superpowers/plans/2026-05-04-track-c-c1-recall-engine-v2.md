@@ -244,7 +244,7 @@ git commit -m "feat(core): parse recall time ranges"
 - Create: `packages/core/src/recall/query-parser.ts`
 - Create: `packages/core/tests/recall/query-parser.test.ts`
 
-- [ ] **Step 1: Write failing intent tests**
+- [x] **Step 1: Write failing intent tests**
 
 Cover questions for intents:
 
@@ -267,7 +267,7 @@ npm test -- packages/core/tests/recall/query-parser.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement parser**
+- [x] **Step 2: Implement parser**
 
 Implement:
 
@@ -288,7 +288,7 @@ Return:
 Do not overfit to Locus-only terms; keep this deterministic and small. Do not
 add Snowball, Porter, or another stemming dependency in C1.
 
-- [ ] **Step 3: Verify parser**
+- [x] **Step 3: Verify parser**
 
 Run:
 
@@ -299,7 +299,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
