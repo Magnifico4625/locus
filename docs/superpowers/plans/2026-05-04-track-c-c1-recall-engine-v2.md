@@ -175,9 +175,10 @@ git commit -m "feat(core): extend recall result contract"
 
 **Files:**
 - Create: `packages/core/src/recall/temporal-parser.ts`
+- Modify: `packages/core/src/tools/recall.ts`
 - Create: `packages/core/tests/recall/temporal-parser.test.ts`
 
-- [ ] **Step 1: Write failing temporal parser tests**
+- [x] **Step 1: Write failing temporal parser tests**
 
 Cover:
 
@@ -205,7 +206,7 @@ npm test -- packages/core/tests/recall/temporal-parser.test.ts
 
 Expected: FAIL because parser does not exist.
 
-- [ ] **Step 2: Implement deterministic parser**
+- [x] **Step 2: Implement deterministic parser**
 
 Implement:
 
@@ -215,7 +216,7 @@ export function parseRecallTemporalRange(question: string, now: number): ParsedR
 
 Use existing `resolveTimeRange()` for `today`, `yesterday`, and `last_7d` where possible. For `N days ago`, compute day boundaries in UTC first. Keep timezone behavior explicit in tests.
 
-- [ ] **Step 3: Verify parser**
+- [x] **Step 3: Verify parser**
 
 Run:
 
@@ -226,12 +227,12 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
 ```bash
-git add packages/core/src/recall/temporal-parser.ts packages/core/tests/recall/temporal-parser.test.ts
+git add packages/core/src/recall/temporal-parser.ts packages/core/src/tools/recall.ts packages/core/tests/recall/temporal-parser.test.ts
 git commit -m "feat(core): parse recall time ranges"
 ```
 

@@ -6,6 +6,7 @@ import type {
   MemoryRecallResult,
   TimeRange,
 } from '../types.js';
+import { parseRecallTemporalRange } from '../recall/temporal-parser.js';
 import { resolveTimeRange, summarizePayload } from './search.js';
 import { handleTimeline } from './timeline.js';
 
@@ -75,21 +76,15 @@ function parseRange(
   question: string,
   now: number,
 ): { timeRange?: TimeRange; resolvedRange?: MemoryRecallResolvedRange } {
-  const lower = question.toLowerCase();
-
-  if (lower.includes('yesterday')) {
-    return buildResolvedRange('yesterday', { relative: 'yesterday' }, now);
+  const parsed = parseRecallTemporalRange(question, now);
+  if (!parsed) {
+    return {};
   }
 
-  if (lower.includes('last week')) {
-    return buildResolvedRange('last week', { relative: 'last_7d' }, now);
-  }
-
-  if (lower.includes('today')) {
-    return buildResolvedRange('today', { relative: 'today' }, now);
-  }
-
-  return {};
+  return {
+    timeRange: { from: parsed.from, to: parsed.to },
+    resolvedRange: parsed,
+  };
 }
 
 function resolveRangeLabel(timeRange: TimeRange): string {
