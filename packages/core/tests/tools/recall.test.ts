@@ -14,10 +14,12 @@ function createAdapter(dir: string): NodeSqliteAdapter {
   return new NodeSqliteAdapter(raw);
 }
 
-function insertDurableDecision(
+type TestDurableMemoryType = 'decision' | 'preference' | 'style' | 'constraint';
+
+function insertDurableMemory(
   db: DatabaseAdapter,
   summary: string,
-  opts?: { topicKey?: string; updatedAt?: number },
+  opts?: { memoryType?: TestDurableMemoryType; topicKey?: string; updatedAt?: number },
 ): number {
   const now = opts?.updatedAt ?? Date.now();
   const result = db.run(
@@ -27,7 +29,7 @@ function insertDurableDecision(
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       opts?.topicKey ?? null,
-      'decision',
+      opts?.memoryType ?? 'decision',
       'active',
       summary,
       JSON.stringify({ test: true }),
@@ -40,6 +42,14 @@ function insertDurableDecision(
   );
 
   return result.lastInsertRowid;
+}
+
+function insertDurableDecision(
+  db: DatabaseAdapter,
+  summary: string,
+  opts?: { topicKey?: string; updatedAt?: number },
+): number {
+  return insertDurableMemory(db, summary, { ...opts, memoryType: 'decision' });
 }
 
 function insertConversationEvent(
@@ -245,6 +255,100 @@ describe('handleRecall', () => {
         id: 'session:sess-auth',
         heading: expect.stringContaining('auth login fixes'),
         candidates: [expect.objectContaining({ sessionId: 'sess-auth' })],
+      }),
+    ]);
+  });
+
+  it('loads durable preference, style, and constraint memories for preference/style queries', () => {
+    const preferenceId = insertDurableMemory(adapter, 'Prefer one task at a time with approval gates.', {
+      memoryType: 'preference',
+      topicKey: 'user_workflow_style',
+      updatedAt: now - 60_000,
+    });
+    const styleId = insertDurableMemory(adapter, 'User likes concise factual progress updates.', {
+      memoryType: 'style',
+      topicKey: 'user_workflow_style',
+      updatedAt: now - 120_000,
+    });
+    const constraintId = insertDurableMemory(adapter, 'Do not touch unrelated Claude Code files.', {
+      memoryType: 'constraint',
+      topicKey: 'claude_code_compatibility',
+      updatedAt: now - 180_000,
+    });
+
+    const result = handleRecall('какой у меня стиль работы?', {
+      db: adapter,
+      now,
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('needs_clarification');
+    expect(result.candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ durableMemoryIds: [preferenceId], sourceKind: 'durable' }),
+        expect.objectContaining({ durableMemoryIds: [styleId], sourceKind: 'durable' }),
+        expect.objectContaining({ durableMemoryIds: [constraintId], sourceKind: 'durable' }),
+      ]),
+    );
+  });
+
+  it('loads user prompts, assistant responses, and session summaries as conversation candidates', () => {
+    insertConversationEvent(adapter, {
+      eventId: 'evt-user-npm',
+      timestamp: now - 60_000,
+      kind: 'user_prompt',
+      payloadJson: JSON.stringify({ prompt: 'npm install failed with a workspace lock issue.' }),
+      sessionId: 'sess-user',
+    });
+    insertConversationEvent(adapter, {
+      eventId: 'evt-assistant-npm',
+      timestamp: now - 120_000,
+      kind: 'ai_response',
+      payloadJson: JSON.stringify({ response: 'Root cause: npm install failed because package-lock was stale.' }),
+      sessionId: 'sess-assistant',
+    });
+    insertConversationEvent(adapter, {
+      eventId: 'evt-summary-npm',
+      timestamp: now - 180_000,
+      kind: 'session_end',
+      payloadJson: JSON.stringify({ summary: 'Fixed npm install by refreshing workspace dependencies.' }),
+      sessionId: 'sess-summary',
+    });
+
+    const result = handleRecall('which npm install errors happened?', {
+      db: adapter,
+      now,
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('needs_clarification');
+    expect(result.candidates).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ eventIds: ['evt-user-npm'], sourceKind: 'conversation' }),
+        expect.objectContaining({ eventIds: ['evt-assistant-npm'], sourceKind: 'conversation' }),
+        expect.objectContaining({ eventIds: ['evt-summary-npm'], sourceKind: 'conversation' }),
+      ]),
+    );
+  });
+
+  it('matches Russian stem-lite query variants against conversation payload text', () => {
+    insertConversationEvent(adapter, {
+      eventId: 'evt-russian-error',
+      timestamp: now - 60_000,
+      kind: 'user_prompt',
+      payloadJson: JSON.stringify({ prompt: 'Починили ошибку npm install в workspace.' }),
+      sessionId: 'sess-russian',
+    });
+
+    const result = handleRecall('какие были ошибки при npm install?', {
+      db: adapter,
+      now,
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('ok');
+    expect(result.summary).toContain('ошибку npm install');
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        eventIds: ['evt-russian-error'],
+        matchedTerms: expect.arrayContaining(['ошибк', 'npm', 'install']),
       }),
     ]);
   });

@@ -314,15 +314,15 @@ git commit -m "feat(core): parse recall query intent"
 
 **Files:**
 - Create: `packages/core/src/recall/candidate-loader.ts`
-- Modify: `packages/core/src/recall/index.ts`
-- Test: `packages/core/tests/recall/scoring.test.ts`
+- Create: `packages/core/src/recall/index.ts`
+- Modify: `packages/core/src/tools/recall.ts`
 - Test: `packages/core/tests/tools/recall.test.ts`
 
 Note: `packages/core/src/recall/` is new in Track C. This task creates
 `candidate-loader.ts` for the first time; later C1/C3 tasks may modify it after
 that initial creation.
 
-- [ ] **Step 1: Write failing candidate loader tests**
+- [x] **Step 1: Write failing candidate loader tests**
 
 Set up in-memory DB rows for:
 
@@ -344,7 +344,7 @@ npm test -- packages/core/tests/tools/recall.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement loader**
+- [x] **Step 2: Implement loader**
 
 Implement loaders:
 
@@ -359,7 +359,7 @@ behavior for recall morphology. Add a recall-specific FTS query builder that
 can use safe prefix terms such as `ошибк*` for normalized RU stems. If FTS5 is
 unavailable, fall back to `LIKE` over normalized term variants.
 
-- [ ] **Step 3: Verify loader through recall tests**
+- [x] **Step 3: Verify loader through recall tests**
 
 Run:
 
@@ -370,12 +370,12 @@ npm -w @locus/core run typecheck
 
 Expected: PASS for loader-specific expectations.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
 ```bash
-git add packages/core/src/recall/candidate-loader.ts packages/core/src/recall/index.ts packages/core/tests/tools/recall.test.ts
+git add packages/core/src/recall/candidate-loader.ts packages/core/src/recall/index.ts packages/core/src/tools/recall.ts packages/core/tests/tools/recall.test.ts
 git commit -m "feat(core): load recall candidates by intent"
 ```
 
