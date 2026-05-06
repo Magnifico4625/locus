@@ -201,6 +201,7 @@ function loadConversationCandidates({
           matchedTerms: matchingTerms(headline, parsedQuery.termVariants),
           sourceKind: 'conversation' as const,
           timestamp: row.timestamp,
+          captureReason: row.kind,
         };
       })
       .filter((candidate) => candidate.matchedTerms.length > 0);
@@ -228,6 +229,7 @@ function loadConversationCandidates({
       matchedTerms: [],
       sourceKind: 'conversation' as const,
       timestamp: entry.timestamp,
+      captureReason: entry.kind,
     }));
 }
 

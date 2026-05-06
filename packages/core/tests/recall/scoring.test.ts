@@ -81,4 +81,20 @@ describe('scoreRecallCandidate', () => {
     expect(match.score).toBeGreaterThan(mismatch.score);
     expect(match.reasons).toContain('capture_reason_match');
   });
+
+  it('prefers completion events for bug and work summary recall', () => {
+    const completion = scoreRecallCandidate(
+      candidate({ captureReason: 'task_complete' }),
+      parsedQuery({ intent: 'bug_context' }),
+      { now },
+    );
+    const prompt = scoreRecallCandidate(
+      candidate({ captureReason: 'user_prompt' }),
+      parsedQuery({ intent: 'bug_context' }),
+      { now },
+    );
+
+    expect(completion.score).toBeGreaterThan(prompt.score);
+    expect(completion.reasons).toContain('completion_event');
+  });
 });

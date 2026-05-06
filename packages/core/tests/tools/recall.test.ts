@@ -362,6 +362,7 @@ describe('handleRecall', () => {
     expect(result).toEqual({
       status: 'no_memory',
       question: 'What did we decide about Kubernetes sharding?',
+      matchedIntent: 'decision',
       summary: 'No matching memory found.',
       candidates: [],
       candidateGroups: [],

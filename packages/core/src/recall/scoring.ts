@@ -14,6 +14,8 @@ export interface RecallScoringOptions {
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DURABLE_PRIORITY_INTENTS = new Set(['decision', 'preference_style']);
+const COMPLETION_EVENT_INTENTS = new Set(['bug_context', 'validation_fact', 'work_summary']);
+const COMPLETION_CAPTURE_REASONS = new Set(['session_end', 'task_complete']);
 
 function confidenceForScore(score: number): MemoryRecallConfidence {
   if (score >= 12) {
@@ -83,6 +85,15 @@ export function scoreRecallCandidate(
   if (candidate.captureReason === parsedQuery.intent) {
     score += 2;
     reasons.push('capture_reason_match');
+  }
+
+  if (
+    candidate.captureReason &&
+    COMPLETION_CAPTURE_REASONS.has(candidate.captureReason) &&
+    COMPLETION_EVENT_INTENTS.has(parsedQuery.intent)
+  ) {
+    score += 5;
+    reasons.push('completion_event');
   }
 
   if (candidate.eventIds.length > 0 || candidate.durableMemoryIds.length > 0) {

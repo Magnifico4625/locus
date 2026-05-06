@@ -26,6 +26,7 @@ const STOP_WORDS = new Set([
   'during',
   'happened',
   'is',
+  'just',
   'last',
   'me',
   'my',
@@ -42,6 +43,7 @@ const STOP_WORDS = new Set([
   'какие',
   'какой',
   'меня',
+  'мы',
   'на',
   'назад',
   'неделе',
@@ -81,7 +83,10 @@ const INTENT_PATTERNS: Array<{
   },
   {
     intent: 'bug_context',
-    patterns: [/\b(?:errors?|failures?|bugs?|failed|failing)\b/u, /ошибк|падал|сломал/u],
+    patterns: [
+      /\b(?:errors?|failures?|bugs?|failed|failing|fix(?:ed|es)?)\b/u,
+      /ошибк|падал|сломал|исправил/u,
+    ],
   },
   {
     intent: 'decision',
@@ -89,7 +94,7 @@ const INTENT_PATTERNS: Array<{
   },
   {
     intent: 'work_summary',
-    patterns: [/\bwhat\s+did\s+we\s+do\b/u, /что\s+делали/u],
+    patterns: [/\bwhat\s+did\s+we\s+do\b/u, /что\s+(?:мы\s+)?делали/u],
   },
 ];
 

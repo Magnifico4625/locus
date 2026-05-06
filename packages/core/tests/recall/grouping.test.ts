@@ -105,4 +105,5 @@ describe('buildRecallResult', () => {
     expect(result.status).toBe('needs_clarification');
     expect(result.candidateGroups).toHaveLength(2);
   });
+
 });

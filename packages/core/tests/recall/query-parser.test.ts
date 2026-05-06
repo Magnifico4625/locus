@@ -8,8 +8,10 @@ describe('parseRecallQuery', () => {
     ['what did we decide about auth yesterday?', 'decision'],
     ['что решили по capture strategy вчера?', 'decision'],
     ['what did we do last week?', 'work_summary'],
+    ['что мы делали вчера?', 'work_summary'],
     ['что делали на прошлой неделе?', 'work_summary'],
     ['which errors happened during npm install?', 'bug_context'],
+    ['what did we just fix in Codex recall?', 'bug_context'],
     ['какие были ошибки при npm install?', 'bug_context'],
     ['what is my code style?', 'preference_style'],
     ['какой у меня стиль работы?', 'preference_style'],
@@ -37,6 +39,14 @@ describe('parseRecallQuery', () => {
     expect(parseRecallQuery('What did we decide about GitHub OAuth yesterday?', now)).toMatchObject({
       normalizedTerms: ['what', 'did', 'we', 'decide', 'about', 'github', 'oauth', 'yesterday'],
       terms: ['github', 'oauth'],
+    });
+  });
+
+  it('does not keep RU pronouns as search terms for timeline-style recall', () => {
+    expect(parseRecallQuery('Что мы делали вчера?', now)).toMatchObject({
+      intent: 'work_summary',
+      terms: [],
+      termVariants: [],
     });
   });
 

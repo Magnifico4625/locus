@@ -4,7 +4,12 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ServerContext } from '../../src/server.js';
 import { createServer } from '../../src/server.js';
-import type { InboxEvent, MemoryRecallResult, MemoryStatus } from '../../src/types.js';
+import type {
+  DurableMemoryType,
+  InboxEvent,
+  MemoryRecallResult,
+  MemoryStatus,
+} from '../../src/types.js';
 
 const fixturesDir = join(import.meta.dirname, '..', '..', '..', 'codex', 'tests', 'fixtures');
 const tempRoots: string[] = [];
@@ -46,10 +51,10 @@ function writeInboxEvent(inboxDir: string, event: InboxEvent): void {
   writeFileSync(join(inboxDir, filename), JSON.stringify(event), 'utf8');
 }
 
-function insertDurableDecision(
+function insertDurableMemory(
   ctx: ServerContext,
   summary: string,
-  opts?: { topicKey?: string; updatedAt?: number },
+  opts?: { memoryType?: DurableMemoryType; topicKey?: string; updatedAt?: number },
 ): number {
   const now = opts?.updatedAt ?? Date.now();
   const result = ctx.db.run(
@@ -59,7 +64,7 @@ function insertDurableDecision(
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       opts?.topicKey ?? null,
-      'decision',
+      opts?.memoryType ?? 'decision',
       'active',
       summary,
       JSON.stringify({ test: true }),
@@ -72,6 +77,14 @@ function insertDurableDecision(
   );
 
   return result.lastInsertRowid;
+}
+
+function insertDurableDecision(
+  ctx: ServerContext,
+  summary: string,
+  opts?: { topicKey?: string; updatedAt?: number },
+): number {
+  return insertDurableMemory(ctx, summary, { ...opts, memoryType: 'decision' });
 }
 
 function createYesterdayTimestamp(referenceNow: number): number {
@@ -180,6 +193,48 @@ describe('memory_recall integration', () => {
     }
   });
 
+  it('answers RU "что мы делали вчера?" with absolute range evidence', async () => {
+    const root = makeTempRoot();
+    const projectDir = join(root, 'project');
+    const dbPath = join(root, 'locus.db');
+    const inboxDir = join(root, 'inbox');
+    const now = Date.now();
+
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(inboxDir, { recursive: true });
+
+    writeInboxEvent(inboxDir, {
+      version: 1,
+      event_id: 'recall-yesterday-ru-001',
+      source: 'codex',
+      project_root: projectDir,
+      session_id: 'sess-yesterday-ru-001',
+      timestamp: createYesterdayTimestamp(now),
+      kind: 'session_end',
+      payload: {
+        summary: 'Исправили вчерашний регрессионный тест recall engine.',
+      },
+    });
+
+    const ctx = await createServer({ cwd: projectDir, dbPath });
+    try {
+      const recallText = await callTextTool(ctx, 'memory_recall', {
+        question: 'Что мы делали вчера?',
+      });
+      const result = JSON.parse(recallText) as MemoryRecallResult;
+
+      expect(result.status).toBe('ok');
+      expect(result.summary).toContain('вчерашний регрессионный тест recall engine');
+      expect(result.matchedIntent).toBe('work_summary');
+      expect(result.resolvedRange).toMatchObject({
+        label: 'вчера',
+      });
+      expect(result.candidateGroups).toHaveLength(1);
+    } finally {
+      ctx.cleanup();
+    }
+  });
+
   it('answers durable decision recall for auth last week', async () => {
     const root = makeTempRoot();
     const projectDir = join(root, 'project');
@@ -206,6 +261,8 @@ describe('memory_recall integration', () => {
 
       expect(result.status).toBe('ok');
       expect(result.summary).toContain('GitHub OAuth');
+      expect(result.matchedIntent).toBe('decision');
+      expect(result.matchedTopics).toEqual(['auth_strategy']);
       expect(result.resolvedRange).toMatchObject({
         label: 'last week',
       });
@@ -214,6 +271,44 @@ describe('memory_recall integration', () => {
       expect(result.candidates).toEqual([
         expect.objectContaining({
           durableMemoryIds: [durableId],
+        }),
+      ]);
+    } finally {
+      ctx.cleanup();
+    }
+  });
+
+  it('returns durable style and preference candidates for style queries', async () => {
+    const root = makeTempRoot();
+    const projectDir = join(root, 'project');
+    const dbPath = join(root, 'locus.db');
+
+    mkdirSync(projectDir, { recursive: true });
+
+    const ctx = await createServer({ cwd: projectDir, dbPath });
+    try {
+      const durableId = insertDurableMemory(
+        ctx,
+        'User prefers short direct progress reports and approval gates between tasks.',
+        {
+          memoryType: 'style',
+          topicKey: 'communication_style',
+          updatedAt: Date.now(),
+        },
+      );
+
+      const recallText = await callTextTool(ctx, 'memory_recall', {
+        question: 'Какой у меня стиль работы?',
+      });
+      const result = JSON.parse(recallText) as MemoryRecallResult;
+
+      expect(result.status).toBe('ok');
+      expect(result.matchedIntent).toBe('preference_style');
+      expect(result.summary).toContain('short direct progress reports');
+      expect(result.candidates).toEqual([
+        expect.objectContaining({
+          durableMemoryIds: [durableId],
+          sourceKind: 'durable',
         }),
       ]);
     } finally {
@@ -264,6 +359,10 @@ describe('memory_recall integration', () => {
 
       expect(result.status).toBe('needs_clarification');
       expect(result.candidates).toHaveLength(2);
+      expect(result.candidateGroups).toEqual([
+        expect.objectContaining({ id: 'session:sess-billing' }),
+        expect.objectContaining({ id: 'session:sess-auth' }),
+      ]);
       expect(result.summary).toContain('multiple possible matches');
     } finally {
       ctx.cleanup();
@@ -287,8 +386,10 @@ describe('memory_recall integration', () => {
       expect(result).toEqual({
         status: 'no_memory',
         question: 'What did we decide about Kubernetes sharding?',
+        matchedIntent: 'decision',
         summary: 'No matching memory found.',
         candidates: [],
+        candidateGroups: [],
       });
     } finally {
       ctx.cleanup();

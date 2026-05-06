@@ -1,4 +1,5 @@
 export { buildRecallResult } from './result-builder.js';
+export { runRecallEngine } from './engine.js';
 export { groupRecallCandidates } from './grouping.js';
 export { loadRecallCandidates } from './candidate-loader.js';
 export { parseRecallQuery } from './query-parser.js';
@@ -6,6 +7,7 @@ export { parseRecallTemporalRange } from './temporal-parser.js';
 export { scoreRecallCandidate, scoreRecallCandidates } from './scoring.js';
 export type { CandidateLoaderOptions } from './candidate-loader.js';
 export type { BuildRecallResultOptions } from './result-builder.js';
+export type { RecallEngineDeps, RecallEngineOptions } from './engine.js';
 export type { RecallScoreResult, RecallScoringOptions } from './scoring.js';
 export type { ParsedRecallQuery } from './query-parser.js';
 export type { ParsedRecallRange } from './temporal-parser.js';

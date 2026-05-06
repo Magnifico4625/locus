@@ -468,13 +468,21 @@ git commit -m "feat(core): score and group recall candidates"
 ## Task C1.6: Wire `memory_recall`
 
 **Files:**
+- Create: `packages/core/src/recall/engine.ts`
+- Modify: `packages/core/src/recall/candidate-loader.ts`
 - Modify: `packages/core/src/tools/recall.ts`
 - Create/Modify: `packages/core/src/recall/index.ts`
+- Modify: `packages/core/src/recall/query-parser.ts`
+- Modify: `packages/core/src/recall/result-builder.ts`
+- Modify: `packages/core/src/recall/scoring.ts`
+- Modify: `packages/core/tests/recall/grouping.test.ts`
+- Modify: `packages/core/tests/recall/query-parser.test.ts`
+- Modify: `packages/core/tests/recall/scoring.test.ts`
 - Modify: `packages/core/tests/tools/recall.test.ts`
 - Modify: `packages/core/tests/integration/recall-tool.test.ts`
 - Modify: `packages/core/tests/integration/track-a-recall-acceptance.test.ts`
 
-- [ ] **Step 1: Write integration expectations**
+- [x] **Step 1: Write integration expectations**
 
 Add tests for:
 
@@ -491,11 +499,11 @@ npm test -- packages/core/tests/tools/recall.test.ts packages/core/tests/integra
 
 Expected: FAIL before wiring.
 
-- [ ] **Step 2: Replace old recall implementation with engine call**
+- [x] **Step 2: Replace old recall implementation with engine call**
 
 Keep `handleRecall()` exported with same signature. Internally call `runRecallEngine()`.
 
-- [ ] **Step 3: Verify focused recall tests**
+- [x] **Step 3: Verify focused recall tests**
 
 Run:
 
@@ -506,7 +514,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
