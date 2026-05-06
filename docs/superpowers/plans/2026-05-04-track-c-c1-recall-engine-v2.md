@@ -531,7 +531,7 @@ git commit -m "feat(core): wire recall engine v2"
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-c1-recall-engine-v2.md`
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-plan-bundle.md`
 
-- [ ] **Step 1: Run focused validation**
+- [x] **Step 1: Run focused validation**
 
 Run:
 
@@ -543,11 +543,11 @@ git diff --check
 
 Expected: PASS and clean diff check.
 
-- [ ] **Step 2: Update plan checkboxes**
+- [x] **Step 2: Update plan checkboxes**
 
 Mark completed C1 tasks in this file and bundle checkpoint.
 
-- [ ] **Step 3: Commit validation notes**
+- [x] **Step 3: Commit validation notes**
 
 Run:
 
@@ -556,7 +556,7 @@ git add docs/superpowers/plans/2026-05-04-track-c-c1-recall-engine-v2.md docs/su
 git commit -m "docs(codex): record track c c1 validation"
 ```
 
-- [ ] **Step 4: Create checkpoint tag**
+- [x] **Step 4: Create checkpoint tag**
 
 Run:
 
