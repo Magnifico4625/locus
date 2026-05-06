@@ -1,12 +1,15 @@
 import type {
   DatabaseAdapter,
-  MemoryRecallCandidate,
-  MemoryRecallCandidateGroup,
   MemoryRecallResolvedRange,
   MemoryRecallResult,
   TimeRange,
 } from '../types.js';
-import { loadRecallCandidates, parseRecallQuery } from '../recall/index.js';
+import {
+  buildRecallResult,
+  loadRecallCandidates,
+  parseRecallQuery,
+  scoreRecallCandidates,
+} from '../recall/index.js';
 import { resolveTimeRange } from './search.js';
 
 interface RecallDeps {
@@ -46,42 +49,6 @@ function buildResolvedRange(
   };
 }
 
-function buildResult(
-  question: string,
-  candidates: MemoryRecallCandidate[],
-  resolvedRange?: MemoryRecallResolvedRange,
-): MemoryRecallResult {
-  if (candidates.length === 0) {
-    return {
-      status: 'no_memory',
-      question,
-      ...(resolvedRange ? { resolvedRange } : {}),
-      summary: 'No matching memory found.',
-      candidates: [],
-    };
-  }
-
-  if (candidates.length > 1) {
-    return {
-      status: 'needs_clarification',
-      question,
-      ...(resolvedRange ? { resolvedRange } : {}),
-      summary: 'I found multiple possible matches. Please clarify which one you mean.',
-      candidates,
-      candidateGroups: buildCandidateGroups(candidates),
-    };
-  }
-
-  const candidate = candidates[0] as MemoryRecallCandidate;
-  return {
-    status: 'ok',
-    question,
-    ...(resolvedRange ? { resolvedRange } : {}),
-    summary: candidate.headline,
-    candidates: [candidate],
-  };
-}
-
 export function handleRecall(
   question: string,
   deps: RecallDeps,
@@ -107,31 +74,6 @@ export function handleRecall(
     now,
     limit,
   });
-  return buildResult(question, candidates, resolvedRange);
-}
-
-function buildCandidateGroups(candidates: MemoryRecallCandidate[]): MemoryRecallCandidateGroup[] {
-  return candidates.map((candidate, index) => {
-    const eventIds = [...candidate.eventIds];
-    const durableMemoryIds = [...candidate.durableMemoryIds];
-    const id = candidate.sessionId
-      ? `session:${candidate.sessionId}`
-      : durableMemoryIds[0] !== undefined
-        ? `durable:${durableMemoryIds[0]}`
-        : eventIds[0] !== undefined
-          ? `event:${eventIds[0]}`
-          : `candidate:${index}`;
-
-    return {
-      id,
-      heading: candidate.headline,
-      whyMatched: candidate.whyMatched,
-      candidates: [candidate],
-      eventIds,
-      durableMemoryIds,
-      ...(candidate.sessionId ? { sessionId: candidate.sessionId } : {}),
-      ...(candidate.topicKey ? { topicKey: candidate.topicKey } : {}),
-      ...(candidate.confidence ? { confidence: candidate.confidence } : {}),
-    };
-  });
+  const scoredCandidates = scoreRecallCandidates(candidates, parsedQuery, { now });
+  return buildRecallResult({ question, candidates: scoredCandidates, resolvedRange });
 }

@@ -19,6 +19,7 @@ interface DurableRecallRow {
 interface ConversationRecallRow {
   event_id: string;
   kind: string;
+  timestamp: number;
   payload_json: string | null;
   session_id: string | null;
 }
@@ -148,6 +149,7 @@ function loadDurableCandidates({
       topicKey: row.topic_key ?? undefined,
       matchedTerms: matchingTerms(row.summary, parsedQuery.termVariants),
       sourceKind: 'durable',
+      timestamp: row.updated_at,
     }));
 }
 
@@ -178,7 +180,7 @@ function loadConversationCandidates({
     params.push(...termParams);
 
     const rows = db.all<ConversationRecallRow>(
-      `SELECT event_id, kind, payload_json, session_id
+      `SELECT event_id, kind, timestamp, payload_json, session_id
        FROM conversation_events
        WHERE ${clauses.join(' AND ')}
        ORDER BY timestamp DESC, id DESC
@@ -198,6 +200,7 @@ function loadConversationCandidates({
           intent: parsedQuery.intent,
           matchedTerms: matchingTerms(headline, parsedQuery.termVariants),
           sourceKind: 'conversation' as const,
+          timestamp: row.timestamp,
         };
       })
       .filter((candidate) => candidate.matchedTerms.length > 0);
@@ -224,6 +227,7 @@ function loadConversationCandidates({
       intent: parsedQuery.intent,
       matchedTerms: [],
       sourceKind: 'conversation' as const,
+      timestamp: entry.timestamp,
     }));
 }
 

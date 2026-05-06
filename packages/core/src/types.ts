@@ -172,6 +172,7 @@ export interface MemoryRecallCandidate {
   matchedTerms?: string[];
   captureReason?: string;
   sourceKind?: 'durable' | 'conversation';
+  timestamp?: number;
 }
 
 export interface MemoryRecallCandidateGroup {

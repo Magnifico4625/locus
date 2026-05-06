@@ -364,6 +364,7 @@ describe('handleRecall', () => {
       question: 'What did we decide about Kubernetes sharding?',
       summary: 'No matching memory found.',
       candidates: [],
+      candidateGroups: [],
     });
   });
 });

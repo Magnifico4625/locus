@@ -387,10 +387,15 @@ git commit -m "feat(core): load recall candidates by intent"
 - Create: `packages/core/src/recall/scoring.ts`
 - Create: `packages/core/src/recall/grouping.ts`
 - Create: `packages/core/src/recall/result-builder.ts`
+- Modify: `packages/core/src/recall/candidate-loader.ts`
+- Modify: `packages/core/src/recall/index.ts`
+- Modify: `packages/core/src/tools/recall.ts`
+- Modify: `packages/core/src/types.ts`
 - Create: `packages/core/tests/recall/scoring.test.ts`
 - Create: `packages/core/tests/recall/grouping.test.ts`
+- Modify: `packages/core/tests/tools/recall.test.ts`
 
-- [ ] **Step 1: Write failing scoring tests**
+- [x] **Step 1: Write failing scoring tests**
 
 Assert higher scores for:
 
@@ -408,7 +413,7 @@ npm test -- packages/core/tests/recall/scoring.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Write failing grouping tests**
+- [x] **Step 2: Write failing grouping tests**
 
 Assert:
 
@@ -424,11 +429,11 @@ npm test -- packages/core/tests/recall/grouping.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 3: Implement scoring**
+- [x] **Step 3: Implement scoring**
 
 Keep weights simple constants in `scoring.ts`. Do not tune against only one fixture.
 
-- [ ] **Step 4: Implement grouping and result builder**
+- [x] **Step 4: Implement grouping and result builder**
 
 Rules:
 
@@ -438,7 +443,7 @@ Rules:
 
 Return optional `candidateGroups` immediately.
 
-- [ ] **Step 5: Verify scoring/grouping**
+- [x] **Step 5: Verify scoring/grouping**
 
 Run:
 
@@ -449,7 +454,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 Run:
 
