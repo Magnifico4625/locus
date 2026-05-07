@@ -1,4 +1,5 @@
 import type { CodexRelevanceReason, CodexSpeakerRole } from './relevance.js';
+import type { CodexCaptureReason } from './types.js';
 
 interface SnippetLimit {
   chars: number;
@@ -20,7 +21,8 @@ const ASSISTANT_CHAR_LIMIT = 220;
 const USER_MAX_SENTENCES = 3;
 const ASSISTANT_MAX_SENTENCES = 2;
 const GLOBAL_HARD_CHAR_MAX = 640;
-const SNIPPET_LIMITS_BY_REASON: Partial<Record<CodexRelevanceReason, SnippetLimit>> = {
+const TRUNCATION_SUFFIX = ' ...';
+const SNIPPET_LIMITS_BY_REASON = {
   style: { chars: 180, sentences: 1 },
   preference: { chars: 220, sentences: 1 },
   constraint: { chars: 220, sentences: 1 },
@@ -30,7 +32,7 @@ const SNIPPET_LIMITS_BY_REASON: Partial<Record<CodexRelevanceReason, SnippetLimi
   release_context: { chars: 420, sentences: 3 },
   bug_context: { chars: 600, sentences: 4 },
   validation_fact: { chars: 500, sentences: 3 },
-};
+} satisfies Partial<Record<CodexCaptureReason, SnippetLimit>>;
 
 export function boundCodexSnippet(
   text: string,
@@ -66,8 +68,16 @@ export function boundCodexSnippet(
   }
 
   const truncated = boundedText.length < normalized.length;
+  if (!truncated) {
+    return {
+      text: boundedText,
+      truncated,
+    };
+  }
+
+  const textBudget = Math.max(0, limit.chars - TRUNCATION_SUFFIX.length);
   return {
-    text: truncated ? `${boundedText} ...` : boundedText,
+    text: `${boundedText.slice(0, textBudget).trimEnd()}${TRUNCATION_SUFFIX}`,
     truncated,
   };
 }
@@ -81,7 +91,10 @@ function limitForReason(options: BoundCodexSnippetOptions): SnippetLimit {
     chars: options.role === 'assistant' ? ASSISTANT_CHAR_LIMIT : USER_CHAR_LIMIT,
     sentences: options.role === 'assistant' ? ASSISTANT_MAX_SENTENCES : USER_MAX_SENTENCES,
   };
-  const reasonLimit = SNIPPET_LIMITS_BY_REASON[options.reason] ?? roleDefault;
+  const reasonLimit =
+    (SNIPPET_LIMITS_BY_REASON as Partial<Record<CodexCaptureReason, SnippetLimit>>)[
+      options.reason
+    ] ?? roleDefault;
 
   return {
     chars: Math.min(reasonLimit.chars, GLOBAL_HARD_CHAR_MAX),

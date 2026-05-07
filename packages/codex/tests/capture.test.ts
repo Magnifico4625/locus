@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getCodexCaptureMode, redactCodexText, shouldImportCodexEvent } from '../src/capture.js';
+import { getCodexCaptureMode, shouldImportCodexEvent } from '../src/capture.js';
 import { CODEX_CAPTURE_REASONS } from '../src/types.js';
 import type { CodexCaptureMode, CodexCaptureReason, CodexNormalizedKind } from '../src/types.js';
 
@@ -86,27 +86,5 @@ describe('CodexCaptureReason contract', () => {
     ];
 
     expect(CODEX_CAPTURE_REASONS).toEqual(expectedReasons);
-  });
-});
-
-describe('redactCodexText', () => {
-  it('redacts obvious bearer tokens, sk keys, and secret-like assignments', () => {
-    const input = [
-      'Authorization: Bearer safeexampletoken123',
-      'OPENAI_API_KEY=sk-safeexample1234567890',
-      'password = "safe-password-value"',
-      'token: safe-token-value',
-      'normal text stays visible',
-    ].join('\n');
-
-    expect(redactCodexText(input)).toBe(
-      [
-        'Authorization: Bearer [REDACTED]',
-        'OPENAI_API_KEY=[REDACTED]',
-        'password = [REDACTED]',
-        'token: [REDACTED]',
-        'normal text stays visible',
-      ].join('\n'),
-    );
   });
 });

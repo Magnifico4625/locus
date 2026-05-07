@@ -95,6 +95,16 @@ describe('boundCodexSnippet', () => {
     expect(snippet.truncated).toBe(true);
   });
 
+  it('counts the truncation marker inside the reason character limit', () => {
+    const snippet = boundCodexSnippet('A'.repeat(2_000), {
+      role: 'user',
+      reason: 'bug_context',
+    });
+
+    expect(snippet.text).toMatch(/ \.\.\.$/);
+    expect(snippet.text.length).toBeLessThanOrEqual(600);
+  });
+
   it('still limits sentence count to prevent transcript dumps', () => {
     const text = [
       'First sentence captures the important bug.',
