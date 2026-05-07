@@ -60,7 +60,7 @@ Do not modify:
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-c3-durable-extractor-v2.md`
 
-- [ ] **Step 1: Verify C2 checkpoint**
+- [x] **Step 1: Verify C2 checkpoint**
 
 Run:
 
@@ -71,7 +71,7 @@ git tag --list "track-c-c2-local"
 
 Expected: clean tree and C2 tag exists unless intentionally skipped.
 
-- [ ] **Step 2: Run existing durable tests**
+- [x] **Step 2: Run existing durable tests**
 
 Run:
 
@@ -81,7 +81,7 @@ npm test -- packages/core/tests/memory/durable-extractor.test.ts packages/core/t
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit plan checkbox update**
+- [x] **Step 3: Commit plan checkbox update**
 
 Run:
 
