@@ -12,9 +12,13 @@ export type CodexSpeakerRole = 'user' | 'assistant';
 const NOISE_PATTERNS = [
   /\bfor general learning\b/i,
   /\bexplain what\b/i,
+  /\bin general terms\b/i,
   /\bhistory of\b/i,
   /\bcompare\b/i,
   /\bwhat are\b/i,
+  /что\s+такое/i,
+  /для\s+общего\s+развития/i,
+  /рассказать\s+подробнее/i,
 ];
 
 const BUG_PATTERNS = [
@@ -22,9 +26,18 @@ const BUG_PATTERNS = [
   /\bcrash(?:es|ed|ing)?\b/i,
   /\bfail(?:s|ed|ing|ure)?\b/i,
   /\berror\b/i,
+  /\bfix(?:ed|es|ing)?\b/i,
   /\bregression\b/i,
   /\brefactor\b/i,
   /\bnull(?:able)?\b/i,
+  /\broot\s+cause\b/i,
+  /\brecall\s+gap\b/i,
+  /пада(?:ет|л|ют)/i,
+  /ошибк/i,
+  /регрес/i,
+  /рефактор/i,
+  /причин[ау]/i,
+  /не\s+сохранял/i,
 ];
 
 const PREFERENCE_PATTERNS = [
@@ -35,6 +48,43 @@ const PREFERENCE_PATTERNS = [
   /\bavoid touching\b/i,
   /\bunrelated modules?\b/i,
   /\bunrelated code\b/i,
+];
+
+const STYLE_PATTERNS = [
+  /\bmy\s+style\b/i,
+  /\bcode\s+style\b/i,
+  /\bshort\s+direct\s+progress\s+reports\b/i,
+  /\bapproval\s+gates?\b/i,
+  /мой\s+стиль/i,
+  /стиль\s+работы/i,
+  /коротк(?:ие|их)\s+отчет/i,
+  /после\s+одобрения/i,
+];
+
+const CONSTRAINT_PATTERNS = [
+  /\bconstraint\b/i,
+  /\bmust\s+not\b/i,
+  /\bdo\s+not\s+modify\b/i,
+  /ограничени[ея]/i,
+  /не\s+трогай/i,
+];
+
+const REJECTED_ALTERNATIVE_PATTERNS = [
+  /\breject(?:ed)?\b/i,
+  /\bdecided\s+against\b/i,
+  /\bnot\s+stable\s+enough\b/i,
+  /отказал(?:ись|и)?/i,
+  /не\s+подош[её]л/i,
+];
+
+const VALIDATION_FACT_PATTERNS = [
+  /\bvalidation\s+passed\b/i,
+  /\btests?\s+passed\b/i,
+  /\btypecheck\b.{0,24}\b(?:green|passed)\b/i,
+  /\bgreen\b/i,
+  /проверено/i,
+  /прош[её]л/i,
+  /зел[её]н/i,
 ];
 
 const NEXT_STEP_PATTERNS = [
@@ -48,10 +98,14 @@ const NEXT_STEP_PATTERNS = [
 const DECISION_PATTERNS = [
   /\bdecision\b/i,
   /\bdecide(?:d)?\b/i,
+  /\buse\s+[a-z0-9_-]+/i,
   /\bchoose\b/i,
   /\bkeep the fix\b/i,
   /\bpatch\b.{0,24}\bfirst\b/i,
   /\bstrategy\b/i,
+  /решили/i,
+  /выбрали/i,
+  /использовать/i,
 ];
 
 export function classifyCodexRelevance(text: string, role: CodexSpeakerRole): CodexRelevanceResult {
@@ -62,6 +116,22 @@ export function classifyCodexRelevance(text: string, role: CodexSpeakerRole): Co
 
   if (role === 'assistant' && matchesAny(normalized, NEXT_STEP_PATTERNS)) {
     return { keep: true, reason: 'next_step' };
+  }
+
+  if (matchesAny(normalized, REJECTED_ALTERNATIVE_PATTERNS)) {
+    return { keep: true, reason: 'rejected_alternative' };
+  }
+
+  if (matchesAny(normalized, VALIDATION_FACT_PATTERNS)) {
+    return { keep: true, reason: 'validation_fact' };
+  }
+
+  if (matchesAny(normalized, CONSTRAINT_PATTERNS)) {
+    return { keep: true, reason: 'constraint' };
+  }
+
+  if (matchesAny(normalized, STYLE_PATTERNS)) {
+    return { keep: true, reason: 'style' };
   }
 
   if (matchesAny(normalized, PREFERENCE_PATTERNS)) {
@@ -77,6 +147,10 @@ export function classifyCodexRelevance(text: string, role: CodexSpeakerRole): Co
   }
 
   if (matchesAny(normalized, NOISE_PATTERNS)) {
+    return { keep: false, reason: 'noise' };
+  }
+
+  if (role === 'assistant') {
     return { keep: false, reason: 'noise' };
   }
 

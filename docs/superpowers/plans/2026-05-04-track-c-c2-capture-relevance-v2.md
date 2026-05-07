@@ -155,7 +155,7 @@ git commit -m "feat(codex): expand capture reason contract"
 - Modify: `packages/codex/src/relevance.ts`
 - Modify: `packages/codex/tests/relevance.test.ts`
 
-- [ ] **Step 1: Write failing relevance tests**
+- [x] **Step 1: Write failing relevance tests**
 
 Cover RU/EN examples:
 
@@ -175,14 +175,14 @@ npm test -- packages/codex/tests/relevance.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement pattern families**
+- [x] **Step 2: Implement pattern families**
 
 Use small, readable regex arrays by reason. Keep default behavior conservative:
 
 - user general context may be kept when not noise
 - assistant general context should still be filtered unless it has high-value markers
 
-- [ ] **Step 3: Verify classifier**
+- [x] **Step 3: Verify classifier**
 
 Run:
 
@@ -193,7 +193,7 @@ npm -w @locus/codex run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
