@@ -1,5 +1,10 @@
 import type { CodexRelevanceReason, CodexSpeakerRole } from './relevance.js';
 
+interface SnippetLimit {
+  chars: number;
+  sentences: number;
+}
+
 export interface BoundCodexSnippetOptions {
   role: CodexSpeakerRole;
   reason: CodexRelevanceReason;
@@ -14,6 +19,18 @@ const USER_CHAR_LIMIT = 280;
 const ASSISTANT_CHAR_LIMIT = 220;
 const USER_MAX_SENTENCES = 3;
 const ASSISTANT_MAX_SENTENCES = 2;
+const GLOBAL_HARD_CHAR_MAX = 640;
+const SNIPPET_LIMITS_BY_REASON: Partial<Record<CodexRelevanceReason, SnippetLimit>> = {
+  style: { chars: 180, sentences: 1 },
+  preference: { chars: 220, sentences: 1 },
+  constraint: { chars: 220, sentences: 1 },
+  decision: { chars: 320, sentences: 2 },
+  rejected_alternative: { chars: 320, sentences: 2 },
+  next_step: { chars: 260, sentences: 2 },
+  release_context: { chars: 420, sentences: 3 },
+  bug_context: { chars: 600, sentences: 4 },
+  validation_fact: { chars: 500, sentences: 3 },
+};
 
 export function boundCodexSnippet(
   text: string,
@@ -24,8 +41,9 @@ export function boundCodexSnippet(
     return { text: '', truncated: false };
   }
 
-  const sentenceLimit = options.role === 'assistant' ? ASSISTANT_MAX_SENTENCES : USER_MAX_SENTENCES;
-  const charLimit = options.role === 'assistant' ? ASSISTANT_CHAR_LIMIT : USER_CHAR_LIMIT;
+  const limit = limitForReason(options);
+  const sentenceLimit = limit.sentences;
+  const charLimit = limit.chars;
   const sentences = splitSentences(normalized);
 
   const keptSentences: string[] = [];
@@ -58,11 +76,22 @@ function collapseWhitespace(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-function splitSentences(text: string): string[] {
-  const matches = text.match(/[^.!?]+[.!?]?/g);
-  if (!matches) {
-    return [text];
-  }
+function limitForReason(options: BoundCodexSnippetOptions): SnippetLimit {
+  const roleDefault = {
+    chars: options.role === 'assistant' ? ASSISTANT_CHAR_LIMIT : USER_CHAR_LIMIT,
+    sentences: options.role === 'assistant' ? ASSISTANT_MAX_SENTENCES : USER_MAX_SENTENCES,
+  };
+  const reasonLimit = SNIPPET_LIMITS_BY_REASON[options.reason] ?? roleDefault;
 
-  return matches.map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 0);
+  return {
+    chars: Math.min(reasonLimit.chars, GLOBAL_HARD_CHAR_MAX),
+    sentences: reasonLimit.sentences,
+  };
+}
+
+function splitSentences(text: string): string[] {
+  return text
+    .split(/(?<=[.!?])\s+(?=[A-ZА-Я])/u)
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence.length > 0);
 }

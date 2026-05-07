@@ -210,7 +210,7 @@ git commit -m "feat(codex): classify high value recall snippets"
 - Modify: `packages/codex/src/bounded-snippets.ts`
 - Modify: `packages/codex/tests/bounded-snippets.test.ts`
 
-- [ ] **Step 1: Write failing snippet limit tests**
+- [x] **Step 1: Write failing snippet limit tests**
 
 Assert:
 
@@ -227,7 +227,7 @@ npm test -- packages/codex/tests/bounded-snippets.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement per-reason limits**
+- [x] **Step 2: Implement per-reason limits**
 
 Keep a constant map:
 
@@ -242,7 +242,7 @@ const SNIPPET_LIMITS_BY_REASON = {
 
 Use a global hard maximum regardless of reason.
 
-- [ ] **Step 3: Verify snippet behavior**
+- [x] **Step 3: Verify snippet behavior**
 
 Run:
 
@@ -253,7 +253,7 @@ npm -w @locus/codex run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

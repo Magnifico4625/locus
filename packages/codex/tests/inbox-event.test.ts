@@ -135,7 +135,7 @@ describe('toInboxEvent', () => {
     expect(toInboxEvent(prompt, 'redacted')?.payload).toEqual({
       prompt: 'Use Authorization: Bearer [REDACTED] and OPENAI_API_KEY=[REDACTED]',
       capture_policy: 'bounded_redacted',
-      capture_reason: 'general_context',
+      capture_reason: 'decision',
       truncated: false,
     });
     expect(toInboxEvent(assistant, 'redacted')?.payload).toEqual({
