@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getCodexCaptureMode, redactCodexText, shouldImportCodexEvent } from '../src/capture.js';
-import type { CodexCaptureMode, CodexNormalizedKind } from '../src/types.js';
+import { CODEX_CAPTURE_REASONS } from '../src/types.js';
+import type { CodexCaptureMode, CodexCaptureReason, CodexNormalizedKind } from '../src/types.js';
 
 const allKinds: CodexNormalizedKind[] = [
   'session_start',
@@ -65,6 +66,26 @@ describe('shouldImportCodexEvent', () => {
       true,
       true,
     ]);
+  });
+});
+
+describe('CodexCaptureReason contract', () => {
+  it('exposes all Track C capture reasons as a runtime contract', () => {
+    const expectedReasons: CodexCaptureReason[] = [
+      'noise',
+      'bug_context',
+      'decision',
+      'preference',
+      'style',
+      'constraint',
+      'rejected_alternative',
+      'validation_fact',
+      'release_context',
+      'next_step',
+      'general_context',
+    ];
+
+    expect(CODEX_CAPTURE_REASONS).toEqual(expectedReasons);
   });
 });
 

@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -125,5 +125,38 @@ describe('Codex importer core ingest compatibility', () => {
     expect(
       storedRows.some((row) => row.payload_json?.includes('"capture_policy":"bounded_redacted"')),
     ).toBe(true);
+  });
+
+  it('stores expanded bounded redacted capture reasons without schema changes', () => {
+    mkdirSync(inboxDir, { recursive: true });
+    writeFileSync(
+      join(inboxDir, 'expanded-reason.json'),
+      JSON.stringify({
+        version: 1,
+        event_id: 'expanded-reason-validation-fact',
+        source: 'codex',
+        source_event_id: 'codex:test:validation-fact',
+        project_root: tempDir,
+        session_id: 'sess-expanded-reason',
+        timestamp: Date.parse('2026-05-07T09:00:00.000Z'),
+        kind: 'user_prompt',
+        payload: {
+          prompt: 'Focused parser regression tests passed.',
+          capture_policy: 'bounded_redacted',
+          capture_reason: 'validation_fact',
+          truncated: false,
+        },
+      }),
+      'utf-8',
+    );
+
+    const ingest = processInbox(inboxDir, adapter, { captureLevel: 'redacted' });
+    expect(ingest.errors).toBe(0);
+    expect(ingest.processed).toBe(1);
+
+    const row = adapter.get<ConversationEventRow>(
+      "SELECT * FROM conversation_events WHERE event_id = 'expanded-reason-validation-fact'",
+    );
+    expect(row?.payload_json).toContain('"capture_reason":"validation_fact"');
   });
 });

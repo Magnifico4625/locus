@@ -1,10 +1,6 @@
-export type CodexRelevanceReason =
-  | 'noise'
-  | 'bug_context'
-  | 'decision'
-  | 'preference'
-  | 'next_step'
-  | 'general_context';
+import type { CodexCaptureReason } from './types.js';
+
+export type CodexRelevanceReason = CodexCaptureReason;
 
 export interface CodexRelevanceResult {
   keep: boolean;

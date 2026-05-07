@@ -101,10 +101,11 @@ git commit -m "docs(codex): start track c c2 capture relevance"
 
 **Files:**
 - Modify: `packages/codex/src/types.ts`
+- Modify: `packages/codex/src/relevance.ts`
 - Modify: `packages/codex/tests/capture.test.ts`
 - Modify: `packages/codex/tests/core-compat.test.ts`
 
-- [ ] **Step 1: Write failing reason contract tests**
+- [x] **Step 1: Write failing reason contract tests**
 
 Assert allowed reasons include:
 
@@ -122,11 +123,11 @@ npm test -- packages/codex/tests/capture.test.ts packages/codex/tests/core-compa
 
 Expected: FAIL until enum is expanded and passed through.
 
-- [ ] **Step 2: Expand types and pass-through mapping**
+- [x] **Step 2: Expand types and pass-through mapping**
 
 Update `CodexCaptureReason`. Ensure `inbox-event.ts` serializes `capture_reason` unchanged for bounded redacted events.
 
-- [ ] **Step 3: Verify compatibility**
+- [x] **Step 3: Verify compatibility**
 
 Run:
 
@@ -137,7 +138,7 @@ npm -w @locus/codex run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

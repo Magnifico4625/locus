@@ -22,13 +22,21 @@ export type CodexNormalizedKind =
   | 'session_start'
   | 'session_end';
 
-export type CodexCaptureReason =
-  | 'noise'
-  | 'bug_context'
-  | 'decision'
-  | 'preference'
-  | 'next_step'
-  | 'general_context';
+export const CODEX_CAPTURE_REASONS = [
+  'noise',
+  'bug_context',
+  'decision',
+  'preference',
+  'style',
+  'constraint',
+  'rejected_alternative',
+  'validation_fact',
+  'release_context',
+  'next_step',
+  'general_context',
+] as const;
+
+export type CodexCaptureReason = (typeof CODEX_CAPTURE_REASONS)[number];
 
 export type CodexCapturePolicy = 'off' | 'metadata' | 'bounded_redacted' | 'full';
 
