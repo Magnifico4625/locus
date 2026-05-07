@@ -379,7 +379,7 @@ git commit -m "feat(codex): retain richer redacted recall context"
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-c2-capture-relevance-v2.md`
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-plan-bundle.md`
 
-- [ ] **Step 1: Run validation**
+- [x] **Step 1: Run validation**
 
 Run:
 
@@ -391,7 +391,7 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 2: Update checkboxes and commit**
+- [x] **Step 2: Update checkboxes and commit**
 
 Run:
 
@@ -400,7 +400,7 @@ git add docs/superpowers/plans/2026-05-04-track-c-c2-capture-relevance-v2.md doc
 git commit -m "docs(codex): record track c c2 validation"
 ```
 
-- [ ] **Step 3: Create checkpoint tag**
+- [x] **Step 3: Create checkpoint tag**
 
 Run:
 
