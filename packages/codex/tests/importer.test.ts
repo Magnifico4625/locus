@@ -440,17 +440,143 @@ describe('importCodexSessionsToInbox', () => {
       'sess_decision_001:session_end',
     ]);
     expect(events[3]?.payload).toMatchObject({
-      prompt:
-        'The parser crashes on empty input after the nullable-branch refactor. Keep the fix surgical and avoid touching unrelated modules.',
+      prompt: 'The parser crashes on empty input after the nullable-branch refactor. ...',
       capture_policy: 'bounded_redacted',
       capture_reason: 'preference',
-      truncated: false,
+      truncated: true,
     });
     expect(events[4]?.payload).toMatchObject({
       capture_policy: 'bounded_redacted',
       capture_reason: 'next_step',
       truncated: false,
     });
+  });
+
+  it('retains richer redacted v2 recall context while dropping noise and redacting secrets', () => {
+    const root = tempRoot();
+    const sessionsDir = join(root, 'sessions');
+    const inboxDir = join(root, 'inbox');
+    mkdirSync(sessionsDir, { recursive: true });
+
+    writeRollout(sessionsDir, 'rollout-redacted-v2.jsonl', [
+      JSON.stringify({
+        type: 'session_meta',
+        timestamp: '2026-05-07T09:00:00.000Z',
+        session_id: 'sess_redacted_v2_001',
+        cwd: 'C:\\Projects\\SampleApp',
+        model: 'gpt-5.4',
+      }),
+      JSON.stringify({
+        type: 'event_msg',
+        subtype: 'user_message',
+        timestamp: '2026-05-07T09:00:01.000Z',
+        message: 'Решили использовать SQLite cache для live recall в Codex CLI.',
+      }),
+      JSON.stringify({
+        type: 'event_msg',
+        subtype: 'user_message',
+        timestamp: '2026-05-07T09:00:02.000Z',
+        message:
+          'Отказались от hook-first capture, потому что это риск для стабильного релиза.',
+      }),
+      JSON.stringify({
+        type: 'response_item',
+        timestamp: '2026-05-07T09:00:03.000Z',
+        item: {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text:
+                'Validation passed: npm test -- packages/codex/tests/relevance.test.ts and npm -w @locus/codex run typecheck are green.',
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: 'event_msg',
+        subtype: 'user_message',
+        timestamp: '2026-05-07T09:00:04.000Z',
+        message: 'Что такое монады в функциональном программировании?',
+      }),
+      JSON.stringify({
+        type: 'event_msg',
+        subtype: 'user_message',
+        timestamp: '2026-05-07T09:00:05.000Z',
+        message:
+          'Bug: recall importer failed with Authorization: Bearer safeexampletoken123 and GITHUB_TOKEN=ghp_safeexampletoken1234567890.',
+      }),
+    ]);
+
+    const metrics = importCodexSessionsToInbox({ sessionsDir, inboxDir, captureMode: 'redacted' });
+    const events = readInboxEvents(inboxDir);
+
+    expect(metrics).toMatchObject({
+      filesScanned: 1,
+      recordsParsed: 6,
+      normalized: 6,
+      written: 5,
+      skippedByCapture: 1,
+      errors: 0,
+      latestSession: 'sess_redacted_v2_001',
+    });
+    expect(events.map((event) => event.kind)).toEqual([
+      'session_start',
+      'user_prompt',
+      'user_prompt',
+      'ai_response',
+      'user_prompt',
+    ]);
+
+    const decision = events.find((event) =>
+      typeof event.payload.prompt === 'string'
+        ? event.payload.prompt.includes('SQLite cache')
+        : false,
+    );
+    expect(decision?.payload).toMatchObject({
+      capture_policy: 'bounded_redacted',
+      capture_reason: 'decision',
+      redaction_applied: false,
+      truncated: false,
+    });
+
+    const rejected = events.find((event) =>
+      typeof event.payload.prompt === 'string'
+        ? event.payload.prompt.includes('hook-first capture')
+        : false,
+    );
+    expect(rejected?.payload).toMatchObject({
+      capture_policy: 'bounded_redacted',
+      capture_reason: 'rejected_alternative',
+      redaction_applied: false,
+      truncated: false,
+    });
+
+    const validation = events.find((event) => event.kind === 'ai_response');
+    expect(validation?.payload).toMatchObject({
+      capture_policy: 'bounded_redacted',
+      capture_reason: 'validation_fact',
+      redaction_applied: false,
+      truncated: false,
+    });
+    expect(validation?.payload.response).toContain('Validation passed');
+
+    const secret = events.find((event) =>
+      typeof event.payload.prompt === 'string'
+        ? event.payload.prompt.includes('recall importer failed')
+        : false,
+    );
+    expect(secret?.payload).toMatchObject({
+      capture_policy: 'bounded_redacted',
+      capture_reason: 'bug_context',
+      redaction_applied: true,
+    });
+    expect(secret?.payload.prompt).toContain('Bearer [REDACTED]');
+    expect(secret?.payload.prompt).not.toContain('safeexampletoken123');
+    expect(secret?.payload.prompt).not.toContain('ghp_safeexampletoken1234567890');
+
+    expect(JSON.stringify(events)).not.toContain('монады');
   });
 
   it('keeps full decision text without bounded payload metadata in full mode', () => {

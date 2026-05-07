@@ -43,6 +43,22 @@ describe('redact', () => {
     expect(redact('DATABASE_PASSWORD: "supersecret123"')).toContain('[REDACTED]');
   });
 
+  it('does not consume JSON payload fields after KEY=VALUE redaction', () => {
+    const input = JSON.stringify({
+      prompt: 'Bug: failed with GITHUB_TOKEN=ghp_safeexampletoken1234567890.',
+      capture_policy: 'bounded_redacted',
+      capture_reason: 'bug_context',
+      redaction_applied: true,
+    });
+
+    const parsed = JSON.parse(redact(input)) as Record<string, unknown>;
+
+    expect(parsed.prompt).toContain('GITHUB_TOKEN=[REDACTED]');
+    expect(parsed.capture_policy).toBe('bounded_redacted');
+    expect(parsed.capture_reason).toBe('bug_context');
+    expect(parsed.redaction_applied).toBe(true);
+  });
+
   it('redacts private key blocks', () => {
     const pem = '-----BEGIN RSA PRIVATE KEY-----\nMIIE...content...\n-----END RSA PRIVATE KEY-----';
     expect(redact(pem)).toBe('[REDACTED_PRIVATE_KEY]');

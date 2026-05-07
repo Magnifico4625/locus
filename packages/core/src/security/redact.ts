@@ -41,8 +41,8 @@ export const REDACT_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = 
   // Generic KEY=VALUE (requires 8+ char value to avoid false positives)
   {
     pattern:
-      /\b([A-Z_]*(?:KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL|AUTH)[A-Z_]*)\s*[=:]\s*['"]?(\S{8,})['"]?/gi,
-    replacement: '$1=[REDACTED]',
+      /\b([A-Z_]*(?:KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL|AUTH)[A-Z_]*)\s*[=:]\s*(['"]?)([^'",}\\\s]{8,})\2/gi,
+    replacement: '$1=$2[REDACTED]$2',
   },
 ];
 

@@ -159,4 +159,106 @@ describe('Codex importer core ingest compatibility', () => {
     );
     expect(row?.payload_json).toContain('"capture_reason":"validation_fact"');
   });
+
+  it('ingests richer redacted v2 recall context including high-value assistant validation', () => {
+    writeFileSync(
+      join(sessionsDir, 'rollout-redacted-v2.jsonl'),
+      `${[
+        JSON.stringify({
+          type: 'session_meta',
+          timestamp: '2026-05-07T09:00:00.000Z',
+          session_id: 'sess_redacted_v2_001',
+          cwd: tempDir,
+          model: 'gpt-5.4',
+        }),
+        JSON.stringify({
+          type: 'event_msg',
+          subtype: 'user_message',
+          timestamp: '2026-05-07T09:00:01.000Z',
+          message: 'Решили использовать SQLite cache для live recall в Codex CLI.',
+        }),
+        JSON.stringify({
+          type: 'event_msg',
+          subtype: 'user_message',
+          timestamp: '2026-05-07T09:00:02.000Z',
+          message:
+            'Отказались от hook-first capture, потому что это риск для стабильного релиза.',
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          timestamp: '2026-05-07T09:00:03.000Z',
+          item: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'output_text',
+                text:
+                  'Validation passed: npm test -- packages/codex/tests/relevance.test.ts and npm -w @locus/codex run typecheck are green.',
+              },
+            ],
+          },
+        }),
+        JSON.stringify({
+          type: 'event_msg',
+          subtype: 'user_message',
+          timestamp: '2026-05-07T09:00:04.000Z',
+          message: 'Что такое монады в функциональном программировании?',
+        }),
+        JSON.stringify({
+          type: 'event_msg',
+          subtype: 'user_message',
+          timestamp: '2026-05-07T09:00:05.000Z',
+          message:
+            'Bug: recall importer failed with Authorization: Bearer safeexampletoken123 and GITHUB_TOKEN=ghp_safeexampletoken1234567890.',
+        }),
+      ].join('\n')}\n`,
+      'utf-8',
+    );
+
+    const importMetrics = importCodexSessionsToInbox({
+      sessionsDir,
+      inboxDir,
+      captureMode: 'redacted',
+      sessionId: 'sess_redacted_v2_001',
+    });
+    expect(importMetrics).toMatchObject({
+      written: 5,
+      skippedByCapture: 1,
+      latestSession: 'sess_redacted_v2_001',
+    });
+
+    const ingest = processInbox(inboxDir, adapter, { captureLevel: 'redacted' });
+    expect(ingest.errors).toBe(0);
+    expect(ingest.processed).toBe(5);
+
+    const storedRows = adapter.all<ConversationEventRow>(
+      "SELECT * FROM conversation_events WHERE session_id = 'sess_redacted_v2_001' ORDER BY timestamp, kind",
+    );
+    expect(storedRows.map((row) => row.kind)).toEqual([
+      'session_start',
+      'user_prompt',
+      'user_prompt',
+      'ai_response',
+      'user_prompt',
+    ]);
+    expect(storedRows.some((row) => row.payload_json?.includes('"capture_reason":"decision"'))).toBe(
+      true,
+    );
+    expect(
+      storedRows.some((row) => row.payload_json?.includes('"capture_reason":"rejected_alternative"')),
+    ).toBe(true);
+    expect(
+      storedRows.some(
+        (row) =>
+          row.kind === 'ai_response' &&
+          row.payload_json?.includes('"capture_reason":"validation_fact"'),
+      ),
+    ).toBe(true);
+    expect(storedRows.some((row) => row.payload_json?.includes('"redaction_applied":true'))).toBe(
+      true,
+    );
+    expect(JSON.stringify(storedRows)).not.toContain('safeexampletoken123');
+    expect(JSON.stringify(storedRows)).not.toContain('монады');
+  });
 });

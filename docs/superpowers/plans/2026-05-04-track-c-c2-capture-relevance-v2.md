@@ -329,7 +329,7 @@ git commit -m "feat(codex): strengthen redacted secret filtering"
 - Modify: `packages/codex/tests/importer.test.ts`
 - Modify: `packages/codex/tests/core-compat.test.ts`
 
-- [ ] **Step 1: Add redacted fixture-style tests**
+- [x] **Step 1: Add redacted fixture-style tests**
 
 Build JSONL records that include:
 
@@ -347,11 +347,11 @@ npm test -- packages/codex/tests/importer.test.ts packages/codex/tests/core-comp
 
 Expected: FAIL until all C2 changes are wired.
 
-- [ ] **Step 2: Fix capture/import integration**
+- [x] **Step 2: Fix capture/import integration**
 
 Ensure retained events write expected `capture_reason`, redaction metadata, and bounded payloads.
 
-- [ ] **Step 3: Verify focused Codex tests**
+- [x] **Step 3: Verify focused Codex tests**
 
 Run:
 
@@ -362,7 +362,7 @@ npm -w @locus/codex run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

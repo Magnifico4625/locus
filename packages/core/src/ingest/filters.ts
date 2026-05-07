@@ -8,9 +8,9 @@ import type { CaptureLevel, DatabaseAdapter, EventSignificance, InboxEvent } fro
  * ai_response) are blocked — they should never reach the inbox at
  * metadata level, but this catches hook malfunctions.
  *
- * At `redacted` level, ai_response is blocked (second defense —
- * the stop hook should already skip at redacted, but this catches
- * hook malfunctions). user_prompt is allowed (contains keywords only).
+ * At `redacted` level, raw ai_response is blocked. Bounded-redacted
+ * assistant snippets from the Codex importer are allowed because they
+ * have already passed relevance filtering, redaction, and snippet bounds.
  *
  * At `full` level, all event kinds pass through.
  */
@@ -19,7 +19,7 @@ export function captureLevelGate(event: InboxEvent, captureLevel: CaptureLevel):
     return event.kind !== 'user_prompt' && event.kind !== 'ai_response';
   }
   if (captureLevel === 'redacted') {
-    return event.kind !== 'ai_response';
+    return event.kind !== 'ai_response' || event.payload.capture_policy === 'bounded_redacted';
   }
   return true;
 }
