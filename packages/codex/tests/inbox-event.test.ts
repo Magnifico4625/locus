@@ -118,7 +118,7 @@ describe('toInboxEvent', () => {
       sourceLine: 2,
       payload: {
         prompt:
-          'Use Authorization: Bearer safeexampletoken123 and OPENAI_API_KEY=sk-safeexample1234567890',
+          'Bug: Use Authorization: Bearer safeexampletoken123 and OPENAI_API_KEY=sk-safeexample1234567890',
       },
     };
     const assistant: CodexNormalizedEvent = {
@@ -133,9 +133,10 @@ describe('toInboxEvent', () => {
     };
 
     expect(toInboxEvent(prompt, 'redacted')?.payload).toEqual({
-      prompt: 'Use Authorization: Bearer [REDACTED] and OPENAI_API_KEY=[REDACTED]',
+      prompt: 'Bug: Use Authorization: Bearer [REDACTED] and OPENAI_API_KEY=[REDACTED]',
       capture_policy: 'bounded_redacted',
-      capture_reason: 'decision',
+      capture_reason: 'bug_context',
+      redaction_applied: true,
       truncated: false,
     });
     expect(toInboxEvent(assistant, 'redacted')?.payload).toEqual({
@@ -144,6 +145,7 @@ describe('toInboxEvent', () => {
       model: 'gpt-5.4',
       capture_policy: 'bounded_redacted',
       capture_reason: 'next_step',
+      redaction_applied: false,
       truncated: true,
     });
   });

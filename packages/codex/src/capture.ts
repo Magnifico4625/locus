@@ -14,6 +14,11 @@ import type {
 
 const VALID_CAPTURE_MODES = new Set<CodexCaptureMode>(['off', 'metadata', 'redacted', 'full']);
 
+export interface CodexRedactionResult {
+  text: string;
+  redactionApplied: boolean;
+}
+
 export function getCodexCaptureMode(
   env: Record<string, string | undefined> = process.env,
 ): CodexCaptureMode {
@@ -85,13 +90,27 @@ export function captureCodexEvent(
 
 // Best-effort redaction for common secret shapes; this is not a complete DLP guarantee.
 export function redactCodexText(text: string): string {
-  return text
+  return redactCodexTextWithMetadata(text).text;
+}
+
+export function redactCodexTextWithMetadata(text: string): CodexRedactionResult {
+  const redacted = text
+    .replace(
+      /-----BEGIN ([A-Z ]*PRIVATE KEY)-----[\s\S]*?-----END \1-----/g,
+      '-----BEGIN $1-----\n[REDACTED]',
+    )
     .replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, 'Bearer [REDACTED]')
     .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, '[REDACTED]')
+    .replace(/\bgh[pousr]_[A-Za-z0-9_]{12,}\b/g, '[REDACTED]')
+    .replace(/(_authToken\s*=\s*)[^\s\r\n]+/gi, '$1[REDACTED]')
     .replace(
-      /\b(password|passwd|secret|api[_-]?key|token)\b(\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s\r\n]+)/gi,
+      /\b(password|passwd|secret|api[_-]?key|github[_-]?token|npm[_-]?token|token)\b(\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s\r\n]+)/gi,
       (_match: string, key: string, separator: string) => `${key}${separator}[REDACTED]`,
     );
+  return {
+    text: redacted,
+    redactionApplied: redacted !== text,
+  };
 }
 
 function isCodexCaptureMode(value: string | undefined): value is CodexCaptureMode {
@@ -108,10 +127,11 @@ function captureModeToPolicy(mode: CodexCaptureMode): CodexCapturePolicy {
 
 function keepFullEvent(event: CodexNormalizedEvent): CodexCaptureDecision {
   if (event.kind === 'user_prompt') {
-    const prompt = redactCodexText(stringValue(event.payload.prompt));
+    const prompt = redactCodexTextWithMetadata(stringValue(event.payload.prompt));
     return keepDecision(
       annotateEvent(event, {
-        prompt,
+        prompt: prompt.text,
+        redactionApplied: prompt.redactionApplied,
         capturePolicy: 'full',
         truncated: false,
         retained: true,
@@ -122,11 +142,12 @@ function keepFullEvent(event: CodexNormalizedEvent): CodexCaptureDecision {
   }
 
   if (event.kind === 'ai_response') {
-    const response = redactCodexText(stringValue(event.payload.response));
+    const response = redactCodexTextWithMetadata(stringValue(event.payload.response));
     return keepDecision(
       annotateEvent(event, {
-        response,
+        response: response.text,
         model: optionalString(event.payload.model),
+        redactionApplied: response.redactionApplied,
         capturePolicy: 'full',
         truncated: false,
         retained: true,
@@ -137,9 +158,11 @@ function keepFullEvent(event: CodexNormalizedEvent): CodexCaptureDecision {
   }
 
   if (event.kind === 'session_end') {
+    const summary = maybeRedactSummary(event.payload.summary);
     return keepDecision(
       annotateEvent(event, {
-        summary: maybeRedactSummary(event.payload.summary),
+        summary: summary?.text,
+        redactionApplied: summary?.redactionApplied,
         capturePolicy: 'full',
         truncated: false,
         retained: true,
@@ -170,9 +193,11 @@ function keepBoundedRedactedEvent(event: CodexNormalizedEvent): CodexCaptureDeci
   }
 
   if (event.kind === 'session_end') {
+    const summary = maybeRedactSummary(event.payload.summary);
     return keepDecision(
       annotateEvent(event, {
-        summary: maybeRedactSummary(event.payload.summary),
+        summary: summary?.text,
+        redactionApplied: summary?.redactionApplied,
         capturePolicy: 'bounded_redacted',
         captureReason: 'general_context',
         truncated: false,
@@ -201,7 +226,8 @@ function keepBoundedTextEvent(
   role: 'user' | 'assistant',
 ): CodexCaptureDecision {
   const originalText = stringValue(event.payload[payloadKey]);
-  const redactedText = redactCodexText(originalText);
+  const redaction = redactCodexTextWithMetadata(originalText);
+  const redactedText = redaction.text;
   const relevance = classifyCodexRelevance(redactedText, role);
 
   if (!relevance.keep) {
@@ -237,6 +263,7 @@ function keepBoundedTextEvent(
         prompt: snippet.text,
         capturePolicy: 'bounded_redacted',
         captureReason: relevance.reason,
+        redactionApplied: redaction.redactionApplied,
         truncated: snippet.truncated,
         retained: true,
         filtered: false,
@@ -253,6 +280,7 @@ function keepBoundedTextEvent(
       model: optionalString(event.payload.model),
       capturePolicy: 'bounded_redacted',
       captureReason: relevance.reason,
+      redactionApplied: redaction.redactionApplied,
       truncated: snippet.truncated,
       retained: true,
       filtered: false,
@@ -310,7 +338,7 @@ function optionalString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
 }
 
-function maybeRedactSummary(value: unknown): string | undefined {
+function maybeRedactSummary(value: unknown): CodexRedactionResult | undefined {
   const summary = optionalString(value);
-  return summary === undefined ? undefined : redactCodexText(summary);
+  return summary === undefined ? undefined : redactCodexTextWithMetadata(summary);
 }

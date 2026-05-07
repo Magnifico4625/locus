@@ -272,7 +272,7 @@ git commit -m "feat(codex): bound snippets by capture reason"
 - Modify: `packages/codex/tests/capture.test.ts`
 - Modify: `packages/codex/tests/inbox-event.test.ts`
 
-- [ ] **Step 1: Write failing redaction tests**
+- [x] **Step 1: Write failing redaction tests**
 
 Cover:
 
@@ -293,15 +293,15 @@ npm test -- packages/codex/tests/redaction.test.ts packages/codex/tests/inbox-ev
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement best-effort redaction**
+- [x] **Step 2: Implement best-effort redaction**
 
 Keep the comment explicit: best effort, not a complete DLP guarantee. Return metadata indicating whether text changed.
 
-- [ ] **Step 3: Thread `redactionApplied` through capture**
+- [x] **Step 3: Thread `redactionApplied` through capture**
 
 Add `redactionApplied` to retained redacted/full user/assistant/session summary payloads where relevant.
 
-- [ ] **Step 4: Verify redaction**
+- [x] **Step 4: Verify redaction**
 
 Run:
 
@@ -312,7 +312,7 @@ npm -w @locus/codex run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 

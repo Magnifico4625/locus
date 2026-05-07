@@ -44,6 +44,7 @@ export interface CodexCaptureAnnotations {
   [key: string]: unknown;
   capturePolicy?: Exclude<CodexCapturePolicy, 'off'>;
   captureReason?: CodexCaptureReason;
+  redactionApplied?: boolean;
   truncated?: boolean;
   retained?: boolean;
   filtered?: boolean;

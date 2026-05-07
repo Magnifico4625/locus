@@ -64,6 +64,7 @@ function toInboxPayload(
         capturePolicy,
         captureReason,
         optionalBoolean(normalizedEvent.payload.truncated),
+        optionalBoolean(normalizedEvent.payload.redactionApplied),
       );
     case 'ai_response':
       return withCaptureMetadata(
@@ -74,6 +75,7 @@ function toInboxPayload(
         capturePolicy,
         captureReason,
         optionalBoolean(normalizedEvent.payload.truncated),
+        optionalBoolean(normalizedEvent.payload.redactionApplied),
       );
     case 'tool_use':
       return compactPayload({
@@ -95,6 +97,7 @@ function toInboxPayload(
         capturePolicy,
         captureReason,
         optionalBoolean(normalizedEvent.payload.truncated),
+        optionalBoolean(normalizedEvent.payload.redactionApplied),
       );
   }
 }
@@ -104,15 +107,23 @@ function withCaptureMetadata(
   capturePolicy: CodexCapturePolicy,
   captureReason?: CodexCaptureReason,
   truncated?: boolean,
+  redactionApplied?: boolean,
 ): Record<string, unknown> {
+  const redactionPayload =
+    capturePolicy === 'bounded_redacted' ? redactionApplied : redactionApplied || undefined;
+
   if (capturePolicy !== 'bounded_redacted') {
-    return payload;
+    return compactPayload({
+      ...payload,
+      redaction_applied: redactionPayload,
+    });
   }
 
   return compactPayload({
     ...payload,
     capture_policy: capturePolicy,
     capture_reason: captureReason,
+    redaction_applied: redactionPayload,
     truncated,
   });
 }
