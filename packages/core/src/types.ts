@@ -78,7 +78,17 @@ export interface MemoryEntry {
   sessionId?: string;
 }
 
-export type DurableMemoryType = 'decision' | 'preference' | 'style' | 'constraint';
+export const DURABLE_MEMORY_TYPES = [
+  'decision',
+  'preference',
+  'style',
+  'constraint',
+  'rejected_alternative',
+  'next_step',
+  'validation_fact',
+] as const;
+
+export type DurableMemoryType = (typeof DURABLE_MEMORY_TYPES)[number];
 
 export type DurableMemoryState = 'active' | 'stale' | 'superseded' | 'archivable';
 

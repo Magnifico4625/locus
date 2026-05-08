@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { extractDurableCandidatesFromEvent } from '../../src/memory/durable-extractor.js';
-import type { ConversationEventRow } from '../../src/types.js';
+import { DURABLE_MEMORY_TYPES } from '../../src/types.js';
+import type { ConversationEventRow, DurableMemoryType } from '../../src/types.js';
+import type { DurableMemoryCandidate } from '../../src/memory/durable-extractor.js';
 
 function makeConversationRow(
   overrides: Partial<ConversationEventRow> & { payload_json: string },
@@ -23,6 +25,37 @@ function makeConversationRow(
 }
 
 describe('extractDurableCandidatesFromEvent', () => {
+  it('exposes Track C durable memory types as a runtime contract', () => {
+    expect(DURABLE_MEMORY_TYPES).toEqual([
+      'decision',
+      'preference',
+      'style',
+      'constraint',
+      'rejected_alternative',
+      'next_step',
+      'validation_fact',
+    ]);
+  });
+
+  it('allows Track C durable memory candidate types at the type boundary', () => {
+    const memoryTypes: DurableMemoryType[] = [
+      'rejected_alternative',
+      'next_step',
+      'validation_fact',
+    ];
+
+    const candidates = memoryTypes.map(
+      (memoryType): DurableMemoryCandidate => ({
+        memoryType,
+        summary: `Track C candidate: ${memoryType}`,
+        evidence: { source: 'test' },
+        source: 'codex',
+      }),
+    );
+
+    expect(candidates.map((candidate) => candidate.memoryType)).toEqual(memoryTypes);
+  });
+
   it('extracts a database choice durable fact from conversation payloads', () => {
     const event = makeConversationRow({
       event_id: 'evt-database',

@@ -6,6 +6,7 @@ import { DurableMemoryStore } from '../../src/memory/durable.js';
 import { runMigrations } from '../../src/storage/migrations.js';
 import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
 import { handleReview } from '../../src/tools/review.js';
+import type { DurableMemoryType } from '../../src/types.js';
 
 function createAdapter(dir: string): NodeSqliteAdapter {
   // biome-ignore lint/suspicious/noExplicitAny: node:sqlite dynamic require
@@ -95,6 +96,40 @@ describe('handleReview', () => {
         state: 'stale',
         topicKey: 'coding_style',
       }),
+    ]);
+  });
+
+  it('reviews Track C durable memory types without schema changes', () => {
+    const memoryTypes: DurableMemoryType[] = [
+      'rejected_alternative',
+      'next_step',
+      'validation_fact',
+    ];
+
+    for (const memoryType of memoryTypes) {
+      durable.insert({
+        topicKey: `track_c_${memoryType}`,
+        memoryType,
+        state: 'stale',
+        summary: `Track C ${memoryType} memory.`,
+        evidence: { source: 'test' },
+        source: 'codex',
+      });
+    }
+
+    const result = handleReview(
+      { db: adapter },
+      {
+        state: 'stale',
+        limit: 10,
+      },
+    );
+
+    expect(result.totalCandidates).toBe(3);
+    expect(result.candidates.map((candidate) => candidate.topicKey)).toEqual([
+      'track_c_validation_fact',
+      'track_c_next_step',
+      'track_c_rejected_alternative',
     ]);
   });
 

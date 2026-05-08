@@ -99,7 +99,7 @@ git commit -m "docs(codex): start track c c3 durable extractor"
 - Modify: `packages/core/tests/memory/durable-extractor.test.ts`
 - Modify: `packages/core/tests/tools/review.test.ts`
 
-- [ ] **Step 1: Write failing type usage tests**
+- [x] **Step 1: Write failing type usage tests**
 
 Add tests that insert or extract:
 
@@ -115,7 +115,7 @@ npm test -- packages/core/tests/memory/durable-extractor.test.ts packages/core/t
 
 Expected: FAIL until union type allows new memory types.
 
-- [ ] **Step 2: Extend `DurableMemoryType`**
+- [x] **Step 2: Extend `DurableMemoryType`**
 
 Add:
 
@@ -125,7 +125,7 @@ Add:
 
 No migration should be necessary because `memory_type` is stored as text.
 
-- [ ] **Step 3: Verify type contract**
+- [x] **Step 3: Verify type contract**
 
 Run:
 
@@ -136,7 +136,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS or extractor-specific tests fail until later tasks.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
