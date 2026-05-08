@@ -17,7 +17,7 @@ const SUPERSEDABLE_TYPES = new Set<DurableMemoryType>([
 function normalizeSummary(summary: string): string {
   return summary
     .toLowerCase()
-    .replace(/[^a-z0-9]+/gi, ' ')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
 }
 

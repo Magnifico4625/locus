@@ -64,6 +64,28 @@ describe('mergeDurableCandidate', () => {
     });
   });
 
+  it('confirms an existing Russian durable entry using Unicode-aware normalized summaries', () => {
+    const existing = makeDurableEntry({
+      id: 10,
+      topicKey: 'database_choice',
+      summary: 'Решили использовать PostgreSQL для долговременной памяти.',
+    });
+
+    const candidate = {
+      topicKey: 'database_choice',
+      memoryType: 'decision' as const,
+      summary: 'решили использовать postgresql для долговременной памяти',
+      evidence: { source: 'repeat-confirmation', confidence: 0.9 },
+      sourceEventId: 'evt-repeat-ru-normalized',
+      source: 'codex' as const,
+    };
+
+    expect(mergeDurableCandidate([existing], candidate)).toEqual({
+      action: 'confirm_existing',
+      existingId: 10,
+    });
+  });
+
   it('supersedes an older active entry when a newer conflicting decision shares the same topic key', () => {
     const existing = makeDurableEntry({
       id: 9,

@@ -1,6 +1,6 @@
 import type { ConversationEventRow, DurableMemoryEntry, DurableMemoryType } from '../types.js';
 import { extractPatternMatches, type ExtractorPatternMatch } from './extractor-patterns.js';
-import { deriveTopicKey } from './topic-keys.js';
+import { deriveCanonicalTopicKey } from './topic-key-registry.js';
 
 export interface DurableMemoryCandidate {
   topicKey?: string;
@@ -28,7 +28,7 @@ function buildCandidate(
   match: ExtractorPatternMatch,
 ): DurableMemoryCandidate {
   return {
-    topicKey: deriveTopicKey({ memoryType: match.memoryType, summary: match.summary }),
+    topicKey: deriveCanonicalTopicKey({ memoryType: match.memoryType, summary: match.summary }),
     memoryType: match.memoryType,
     summary: match.summary,
     evidence: {
