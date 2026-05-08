@@ -33,6 +33,8 @@ export function handleReview(deps: ReviewDeps, options: ReviewOptions = {}): Dur
 
   return {
     totalCandidates: filtered.length,
+    returnedCandidates: filtered.length,
+    totalMatchingCandidates: review.candidates.length,
     countsByState: review.countsByState,
     candidates: filtered.map((candidate): DurableReviewCandidate => ({ ...candidate })),
   };

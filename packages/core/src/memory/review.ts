@@ -116,6 +116,8 @@ export function reviewDurableMemories(
 
   return {
     totalCandidates: candidates.length,
+    returnedCandidates: candidates.length,
+    totalMatchingCandidates: candidates.length,
     countsByState,
     candidates,
   };

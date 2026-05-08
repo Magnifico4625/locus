@@ -23,6 +23,7 @@ function makeAuditDeps(adapter: NodeSqliteAdapter, dir: string): AuditDeps {
     dbPath,
     logPath,
     captureLevel: 'metadata',
+    fts5: false,
   };
 }
 
@@ -79,6 +80,11 @@ function insertConversationEvent(
     ) VALUES (?, 'codex', ?, '/home/user/myproject', 'session-a', ?, 'user_prompt', ?, 'high', '[]', ?)`,
     [eventId, `codex:${eventId}`, timestamp, JSON.stringify(payload), timestamp],
   );
+}
+
+function createAuditFtsTables(adapter: NodeSqliteAdapter): void {
+  adapter.exec('CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(content)');
+  adapter.exec('CREATE VIRTUAL TABLE IF NOT EXISTS conversation_fts USING fts5(content)');
 }
 
 describe('handleAudit', () => {
@@ -313,6 +319,30 @@ describe('handleAudit', () => {
     expect(result).toContain('decision: 2');
     expect(result).toContain('bug_context: 1');
     expect(result).not.toContain('evt-missing-reason');
+  });
+
+  it('shows FTS5 audit health when indexes are available', () => {
+    createAuditFtsTables(adapter);
+    const deps = makeAuditDeps(adapter, tempDir);
+    deps.fts5 = true;
+    const result = handleAudit(deps);
+
+    expect(result).toContain('FTS5 index: 0 memories indexed');
+    expect(result).toContain('FTS5 conversation index: 0/0 events indexed');
+  });
+
+  it('warns when FTS5 indexes are missing or empty', () => {
+    createAuditFtsTables(adapter);
+    insertMemory(adapter, 'semantic', 'Use composition over inheritance');
+    insertConversationEvent(adapter, 'evt-decision-fts', { capture_reason: 'decision' });
+    adapter.run('DROP TABLE memories_fts');
+
+    const deps = makeAuditDeps(adapter, tempDir);
+    deps.fts5 = true;
+    const result = handleAudit(deps);
+
+    expect(result).toContain('WARNING: memories_fts table missing');
+    expect(result).toContain('WARNING: FTS5 index for conversation events is empty');
   });
 
   // ── 7. Secrets detection ─────────────────────────────────────────────────

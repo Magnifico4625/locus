@@ -138,6 +138,8 @@ export interface DurableReviewCandidate {
 
 export interface DurableReviewResult {
   totalCandidates: number;
+  returnedCandidates?: number;
+  totalMatchingCandidates?: number;
   countsByState: DurableMemoryStateCounts;
   candidates: DurableReviewCandidate[];
 }

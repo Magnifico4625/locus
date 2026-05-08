@@ -145,6 +145,32 @@ describe('handleReview', () => {
     ]);
   });
 
+  it('separates returned count from total matching candidates when limit is smaller', () => {
+    for (let i = 0; i < 3; i += 1) {
+      durable.insert({
+        topicKey: 'coding_style',
+        memoryType: 'style',
+        state: 'stale',
+        summary: `Stale style memory ${i}.`,
+        evidence: { confidence: 0.9, reason: 'test' },
+        source: 'manual',
+      });
+    }
+
+    const result = handleReview(
+      { db: adapter },
+      {
+        state: 'stale',
+        limit: 2,
+      },
+    );
+
+    expect(result.totalCandidates).toBe(2);
+    expect(result.returnedCandidates).toBe(2);
+    expect(result.totalMatchingCandidates).toBe(3);
+    expect(result.candidates).toHaveLength(2);
+  });
+
   it('reviews Track C durable memory types without schema changes', () => {
     const memoryTypes: DurableMemoryType[] = [
       'rejected_alternative',
