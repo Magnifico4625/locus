@@ -278,7 +278,7 @@ git commit -m "feat(core): extract richer durable memories"
 - Modify: `packages/core/src/memory/durable-runner.ts`
 - Modify: `packages/core/tests/memory/durable-merge.test.ts`
 
-- [ ] **Step 1: Write failing merge tests**
+- [x] **Step 1: Write failing merge tests**
 
 Assert:
 
@@ -298,7 +298,7 @@ npm test -- packages/core/tests/memory/durable-merge.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement merge policy**
+- [x] **Step 2: Implement merge policy**
 
 Keep policy explicit:
 
@@ -308,7 +308,7 @@ const SUPERSEDABLE_TYPES = new Set(['decision', 'preference', 'constraint', 'nex
 
 Do not supersede entries without topic keys unless current behavior explicitly expects it.
 
-- [ ] **Step 3: Verify durable runner integration**
+- [x] **Step 3: Verify durable runner integration**
 
 Run:
 
@@ -319,7 +319,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

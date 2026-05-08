@@ -42,6 +42,28 @@ describe('mergeDurableCandidate', () => {
     });
   });
 
+  it('confirms an existing durable entry using normalized summaries', () => {
+    const existing = makeDurableEntry({
+      id: 8,
+      topicKey: 'database_choice',
+      summary: 'Use SQLite for the local durable memory store.',
+    });
+
+    const candidate = {
+      topicKey: 'database_choice',
+      memoryType: 'decision' as const,
+      summary: 'use sqlite for the local durable memory store',
+      evidence: { source: 'repeat-confirmation', confidence: 0.9 },
+      sourceEventId: 'evt-repeat-normalized',
+      source: 'codex' as const,
+    };
+
+    expect(mergeDurableCandidate([existing], candidate)).toEqual({
+      action: 'confirm_existing',
+      existingId: 8,
+    });
+  });
+
   it('supersedes an older active entry when a newer conflicting decision shares the same topic key', () => {
     const existing = makeDurableEntry({
       id: 9,
@@ -53,7 +75,7 @@ describe('mergeDurableCandidate', () => {
       topicKey: 'database_choice',
       memoryType: 'decision' as const,
       summary: 'Use SQLite for the local durable memory store.',
-      evidence: { source: 'newer-decision' },
+      evidence: { source: 'newer-decision', confidence: 0.9 },
       sourceEventId: 'evt-new',
       source: 'codex' as const,
     };
@@ -61,6 +83,101 @@ describe('mergeDurableCandidate', () => {
     expect(mergeDurableCandidate([existing], candidate)).toEqual({
       action: 'supersede_existing',
       existingId: 9,
+    });
+  });
+
+  it.each([
+    ['preference', 'user_workflow_style'],
+    ['constraint', 'codex_hooks_strategy'],
+    ['next_step', 'release_steps'],
+  ] as const)(
+    'supersedes an older active %s when the newer candidate shares the same topic key',
+    (memoryType, topicKey) => {
+      const existing = makeDurableEntry({
+        id: 11,
+        topicKey,
+        memoryType,
+        summary: `Old ${memoryType} summary.`,
+      });
+
+      const candidate = {
+        topicKey,
+        memoryType,
+        summary: `New ${memoryType} summary.`,
+        evidence: { source: 'newer-memory', confidence: 0.9 },
+        sourceEventId: 'evt-newer-memory',
+        source: 'codex' as const,
+      };
+
+      expect(mergeDurableCandidate([existing], candidate)).toEqual({
+        action: 'supersede_existing',
+        existingId: 11,
+      });
+    },
+  );
+
+  it('does not supersede rejected alternatives by default', () => {
+    const existing = makeDurableEntry({
+      id: 12,
+      topicKey: 'codex_hooks_strategy',
+      memoryType: 'rejected_alternative',
+      summary: 'Rejected hook-first capture because it risks startup stability.',
+    });
+
+    const candidate = {
+      topicKey: 'codex_hooks_strategy',
+      memoryType: 'rejected_alternative' as const,
+      summary: 'Rejected direct SQLite hooks because they can hit SQLITE_BUSY.',
+      evidence: { source: 'new-rejection', confidence: 0.9 },
+      sourceEventId: 'evt-rejected-new',
+      source: 'codex' as const,
+    };
+
+    expect(mergeDurableCandidate([existing], candidate)).toEqual({
+      action: 'insert_new_active',
+    });
+  });
+
+  it('keeps both memories when a topic collision has no mapping confidence', () => {
+    const existing = makeDurableEntry({
+      id: 13,
+      topicKey: 'database_choice',
+      summary: 'Use PostgreSQL for shared server storage.',
+    });
+
+    const candidate = {
+      topicKey: 'database_choice',
+      memoryType: 'decision' as const,
+      summary: 'Use SQLite for local cache storage.',
+      evidence: { source: 'legacy-candidate-without-confidence' },
+      sourceEventId: 'evt-no-confidence',
+      source: 'codex' as const,
+    };
+
+    expect(mergeDurableCandidate([existing], candidate)).toEqual({
+      action: 'insert_new_active',
+    });
+  });
+
+  it('does not supersede active entries when the candidate has no topic key', () => {
+    const existing = makeDurableEntry({
+      id: 14,
+      topicKey: undefined,
+      memoryType: 'decision',
+      summary: 'Use PostgreSQL for storage.',
+    });
+
+    const candidate = {
+      topicKey: undefined,
+      memoryType: 'decision' as const,
+      summary: 'Use SQLite for storage.',
+      evidence: { source: 'topicless-candidate', confidence: 0.9 },
+      sourceEventId: 'evt-topicless',
+      source: 'codex' as const,
+    };
+
+    expect(mergeDurableCandidate([existing], candidate)).toEqual({
+      action: 'insert_new_active',
     });
   });
 
