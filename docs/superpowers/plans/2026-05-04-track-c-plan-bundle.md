@@ -42,7 +42,7 @@
 - [x] After `C1`, tag: `track-c-c1-local`
 - [x] After `C2`, tag: `track-c-c2-local`
 - [x] After `C3`, tag: `track-c-c3-local`
-- [ ] After `C4`, tag: `track-c-c4-local`
+- [x] After `C4`, tag: `track-c-c4-local`
 - [ ] After `C5` if executed, tag: `track-c-c5-local`
 - [ ] After `C6`, tag: `track-c-c6-local`
 
