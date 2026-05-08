@@ -331,7 +331,7 @@ git commit -m "feat(codex): package optional hook config"
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-c5-optional-codex-hooks.md`
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-plan-bundle.md`
 
-- [ ] **Step 1: Run validation**
+- [x] **Step 1: Run validation**
 
 Run:
 
@@ -343,7 +343,7 @@ git diff --check
 
 Expected: PASS if C5 executed. If C5 skipped, document skip reason.
 
-- [ ] **Step 2: Update checkboxes and commit**
+- [x] **Step 2: Update checkboxes and commit**
 
 Run:
 
@@ -352,7 +352,7 @@ git add docs/superpowers/plans/2026-05-04-track-c-c5-optional-codex-hooks.md doc
 git commit -m "docs(codex): record track c c5 validation"
 ```
 
-- [ ] **Step 3: Create checkpoint tag if executed**
+- [x] **Step 3: Create checkpoint tag if executed**
 
 Run:
 
