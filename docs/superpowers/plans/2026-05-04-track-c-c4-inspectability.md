@@ -104,7 +104,7 @@ git commit -m "docs(codex): start track c c4 inspectability"
 - Create: `packages/core/src/memory/evidence.ts`
 - Create: `packages/core/tests/memory/evidence.test.ts`
 
-- [ ] **Step 1: Write failing evidence tests**
+- [x] **Step 1: Write failing evidence tests**
 
 Cover parsing evidence with:
 
@@ -123,7 +123,7 @@ npm test -- packages/core/tests/memory/evidence.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement safe evidence helpers**
+- [x] **Step 2: Implement safe evidence helpers**
 
 Implement helpers that never throw on malformed JSON-derived evidence. The
 helpers should normalize existing `Record<string, unknown>` values into concise
@@ -131,7 +131,7 @@ display fields such as confidence, reason, matched pattern, source event, and
 session; they should not parse DB rows directly or become a new persistence
 abstraction.
 
-- [ ] **Step 3: Verify evidence helpers**
+- [x] **Step 3: Verify evidence helpers**
 
 Run:
 
@@ -142,7 +142,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 
