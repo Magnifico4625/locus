@@ -163,7 +163,7 @@ git commit -m "feat(core): summarize durable memory evidence"
 - Modify: `packages/core/tests/memory/review.test.ts`
 - Modify: `packages/core/tests/tools/review.test.ts`
 
-- [ ] **Step 1: Write failing review tests**
+- [x] **Step 1: Write failing review tests**
 
 Assert `memory_review` supports:
 
@@ -181,11 +181,11 @@ npm test -- packages/core/tests/memory/review.test.ts packages/core/tests/tools/
 
 Expected: FAIL.
 
-- [ ] **Step 2: Extend types and tool schema**
+- [x] **Step 2: Extend types and tool schema**
 
 Add optional filters. Keep existing response fields stable.
 
-- [ ] **Step 3: Implement review formatting**
+- [x] **Step 3: Implement review formatting**
 
 Build `whyStored` from evidence:
 
@@ -193,7 +193,7 @@ Build `whyStored` from evidence:
 Stored as decision because matched "решили" with high confidence from session <id>.
 ```
 
-- [ ] **Step 4: Verify review**
+- [x] **Step 4: Verify review**
 
 Run:
 
@@ -204,7 +204,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 

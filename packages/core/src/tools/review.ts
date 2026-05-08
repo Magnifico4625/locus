@@ -1,6 +1,7 @@
 import { reviewDurableMemories } from '../memory/review.js';
 import type {
   DatabaseAdapter,
+  DurableMemoryType,
   DurableMemoryState,
   DurableReviewCandidate,
   DurableReviewResult,
@@ -13,17 +14,22 @@ export interface ReviewDeps {
 export interface ReviewOptions {
   state?: DurableMemoryState;
   topicKey?: string;
+  memoryType?: DurableMemoryType;
+  confidence?: number;
   limit?: number;
 }
 
 export function handleReview(deps: ReviewDeps, options: ReviewOptions = {}): DurableReviewResult {
   const effectiveLimit = Math.max(1, options.limit ?? 20);
-  const review = reviewDurableMemories(deps, { limit: 1000 });
+  const review = reviewDurableMemories(deps, {
+    state: options.state,
+    topicKey: options.topicKey,
+    memoryType: options.memoryType,
+    confidence: options.confidence,
+    limit: 1000,
+  });
 
-  const filtered = review.candidates
-    .filter((candidate) => (options.state ? candidate.state === options.state : true))
-    .filter((candidate) => (options.topicKey ? candidate.topicKey === options.topicKey : true))
-    .slice(0, effectiveLimit);
+  const filtered = review.candidates.slice(0, effectiveLimit);
 
   return {
     totalCandidates: filtered.length,

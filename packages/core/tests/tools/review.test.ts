@@ -99,6 +99,52 @@ describe('handleReview', () => {
     ]);
   });
 
+  it('supports filtering by memoryType and minimum confidence', () => {
+    durable.insert({
+      topicKey: 'release_steps',
+      memoryType: 'next_step',
+      state: 'stale',
+      summary: 'Next step: update install docs.',
+      evidence: { confidence: 0.72, reason: 'next_step' },
+      source: 'codex',
+    });
+    const validation = durable.insert({
+      topicKey: 'track_c_validation',
+      memoryType: 'validation_fact',
+      state: 'stale',
+      summary: 'Validation passed: npm test.',
+      evidence: {
+        confidence: 0.94,
+        matchedPattern: 'Validation passed:',
+        eventId: 'evt-validation',
+        sessionId: 'sess-validation',
+      },
+      sourceEventId: 'source-evt-validation',
+      source: 'codex',
+    });
+
+    const result = handleReview(
+      { db: adapter },
+      {
+        memoryType: 'validation_fact',
+        confidence: 0.9,
+        limit: 10,
+      },
+    );
+
+    expect(result.totalCandidates).toBe(1);
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        durableId: validation.id,
+        memoryType: 'validation_fact',
+        confidence: 0.94,
+        sourceEventId: 'source-evt-validation',
+        whyStored:
+          'Stored as validation_fact because matched "Validation passed:" with 94% confidence from session sess-validation.',
+      }),
+    ]);
+  });
+
   it('reviews Track C durable memory types without schema changes', () => {
     const memoryTypes: DurableMemoryType[] = [
       'rejected_alternative',

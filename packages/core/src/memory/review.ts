@@ -1,17 +1,24 @@
 import type {
   DatabaseAdapter,
   DurableMemoryEntry,
+  DurableMemoryState,
   DurableMemoryStateCounts,
+  DurableMemoryType,
   DurableReviewCandidate,
   DurableReviewResult,
 } from '../types.js';
 import { DurableMemoryStore } from './durable.js';
+import { formatEvidenceWhyStored, normalizeDurableEvidence } from './evidence.js';
 
 export interface ReviewDurableMemoriesDeps {
   db: DatabaseAdapter;
 }
 
 export interface ReviewDurableMemoriesOptions {
+  state?: DurableMemoryState;
+  topicKey?: string;
+  memoryType?: DurableMemoryType;
+  confidence?: number;
   limit?: number;
 }
 
@@ -25,14 +32,25 @@ function createEmptyStateCounts(): DurableMemoryStateCounts {
 }
 
 function buildCandidate(entry: DurableMemoryEntry): DurableReviewCandidate | null {
+  const evidence = normalizeDurableEvidence(entry.evidence);
+  const sourceEventId = entry.sourceEventId ?? evidence.sourceEventId;
+  const whyStored = formatEvidenceWhyStored(entry.memoryType, {
+    ...evidence,
+    sourceEventId,
+  });
+
   if (entry.state === 'superseded') {
     return {
       durableId: entry.id,
       topicKey: entry.topicKey,
+      memoryType: entry.memoryType,
       state: entry.state,
       reason: 'superseded_by_newer_memory',
       recommendedAction: 'delete',
       summary: entry.summary,
+      confidence: evidence.confidence,
+      sourceEventId,
+      whyStored,
       supersededById: entry.supersededById,
       updatedAt: entry.updatedAt,
     };
@@ -42,10 +60,14 @@ function buildCandidate(entry: DurableMemoryEntry): DurableReviewCandidate | nul
     return {
       durableId: entry.id,
       topicKey: entry.topicKey,
+      memoryType: entry.memoryType,
       state: entry.state,
       reason: 'stale_low_value',
       recommendedAction: 'review',
       summary: entry.summary,
+      confidence: evidence.confidence,
+      sourceEventId,
+      whyStored,
       supersededById: entry.supersededById,
       updatedAt: entry.updatedAt,
     };
@@ -55,10 +77,14 @@ function buildCandidate(entry: DurableMemoryEntry): DurableReviewCandidate | nul
     return {
       durableId: entry.id,
       topicKey: entry.topicKey,
+      memoryType: entry.memoryType,
       state: entry.state,
       reason: 'aged_but_readable',
       recommendedAction: 'archive',
       summary: entry.summary,
+      confidence: evidence.confidence,
+      sourceEventId,
+      whyStored,
       supersededById: entry.supersededById,
       updatedAt: entry.updatedAt,
     };
@@ -76,8 +102,16 @@ export function reviewDurableMemories(
   const entries = store.listAll(limit);
   const countsByState = entries.length > 0 ? store.countByState() : createEmptyStateCounts();
   const candidates = entries
+    .filter((entry) => (options?.state ? entry.state === options.state : true))
+    .filter((entry) => (options?.topicKey ? entry.topicKey === options.topicKey : true))
+    .filter((entry) => (options?.memoryType ? entry.memoryType === options.memoryType : true))
     .map((entry) => buildCandidate(entry))
     .filter((candidate): candidate is DurableReviewCandidate => candidate !== null)
+    .filter((candidate) =>
+      typeof options?.confidence === 'number'
+        ? typeof candidate.confidence === 'number' && candidate.confidence >= options.confidence
+        : true,
+    )
     .slice(0, limit);
 
   return {

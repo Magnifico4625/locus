@@ -124,10 +124,14 @@ export type DurableReviewAction = 'delete' | 'archive' | 'review';
 export interface DurableReviewCandidate {
   durableId: number;
   topicKey?: string;
+  memoryType: DurableMemoryType;
   state: DurableMemoryState;
   reason: DurableReviewReason;
   recommendedAction: DurableReviewAction;
   summary: string;
+  confidence?: number;
+  sourceEventId?: string;
+  whyStored: string;
   supersededById?: number;
   updatedAt: number;
 }

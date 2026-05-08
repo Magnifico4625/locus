@@ -92,4 +92,35 @@ describe('reviewDurableMemories', () => {
     );
     expect(beforeCount).toBe(afterCount);
   });
+
+  it('includes evidence-derived why-stored fields for review candidates', () => {
+    const stale = durable.insert({
+      topicKey: 'database_choice',
+      memoryType: 'decision',
+      state: 'stale',
+      summary: 'Use SQLite for local durable storage.',
+      evidence: {
+        confidence: 0.91,
+        matchedPattern: 'Decision:',
+        reason: 'decision_phrase',
+        eventId: 'evt-database',
+        sessionId: 'sess-database',
+      },
+      sourceEventId: 'source-evt-database',
+      source: 'codex',
+    });
+
+    const result = reviewDurableMemories({ db: adapter });
+
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        durableId: stale.id,
+        memoryType: 'decision',
+        sourceEventId: 'source-evt-database',
+        confidence: 0.91,
+        whyStored:
+          'Stored as decision because matched "Decision:" with 91% confidence from session sess-database.',
+      }),
+    ]);
+  });
 });

@@ -43,7 +43,7 @@ import type {
   LocusConfig,
   ProjectRootMethod,
 } from './types.js';
-import { LOCUS_DEFAULTS } from './types.js';
+import { DURABLE_MEMORY_TYPES, LOCUS_DEFAULTS } from './types.js';
 // ─── Public interfaces ────────────────────────────────────────────────────────
 
 export interface CreateServerOptions {
@@ -335,13 +335,22 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     {
       state: z.enum(['active', 'stale', 'superseded', 'archivable']).optional(),
       topicKey: z.string().optional(),
+      memoryType: z.enum(DURABLE_MEMORY_TYPES).optional(),
+      confidence: z
+        .number()
+        .min(0)
+        .max(1)
+        .optional()
+        .describe('Minimum durable evidence confidence to include (0-1)'),
       limit: z.number().optional().describe('Max review candidates to return (default 20)'),
     },
-    async ({ state, topicKey, limit }) => ({
+    async ({ state, topicKey, memoryType, confidence, limit }) => ({
       content: [
         {
           type: 'text' as const,
-          text: JSON.stringify(handleReview({ db }, { state, topicKey, limit })),
+          text: JSON.stringify(
+            handleReview({ db }, { state, topicKey, memoryType, confidence, limit }),
+          ),
         },
       ],
     }),
