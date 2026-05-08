@@ -69,8 +69,75 @@ describe('extractDurableCandidatesFromEvent', () => {
       expect.objectContaining({
         topicKey: 'database_choice',
         memoryType: 'decision',
+        evidence: expect.objectContaining({
+          matchedPattern: expect.any(String),
+          confidence: expect.any(Number),
+          reason: expect.any(String),
+        }),
         source: 'codex',
         sourceEventId: 'evt-database',
+      }),
+    ]);
+  });
+
+  it('extracts accepted RU decisions with canonical English topic keys', () => {
+    const event = makeConversationRow({
+      event_id: 'evt-ru-decision',
+      payload_json: JSON.stringify({
+        prompt: 'Мы решили использовать PostgreSQL для долговременной памяти.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'decision',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(event)).toEqual([
+      expect.objectContaining({
+        topicKey: 'database_choice',
+        memoryType: 'decision',
+        sourceEventId: 'evt-ru-decision',
+      }),
+    ]);
+  });
+
+  it('extracts rejected alternatives with rationale', () => {
+    const event = makeConversationRow({
+      event_id: 'evt-rejected',
+      payload_json: JSON.stringify({
+        prompt: 'Rejected hook-first capture because it is too risky for the stable release.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'rejected_alternative',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(event)).toEqual([
+      expect.objectContaining({
+        topicKey: 'codex_hooks_strategy',
+        memoryType: 'rejected_alternative',
+        summary: 'Rejected hook-first capture because it is too risky for the stable release.',
+        evidence: expect.objectContaining({
+          matchedPattern: expect.any(String),
+          confidence: expect.any(Number),
+          reason: 'rejected_alternative_with_rationale',
+        }),
+      }),
+    ]);
+  });
+
+  it('extracts user workflow preferences', () => {
+    const event = makeConversationRow({
+      event_id: 'evt-preference',
+      payload_json: JSON.stringify({
+        prompt: 'I prefer one task at a time with approval gates.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'preference',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(event)).toEqual([
+      expect.objectContaining({
+        topicKey: 'user_workflow_style',
+        memoryType: 'preference',
+        sourceEventId: 'evt-preference',
       }),
     ]);
   });
@@ -132,5 +199,66 @@ describe('extractDurableCandidatesFromEvent', () => {
         sourceEventId: 'evt-auth',
       }),
     ]);
+  });
+
+  it('extracts next steps from assistant summaries', () => {
+    const event = makeConversationRow({
+      event_id: 'evt-next-step',
+      kind: 'ai_response',
+      payload_json: JSON.stringify({
+        response: 'Next step: update the README install section after the package smoke test.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'next_step',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(event)).toEqual([
+      expect.objectContaining({
+        memoryType: 'next_step',
+        sourceEventId: 'evt-next-step',
+        evidence: expect.objectContaining({
+          reason: 'next_step',
+          confidence: expect.any(Number),
+        }),
+      }),
+    ]);
+  });
+
+  it('extracts validation facts with command context', () => {
+    const event = makeConversationRow({
+      event_id: 'evt-validation',
+      kind: 'ai_response',
+      payload_json: JSON.stringify({
+        response:
+          'Validation passed: npm test -- packages/core/tests/memory/durable-extractor.test.ts and npm -w @locus/core run typecheck.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'validation_fact',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(event)).toEqual([
+      expect.objectContaining({
+        memoryType: 'validation_fact',
+        summary: expect.stringContaining('npm test -- packages/core/tests/memory'),
+        sourceEventId: 'evt-validation',
+        evidence: expect.objectContaining({
+          reason: 'validation_fact',
+          matchedPattern: expect.any(String),
+        }),
+      }),
+    ]);
+  });
+
+  it('drops low-confidence vague statements', () => {
+    const event = makeConversationRow({
+      event_id: 'evt-vague',
+      payload_json: JSON.stringify({
+        prompt: 'Maybe we discussed something useful around this area.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'general_context',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(event)).toEqual([]);
   });
 });

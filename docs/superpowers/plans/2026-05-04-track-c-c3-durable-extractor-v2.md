@@ -214,7 +214,7 @@ git commit -m "feat(core): normalize durable topic keys"
 - Modify: `packages/core/src/memory/durable-extractor.ts`
 - Modify: `packages/core/tests/memory/durable-extractor.test.ts`
 
-- [ ] **Step 1: Write failing extractor tests**
+- [x] **Step 1: Write failing extractor tests**
 
 Cover RU/EN:
 
@@ -235,7 +235,7 @@ npm test -- packages/core/tests/memory/durable-extractor.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement pattern families**
+- [x] **Step 2: Implement pattern families**
 
 Implement extraction helpers by memory type. Return candidate evidence:
 
@@ -249,7 +249,7 @@ Implement extraction helpers by memory type. Return candidate evidence:
 
 Low-confidence candidates should not be returned.
 
-- [ ] **Step 3: Verify extraction**
+- [x] **Step 3: Verify extraction**
 
 Run:
 
@@ -260,7 +260,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

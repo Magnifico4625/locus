@@ -1,4 +1,5 @@
 import type { ConversationEventRow, DurableMemoryEntry, DurableMemoryType } from '../types.js';
+import { extractPatternMatches, type ExtractorPatternMatch } from './extractor-patterns.js';
 import { deriveTopicKey } from './topic-keys.js';
 
 export interface DurableMemoryCandidate {
@@ -22,67 +23,22 @@ function parsePayload(payloadJson: string | null): Record<string, unknown> | und
   }
 }
 
-function normalizeSentence(text: string): string {
-  return text.replace(/\s+/g, ' ').trim();
-}
-
-function extractDecisionSummary(text: string): string | undefined {
-  const normalized = normalizeSentence(text);
-  const match = normalized.match(/decision:\s*(.+)$/i);
-  if (match?.[1]) {
-    return match[1].trim();
-  }
-
-  if (/^use\s+/i.test(normalized)) {
-    return normalized;
-  }
-
-  return undefined;
-}
-
-function extractStyleSummary(text: string): string | undefined {
-  const normalized = normalizeSentence(text);
-  const lower = normalized.toLowerCase();
-
-  if (
-    lower.includes('surgical') ||
-    lower.includes('avoid unrelated refactors') ||
-    lower.includes('prove it with tests')
-  ) {
-    return normalized;
-  }
-
-  return undefined;
-}
-
-function extractConstraintSummary(text: string): string | undefined {
-  const normalized = normalizeSentence(text);
-  const lower = normalized.toLowerCase();
-
-  if (
-    lower.includes('do not touch ') ||
-    lower.includes('keep codex as the primary validation path')
-  ) {
-    return normalized;
-  }
-
-  return undefined;
-}
-
 function buildCandidate(
   event: ConversationEventRow,
-  memoryType: DurableMemoryType,
-  summary: string,
+  match: ExtractorPatternMatch,
 ): DurableMemoryCandidate {
   return {
-    topicKey: deriveTopicKey({ memoryType, summary }),
-    memoryType,
-    summary,
+    topicKey: deriveTopicKey({ memoryType: match.memoryType, summary: match.summary }),
+    memoryType: match.memoryType,
+    summary: match.summary,
     evidence: {
       eventId: event.event_id,
       kind: event.kind,
       timestamp: event.timestamp,
       sessionId: event.session_id ?? undefined,
+      matchedPattern: match.matchedPattern,
+      confidence: match.confidence,
+      reason: match.reason,
     },
     sourceEventId: event.event_id,
     source: event.source as DurableMemoryEntry['source'],
@@ -103,20 +59,16 @@ export function extractDurableCandidatesFromEvent(
   const promptText = typeof payload.prompt === 'string' ? payload.prompt : undefined;
   const responseText = typeof payload.response === 'string' ? payload.response : undefined;
 
-  const decisionText = summaryText ?? responseText;
-  const decisionSummary = decisionText ? extractDecisionSummary(decisionText) : undefined;
-  if (decisionSummary) {
-    candidates.push(buildCandidate(event, 'decision', decisionSummary));
-  }
+  for (const text of [summaryText, promptText, responseText]) {
+    if (!text) {
+      continue;
+    }
 
-  const styleSummary = promptText ? extractStyleSummary(promptText) : undefined;
-  if (styleSummary) {
-    candidates.push(buildCandidate(event, 'style', styleSummary));
-  }
-
-  const constraintSummary = promptText ? extractConstraintSummary(promptText) : undefined;
-  if (constraintSummary) {
-    candidates.push(buildCandidate(event, 'constraint', constraintSummary));
+    for (const match of extractPatternMatches(text)) {
+      if (!candidates.some((candidate) => candidate.memoryType === match.memoryType)) {
+        candidates.push(buildCandidate(event, match));
+      }
+    }
   }
 
   return candidates;
