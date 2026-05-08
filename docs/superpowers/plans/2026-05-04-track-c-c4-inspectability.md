@@ -221,7 +221,7 @@ git commit -m "feat(core): expose why stored durable memories"
 - Modify: `packages/core/src/tools/audit.ts`
 - Modify: `packages/core/tests/tools/audit.test.ts`
 
-- [ ] **Step 1: Write failing audit tests**
+- [x] **Step 1: Write failing audit tests**
 
 Assert audit output mentions:
 
@@ -238,14 +238,14 @@ npm test -- packages/core/tests/tools/audit.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement audit summary**
+- [x] **Step 2: Implement audit summary**
 
 Use lightweight SQL over `conversation_events.payload_json`. Avoid unbounded
 full-table JSON parsing: inspect at most the latest 1000 Codex conversation
 events, and prefer a recent time window such as the last 30 days when available.
 Keep the limit as a named constant so future tuning is explicit.
 
-- [ ] **Step 3: Verify audit**
+- [x] **Step 3: Verify audit**
 
 Run:
 
@@ -256,7 +256,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

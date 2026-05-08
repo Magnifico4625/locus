@@ -66,6 +66,21 @@ function insertHookCapture(adapter: NodeSqliteAdapter): void {
   );
 }
 
+function insertConversationEvent(
+  adapter: NodeSqliteAdapter,
+  eventId: string,
+  payload: Record<string, unknown>,
+  timestamp = Date.now(),
+): void {
+  adapter.run(
+    `INSERT INTO conversation_events (
+      event_id, source, source_event_id, project_root, session_id,
+      timestamp, kind, payload_json, significance, tags_json, created_at
+    ) VALUES (?, 'codex', ?, '/home/user/myproject', 'session-a', ?, 'user_prompt', ?, 'high', '[]', ?)`,
+    [eventId, `codex:${eventId}`, timestamp, JSON.stringify(payload), timestamp],
+  );
+}
+
 describe('handleAudit', () => {
   let tempDir: string;
   let adapter: NodeSqliteAdapter;
@@ -272,6 +287,7 @@ describe('handleAudit', () => {
     const result = handleAudit(deps);
 
     expect(result).toContain("'redacted'");
+    expect(result).toContain('best-effort');
   });
 
   it("shows warning for 'full' capture level", () => {
@@ -281,6 +297,22 @@ describe('handleAudit', () => {
 
     expect(result).toContain('WARNING');
     expect(result).toContain("'full'");
+  });
+
+  it('shows capture reason counts from recent Codex conversation events', () => {
+    insertConversationEvent(adapter, 'evt-decision-1', { capture_reason: 'decision' });
+    insertConversationEvent(adapter, 'evt-decision-2', { capture_reason: 'decision' });
+    insertConversationEvent(adapter, 'evt-bug-1', { capture_reason: 'bug_context' });
+    insertConversationEvent(adapter, 'evt-missing-reason', { summary: 'No reason here' });
+
+    const deps = makeAuditDeps(adapter, tempDir);
+    deps.captureLevel = 'redacted';
+    const result = handleAudit(deps);
+
+    expect(result).toContain('Codex capture reasons');
+    expect(result).toContain('decision: 2');
+    expect(result).toContain('bug_context: 1');
+    expect(result).not.toContain('evt-missing-reason');
   });
 
   // ── 7. Secrets detection ─────────────────────────────────────────────────

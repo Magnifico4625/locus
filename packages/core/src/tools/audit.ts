@@ -33,6 +33,13 @@ interface HookCountRow {
   cnt: number;
 }
 
+interface CaptureReasonRow {
+  payload_json: string | null;
+}
+
+const CAPTURE_REASON_AUDIT_LIMIT = 1000;
+const CAPTURE_REASON_RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1000;
+
 function tableExists(db: DatabaseAdapter, name: string): boolean {
   const row = db.get<CountRow>(
     "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
@@ -64,6 +71,73 @@ function countArrayEntries(json: string | null): number {
   } catch {
     return 0;
   }
+}
+
+function readCaptureReason(payloadJson: string | null): string | undefined {
+  if (!payloadJson) {
+    return undefined;
+  }
+
+  try {
+    const payload = JSON.parse(payloadJson) as Record<string, unknown>;
+    const reason = payload.capture_reason;
+    if (typeof reason !== 'string') {
+      return undefined;
+    }
+
+    const trimmed = reason.trim();
+    return trimmed ? trimmed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function loadCaptureReasonRows(db: DatabaseAdapter): CaptureReasonRow[] {
+  const recentCutoff = Date.now() - CAPTURE_REASON_RECENT_WINDOW_MS;
+  const recentRows = db.all<CaptureReasonRow>(
+    `SELECT payload_json FROM conversation_events
+     WHERE source = 'codex' AND payload_json IS NOT NULL AND timestamp >= ?
+     ORDER BY timestamp DESC, id DESC
+     LIMIT ?`,
+    [recentCutoff, CAPTURE_REASON_AUDIT_LIMIT],
+  );
+
+  if (recentRows.length > 0) {
+    return recentRows;
+  }
+
+  return db.all<CaptureReasonRow>(
+    `SELECT payload_json FROM conversation_events
+     WHERE source = 'codex' AND payload_json IS NOT NULL
+     ORDER BY timestamp DESC, id DESC
+     LIMIT ?`,
+    [CAPTURE_REASON_AUDIT_LIMIT],
+  );
+}
+
+function summarizeCaptureReasons(db: DatabaseAdapter): string | undefined {
+  const rows = loadCaptureReasonRows(db);
+  const counts = new Map<string, number>();
+
+  for (const row of rows) {
+    const reason = readCaptureReason(row.payload_json);
+    if (!reason) {
+      continue;
+    }
+
+    counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+
+  if (counts.size === 0) {
+    return undefined;
+  }
+
+  const summary = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([reason, count]) => `${reason}: ${count}`)
+    .join(', ');
+
+  return `Codex capture reasons: ${summary} (latest ${CAPTURE_REASON_AUDIT_LIMIT} events, 30d preferred).`;
 }
 
 export function handleAudit(deps: AuditDeps): string {
@@ -111,6 +185,7 @@ export function handleAudit(deps: AuditDeps): string {
 
   // Hook captures
   const hookCount = db.get<HookCountRow>('SELECT COUNT(*) as cnt FROM hook_captures')?.cnt ?? 0;
+  const captureReasonSummary = summarizeCaptureReasons(db);
 
   // DB and log sizes
   const dbBytes = getFileSize(dbPath);
@@ -145,6 +220,7 @@ export function handleAudit(deps: AuditDeps): string {
     `Semantic memory:  ${semanticCount} ${semanticCount === 1 ? 'entry' : 'entries'} (${semanticTokens} tokens est.)`,
     `Episodic memory:  ${episodicCount} ${episodicCount === 1 ? 'entry' : 'entries'} across ${episodicSessionCount} ${episodicSessionCount === 1 ? 'session' : 'sessions'} (${episodicTokens} tokens est.)`,
     `Hook captures:   ${hookCount} events (${captureLevel === 'metadata' ? 'metadata only, no content' : captureLevel} capture)`,
+    ...(captureReasonSummary ? [captureReasonSummary] : []),
     '',
     `DB size: ${formatSize(dbBytes)} at ${dbPath}`,
     `Log size: ${formatSize(logBytes)} at ${logPath}`,
@@ -198,7 +274,9 @@ export function handleAudit(deps: AuditDeps): string {
   if (captureLevel === 'metadata') {
     lines.push("Capture level is 'metadata' — no raw file content is stored.");
   } else if (captureLevel === 'redacted') {
-    lines.push("Capture level is 'redacted' — content is stored with secrets removed.");
+    lines.push(
+      "Capture level is 'redacted' — content is stored with secrets removed on a best-effort basis.",
+    );
   } else {
     lines.push(
       "WARNING: Capture level is 'full' — raw file content is being stored. Consider switching to 'metadata' or 'redacted'.",
