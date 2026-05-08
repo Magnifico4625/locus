@@ -338,7 +338,7 @@ git commit -m "feat(core): merge durable memories by topic policy"
 - Modify: `packages/core/src/recall/candidate-loader.ts` if needed
 - Modify: `packages/core/src/recall/scoring.ts` if needed
 
-- [ ] **Step 1: Write failing recall tests for new types**
+- [x] **Step 1: Write failing recall tests for new types**
 
 Assert recall can answer:
 
@@ -355,7 +355,7 @@ npm test -- packages/core/tests/tools/recall.test.ts packages/core/tests/integra
 
 Expected: FAIL if C1 loader/scoring only handles old memory types.
 
-- [ ] **Step 2: Update loader/scoring minimally**
+- [x] **Step 2: Update loader/scoring minimally**
 
 Map query intents to the new durable memory types explicitly:
 
@@ -367,7 +367,7 @@ Map query intents to the new durable memory types explicitly:
 Keep this as a small compatibility extension to the C1 loader/scoring, not a
 rewrite of the recall engine.
 
-- [ ] **Step 3: Verify recall and durable tests**
+- [x] **Step 3: Verify recall and durable tests**
 
 Run:
 
@@ -378,7 +378,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

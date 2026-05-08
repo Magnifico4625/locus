@@ -316,6 +316,104 @@ describe('memory_recall integration', () => {
     }
   });
 
+  it('answers durable rejected alternative recall', async () => {
+    const root = makeTempRoot();
+    const projectDir = join(root, 'project');
+    const dbPath = join(root, 'locus.db');
+
+    mkdirSync(projectDir, { recursive: true });
+
+    const ctx = await createServer({ cwd: projectDir, dbPath });
+    try {
+      const durableId = insertDurableMemory(
+        ctx,
+        'Rejected hook-first capture because it risks startup stability.',
+        {
+          memoryType: 'rejected_alternative',
+          topicKey: 'codex_hooks_strategy',
+          updatedAt: Date.now(),
+        },
+      );
+
+      const recallText = await callTextTool(ctx, 'memory_recall', {
+        question: 'why did we reject hook-first capture?',
+      });
+      const result = JSON.parse(recallText) as MemoryRecallResult;
+
+      expect(result.status).toBe('ok');
+      expect(result.matchedIntent).toBe('rejected_alternative');
+      expect(result.summary).toContain('hook-first capture');
+      expect(result.candidates).toEqual([
+        expect.objectContaining({
+          durableMemoryIds: [durableId],
+          sourceKind: 'durable',
+        }),
+      ]);
+    } finally {
+      ctx.cleanup();
+    }
+  });
+
+  it('answers durable next-step and validation recall', async () => {
+    const root = makeTempRoot();
+    const projectDir = join(root, 'project');
+    const dbPath = join(root, 'locus.db');
+
+    mkdirSync(projectDir, { recursive: true });
+
+    const ctx = await createServer({ cwd: projectDir, dbPath });
+    try {
+      const nextStepId = insertDurableMemory(
+        ctx,
+        'Next step: update the README install section after the package smoke test.',
+        {
+          memoryType: 'next_step',
+          topicKey: 'release_steps',
+          updatedAt: Date.now() - 60_000,
+        },
+      );
+      const validationId = insertDurableMemory(
+        ctx,
+        'Validation passed: npm test -- packages/core/tests/memory/durable-extractor.test.ts.',
+        {
+          memoryType: 'validation_fact',
+          topicKey: 'track_c_validation',
+          updatedAt: Date.now(),
+        },
+      );
+
+      const nextStepText = await callTextTool(ctx, 'memory_recall', {
+        question: 'what remains to do?',
+      });
+      const nextStep = JSON.parse(nextStepText) as MemoryRecallResult;
+      expect(nextStep.status).toBe('ok');
+      expect(nextStep.matchedIntent).toBe('next_step');
+      expect(nextStep.summary).toContain('README install section');
+      expect(nextStep.candidates).toEqual([
+        expect.objectContaining({
+          durableMemoryIds: [nextStepId],
+          sourceKind: 'durable',
+        }),
+      ]);
+
+      const validationText = await callTextTool(ctx, 'memory_recall', {
+        question: 'what passed validation?',
+      });
+      const validation = JSON.parse(validationText) as MemoryRecallResult;
+      expect(validation.status).toBe('ok');
+      expect(validation.matchedIntent).toBe('validation_fact');
+      expect(validation.summary).toContain('durable-extractor.test.ts');
+      expect(validation.candidates).toEqual([
+        expect.objectContaining({
+          durableMemoryIds: [validationId],
+          sourceKind: 'durable',
+        }),
+      ]);
+    } finally {
+      ctx.cleanup();
+    }
+  });
+
   it('returns needs_clarification for ambiguous two-task recall', async () => {
     const root = makeTempRoot();
     const projectDir = join(root, 'project');

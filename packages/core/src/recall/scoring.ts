@@ -13,7 +13,13 @@ export interface RecallScoringOptions {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DURABLE_PRIORITY_INTENTS = new Set(['decision', 'preference_style']);
+const DURABLE_PRIORITY_INTENTS = new Set([
+  'decision',
+  'preference_style',
+  'rejected_alternative',
+  'next_step',
+  'validation_fact',
+]);
 const COMPLETION_EVENT_INTENTS = new Set(['bug_context', 'validation_fact', 'work_summary']);
 const COMPLETION_CAPTURE_REASONS = new Set(['session_end', 'task_complete']);
 

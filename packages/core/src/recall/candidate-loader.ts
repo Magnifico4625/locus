@@ -35,7 +35,18 @@ export interface CandidateLoaderOptions {
 const DURABLE_TYPES_BY_INTENT: Partial<Record<ParsedRecallQuery['intent'], DurableMemoryType[]>> = {
   decision: ['decision'],
   preference_style: ['preference', 'style', 'constraint'],
-  general: ['decision', 'preference', 'style', 'constraint'],
+  rejected_alternative: ['rejected_alternative'],
+  next_step: ['next_step'],
+  validation_fact: ['validation_fact'],
+  general: [
+    'decision',
+    'preference',
+    'style',
+    'constraint',
+    'rejected_alternative',
+    'next_step',
+    'validation_fact',
+  ],
 };
 
 function normalizeText(text: string): string {
@@ -86,6 +97,14 @@ function durableTypesForIntent(intent: ParsedRecallQuery['intent']): DurableMemo
   return DURABLE_TYPES_BY_INTENT[intent] ?? [];
 }
 
+function isExactDurableIntent(intent: ParsedRecallQuery['intent']): boolean {
+  return (
+    intent === 'rejected_alternative' ||
+    intent === 'next_step' ||
+    intent === 'validation_fact'
+  );
+}
+
 export function buildRecallFtsQuery(terms: string[]): string {
   return terms
     .map((term) => term.replace(/["*]/g, '').trim())
@@ -132,7 +151,7 @@ function loadDurableCandidates({
 
   return rows
     .filter((row) => {
-      if (parsedQuery.intent === 'preference_style') {
+      if (parsedQuery.intent === 'preference_style' || isExactDurableIntent(parsedQuery.intent)) {
         return true;
       }
       return (

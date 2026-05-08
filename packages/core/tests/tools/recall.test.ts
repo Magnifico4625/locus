@@ -5,7 +5,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { runMigrations } from '../../src/storage/migrations.js';
 import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
 import { handleRecall } from '../../src/tools/recall.js';
-import type { DatabaseAdapter, EventKind, MemoryRecallResult } from '../../src/types.js';
+import type {
+  DatabaseAdapter,
+  DurableMemoryType,
+  EventKind,
+  MemoryRecallResult,
+} from '../../src/types.js';
 
 function createAdapter(dir: string): NodeSqliteAdapter {
   // biome-ignore lint/suspicious/noExplicitAny: node:sqlite dynamic require
@@ -14,12 +19,10 @@ function createAdapter(dir: string): NodeSqliteAdapter {
   return new NodeSqliteAdapter(raw);
 }
 
-type TestDurableMemoryType = 'decision' | 'preference' | 'style' | 'constraint';
-
 function insertDurableMemory(
   db: DatabaseAdapter,
   summary: string,
-  opts?: { memoryType?: TestDurableMemoryType; topicKey?: string; updatedAt?: number },
+  opts?: { memoryType?: DurableMemoryType; topicKey?: string; updatedAt?: number },
 ): number {
   const now = opts?.updatedAt ?? Date.now();
   const result = db.run(
@@ -289,6 +292,87 @@ describe('handleRecall', () => {
         expect.objectContaining({ durableMemoryIds: [constraintId], sourceKind: 'durable' }),
       ]),
     );
+  });
+
+  it('recalls rejected alternatives from durable memory', () => {
+    const durableId = insertDurableMemory(
+      adapter,
+      'Rejected hook-first capture because it risks startup stability.',
+      {
+        memoryType: 'rejected_alternative',
+        topicKey: 'codex_hooks_strategy',
+        updatedAt: now - 60_000,
+      },
+    );
+
+    const result = handleRecall('why did we reject hook-first capture?', {
+      db: adapter,
+      now,
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('ok');
+    expect(result.matchedIntent).toBe('rejected_alternative');
+    expect(result.summary).toContain('hook-first capture');
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        durableMemoryIds: [durableId],
+        sourceKind: 'durable',
+      }),
+    ]);
+  });
+
+  it('recalls next steps from durable memory', () => {
+    const durableId = insertDurableMemory(
+      adapter,
+      'Next step: update the README install section after the package smoke test.',
+      {
+        memoryType: 'next_step',
+        topicKey: 'release_steps',
+        updatedAt: now - 60_000,
+      },
+    );
+
+    const result = handleRecall('what remains to do?', {
+      db: adapter,
+      now,
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('ok');
+    expect(result.matchedIntent).toBe('next_step');
+    expect(result.summary).toContain('README install section');
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        durableMemoryIds: [durableId],
+        sourceKind: 'durable',
+      }),
+    ]);
+  });
+
+  it('recalls validation facts from durable memory', () => {
+    const durableId = insertDurableMemory(
+      adapter,
+      'Validation passed: npm test -- packages/core/tests/memory/durable-extractor.test.ts.',
+      {
+        memoryType: 'validation_fact',
+        topicKey: 'track_c_validation',
+        updatedAt: now - 60_000,
+      },
+    );
+
+    const result = handleRecall('what passed validation?', {
+      db: adapter,
+      now,
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('ok');
+    expect(result.matchedIntent).toBe('validation_fact');
+    expect(result.summary).toContain('durable-extractor.test.ts');
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        durableMemoryIds: [durableId],
+        sourceKind: 'durable',
+      }),
+    ]);
   });
 
   it('loads user prompts, assistant responses, and session summaries as conversation candidates', () => {
