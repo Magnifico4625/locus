@@ -118,7 +118,7 @@ If proceeding, commit plan checkbox update. If skipping, document why and do not
 - Modify: `packages/cli/src/index.ts`
 - Create: `packages/cli/tests/codex-hooks.test.ts`
 
-- [ ] **Step 1: Write failing hook command tests**
+- [x] **Step 1: Write failing hook command tests**
 
 Assert:
 
@@ -140,7 +140,7 @@ npm test -- packages/cli/tests/codex-hooks.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement hook command**
+- [x] **Step 2: Implement hook command**
 
 Read stdin JSON, parse defensively, return minimal hook output:
 
@@ -154,7 +154,7 @@ If a marker is needed, write only a small JSON file atomically. Prefer a
 dedicated trigger queue if the marker is operational metadata rather than a real
 conversation event.
 
-- [ ] **Step 3: Verify command tests**
+- [x] **Step 3: Verify command tests**
 
 Run:
 
@@ -165,7 +165,7 @@ npm -w @locus/cli run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

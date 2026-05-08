@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { CodexMcpServerConfig } from './codex/config.js';
 import { formatDoctorCodex } from './commands/doctor-codex.js';
+import { runCodexHook } from './commands/hook-codex.js';
 import { formatInstallCodexDryRun, runInstallCodex } from './commands/install-codex.js';
 import { runMcp } from './commands/mcp.js';
 import { type CommandRunner, defaultCommandRunner } from './commands/runner.js';
@@ -18,6 +19,7 @@ export interface CliOptions {
   commandRunner?: CommandRunner;
   readMcpServer?: () => CodexMcpServerConfig | undefined;
   platform?: NodeJS.Platform;
+  stdin?: string;
 }
 
 const usage = `Usage: locus-memory <command>
@@ -26,6 +28,7 @@ Commands:
   locus-memory mcp              Start the Locus MCP server
   locus-memory install codex    Install Locus for Codex
   locus-memory doctor codex     Diagnose the Codex installation
+  locus-memory hook codex       Run a Codex lifecycle hook
   locus-memory uninstall codex  Remove Locus from Codex config
 
 Options:
@@ -56,6 +59,21 @@ export async function runCli(
 
   if (command === 'mcp') {
     return runMcp();
+  }
+
+  if (command === 'hook' && subcommand === 'codex') {
+    const result = runCodexHook({
+      event: argv[2],
+      stdin: options.stdin,
+      env: options.env,
+    });
+    if (result.stdout) {
+      io.stdout(result.stdout);
+    }
+    if (result.stderr) {
+      io.stderr(result.stderr);
+    }
+    return result.exitCode;
   }
 
   if (command === 'install' && subcommand === 'codex' && argv.includes('--dry-run')) {
