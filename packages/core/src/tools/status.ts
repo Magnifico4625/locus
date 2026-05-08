@@ -75,7 +75,7 @@ function buildCodexTruth(
       recommendedCaptureMode: 'redacted',
       desktopParity: 'unverified',
       recallMessage:
-        'metadata capture imports structural session events and diagnostics, but conversational recall is intentionally limited.',
+        'metadata capture imports structural session events and diagnostics, but conversational recall is weak by design.',
       desktopMessage,
     };
   }
@@ -86,7 +86,7 @@ function buildCodexTruth(
       recommendedCaptureMode: 'redacted',
       desktopParity: 'unverified',
       recallMessage:
-        'redacted capture stores bounded, filtered conversation snippets for practical recall without full transcripts.',
+        'redacted capture is the recommended rich recall mode: it stores bounded, filtered conversation snippets without full transcripts.',
       desktopMessage,
     };
   }
@@ -96,7 +96,7 @@ function buildCodexTruth(
     recommendedCaptureMode: 'redacted',
     desktopParity: 'unverified',
     recallMessage:
-      'full capture stores raw conversation content and can provide maximum recall, but it is explicit warning territory.',
+      'full capture stores raw conversation content and can provide maximum recall, but it carries privacy risk and is explicit warning territory.',
     desktopMessage,
   };
 }

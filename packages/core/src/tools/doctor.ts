@@ -363,11 +363,19 @@ function appendCodexChecks(
         'full capture can provide maximum recall, but raw conversation content is stored locally.',
       fix: 'Use LOCUS_CODEX_CAPTURE=redacted unless full transcripts are explicitly required.',
     });
+  } else if (codexDiagnostics.importedEventCount === 0) {
+    checks.push({
+      name: 'Codex recall readiness',
+      status: 'warn',
+      message:
+        'redacted capture is enabled, but 0 Codex conversation events have been retained for recall.',
+      fix: 'Use memory_search first, then memory_import_codex if you need a manual catch-up.',
+    });
   } else {
     checks.push({
       name: 'Codex recall readiness',
       status: 'ok',
-      message: 'redacted capture supports practical bounded conversational recall.',
+      message: 'redacted capture is the recommended rich recall mode and has retained Codex events.',
     });
   }
 

@@ -398,9 +398,71 @@ describe('handleStatus', () => {
       recallReadiness: 'limited',
       recommendedCaptureMode: 'redacted',
       desktopParity: 'unverified',
-      recallMessage: expect.stringContaining('metadata'),
+      recallMessage: expect.stringContaining('weak'),
       desktopMessage: expect.stringContaining('desktop'),
     });
+  });
+
+  it('exposes redacted capture as the recommended rich recall mode', () => {
+    const status = handleStatus({
+      ...(makeStatusDeps(adapter, tempDir, {
+        config: { ...LOCUS_DEFAULTS, captureLevel: 'redacted' },
+      }) as object),
+      codexDiagnostics: {
+        client: 'codex',
+        clientSurface: 'cli',
+        detectionEvidence: ['env:CODEX_HOME'],
+        captureMode: 'redacted',
+        sessionsDir: normalizePathForIdentity('/codex/sessions'),
+        sessionsDirExists: true,
+        rolloutFilesFound: 3,
+        latestRolloutPath: normalizePathForIdentity(
+          '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+        ),
+        latestRolloutReadable: true,
+        importedEventCount: 4,
+      },
+    } as never);
+
+    expect((status as Record<string, unknown>).codexTruth).toEqual(
+      expect.objectContaining({
+        recallReadiness: 'practical',
+        recommendedCaptureMode: 'redacted',
+        desktopParity: 'unverified',
+        recallMessage: expect.stringContaining('recommended rich recall'),
+      }),
+    );
+  });
+
+  it('exposes full capture as maximum recall with a privacy warning', () => {
+    const status = handleStatus({
+      ...(makeStatusDeps(adapter, tempDir, {
+        config: { ...LOCUS_DEFAULTS, captureLevel: 'full' },
+      }) as object),
+      codexDiagnostics: {
+        client: 'codex',
+        clientSurface: 'cli',
+        detectionEvidence: ['env:CODEX_HOME'],
+        captureMode: 'full',
+        sessionsDir: normalizePathForIdentity('/codex/sessions'),
+        sessionsDirExists: true,
+        rolloutFilesFound: 3,
+        latestRolloutPath: normalizePathForIdentity(
+          '/codex/sessions/2026/04/rollout-2026-04-14T12-00-00.jsonl',
+        ),
+        latestRolloutReadable: true,
+        importedEventCount: 4,
+      },
+    } as never);
+
+    expect((status as Record<string, unknown>).codexTruth).toEqual(
+      expect.objectContaining({
+        recallReadiness: 'maximum',
+        recommendedCaptureMode: 'redacted',
+        desktopParity: 'unverified',
+        recallMessage: expect.stringContaining('privacy'),
+      }),
+    );
   });
 
   it('includes durable-memory state counts in status output', () => {

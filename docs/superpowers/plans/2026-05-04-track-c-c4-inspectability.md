@@ -275,7 +275,7 @@ git commit -m "feat(core): audit capture reasons"
 - Modify: `packages/core/tests/tools/status.test.ts`
 - Modify: `packages/core/tests/tools/doctor.test.ts`
 
-- [ ] **Step 1: Write failing status/doctor tests**
+- [x] **Step 1: Write failing status/doctor tests**
 
 Assert:
 
@@ -293,11 +293,11 @@ npm test -- packages/core/tests/tools/status.test.ts packages/core/tests/tools/d
 
 Expected: FAIL for new text/fields.
 
-- [ ] **Step 2: Implement truth refinements**
+- [x] **Step 2: Implement truth refinements**
 
 Keep shape backward-compatible. Add optional diagnostic fields only if needed.
 
-- [ ] **Step 3: Verify status/doctor**
+- [x] **Step 3: Verify status/doctor**
 
 Run:
 
@@ -308,7 +308,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

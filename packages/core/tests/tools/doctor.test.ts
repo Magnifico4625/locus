@@ -456,6 +456,24 @@ describe('handleDoctor', () => {
     expect(importedCheck?.fix).toContain('memory_import_codex');
   });
 
+  it('warns when redacted capture has zero retained conversation events', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexDiagnostics: codexDiagnostics({
+        captureMode: 'redacted',
+        importedEventCount: 0,
+        latestImportedSessionId: undefined,
+        latestImportedTimestamp: undefined,
+      }),
+    } as never);
+
+    const readinessCheck = report.checks.find((c) => c.name === 'Codex recall readiness');
+    expect(readinessCheck?.status).toBe('warn');
+    expect(readinessCheck?.message).toContain('redacted capture is enabled');
+    expect(readinessCheck?.message).toContain('0 Codex conversation events');
+    expect(readinessCheck?.fix).toContain('memory_import_codex');
+  });
+
   it('adds an explicit desktop parity warning when Codex diagnostics are present', () => {
     const report = handleDoctor({
       ...(healthyDeps(adapter, tempDir) as object),
