@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { cleanupInterruptedInstall, findInterruptedInstallTempFiles } from '../codex/cleanup.js';
 import { buildCodexMcpAddArgs } from '../codex/commands.js';
 import { classifyMcpOwnership, parseCodexMcpGetOutput, setMcpServerCwd } from '../codex/config.js';
+import { installCodexHooks, resolveCodexHooksPath } from '../codex/hooks.js';
 import { acquireInstallLock } from '../codex/lock.js';
 import { resolveCodexConfigPath, resolveCodexHome, resolveCodexSkillPath } from '../codex/paths.js';
 import { installCodexSkill } from '../codex/skill.js';
@@ -12,6 +13,7 @@ import type { CommandRunner } from './runner.js';
 export interface InstallCodexDryRunOptions {
   env?: Record<string, string | undefined>;
   startDir?: string;
+  withHooks?: boolean;
 }
 
 export interface InstallCodexOptions extends InstallCodexDryRunOptions {
@@ -33,6 +35,8 @@ export function formatInstallCodexDryRun(options: InstallCodexDryRunOptions = {}
     `Skill path: ${skillPath}`,
     `MCP runtime: npx -y ${runtimeSpecifier} mcp`,
     `MCP cwd: ${codexHome}`,
+    `Hooks path: ${resolveCodexHooksPath(env)}`,
+    `Hooks: ${options.withHooks ? 'requested (would install)' : 'not requested'}`,
     'Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error',
     `Install lock: ${existsSync(lockPath) ? `present at ${lockPath}` : 'none'}`,
     `Stale temp files: ${tempFiles.length}`,
@@ -129,6 +133,9 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
 
     const cwdResult = setMcpServerCwd(resolveCodexConfigPath(env), 'locus', codexHome);
     const skill = installCodexSkill({ env, overwrite: true, backup: true });
+    const hooks = options.withHooks
+      ? installCodexHooks({ env, version, platform: options.platform })
+      : undefined;
 
     return {
       exitCode: skill.error ? 1 : 0,
@@ -143,6 +150,9 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
         `Skill: ${skill.action}`,
         `Skill path: ${skill.targetPath}`,
         skill.backup ? `Backup: ${skill.backup.path}` : undefined,
+        hooks ? `Hooks: ${hooks.action}` : 'Hooks: not requested',
+        hooks ? `Hooks path: ${hooks.path}` : undefined,
+        hooks?.backupPath ? `Hooks backup: ${hooks.backupPath}` : undefined,
         skill.error ? `Error: ${skill.error.message}` : undefined,
       ]
         .filter((line): line is string => Boolean(line))

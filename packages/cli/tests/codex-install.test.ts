@@ -1,7 +1,16 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { buildCodexHooksConfig, renderCodexHooksJson } from '../src/codex/hooks.js';
 import {
   resolveCodexConfigPath,
   resolveCodexHome,
@@ -150,7 +159,24 @@ describe('codex install model', () => {
     expect(exitCode).toBe(0);
     expect(stdout.join('\n')).toContain(join(codexHome, 'skills', 'locus-memory', 'SKILL.md'));
     expect(stdout.join('\n')).toContain('LOCUS_CODEX_CAPTURE=redacted');
+    expect(stdout.join('\n')).toContain(`Hooks path: ${join(codexHome, 'hooks.json')}`);
+    expect(stdout.join('\n')).toContain('Hooks: not requested');
     expect(existsSync(join(codexHome, 'skills'))).toBe(false);
+    expect(existsSync(join(codexHome, 'hooks.json'))).toBe(false);
+  });
+
+  it('dry-run with hooks reports hook install intent without writing files', async () => {
+    const codexHome = makeTempDir();
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex', '--dry-run', '--with-hooks'], io, {
+      env: { CODEX_HOME: codexHome },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.join('\n')).toContain(`Hooks path: ${join(codexHome, 'hooks.json')}`);
+    expect(stdout.join('\n')).toContain('Hooks: requested (would install)');
+    expect(existsSync(join(codexHome, 'hooks.json'))).toBe(false);
   });
 
   it('dry-run reports stale lock and temp files without removing them', async () => {
@@ -231,6 +257,113 @@ describe('codex install model', () => {
     );
     expect(stdout.join('\n')).toContain(`MCP cwd: ${codexHome}`);
     expect(stdout.join('\n')).toContain('Skill: created');
+    expect(stdout.join('\n')).toContain('Hooks: not requested');
+    expect(existsSync(join(codexHome, 'hooks.json'))).toBe(false);
+  });
+
+  it('installs Codex hooks only when explicitly requested', async () => {
+    const codexHome = makeTempDir();
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex', '--yes', '--with-hooks'], io, {
+      env: { CODEX_HOME: codexHome },
+      startDir: repoRoot,
+      platform: 'linux',
+      commandRunner: async (_command, args) => {
+        if (args.includes('add')) {
+          writeFileSync(
+            join(codexHome, 'config.toml'),
+            [
+              '[mcp_servers.locus]',
+              'command = "npx"',
+              'args = ["-y", "locus-memory@3.5.3", "mcp"]',
+              '',
+            ].join('\n'),
+            'utf8',
+          );
+        }
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.join('\n')).toContain('Hooks: created');
+    expect(readFileSync(join(codexHome, 'hooks.json'), 'utf8')).toContain(
+      'locus-memory@3.5.3 hook codex stop',
+    );
+  });
+
+  it('backs up existing hook config before overwrite', async () => {
+    const codexHome = makeTempDir();
+    mkdirSync(codexHome, { recursive: true });
+    writeFileSync(join(codexHome, 'hooks.json'), '{"hooks":{"Custom":[]}}\n', 'utf8');
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex', '--yes', '--with-hooks'], io, {
+      env: { CODEX_HOME: codexHome },
+      startDir: repoRoot,
+      platform: 'linux',
+      commandRunner: async (_command, args) => {
+        if (args.includes('add')) {
+          writeFileSync(
+            join(codexHome, 'config.toml'),
+            [
+              '[mcp_servers.locus]',
+              'command = "npx"',
+              'args = ["-y", "locus-memory@3.5.3", "mcp"]',
+              '',
+            ].join('\n'),
+            'utf8',
+          );
+        }
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.join('\n')).toContain('Hooks: updated');
+    expect(stdout.join('\n')).toContain('Hooks backup:');
+    expect(readFileSync(join(codexHome, 'hooks.json'), 'utf8')).toContain(
+      'locus-memory@3.5.3 hook codex stop',
+    );
+    expect(readdirSync(codexHome).some((file) => /^hooks\.json\..+\.bak$/u.test(file))).toBe(
+      true,
+    );
+  });
+
+  it('leaves matching hook config unchanged on repeated install', async () => {
+    const codexHome = makeTempDir();
+    mkdirSync(codexHome, { recursive: true });
+    writeFileSync(
+      join(codexHome, 'hooks.json'),
+      renderCodexHooksJson(buildCodexHooksConfig({ version: '3.5.3', platform: 'linux' })),
+      'utf8',
+    );
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex', '--yes', '--with-hooks'], io, {
+      env: { CODEX_HOME: codexHome },
+      startDir: repoRoot,
+      platform: 'linux',
+      commandRunner: async (_command, args) => {
+        if (args.includes('add')) {
+          writeFileSync(
+            join(codexHome, 'config.toml'),
+            [
+              '[mcp_servers.locus]',
+              'command = "npx"',
+              'args = ["-y", "locus-memory@3.5.3", "mcp"]',
+              '',
+            ].join('\n'),
+            'utf8',
+          );
+        }
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.join('\n')).toContain('Hooks: unchanged');
   });
 
   it('does not mutate Codex config when the pinned runtime package is unavailable', async () => {

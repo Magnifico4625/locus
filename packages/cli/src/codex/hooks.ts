@@ -1,4 +1,14 @@
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from 'node:fs';
+import { dirname, join } from 'node:path';
 import { buildRuntimePackageSpecifier } from '../package-info.js';
+import { resolveCodexHome } from './paths.js';
 
 export type CodexHookConfigEvent = 'SessionStart' | 'UserPromptSubmit' | 'Stop';
 export type CodexHookCommandEvent = 'session-start' | 'user-prompt-submit' | 'stop';
@@ -24,6 +34,15 @@ export interface BuildCodexHooksConfigOptions {
   platform?: NodeJS.Platform;
   timeoutSeconds?: number;
   binaryPath?: string;
+}
+
+export type CodexHooksInstallAction = 'created' | 'updated' | 'unchanged';
+export type CodexHooksStatus = 'configured' | 'not configured';
+
+export interface InstallCodexHooksResult {
+  action: CodexHooksInstallAction;
+  path: string;
+  backupPath?: string;
 }
 
 const hookEvents: ReadonlyArray<{
@@ -102,6 +121,60 @@ export function renderCodexHooksJson(config: CodexHooksConfig): string {
   return `${JSON.stringify(config, null, 2)}\n`;
 }
 
+export function resolveCodexHooksPath(
+  env: Record<string, string | undefined> = process.env,
+): string {
+  return join(resolveCodexHome(env), 'hooks.json');
+}
+
+export function installCodexHooks(options: {
+  env?: Record<string, string | undefined>;
+  version: string;
+  platform?: NodeJS.Platform;
+  now?: Date;
+}): InstallCodexHooksResult {
+  const hooksPath = resolveCodexHooksPath(options.env);
+  const next = renderCodexHooksJson(
+    buildCodexHooksConfig({
+      version: options.version,
+      platform: options.platform,
+    }),
+  );
+
+  if (existsSync(hooksPath)) {
+    const current = readFileSync(hooksPath, 'utf8');
+    if (current === next) {
+      return { action: 'unchanged', path: hooksPath };
+    }
+
+    const backupPath = `${hooksPath}.${timestamp(options.now ?? new Date())}.bak`;
+    copyFileSync(hooksPath, backupPath);
+    writeHooksFileAtomically(hooksPath, next);
+    return { action: 'updated', path: hooksPath, backupPath };
+  }
+
+  writeHooksFileAtomically(hooksPath, next);
+  return { action: 'created', path: hooksPath };
+}
+
+export function inspectCodexHooks(options: {
+  env?: Record<string, string | undefined>;
+} = {}): { status: CodexHooksStatus; path: string } {
+  const hooksPath = resolveCodexHooksPath(options.env);
+  if (!existsSync(hooksPath)) {
+    return { status: 'not configured', path: hooksPath };
+  }
+
+  const text = readFileSync(hooksPath, 'utf8');
+  return {
+    status:
+      text.includes('locus-memory@') && text.includes('hook codex')
+        ? 'configured'
+        : 'not configured',
+    path: hooksPath,
+  };
+}
+
 function requiredVersion(version: string | undefined): string {
   if (!version || version.trim().length === 0) {
     throw new Error('Codex hook config requires a pinned locus-memory version');
@@ -115,4 +188,16 @@ function quoteShellArg(value: string): string {
   }
 
   return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function writeHooksFileAtomically(path: string, text: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const tempPath = `${path}.locus-tmp`;
+  writeFileSync(tempPath, text, 'utf8');
+  // Rename is atomic on the same filesystem and prevents partial hooks.json reads.
+  renameSync(tempPath, path);
+}
+
+function timestamp(date: Date): string {
+  return date.toISOString().replaceAll('-', '').replaceAll(':', '').replace('.', '');
 }

@@ -77,7 +77,13 @@ export async function runCli(
   }
 
   if (command === 'install' && subcommand === 'codex' && argv.includes('--dry-run')) {
-    io.stdout(formatInstallCodexDryRun({ env: options.env, startDir: options.startDir }));
+    io.stdout(
+      formatInstallCodexDryRun({
+        env: options.env,
+        startDir: options.startDir,
+        withHooks: argv.includes('--with-hooks'),
+      }),
+    );
     return 0;
   }
 
@@ -87,6 +93,7 @@ export async function runCli(
       startDir: options.startDir,
       commandRunner: options.commandRunner ?? defaultCommandRunner,
       platform: options.platform,
+      withHooks: argv.includes('--with-hooks'),
     });
     io.stdout(result.output);
     return result.exitCode;

@@ -236,7 +236,7 @@ git commit -m "feat(cli): generate optional codex hook config"
 - Modify: `packages/cli/tests/codex-install.test.ts`
 - Modify: `packages/cli/tests/codex-doctor.test.ts`
 
-- [ ] **Step 1: Write failing installer/doctor tests**
+- [x] **Step 1: Write failing installer/doctor tests**
 
 Assert:
 
@@ -254,15 +254,15 @@ npm test -- packages/cli/tests/codex-install.test.ts packages/cli/tests/codex-do
 
 Expected: FAIL.
 
-- [ ] **Step 2: Wire optional flag**
+- [x] **Step 2: Wire optional flag**
 
 Do not change default install behavior. Add dry-run output for hook path and hook status.
 
-- [ ] **Step 3: Wire doctor**
+- [x] **Step 3: Wire doctor**
 
 Doctor should inspect hook files/config without mutating them.
 
-- [ ] **Step 4: Verify**
+- [x] **Step 4: Verify**
 
 Run:
 
@@ -273,7 +273,7 @@ npm -w @locus/cli run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 
