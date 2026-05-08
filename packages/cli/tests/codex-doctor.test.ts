@@ -45,6 +45,9 @@ describe('codex doctor command', () => {
         if (command === 'codex' && args[0] === '--version') {
           return { exitCode: 0, stdout: 'codex-cli 0.125.0\n', stderr: '' };
         }
+        if (command === 'codex' && args.join(' ') === 'features list') {
+          return { exitCode: 0, stdout: 'hooks stable true\n', stderr: '' };
+        }
         return { exitCode: 1, stdout: '', stderr: 'not configured' };
       },
       readMcpServer: () => ({
@@ -140,6 +143,34 @@ describe('codex doctor command', () => {
         }
         if (command === 'codex' && args.join(' ') === 'features list') {
           return { exitCode: 0, stdout: 'plugins stable true\n', stderr: '' };
+        }
+        return { exitCode: 1, stdout: '', stderr: 'not configured' };
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stdout.join('\n')).toContain('Hooks: unavailable');
+  });
+
+  it('reports hooks unavailable when Codex features list is unavailable', async () => {
+    const codexHome = makeTempDir();
+    mkdirSync(codexHome, { recursive: true });
+    writeFileSync(
+      join(codexHome, 'hooks.json'),
+      renderCodexHooksJson(buildCodexHooksConfig({ version: '3.5.3' })),
+      'utf8',
+    );
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['doctor', 'codex'], io, {
+      env: { CODEX_HOME: codexHome },
+      startDir: repoRoot,
+      commandRunner: async (command, args) => {
+        if (command === 'codex' && args[0] === '--version') {
+          return { exitCode: 0, stdout: 'codex-cli 0.119.0\n', stderr: '' };
+        }
+        if (command === 'codex' && args.join(' ') === 'features list') {
+          return { exitCode: 1, stdout: '', stderr: 'unknown command' };
         }
         return { exitCode: 1, stdout: '', stderr: 'not configured' };
       },

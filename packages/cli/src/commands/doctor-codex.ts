@@ -26,7 +26,7 @@ export async function formatDoctorCodex(options: DoctorCodexOptions): Promise<st
   const ownership = classifyMcpOwnership(config);
   const hooks = inspectCodexHooks({ env });
   const hookStatus =
-    hookFeature.exitCode === 0 && !codexSupportsHooks(hookFeature.stdout)
+    hookFeature.exitCode !== 0 || !codexSupportsHooks(hookFeature.stdout)
       ? 'unavailable'
       : hooks.status;
 

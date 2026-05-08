@@ -1,10 +1,18 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildCodexHookCommand,
   buildCodexHooksConfig,
+  inspectCodexHooks,
   renderCodexHooksJson,
 } from '../src/codex/hooks.js';
 import { runCli } from '../src/index.js';
@@ -172,5 +180,46 @@ describe('codex hook config generation', () => {
     expect(JSON.parse(json)).toEqual(buildCodexHooksConfig({ version: '3.5.3' }));
     expect(json).toMatch(/^\{\n  "hooks":/u);
     expect(json.endsWith('\n')).toBe(true);
+  });
+
+  it('inspects configured hooks from installed binary command policy', () => {
+    const codexHome = makeTempDir();
+    writeFileSync(
+      join(codexHome, 'hooks.json'),
+      renderCodexHooksJson(
+        buildCodexHooksConfig({
+          version: '3.5.3',
+          binaryPath: 'C:\\Program Files\\Locus\\locus-memory.cmd',
+        }),
+      ),
+      'utf8',
+    );
+
+    expect(inspectCodexHooks({ env: { CODEX_HOME: codexHome } }).status).toBe('configured');
+  });
+
+  it('does not mark arbitrary text matches as configured hooks', () => {
+    const codexHome = makeTempDir();
+    writeFileSync(
+      join(codexHome, 'hooks.json'),
+      JSON.stringify({
+        hooks: {
+          Stop: [
+            {
+              hooks: [
+                {
+                  type: 'command',
+                  command: 'node noop.js',
+                  statusMessage: 'mentions locus-memory@3.5.3 hook codex stop only in text',
+                },
+              ],
+            },
+          ],
+        },
+      }),
+      'utf8',
+    );
+
+    expect(inspectCodexHooks({ env: { CODEX_HOME: codexHome } }).status).toBe('not configured');
   });
 });

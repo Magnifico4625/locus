@@ -167,10 +167,7 @@ export function inspectCodexHooks(options: {
 
   const text = readFileSync(hooksPath, 'utf8');
   return {
-    status:
-      text.includes('locus-memory@') && text.includes('hook codex')
-        ? 'configured'
-        : 'not configured',
+    status: hasLocusHookCommand(text) ? 'configured' : 'not configured',
     path: hooksPath,
   };
 }
@@ -188,6 +185,52 @@ function quoteShellArg(value: string): string {
   }
 
   return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function hasLocusHookCommand(text: string): boolean {
+  try {
+    const parsed = JSON.parse(text) as unknown;
+    if (!isRecord(parsed) || !isRecord(parsed.hooks)) {
+      return false;
+    }
+
+    return Object.values(parsed.hooks).some((groups) => {
+      if (!Array.isArray(groups)) {
+        return false;
+      }
+
+      return groups.some((group) => {
+        if (!isRecord(group) || !Array.isArray(group.hooks)) {
+          return false;
+        }
+
+        return group.hooks.some((handler) => {
+          if (!isRecord(handler) || handler.type !== 'command') {
+            return false;
+          }
+
+          return isLocusHookCommand(handler.command);
+        });
+      });
+    });
+  } catch {
+    return false;
+  }
+}
+
+function isLocusHookCommand(command: unknown): boolean {
+  if (typeof command !== 'string') {
+    return false;
+  }
+
+  return (
+    /\blocus-memory(?:\.cmd)?(?:@[\w.-]+)?\b/u.test(command) &&
+    /\bhook codex\b/u.test(command)
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function writeHooksFileAtomically(path: string, text: string): void {
