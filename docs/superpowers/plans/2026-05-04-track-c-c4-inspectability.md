@@ -66,7 +66,7 @@ Do not modify:
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-c4-inspectability.md`
 
-- [ ] **Step 1: Verify C3 checkpoint**
+- [x] **Step 1: Verify C3 checkpoint**
 
 Run:
 
@@ -77,7 +77,7 @@ git tag --list "track-c-c3-local"
 
 Expected: clean tree and C3 tag exists unless intentionally skipped.
 
-- [ ] **Step 2: Run existing inspectability tests**
+- [x] **Step 2: Run existing inspectability tests**
 
 Run:
 
@@ -87,7 +87,7 @@ npm test -- packages/core/tests/tools/review.test.ts packages/core/tests/tools/a
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit plan checkbox update**
+- [x] **Step 3: Commit plan checkbox update**
 
 Run:
 
