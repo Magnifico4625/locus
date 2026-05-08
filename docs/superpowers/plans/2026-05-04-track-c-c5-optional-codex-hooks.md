@@ -182,7 +182,7 @@ git commit -m "feat(cli): add codex hook command"
 - Create: `packages/cli/src/codex/hooks.ts`
 - Modify: `packages/cli/tests/codex-hooks.test.ts`
 
-- [ ] **Step 1: Write failing config tests**
+- [x] **Step 1: Write failing config tests**
 
 Assert generated hooks config:
 
@@ -202,11 +202,11 @@ npm test -- packages/cli/tests/codex-hooks.test.ts
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement config builder**
+- [x] **Step 2: Implement config builder**
 
 Prefer structured JSON file generation over shell string mutation. Keep command strings minimal and test Windows paths with spaces.
 
-- [ ] **Step 3: Verify config tests**
+- [x] **Step 3: Verify config tests**
 
 Run:
 
@@ -217,7 +217,7 @@ npm -w @locus/cli run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

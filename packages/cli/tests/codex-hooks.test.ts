@@ -2,6 +2,11 @@ import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import {
+  buildCodexHookCommand,
+  buildCodexHooksConfig,
+  renderCodexHooksJson,
+} from '../src/codex/hooks.js';
 import { runCli } from '../src/index.js';
 
 const tempDirs: string[] = [];
@@ -112,5 +117,60 @@ describe('codex hook command', () => {
     expect(existsSync(join(import.meta.dirname, '..', 'src', 'commands', 'hook-codex.ts'))).toBe(
       true,
     );
+  });
+});
+
+describe('codex hook config generation', () => {
+  it('generates lifecycle hooks for safe recall freshness triggers', () => {
+    const config = buildCodexHooksConfig({ version: '3.5.3' });
+
+    expect(Object.keys(config.hooks).sort()).toEqual([
+      'SessionStart',
+      'Stop',
+      'UserPromptSubmit',
+    ]);
+    expect(config.hooks.PostToolUse).toBeUndefined();
+
+    for (const event of ['SessionStart', 'UserPromptSubmit', 'Stop'] as const) {
+      expect(config.hooks[event]).toHaveLength(1);
+      expect(config.hooks[event]?.[0]?.hooks).toHaveLength(1);
+      expect(config.hooks[event]?.[0]?.hooks[0]).toMatchObject({
+        type: 'command',
+        timeout: 3,
+      });
+      expect(config.hooks[event]?.[0]?.hooks[0]?.command).toContain('locus-memory@3.5.3');
+      expect(config.hooks[event]?.[0]?.hooks[0]?.command).not.toContain('@latest');
+    }
+  });
+
+  it('uses event-specific hook command arguments', () => {
+    const config = buildCodexHooksConfig({ version: '3.5.3', platform: 'linux' });
+
+    expect(config.hooks.SessionStart?.[0]?.hooks[0]?.command).toBe(
+      'npx -y locus-memory@3.5.3 hook codex session-start',
+    );
+    expect(config.hooks.UserPromptSubmit?.[0]?.hooks[0]?.command).toBe(
+      'npx -y locus-memory@3.5.3 hook codex user-prompt-submit',
+    );
+    expect(config.hooks.Stop?.[0]?.hooks[0]?.command).toBe(
+      'npx -y locus-memory@3.5.3 hook codex stop',
+    );
+  });
+
+  it('quotes Windows command paths with spaces for installed binary policy', () => {
+    expect(
+      buildCodexHookCommand({
+        event: 'stop',
+        binaryPath: 'C:\\Program Files\\Locus\\locus-memory.cmd',
+      }),
+    ).toBe('"C:\\Program Files\\Locus\\locus-memory.cmd" hook codex stop');
+  });
+
+  it('renders deterministic pretty JSON for hooks.json', () => {
+    const json = renderCodexHooksJson(buildCodexHooksConfig({ version: '3.5.3' }));
+
+    expect(JSON.parse(json)).toEqual(buildCodexHooksConfig({ version: '3.5.3' }));
+    expect(json).toMatch(/^\{\n  "hooks":/u);
+    expect(json.endsWith('\n')).toBe(true);
   });
 });
