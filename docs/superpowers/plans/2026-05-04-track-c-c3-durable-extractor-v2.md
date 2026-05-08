@@ -155,7 +155,7 @@ git commit -m "feat(core): extend durable memory types"
 - Create: `packages/core/tests/memory/topic-key-registry.test.ts`
 - Modify: `packages/core/tests/memory/topic-keys.test.ts`
 
-- [ ] **Step 1: Write failing topic registry tests**
+- [x] **Step 1: Write failing topic registry tests**
 
 Assert:
 
@@ -174,18 +174,18 @@ npm test -- packages/core/tests/memory/topic-key-registry.test.ts packages/core/
 
 Expected: FAIL.
 
-- [ ] **Step 2: Implement registry**
+- [x] **Step 2: Implement registry**
 
 Use canonical English topic keys and RU/EN synonym lists. Keep registry data close to matcher logic so it is reviewable.
 
-- [ ] **Step 3: Keep legacy `deriveTopicKey()` API**
+- [x] **Step 3: Keep legacy `deriveTopicKey()` API**
 
 Make `topic-keys.ts` delegate to registry so existing imports do not break.
 Mark the old function as a compatibility wrapper with a short `@deprecated`
 comment pointing new code to `topic-key-registry.ts`; do not maintain two
 parallel implementations.
 
-- [ ] **Step 4: Verify registry**
+- [x] **Step 4: Verify registry**
 
 Run:
 
@@ -196,7 +196,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 Run:
 

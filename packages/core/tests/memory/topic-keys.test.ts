@@ -11,6 +11,24 @@ describe('deriveTopicKey', () => {
     ).toBe('database_choice');
   });
 
+  it('classifies Russian database decisions under the same canonical key', () => {
+    expect(
+      deriveTopicKey({
+        memoryType: 'decision',
+        summary: 'Мы решили использовать PostgreSQL для долговременной памяти.',
+      }),
+    ).toBe('database_choice');
+  });
+
+  it('delegates new Track C memory types to the canonical registry', () => {
+    expect(
+      deriveTopicKey({
+        memoryType: 'rejected_alternative',
+        summary: 'Отказались от hook-first capture, потому что это риск для релиза.',
+      }),
+    ).toBe('codex_hooks_strategy');
+  });
+
   it('classifies authentication strategy decisions under auth_strategy', () => {
     expect(
       deriveTopicKey({
