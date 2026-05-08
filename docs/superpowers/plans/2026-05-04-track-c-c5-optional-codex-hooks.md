@@ -72,7 +72,7 @@ Do not modify:
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-c5-optional-codex-hooks.md`
 
-- [ ] **Step 1: Check current Codex feature flags**
+- [x] **Step 1: Check current Codex feature flags**
 
 Run:
 
@@ -87,7 +87,7 @@ by current Codex CLI builds, but if an older local CLI lacks that subcommand,
 fall back to `codex --help` plus the official Hooks docs before deciding. If
 hook support is unavailable locally, stop and move C5 to a future release.
 
-- [ ] **Step 2: Re-read official docs**
+- [x] **Step 2: Re-read official docs**
 
 Check:
 
@@ -99,9 +99,15 @@ Check:
 
 Expected: event names and config shape still match this plan.
 
-- [ ] **Step 3: Commit skip/proceed decision**
+- [x] **Step 3: Commit skip/proceed decision**
 
 If proceeding, commit plan checkbox update. If skipping, document why and do not implement C5.
+
+**Proceed decision (2026-05-08, Codex CLI 0.129.0):**
+
+- Proceed with C5.1-C5.3: local `codex features list` reports `hooks stable true`, and official docs still describe command hooks receiving JSON over `stdin` with events such as `SessionStart`, `UserPromptSubmit`, and `Stop`.
+- Use the current feature naming conservatively: release notes document `codex_hooks` being aliased as `hooks`, and local CLI exposes `hooks`.
+- Do not execute C5.4 in this pass. Local `codex features list` reports `plugin_hooks under development false`; plugin-bundled hooks stay a future feature until the Codex plugin hook path is stable and verified locally.
 
 ---
 
@@ -278,12 +284,14 @@ git commit -m "feat(cli): install optional codex hooks"
 
 ---
 
-## Task C5.4: Plugin Packaging Hook Support
+## Task C5.4: Plugin Packaging Hook Support - Deferred
 
 **Files:**
 - Modify: `packages/codex/src/plugin-sync.ts`
 - Modify: `packages/codex/tests/marketplace-bundle.test.ts`
 - Modify: `plugins/locus-memory/.codex-plugin/plugin.json`
+
+**Status:** Not executing in this Track C pass. Keep this task as future work because local Codex CLI 0.129.0 reports `plugin_hooks under development false`.
 
 - [ ] **Step 1: Write failing marketplace tests**
 
