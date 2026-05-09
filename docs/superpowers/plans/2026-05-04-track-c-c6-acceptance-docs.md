@@ -62,7 +62,7 @@ Do not modify:
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-c6-acceptance-docs.md`
 
-- [ ] **Step 1: Verify C4 or C5 checkpoint**
+- [x] **Step 1: Verify C4 or C5 checkpoint**
 
 Run:
 
@@ -74,7 +74,7 @@ git tag --list "track-c-c5-local"
 
 Expected: clean tree. C4 tag must exist. C5 tag may be absent if hooks slipped.
 
-- [ ] **Step 2: Run current acceptance tests**
+- [x] **Step 2: Run current acceptance tests**
 
 Run:
 
@@ -84,7 +84,7 @@ npm test -- packages/core/tests/integration/track-a-recall-acceptance.test.ts
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit plan checkbox update**
+- [x] **Step 3: Commit plan checkbox update**
 
 Run:
 
