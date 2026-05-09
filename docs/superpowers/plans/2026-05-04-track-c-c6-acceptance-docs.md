@@ -140,7 +140,7 @@ git commit -m "test(codex): add track c recall fixtures"
 **Files:**
 - Create: `packages/core/tests/integration/track-c-recall-acceptance.test.ts`
 
-- [ ] **Step 1: Write failing acceptance tests**
+- [x] **Step 1: Write failing acceptance tests**
 
 Use `createServer()` with temp `CODEX_HOME`, copy fixture files under `sessions/YYYY/MM/`, set:
 
@@ -172,11 +172,11 @@ npm test -- packages/core/tests/integration/track-c-recall-acceptance.test.ts
 
 Expected: FAIL until all C1-C4 behavior is correct.
 
-- [ ] **Step 2: Fix only acceptance gaps**
+- [x] **Step 2: Fix only acceptance gaps**
 
 If tests fail because C1-C4 missed a small behavior, patch the relevant focused module with a regression test. Do not rewrite architecture in C6.
 
-- [ ] **Step 3: Verify Track C acceptance**
+- [x] **Step 3: Verify Track C acceptance**
 
 Run:
 
@@ -187,7 +187,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 Run:
 

@@ -63,6 +63,13 @@ const EXTRACTOR_PATTERNS: ExtractorPattern[] = [
     regex: /\b(?:surgical|avoid unrelated refactors|prove it with tests|хирургическ|без лишних рефакторинг)\b/i,
   },
   {
+    memoryType: 'style',
+    matchedPattern: 'ru-work-style',
+    confidence: 0.86,
+    reason: 'collaboration_style',
+    regex: /(?:мой стиль работы|стиль работы).+(?:таск|задач|отчет|отчёт|одобрен|одобрения)/iu,
+  },
+  {
     memoryType: 'preference',
     matchedPattern: 'user-preference',
     confidence: 0.84,
@@ -90,6 +97,9 @@ const EXTRACTOR_PATTERNS: ExtractorPattern[] = [
 export function extractPatternMatches(text: string): ExtractorPatternMatch[] {
   const normalized = normalizeSentence(text);
   if (!normalized) {
+    return [];
+  }
+  if (isQuestionLike(normalized)) {
     return [];
   }
 
@@ -126,4 +136,11 @@ export function extractPatternMatches(text: string): ExtractorPatternMatch[] {
 
 function normalizeSentence(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+function isQuestionLike(text: string): boolean {
+  return (
+    /\?\s*$/.test(text) ||
+    /^(?:what|why|how|which|кто|что|почему|какой|какие|как)\b/iu.test(text)
+  );
 }

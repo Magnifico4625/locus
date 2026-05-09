@@ -106,4 +106,56 @@ describe('buildRecallResult', () => {
     expect(result.candidateGroups).toHaveLength(2);
   });
 
+  it('returns ok when one high-confidence group clearly outranks background matches', () => {
+    const result = buildRecallResult({
+      question: 'what did we decide about capture strategy?',
+      candidates: [
+        candidate({
+          headline: 'Use redacted capture as the practical recall mode.',
+          topicKey: 'capture_strategy',
+          durableMemoryIds: [1],
+          eventIds: [],
+          sourceKind: 'durable',
+          score: 17,
+          confidence: 'high',
+        }),
+        candidate({
+          sessionId: 'sess-background',
+          headline: 'Mentioned capture while discussing unrelated task planning.',
+          score: 8,
+          confidence: 'medium',
+        }),
+      ],
+    });
+
+    expect(result.status).toBe('ok');
+    expect(result.summary).toContain('redacted capture');
+    expect(result.candidateGroups).toHaveLength(2);
+  });
+
+  it('returns ok when one durable medium-confidence group outranks background matches', () => {
+    const result = buildRecallResult({
+      question: 'what remains to do?',
+      candidates: [
+        candidate({
+          headline: 'Next step: update acceptance docs.',
+          durableMemoryIds: [1],
+          eventIds: [],
+          sourceKind: 'durable',
+          score: 10,
+          confidence: 'medium',
+        }),
+        candidate({
+          sessionId: 'sess-background',
+          headline: 'Background timeline event from the same session.',
+          score: 7,
+          confidence: 'medium',
+        }),
+      ],
+    });
+
+    expect(result.status).toBe('ok');
+    expect(result.summary).toContain('acceptance docs');
+  });
+
 });

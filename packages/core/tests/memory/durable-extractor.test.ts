@@ -99,6 +99,19 @@ describe('extractDurableCandidatesFromEvent', () => {
     ]);
   });
 
+  it('does not extract recall questions as durable decisions', () => {
+    const event = makeConversationRow({
+      event_id: 'evt-question',
+      payload_json: JSON.stringify({
+        prompt: 'Что решили по capture strategy?',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'decision',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(event)).toEqual([]);
+  });
+
   it('extracts rejected alternatives with rationale', () => {
     const event = makeConversationRow({
       event_id: 'evt-rejected',
@@ -157,6 +170,26 @@ describe('extractDurableCandidatesFromEvent', () => {
         memoryType: 'style',
         sourceEventId: 'evt-style',
         source: 'codex',
+      }),
+    ]);
+  });
+
+  it('extracts Russian workflow style from bounded redacted prompts', () => {
+    const event = makeConversationRow({
+      event_id: 'evt-ru-style',
+      payload_json: JSON.stringify({
+        prompt:
+          'Мой стиль работы: короткие отчеты после каждого атомарного таска, git commit на чекпоинтах, не переходить к следующей задаче без одобрения.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'preference',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(event)).toEqual([
+      expect.objectContaining({
+        topicKey: 'user_workflow_style',
+        memoryType: 'style',
+        sourceEventId: 'evt-ru-style',
       }),
     ]);
   });

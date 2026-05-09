@@ -29,6 +29,26 @@ describe('deriveTopicKey', () => {
     ).toBe('codex_hooks_strategy');
   });
 
+  it('classifies Codex capture strategy decisions under capture_strategy', () => {
+    expect(
+      deriveTopicKey({
+        memoryType: 'decision',
+        summary:
+          'capture strategy stays local and rule-based with high-value snippets in redacted mode.',
+      }),
+    ).toBe('capture_strategy');
+  });
+
+  it('classifies Track C acceptance next steps under track_c_acceptance', () => {
+    expect(
+      deriveTopicKey({
+        memoryType: 'next_step',
+        summary:
+          'Next I will update the acceptance matrix and docs after the Track C recall fixtures pass.',
+      }),
+    ).toBe('track_c_acceptance');
+  });
+
   it('classifies authentication strategy decisions under auth_strategy', () => {
     expect(
       deriveTopicKey({

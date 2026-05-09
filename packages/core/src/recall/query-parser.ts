@@ -103,6 +103,7 @@ const TOPIC_HINTS: Array<{ topic: string; patterns: RegExp[] }> = [
   { topic: 'capture_strategy', patterns: [/\bcapture\s+strategy\b/u, /capture\s+mode/u] },
   { topic: 'codex_hooks_strategy', patterns: [/\bhook-first\b/u, /\bcodex\s+hooks?\b/u] },
   { topic: 'package_installation', patterns: [/\bnpm\s+install\b/u, /\binstall\b/u] },
+  { topic: 'user_workflow_style', patterns: [/\bwork\s+style\b/u, /стиль\s+работ/u] },
 ];
 
 function normalizeQuestion(question: string): string {

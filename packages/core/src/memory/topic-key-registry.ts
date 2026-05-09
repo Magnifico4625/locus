@@ -7,8 +7,10 @@ export interface TopicKeyInput {
 
 export type CanonicalTopicKey =
   | 'auth_strategy'
+  | 'capture_strategy'
   | 'codex_hooks_strategy'
   | 'database_choice'
+  | 'track_c_acceptance'
   | 'user_workflow_style';
 
 interface TopicKeyRule {
@@ -51,10 +53,29 @@ const TOPIC_KEY_RULES: TopicKeyRule[] = [
     all: [['codex', 'capture', 'захват'], ['reject', 'rejected', 'отказ', 'отказались', 'avoid']],
   },
   {
+    key: 'capture_strategy',
+    memoryTypes: ['decision'],
+    any: ['capture strategy', 'capture mode', 'redacted capture', 'bounded redacted'],
+    all: [['capture', 'захват', 'memory', 'памят', 'recall'], ['redacted', 'metadata', 'full']],
+  },
+  {
     key: 'user_workflow_style',
     memoryTypes: ['preference', 'style', 'constraint'],
-    any: ['one task at a time', 'approval gate', 'approval gates', 'по одному таску'],
+    any: [
+      'one task at a time',
+      'approval gate',
+      'approval gates',
+      'по одному таску',
+      'стиль работы',
+      'атомарного таска',
+    ],
     all: [['task', 'таск', 'задач'], ['approve', 'approval', 'одобрен', 'одобрения']],
+  },
+  {
+    key: 'track_c_acceptance',
+    memoryTypes: ['next_step', 'validation_fact'],
+    any: ['track c', 'acceptance fixtures', 'acceptance matrix', 'memory_recall'],
+    all: [['acceptance', 'track c'], ['recall', 'fixtures', 'docs', 'matrix']],
   },
 ];
 

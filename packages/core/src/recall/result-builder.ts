@@ -14,6 +14,41 @@ export interface BuildRecallResultOptions {
   matchedTopics?: string[];
 }
 
+const DOMINANT_GROUP_SCORE_GAP = 3;
+
+function topScore(candidate: MemoryRecallCandidate | undefined): number {
+  return candidate?.score ?? 0;
+}
+
+function isDominantTopGroup(candidates: MemoryRecallCandidate[]): boolean {
+  const topCandidate = candidates[0];
+  if (!topCandidate) {
+    return false;
+  }
+
+  const topGroupKey = groupKey(topCandidate);
+  const nextDifferentGroup = candidates.find((candidate) => groupKey(candidate) !== topGroupKey);
+  const scoreGap = topScore(topCandidate) - topScore(nextDifferentGroup);
+  if (topCandidate.confidence === 'high') {
+    return scoreGap >= DOMINANT_GROUP_SCORE_GAP;
+  }
+
+  return topCandidate.sourceKind === 'durable' && topCandidate.confidence === 'medium' && scoreGap >= 3;
+}
+
+function groupKey(candidate: MemoryRecallCandidate): string {
+  if (candidate.topicKey) {
+    return `topic:${candidate.topicKey}`;
+  }
+  if (candidate.sessionId) {
+    return `session:${candidate.sessionId}`;
+  }
+  if (candidate.durableMemoryIds[0] !== undefined) {
+    return `durable:${candidate.durableMemoryIds[0]}`;
+  }
+  return `event:${candidate.eventIds[0] ?? 'unknown'}`;
+}
+
 export function buildRecallResult({
   question,
   candidates,
@@ -50,6 +85,20 @@ export function buildRecallResult({
       candidates,
       candidateGroups,
       confidence: group.confidence,
+    };
+  }
+
+  if (isDominantTopGroup(candidates)) {
+    const topCandidate = candidates[0]!;
+    return {
+      status: 'ok',
+      question,
+      ...(resolvedRange ? { resolvedRange } : {}),
+      ...resultMetadata,
+      summary: topCandidate.headline,
+      candidates,
+      candidateGroups,
+      confidence: topCandidate.confidence,
     };
   }
 

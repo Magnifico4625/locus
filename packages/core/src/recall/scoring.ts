@@ -22,6 +22,7 @@ const DURABLE_PRIORITY_INTENTS = new Set([
 ]);
 const COMPLETION_EVENT_INTENTS = new Set(['bug_context', 'validation_fact', 'work_summary']);
 const COMPLETION_CAPTURE_REASONS = new Set(['session_end', 'task_complete']);
+const VALIDATION_COMMAND_PATTERN = /\b(?:npm\s+(?:test|-w)|typecheck|vitest|pytest|cargo\s+test)\b/i;
 
 function confidenceForScore(score: number): MemoryRecallConfidence {
   if (score >= 12) {
@@ -100,6 +101,14 @@ export function scoreRecallCandidate(
   ) {
     score += 5;
     reasons.push('completion_event');
+  }
+
+  if (
+    parsedQuery.intent === 'validation_fact' &&
+    VALIDATION_COMMAND_PATTERN.test(candidate.headline)
+  ) {
+    score += 3;
+    reasons.push('validation_command_context');
   }
 
   if (candidate.eventIds.length > 0 || candidate.durableMemoryIds.length > 0) {

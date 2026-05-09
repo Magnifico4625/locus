@@ -64,5 +64,8 @@ describe('parseRecallQuery', () => {
     expect(parseRecallQuery('что решили по capture strategy?', now).topicHints).toEqual([
       'capture_strategy',
     ]);
+    expect(parseRecallQuery('какой у меня стиль работы?', now).topicHints).toEqual([
+      'user_workflow_style',
+    ]);
   });
 });

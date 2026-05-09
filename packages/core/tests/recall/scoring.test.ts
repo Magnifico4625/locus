@@ -97,4 +97,31 @@ describe('scoreRecallCandidate', () => {
     expect(completion.score).toBeGreaterThan(prompt.score);
     expect(completion.reasons).toContain('completion_event');
   });
+
+  it('prefers validation facts with command context', () => {
+    const command = scoreRecallCandidate(
+      candidate({
+        headline:
+          'Validation passed: npm test -- packages/cli/tests/codex-install.test.ts and npm -w @locus/cli run typecheck.',
+        sourceKind: 'durable',
+        durableMemoryIds: [1],
+        eventIds: [],
+      }),
+      parsedQuery({ intent: 'validation_fact', terms: [], termVariants: [] }),
+      { now },
+    );
+    const generic = scoreRecallCandidate(
+      candidate({
+        headline: 'Validation session completed after the install path fix.',
+        sourceKind: 'durable',
+        durableMemoryIds: [2],
+        eventIds: [],
+      }),
+      parsedQuery({ intent: 'validation_fact', terms: [], termVariants: [] }),
+      { now },
+    );
+
+    expect(command.score).toBeGreaterThan(generic.score);
+    expect(command.reasons).toContain('validation_command_context');
+  });
 });
