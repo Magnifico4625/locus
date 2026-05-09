@@ -102,7 +102,7 @@ git commit -m "docs(codex): start track c c6 acceptance docs"
 - Create: `packages/codex/tests/fixtures/track-c/decision-rejected-alternative.jsonl`
 - Create: `packages/codex/tests/fixtures/track-c/style-preference-validation.jsonl`
 
-- [ ] **Step 1: Create fixture outlines**
+- [x] **Step 1: Create fixture outlines**
 
 Fixtures must include realistic Codex JSONL shapes already supported by normalizer:
 
@@ -112,7 +112,7 @@ Fixtures must include realistic Codex JSONL shapes already supported by normaliz
 
 Do not include real secrets. Use fake tokens only for redaction tests.
 
-- [ ] **Step 2: Cover required scenarios**
+- [x] **Step 2: Cover required scenarios**
 
 Fixtures must include:
 
@@ -124,7 +124,7 @@ Fixtures must include:
 - next step
 - off-topic learning/noise turn
 
-- [ ] **Step 3: Commit fixtures**
+- [x] **Step 3: Commit fixtures**
 
 Run:
 
