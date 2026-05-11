@@ -396,7 +396,7 @@ git tag -a track-c-c6-local -m "Track C C6 acceptance docs local checkpoint"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-c6-acceptance-docs.md`
 
-- [ ] **Step 1: Summarize release state**
+- [x] **Step 1: Summarize release state**
 
 Record:
 
@@ -406,6 +406,36 @@ Record:
 - whether C5 hooks shipped or slipped
 - whether desktop parity remains unverified
 
-- [ ] **Step 2: Ask for release approval**
+Release readiness handoff (2026-05-11):
+
+- Checkpoint: `track-c-c6-local`
+- Latest validation commit: `f8ad5eb docs(codex): record track c c6 validation`
+- Focused validation: PASS
+  - `packages/core/tests/recall`
+  - durable extractor / merge / topic-key registry tests
+  - Track C and Track A recall acceptance tests
+  - Codex capture / relevance / bounded snippets / redaction / importer / core compat tests
+- Workspace validation: PASS
+  - `npm run build`
+  - `npm run check` (`114` test files, `1265` tests)
+  - `git diff --check`
+- Runtime smoke: partial PASS
+  - current MCP reports `captureLevel=redacted`, FTS5 enabled, clean audit, no stored secrets
+  - current MCP is bound to `C:\Users\Admin\.codex`, not this repository, so live repo-bound recall remains a release-prep check
+- C5 optional hooks: implemented locally and tagged `track-c-c5-local`, but should remain optional and not be marketed as required for Track C recall quality
+- Desktop / extension parity: still unverified; docs must continue to avoid claiming parity until tested on that surface
+- Known limitations:
+  - `metadata` remains diagnostics-first and should not be advertised as rich semantic recall
+  - `full` remains explicit privacy-warning territory
+  - redacted recall is fixture-backed and rule-based, not a promise of perfect extraction
+  - low-confidence extractor candidates are dropped rather than stored for review
+  - runtime repo-bound smoke should be repeated after local install/package refresh during release prep
+
+- [x] **Step 2: Ask for release approval**
 
 Do not bump versions or publish until the user approves moving from Track C implementation to release prep.
+
+Approval gate: Track C implementation is complete locally. Next phase requires
+explicit user approval to start release prep: version bump, changelog/release
+polish, package validation, local install refresh, repo-bound runtime smoke,
+GitHub push/PR/release flow, and any public release notes.
