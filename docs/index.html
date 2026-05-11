@@ -70,7 +70,7 @@
               class="inline-flex items-center gap-2 rounded-full border border-locus-border bg-locus-surface px-3 py-1 text-xs font-mono text-zinc-400 mb-8"
             >
               <span class="w-2 h-2 rounded-full bg-locus-accent animate-pulse"></span>
-              v3.5.3 release • one-command install for Codex
+              v3.6.0 release • Track C richer recall for Codex
             </div>
 
             <h1 class="text-5xl md:text-7xl font-bold tracking-tight leading-[1.02] max-w-4xl">
@@ -82,7 +82,7 @@
 
             <p class="mt-6 max-w-2xl text-lg md:text-xl text-zinc-400 leading-relaxed">
               Locus gives Codex and Claude Code a local memory layer for project structure,
-              durable decisions, searchable history, and diagnostics. Built on MCP. Safe-by-default.
+              durable decisions, searchable history, summary-first memory_recall, and diagnostics. Built on MCP. Safe-by-default.
               Designed so your agent stops starting from zero.
             </p>
 
@@ -178,7 +178,7 @@
             <h2 class="text-3xl md:text-4xl font-semibold tracking-tight">What ships today</h2>
             <p class="mt-4 text-zinc-400 leading-relaxed">
               Locus is already a real product line for Codex, not a future promise. The current release
-              focuses on reliable memory primitives, diagnostics, and one-command install.
+              focuses on Track C richer recall, diagnostics, and one-command install.
             </p>
           </div>
 
@@ -189,9 +189,9 @@
               </div>
               <h3 class="mt-6 text-xl font-semibold">Codex memory that survives the next session</h3>
               <p class="mt-3 text-sm leading-7 text-zinc-400 max-w-xl">
-                `memory_import_codex`, auto-import before `memory_search`, and Codex-aware diagnostics
-                shipped in `v3.4.0`. Recent dialogue, prior decisions, and project structure
-                can be recalled through one local memory system instead of ad-hoc summaries.
+                Track C validates redacted Codex recall through `memory_recall`: dated Russian questions,
+                capture decisions, rejected alternatives, user style, npm errors, next steps, and validation
+                facts pass through import, durable memory, and recall.
               </p>
             </article>
 
@@ -201,9 +201,8 @@
               </div>
               <h3 class="mt-6 text-xl font-semibold">Safe-by-default capture</h3>
               <p class="mt-3 text-sm leading-7 text-zinc-400">
-                The shipped default remains `metadata`. That gives ingestion, visibility, and diagnostics
-                first. Richer recall modes exist, but they are opt-in and should be treated with explicit
-                privacy trade-offs.
+                `redacted` is the recommended rich recall mode for Codex. `metadata` remains diagnostics-first.
+                `full` is maximum recall and requires an explicit privacy warning; never treat it as risk-free.
               </p>
             </article>
 
@@ -214,7 +213,8 @@
               <h3 class="mt-6 text-xl font-semibold">Diagnosable, not magical</h3>
               <p class="mt-3 text-sm leading-7 text-zinc-400">
                 `memory_status` and `memory_doctor` expose Codex-specific state so users can see what is
-                imported, what is missing, and where the failure actually lives.
+                imported, what is missing, and where the failure actually lives. `candidateGroups` make
+                ambiguous recall inspectable instead of magical.
               </p>
             </article>
 
@@ -285,10 +285,10 @@
                 <strong class="text-white">Secondary:</strong> Cursor, Windsurf, Cline, Zed through generic MCP now and adapter work later
               </li>
               <li>
-                <strong class="text-white">Current release:</strong> `v3.5.3`
+                <strong class="text-white">Current release:</strong> `v3.6.0`
               </li>
               <li>
-                <strong class="text-white">Next themes:</strong> post-publish validation, recall ranking polish, dashboard UX
+                <strong class="text-white">Next themes:</strong> desktop validation, optional Codex hooks, dashboard UX
               </li>
             </ul>
 
@@ -325,13 +325,13 @@
                 Open GitHub Repository
               </a>
               <a
-                href="https://github.com/Magnifico4625/locus/releases/tag/v3.5.3"
+                href="https://github.com/Magnifico4625/locus/releases/tag/v3.6.0"
                 target="_blank"
                 rel="noreferrer"
                 class="inline-flex items-center justify-center gap-2 rounded-md border border-locus-border px-6 py-3.5 font-medium text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors"
               >
                 <i data-lucide="badge-check" class="w-5 h-5"></i>
-                Read v3.5.3 Release
+                Read v3.6.0 Release
               </a>
             </div>
           </div>

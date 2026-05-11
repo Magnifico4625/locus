@@ -89,13 +89,17 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 - Summary-first recall through `memory_recall`
 - `codexTruth` status guidance that separates import health from recall usefulness
 
-Last documented recall validation target: Codex CLI `0.125.0` surface as of April 28, 2026. Install smoke during Track B used the registry-hosted `locus-memory@3.5.3` package locally after npm publish.
+Track C adds fixture-backed richer recall validation for Codex CLI: Russian dated questions, capture-strategy decisions, rejected alternatives, user workflow style, npm install errors, next steps, and validation facts now pass through import, inbox, durable memory, and `memory_recall`.
+
+Last documented install validation target: Codex CLI `0.125.0` surface as of April 28, 2026. Install smoke during Track B used the registry-hosted `locus-memory@3.5.3` package locally after npm publish. Track C recall validation is repository-local until the `v3.6.0` release is cut.
 
 Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is reported as unverified until checked there.
 
 ## Codex JSONL Import
 
-Phase 1 built the adapter foundation. Phase 2 exposed it through MCP. Phase 3 added bounded auto-import before `memory_search`. Track A adds acceptance-backed truth: `metadata` is limited recall, `redacted` is the recommended practical mode, and diagnostics must say when desktop/extension parity is unverified. `v3.4.0` also validates current Codex payload-wrapped JSONL records and prevents `memory_recall` from missing older matching conversation events just because they are outside the recent timeline window.
+Phase 1 built the adapter foundation. Phase 2 exposed it through MCP. Phase 3 added bounded auto-import before `memory_search`. Track A added acceptance-backed truth: `metadata` is limited recall, `redacted` is the recommended practical mode, and diagnostics must say when desktop/extension parity is unverified. `v3.4.0` also validated current Codex payload-wrapped JSONL records and prevents `memory_recall` from missing older matching conversation events just because they are outside the recent timeline window.
+
+Track C raises the bar from "import works" to "recall is useful": `memory_recall` is now validated against redacted Codex fixtures for dated Russian recall, capture decisions, rejected alternatives, style/preferences, bug context, next steps, and validation facts. When multiple plausible matches remain, `candidateGroups` are exposed so the agent can ask a focused clarification question.
 
 ### Auto-import before search
 
@@ -114,12 +118,15 @@ Use `memory_status` to inspect both the last auto-import snapshot and the curren
 
 The canonical Locus Codex skill assumes this workflow:
 
-- `memory_search` first for project recall and recent Codex dialogue
-- `memory_recall` for summary-first questions like "what did we do yesterday?"
+- `memory_recall` first for summary-first questions like "what did we do yesterday?"
+- `memory_search` when exact-term search is still useful after recall
 - `memory_status` when recent history does not appear as expected
 - `memory_import_codex` only for manual catch-up, filtered imports, or older sessions
+- `memory_review` when the user asks what Locus stored, why it exists, or what can be cleaned up
 - `memory_remember` for architectural decisions, trade-offs, and reasons behind the chosen path
 - `memory_scan` after large project-structure changes
+
+If `memory_recall` returns `needs_clarification`, inspect `candidateGroups` and ask the user a focused follow-up. Do not say "I do not remember" until Locus has been checked.
 
 This workflow is optimized and validated for Codex CLI. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
 
@@ -214,10 +221,12 @@ If `LOCUS_CODEX_CAPTURE=off`, both auto-import before `memory_search` and `memor
 
 Redaction is best-effort by design: obvious API keys, bearer tokens, and similar secrets are stripped before storage, but arbitrary free-form text can never be guaranteed perfectly secret-free.
 
+Codex hooks are optional. If hook support is enabled in a future Codex surface, Locus should treat hooks as a freshness trigger only; canonical recall remains based on JSONL transcript import plus the shared inbox/core ingest path.
+
 See [Codex Acceptance Matrix](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-acceptance-matrix.md) for the current CLI, desktop/extension, manual fallback, and capture-mode validation status.
 
 ## What's Coming
 
-- Codex desktop / extension validation for the registry-hosted `locus-memory@3.5.3` runtime
-- recall ranking polish for duplicate-heavy sessions
+- Codex desktop / extension validation for the registry-hosted runtime
+- optional Codex hook freshness trigger if upstream plugin hooks stabilize
 - dashboard and secondary IDE adapter work after the Codex-first path is strong

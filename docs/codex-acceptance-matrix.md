@@ -1,6 +1,6 @@
 # Codex Acceptance Matrix
 
-This matrix records what the current Track A acceptance tests and Track B install checks prove for Codex memory.
+This matrix records what the current Track A, Track B, and Track C checks prove for Codex memory.
 
 It separates three different claims:
 
@@ -12,8 +12,8 @@ It separates three different claims:
 
 | Surface | Status | Validated behavior | Known limitation |
 |---------|--------|--------------------|------------------|
-| Codex CLI | Validated primary path | Auto-import before `memory_search`, manual `memory_import_codex`, `memory_status`, `memory_doctor`, `memory_recall`, fixture-backed recent bugfix recall, durable decision candidate recall, live local recall marker `TRACKA-LIVE-20260423` on Codex CLI `0.123.0`, local one-command installer smoke on Codex CLI `0.125.0` | Strong conversational recall requires `LOCUS_CODEX_CAPTURE=redacted` or `full`; `metadata` is limited recall; duplicate-heavy recall can return `needs_clarification`; package-owned fresh runtime requires post-publish validation |
-| Codex desktop / extension | Unverified parity | Same MCP config model may expose the same Locus tools when the upstream surface supports MCP | Extension-side MCP visibility and behavior can differ from CLI; diagnostics must report this honestly |
+| Codex CLI | Validated primary path | Auto-import before `memory_search`, manual `memory_import_codex`, `memory_status`, `memory_doctor`, `memory_recall`, fixture-backed recent bugfix recall, durable decision candidate recall, live local recall marker `TRACKA-LIVE-20260423` on Codex CLI `0.123.0`, local one-command installer smoke on Codex CLI `0.125.0`, Track C redacted recall fixtures through `track-c-recall-acceptance.test.ts` | Strong conversational recall requires `LOCUS_CODEX_CAPTURE=redacted` or `full`; `metadata` is limited recall; duplicate-heavy recall can return `needs_clarification`; agents must use `candidateGroups` for focused clarification |
+| Codex desktop / extension | Unverified parity | Same MCP config model may expose the same Locus tools when the upstream surface supports MCP | Codex desktop / extension parity remains unverified; extension-side MCP visibility and behavior can differ from CLI; diagnostics must report this honestly |
 | One-command npm install | Validated for Codex CLI via npm package | `locus-memory install codex`, `doctor codex`, and `uninstall codex` are implemented with skill install, lock handling, idempotency, redacted defaults, package-runtime config generation, and safe MCP `cwd` handling | Codex desktop / extension parity remains unverified until tested in that surface |
 | Manual MCP fallback | Supported fallback | Direct MCP server setup works with all Locus tools/resources where the client exposes MCP | Passive Codex JSONL import still depends on `CODEX_HOME`, readable `sessions/`, and capture mode |
 | Secondary IDE adapters | Future work | Generic MCP tools/resources work where the client supports MCP | Passive conversation capture for Cursor/Windsurf-style clients is not validated in Track A |
@@ -29,20 +29,22 @@ It separates three different claims:
 
 ## Accepted Recall Contract
 
-Track A acceptance considers recall successful when:
+Track C acceptance considers recall successful when:
 
 - Codex CLI can recover useful recent context from a real fixture-backed session.
 - Codex CLI can recover useful local live dialogue from payload-wrapped rollout JSONL in `redacted` mode.
-- Durable decisions appear in recall candidates.
-- Multiple plausible matches may return `needs_clarification`; that is valid if the durable or conversation candidate is present and inspectable.
+- Durable decisions, rejected alternatives, style/preferences, next steps, and validation facts appear in recall candidates.
+- Russian dated questions such as "что мы делали вчера?" can recover relevant redacted context.
+- Multiple plausible matches may return `needs_clarification`; that is valid if the durable or conversation candidate is present, inspectable, and grouped through `candidateGroups`.
 - `memory_status` exposes `codexTruth` so agents can distinguish import health from recall usefulness.
 - `memory_doctor` warns when `metadata` is too weak for strong recall and when desktop/extension parity is unverified.
 
 ## Verification Commands
 
-The focused Track A acceptance checks are:
+The focused Track C acceptance checks are:
 
 ```bash
+npm test -- packages/core/tests/integration/track-c-recall-acceptance.test.ts packages/core/tests/integration/track-a-recall-acceptance.test.ts
 npm test -- packages/core/tests/integration/track-a-recall-acceptance.test.ts packages/core/tests/integration/track-a-desktop-diagnostics.test.ts
 npm test -- packages/core/tests/tools/doctor.test.ts packages/core/tests/tools/status.test.ts
 ```

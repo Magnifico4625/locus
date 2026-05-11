@@ -14,14 +14,20 @@ describe('GitHub Pages landing page', () => {
     expect(existsSync(indexPath)).toBe(true);
   });
 
-  it('describes the current v3.5.3 product state honestly', () => {
+  it('describes the current v3.6.0 product state honestly', () => {
     const html = readFileSync(indexPath, 'utf-8');
 
-    expect(html).toContain('v3.5.3');
+    expect(html).toContain('v3.6.0');
+    expect(html).toContain('Track C');
     expect(html).toContain('one-command install');
     expect(html).toContain('npx -y locus-memory@latest install codex');
     expect(html).toContain('copy-install-button');
     expect(html).toContain('redacted');
+    expect(html).toContain('recommended rich recall');
+    expect(html).toContain('full');
+    expect(html).toContain('explicit privacy warning');
+    expect(html).toContain('memory_recall');
+    expect(html).toContain('candidateGroups');
     expect(html).toContain('Codex');
     expect(html).toContain('Claude Code');
     expect(html).not.toContain('v3.1.0 is out');
@@ -47,19 +53,44 @@ describe('GitHub Pages landing page', () => {
     const readme = readRepoFile('README.md');
     const codexReadme = readRepoFile('packages/codex/README.md');
     const configExample = readRepoFile('packages/codex/config/config.toml.example');
+    const acceptanceMatrix = readRepoFile('docs/codex-acceptance-matrix.md');
+    const roadmap = readRepoFile('docs/roadmap/codex-next.md');
+    const releaseNotes = readRepoFile('docs/releases/v3.6.0.md');
 
     expect(readme).toContain('npx -y locus-memory@latest install codex');
     expect(readme).toContain('Manual MCP fallback');
     expect(readme).toContain('codex mcp add locus -- node /path/to/locus/dist/server.js');
+    expect(readme).toContain('New in v3.6');
+    expect(readme).toContain('Track C');
+    expect(readme).toContain('candidateGroups');
+    expect(readme).toContain('full` is maximum recall');
     expect(readme).not.toContain('desktop/extension parity is validated');
 
     expect(codexReadme).toContain('npx -y locus-memory@latest install codex');
     expect(codexReadme).toContain('doctor codex');
     expect(codexReadme).toContain('uninstall codex');
+    expect(codexReadme).toContain('Track C');
+    expect(codexReadme).toContain('memory_review');
+    expect(codexReadme).toContain('candidateGroups');
+    expect(codexReadme).toContain('Codex hooks are optional');
 
     expect(configExample).toContain('locus-memory@3.5.3');
     expect(configExample).toContain('npx.cmd');
     expect(configExample).not.toContain('args = ["-y", "locus-memory@latest", "mcp"]');
     expect(configExample).not.toContain('coming soon');
+
+    expect(acceptanceMatrix).toContain('Track C');
+    expect(acceptanceMatrix).toContain('track-c-recall-acceptance.test.ts');
+    expect(acceptanceMatrix).toContain('candidateGroups');
+    expect(acceptanceMatrix).toContain('desktop / extension parity remains unverified');
+
+    expect(roadmap).toContain('Track C');
+    expect(roadmap).toContain('completed locally');
+    expect(roadmap).toContain('v3.6.0');
+
+    expect(releaseNotes).toContain('Locus v3.6.0 Release Notes');
+    expect(releaseNotes).toContain('Track C');
+    expect(releaseNotes).toContain('Known Boundaries');
+    expect(releaseNotes).toContain('Codex desktop / extension parity remains unverified');
   });
 });

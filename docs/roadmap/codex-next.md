@@ -1,9 +1,9 @@
 # Codex Next Roadmap
 
 **Date:** 2026-04-16  
-**Last updated:** 2026-04-28
+**Last updated:** 2026-05-11
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is published to npm through `locus-memory@3.5.3`; GitHub PR/release publication is the remaining release-management step.
+**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is published to npm through `locus-memory@3.5.3`. Track C richer recall is completed locally as a `v3.6.0` release candidate and is going through docs/final validation.
 
 ---
 
@@ -177,6 +177,7 @@ Known follow-up:
 
 **Priority:** `P0`  
 **Target window:** May 2026 and after the trust-gap work establishes the baseline  
+**Current status:** core implementation completed locally as `v3.6.0` release-candidate work; C6 docs and final validation are in progress.
 **Why it matters:** once the product is no longer misleading at the baseline level, the next step is to deepen recall quality and make richer capture modes production-worthy rather than experimental.
 
 ### Goal
@@ -211,7 +212,16 @@ Turn Codex memory from “recent context is finally trustworthy” into “recen
 
 ### Release intent
 
-Best treated as **`v3.6`** candidate work now that Track A shipped in `v3.4.0` and Track B shipped to npm as `v3.5.0`.
+Best treated as **`v3.6.0`** candidate work now that Track A shipped in `v3.4.0` and Track B shipped to npm as `v3.5.3`.
+
+### Delivered locally
+
+- C1 Recall Engine v2: query parsing, temporal hints, candidate loading, scoring, grouping, and `candidateGroups`
+- C2 Redacted Capture v2: bounded high-value snippets and stronger redaction tests
+- C3 Durable Extractor v2: topic keys, rejected alternatives, next steps, validation facts, user style/preferences, and supersede semantics
+- C4 Inspectability: `memory_review`, `memory_audit`, evidence formatting, and storage visibility
+- C5 Optional Codex Hooks: CLI hook helper and diagnostics; plugin hook packaging deferred until upstream `plugin_hooks` stabilizes
+- C6 Acceptance And Docs: Track C fixture-backed recall acceptance completed for the core path; public docs truth pass and final validation still gate release publication
 
 ---
 
@@ -370,7 +380,7 @@ This is a planning suggestion, not a hard contract.
 |---------|----------------|
 | `v3.4` | shipped Track A memory-trust work: reliable auto-import, validated recall, automatic high-value memory persistence, honest diagnostics/docs |
 | `v3.5` | shipped one-command install foundations: npm runtime, installer/doctor/uninstall, marketplace bundle generation, install UX cleanup |
-| `v3.6` | richer Codex conversational recall (`redacted` / `full`) and stronger capture/privacy UX |
+| `v3.6.0` | Track C richer Codex conversational recall (`redacted` / `full`) and stronger capture/privacy UX |
 | `v4.0` | HTML dashboard + broader product-grade memory visibility |
 
 Secondary IDE adapters should be scheduled only when they do not block the Codex-first path above.

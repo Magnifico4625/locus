@@ -26,7 +26,9 @@ Locus solves this with three persistent memory layers:
 
 **New in v3.5.3 — One-command Codex install:** Locus is packaged as the public `locus-memory` npm runtime with a Codex installer, doctor, uninstall command, and generated marketplace bundle. The recurring MCP runtime is version-pinned, runs from `$CODEX_HOME` to avoid local `npx` workspace resolution issues, and `doctor codex` now reports package-owned installs correctly.
 
-**Track A Codex recall truth:** Codex CLI is the primary validated path for useful recall. `metadata` remains the safe default for diagnostics and minimal capture, but it is not strong conversational memory. For practical Codex recall, use `LOCUS_CODEX_CAPTURE=redacted` with `LOCUS_CAPTURE_LEVEL=redacted`. `full` is available only as explicit warning territory.
+**New in v3.6 — Track C richer Codex recall:** Codex CLI recall is now tested against redacted multi-session fixtures that include Russian dated questions, capture-strategy decisions, rejected alternatives, user workflow style, npm install errors, next steps, and validation facts. `memory_recall` is the summary-first path; when several plausible matches exist, `candidateGroups` make the clarification visible instead of hiding ambiguity.
+
+**Codex recall truth:** Codex CLI is the primary validated path for useful recall. `metadata` remains the safe default for diagnostics and minimal capture, but it is not strong conversational memory. For practical Codex recall, use `LOCUS_CODEX_CAPTURE=redacted` with `LOCUS_CAPTURE_LEVEL=redacted`. `full` is maximum recall and must be treated as explicit warning territory, not a risk-free mode.
 
 Locus stores metadata only by default. No raw file content is ever written to disk unless you explicitly opt in.
 
@@ -132,17 +134,19 @@ Repo-local plugin packaging is also available for local Codex onboarding:
 
 Manual MCP setup remains fully supported. The local plugin bundle and generated marketplace bundle are packaging layers, not second sources of product logic.
 
-Recent Codex history becomes searchable automatically when you use `memory_search`, but recall quality depends on capture mode. `metadata` proves import health and preserves limited session context. `redacted` is the recommended practical mode for useful conversational recall. `full` stores the most content and must be treated as explicit opt-in.
+Recent Codex history becomes searchable automatically when you use `memory_search`, but recall quality depends on capture mode. `metadata` proves import health and preserves limited session context. `redacted` is the recommended practical mode for useful conversational recall. `full` stores the most content and must be treated as explicit opt-in with an explicit privacy warning.
 
 `memory_recall` is summary-first and can recover useful Codex context from imported conversation events and durable decisions. If several events match the same question, it may return `needs_clarification`; that is expected when the same marker or decision appears in prompts, session summaries, and follow-up diagnostics.
+Agents should inspect `candidateGroups` in that response and ask a focused clarification question instead of guessing.
 
 Recommended Codex workflow:
 
-- use `memory_search` first when recalling recent work, prior decisions, or recent Codex dialogue
-- use `memory_recall` for summary-first questions like "what did we do yesterday?" or "what did we decide about auth?"
+- use `memory_recall` first for summary-first questions like "what did we do yesterday?" or "what did we decide about auth?"
+- use `memory_search` when raw search is still useful after recall or when you need exact terms
 - use `memory_status` to inspect `codexAutoImport` and `codexDiagnostics` if recent dialogue does not appear as expected
 - use `memory_doctor` for actionable Codex checks when you need to diagnose session discovery, rollout readability, capture mode, or imported-event counts
 - use `memory_import_codex` only for older sessions, filtered imports, or explicit manual catch-up
+- use `memory_review` when you want to inspect what durable memories were stored, why they exist, or what may be stale/superseded
 - use `memory_remember` for important architectural decisions and why they were made
 
 Common Codex fixes:
@@ -313,7 +317,7 @@ For Codex specifically, read the modes as product behavior:
 
 - `metadata`: safe default and diagnostics-first mode; limited conversational recall.
 - `redacted`: recommended practical mode for useful Codex recall; stores bounded, filtered, best-effort-redacted snippets.
-- `full`: maximum recall with raw conversation text after best-effort redaction; explicit opt-in only.
+- `full`: maximum recall with raw conversation text after best-effort redaction; explicit opt-in only and never risk-free.
 
 See [Codex Acceptance Matrix](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-acceptance-matrix.md) for the current validation status.
 
@@ -444,7 +448,8 @@ The next Codex-focused release tracks target recall ranking polish, dashboard UX
 | v3.1.1 | Released | Fix: hooks failed in plugin cache due to bare module import of `@locus/shared-runtime` |
 | v3.3 | Released | Codex release: manual import, auto-import before search, doctor/status diagnostics, skill sync, VS Code docs, repo-local plugin packaging |
 | v3.4 | Released | Codex memory trust release: validated useful recall in `redacted`, current Codex JSONL compatibility, honest diagnostics/docs |
-| v3.5 | **Current** | One-command Codex install: npm runtime, installer/doctor/uninstall commands, generated marketplace bundle, manual MCP fallback preserved |
+| v3.5 | Released | One-command Codex install: npm runtime, installer/doctor/uninstall commands, generated marketplace bundle, manual MCP fallback preserved |
+| v3.6 | **Current** | Track C richer Codex recall: redacted fixture-backed recall, `candidateGroups`, durable fact extraction, privacy/inspection docs |
 | v4.0 | Planned | HTML dashboard for memory visualization |
 
 ## Development

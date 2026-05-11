@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-05-11
+
+### Added
+- Track C richer Codex recall acceptance with redacted JSONL fixtures covering Russian dated recall, capture strategy, rejected hook-first rationale, user workflow style, npm install errors, next steps, and validation facts.
+- `candidateGroups`-driven recall UX so agents can ask focused clarification questions when multiple plausible memories match.
+- Durable memory extraction for rejected alternatives, next steps, validation facts, user workflow style, and Track C topic keys.
+- `memory_review` / audit visibility improvements for inspecting stored durable memories and cleanup candidates.
+- Codex skill instructions for `memory_recall`, `memory_review`, capture modes, privacy warnings, and desktop/extension parity limits.
+
+### Changed
+- Codex docs now present `memory_recall` as the summary-first path for past work, prior decisions, dated context, and user style.
+- `redacted` is documented as the recommended rich recall mode for Codex; `metadata` remains diagnostics-first and limited for conversational memory.
+- `full` is documented as maximum recall with explicit privacy-warning requirements, not a risk-free setting.
+
+### Notes
+- Codex CLI remains the validated primary path.
+- Codex desktop / extension parity remains unverified until directly tested in that surface.
+- Optional Codex hooks are treated as future freshness triggers; canonical recall remains JSONL transcript import plus the shared inbox/core ingest path.
+
 ## [3.5.3] - 2026-04-28
 
 ### Changed
@@ -222,7 +241,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PostToolUse hook for automatic capture
 - `memory_scan`, `memory_search`, `memory_explore`, `memory_remember`, `memory_forget`, `memory_purge`, `memory_status`, `memory_doctor`, `memory_audit` tools
 
-[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.5.3...HEAD
+[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.6.0...HEAD
+[3.6.0]: https://github.com/Magnifico4625/locus/compare/v3.5.3...v3.6.0
 [3.5.3]: https://github.com/Magnifico4625/locus/compare/v3.5.2...v3.5.3
 [3.5.2]: https://github.com/Magnifico4625/locus/compare/v3.5.1...v3.5.2
 [3.5.1]: https://github.com/Magnifico4625/locus/compare/v3.5.0...v3.5.1

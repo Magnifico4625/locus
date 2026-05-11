@@ -249,7 +249,7 @@ git commit -m "docs(codex): teach skill richer recall flow"
 - Create: `docs/releases/v3.6.0.md`
 - Modify: `CHANGELOG.md`
 
-- [ ] **Step 1: Write/update docs tests**
+- [x] **Step 1: Write/update docs tests**
 
 Assert landing page and docs mention:
 
@@ -267,18 +267,18 @@ npm test -- packages/codex/tests/landing-page.test.ts
 
 Expected: FAIL until docs are updated.
 
-- [ ] **Step 2: Update README and Codex docs**
+- [x] **Step 2: Update README and Codex docs**
 
 Keep install quick start intact. Add richer recall section with examples and privacy wording.
 
-- [ ] **Step 3: Update acceptance matrix and roadmap**
+- [x] **Step 3: Update acceptance matrix and roadmap**
 
 Mark Track C status accurately:
 
 - in-progress until final validation
 - shipped only after release prep
 
-- [ ] **Step 4: Add `docs/releases/v3.6.0.md`**
+- [x] **Step 4: Add `docs/releases/v3.6.0.md`**
 
 Include:
 
@@ -288,7 +288,7 @@ Include:
 - hooks status
 - desktop parity status
 
-- [ ] **Step 5: Verify docs search**
+- [x] **Step 5: Verify docs search**
 
 Run:
 
@@ -298,7 +298,7 @@ rg -n "metadata|redacted|full|candidateGroups|hook|desktop|v3.6|Track C" README.
 
 Expected: no stale or contradictory product claims.
 
-- [ ] **Step 6: Run tests and commit**
+- [x] **Step 6: Run tests and commit**
 
 Run:
 
