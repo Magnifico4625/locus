@@ -150,5 +150,11 @@ describe('skill sync helpers', () => {
     expect(installedSkill).toContain('# Locus -- Persistent Project Memory');
     expect(installedSkill).toContain('memory_recall');
     expect(installedSkill).toContain('Always check Locus before saying you do not remember');
+    expect(installedSkill).toContain('candidateGroups');
+    expect(installedSkill).toContain('memory_review');
+    expect(installedSkill).toContain('`metadata` means ingestion and diagnostics first');
+    expect(installedSkill).toContain('`redacted` is the recommended practical rich-recall mode');
+    expect(installedSkill).toContain('`full` is maximum local capture');
+    expect(installedSkill).toContain('Do not claim Codex desktop or extension parity');
   });
 });

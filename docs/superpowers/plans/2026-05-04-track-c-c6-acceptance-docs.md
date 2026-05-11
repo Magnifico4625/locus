@@ -206,7 +206,7 @@ git commit -m "test(core): prove track c redacted recall"
 - Modify: `packages/codex/tests/plugin-bundle.test.ts` if needed
 - Modify: `packages/codex/tests/skill-sync.test.ts` if bundled skill sync expectations change
 
-- [ ] **Step 1: Update skill behavior**
+- [x] **Step 1: Update skill behavior**
 
 The skill should tell Codex:
 
@@ -216,7 +216,7 @@ The skill should tell Codex:
 - distinguish `metadata`, `redacted`, `full`
 - do not overclaim desktop parity
 
-- [ ] **Step 2: Verify bundled skill sync tests**
+- [x] **Step 2: Verify bundled skill sync tests**
 
 Run:
 
@@ -226,7 +226,7 @@ npm test -- packages/codex/tests/plugin-bundle.test.ts packages/codex/tests/skil
 
 Expected: PASS.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 Run:
 

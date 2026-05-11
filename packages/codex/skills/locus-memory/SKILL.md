@@ -22,6 +22,7 @@ project context across sessions.
 5. **memory_timeline** -- View recent conversation history
 6. **memory_status** -- Memory health and storage info
 7. **memory_scan** -- Re-index project structure after file changes
+8. **memory_review** -- Inspect durable memories, states, confidence, and evidence
 
 ## Key Behaviors
 
@@ -31,13 +32,19 @@ project context across sessions.
   - "what did we decide about auth?"
   - "what did we just fix?"
 - In Codex, recent dialogue is auto-imported before `memory_recall` and `memory_search`
-- If `memory_recall` returns `needs_clarification`, ask a focused follow-up question after the lookup instead of guessing or asking before checking Locus
+- If `memory_recall` returns `needs_clarification`, inspect `candidateGroups` and ask a focused follow-up question after the lookup instead of guessing or asking before checking Locus
 - If `memory_recall` returns `no_memory`, then fall back to `memory_search` or `memory_timeline` only when raw search or chronology is still useful
 - If recent Codex history does not appear, inspect `memory_status` before trying manual recovery steps
 - Use `memory_import_codex` only for manual catch-up, older sessions, or filtered imports
+- Use `memory_review` when the user asks what Locus stored, why a memory exists, what can be cleaned up, or which durable facts are active/stale/superseded
 - Save important decisions when the user makes architecture choices
 - Use `memory_remember` for architectural choices, trade-offs, and why a path was chosen, not only for end-of-task summaries
 - Use `memory_scan` after significant file structure changes
 - Prefer `memory_search` over re-reading files when looking for past context after `memory_recall` has already been tried
 - After completing a major task, call `memory_remember` with a concise summary when the outcome should persist across sessions
-- If the task clearly involves secrets, tokens, passwords, or highly sensitive material, remind the user that capture settings such as `LOCUS_CODEX_CAPTURE=full` may store redacted local memory content
+- Treat capture modes precisely:
+  - `metadata` means ingestion and diagnostics first, with limited conversational recall
+  - `redacted` is the recommended practical rich-recall mode for Codex because it stores high-value snippets with privacy filtering
+  - `full` is maximum local capture and must be described with an explicit privacy warning, never as risk-free
+- If the task clearly involves secrets, tokens, passwords, or highly sensitive material, remind the user that `LOCUS_CODEX_CAPTURE=full` / `LOCUS_CAPTURE_LEVEL=full` may store sensitive local memory content
+- Codex CLI is the validated primary path. Do not claim Codex desktop or extension parity unless the current environment has been tested through that surface

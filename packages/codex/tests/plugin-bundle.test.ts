@@ -49,6 +49,21 @@ describe('codex plugin bundle', () => {
     expect(pluginSkill).toBe(canonicalSkill);
   });
 
+  it('ships the Track C recall truth instructions in the bundled skill', () => {
+    const root = repoRoot();
+    const pluginSkill = readFileSync(
+      join(root, 'plugins', 'locus-memory', 'skills', 'locus-memory', 'SKILL.md'),
+      'utf8',
+    );
+
+    expect(pluginSkill).toContain('candidateGroups');
+    expect(pluginSkill).toContain('memory_review');
+    expect(pluginSkill).toContain('`metadata` means ingestion and diagnostics first');
+    expect(pluginSkill).toContain('`redacted` is the recommended practical rich-recall mode');
+    expect(pluginSkill).toContain('`full` is maximum local capture');
+    expect(pluginSkill).toContain('Do not claim Codex desktop or extension parity');
+  });
+
   it('ships an .mcp.json with a locus server definition and safe default env values', () => {
     const root = repoRoot();
     const pluginMcpPath = join(root, 'plugins', 'locus-memory', '.mcp.json');
