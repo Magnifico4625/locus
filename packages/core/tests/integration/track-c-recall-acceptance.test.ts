@@ -120,6 +120,18 @@ async function withTrackCServer<T>(fn: (ctx: ServerContext) => Promise<T>): Prom
   }
 }
 
+async function withImportedTrackCServer<T>(fn: (ctx: ServerContext) => Promise<T>): Promise<T> {
+  return withTrackCServer(async (ctx) => {
+    const imported = await callJsonTool<MemoryImportCodexResponse>(ctx, 'memory_import_codex', {
+      since: Date.parse('2026-05-08T00:00:00.000Z'),
+    });
+    expect(imported.status).toBe('ok');
+    expect(imported.imported).toBeGreaterThan(0);
+
+    return await fn(ctx);
+  });
+}
+
 function recallText(result: MemoryRecallResult): string {
   return [
     result.summary,
@@ -143,50 +155,69 @@ function expectRecallContains(result: MemoryRecallResult, expected: string[]): v
 }
 
 describe('Track C redacted recall acceptance', () => {
-  it('recalls high-value Codex dialogue facts from redacted transcript fixtures', async () => {
-    await withTrackCServer(async (ctx) => {
-      const imported = await callJsonTool<MemoryImportCodexResponse>(ctx, 'memory_import_codex', {
-        since: Date.parse('2026-05-08T00:00:00.000Z'),
-      });
-      expect(imported.status).toBe('ok');
-      expect(imported.imported).toBeGreaterThan(0);
-
+  it('recalls yesterday as an overview across all Track C fixtures', async () => {
+    await withImportedTrackCServer(async (ctx) => {
       const yesterday = await callJsonTool<MemoryRecallResult>(ctx, 'memory_recall', {
         question: 'что мы делали вчера?',
       });
       expect(['ok', 'needs_clarification']).toContain(yesterday.status);
+      // The broad "yesterday" query intentionally proves recall can connect all fixture sessions.
       expectRecallContains(yesterday, ['redacted', 'hook-first', 'npm']);
+    });
+  });
 
+  it('recalls the capture strategy decision', async () => {
+    await withImportedTrackCServer(async (ctx) => {
       const captureStrategy = await callJsonTool<MemoryRecallResult>(ctx, 'memory_recall', {
         question: 'что решили по capture strategy?',
       });
       expect(captureStrategy.status).toBe('ok');
       expectRecallContains(captureStrategy, ['redacted', 'rule-based']);
+    });
+  });
 
+  it('recalls the hook-first rejected alternative', async () => {
+    await withImportedTrackCServer(async (ctx) => {
       const hookFirst = await callJsonTool<MemoryRecallResult>(ctx, 'memory_recall', {
         question: 'почему отказались от hook-first?',
       });
       expect(hookFirst.status).toBe('ok');
       expectRecallContains(hookFirst, ['hook-first', 'under development']);
+    });
+  });
 
+  it('recalls the user work style preference', async () => {
+    await withImportedTrackCServer(async (ctx) => {
       const style = await callJsonTool<MemoryRecallResult>(ctx, 'memory_recall', {
         question: 'какой у меня стиль работы?',
       });
       expect(style.status).toBe('ok');
       expectRecallContains(style, ['атомарного таска', 'одобрения']);
+    });
+  });
 
+  it('recalls npm install error context', async () => {
+    await withImportedTrackCServer(async (ctx) => {
       const npmErrors = await callJsonTool<MemoryRecallResult>(ctx, 'memory_recall', {
         question: 'какие ошибки были при npm install?',
       });
       expect(npmErrors.status).toBe('ok');
       expectRecallContains(npmErrors, ['eresolve', 'dependency tree']);
+    });
+  });
 
+  it('recalls documented next steps', async () => {
+    await withImportedTrackCServer(async (ctx) => {
       const nextSteps = await callJsonTool<MemoryRecallResult>(ctx, 'memory_recall', {
         question: 'что осталось сделать?',
       });
       expect(nextSteps.status).toBe('ok');
       expectRecallContains(nextSteps, ['acceptance matrix', 'docs']);
+    });
+  });
 
+  it('recalls validation facts', async () => {
+    await withImportedTrackCServer(async (ctx) => {
       const validated = await callJsonTool<MemoryRecallResult>(ctx, 'memory_recall', {
         question: 'что реально проверено?',
       });
