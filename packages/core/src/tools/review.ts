@@ -1,8 +1,8 @@
 import { reviewDurableMemories } from '../memory/review.js';
 import type {
   DatabaseAdapter,
-  DurableMemoryType,
   DurableMemoryState,
+  DurableMemoryType,
   DurableReviewCandidate,
   DurableReviewResult,
 } from '../types.js';

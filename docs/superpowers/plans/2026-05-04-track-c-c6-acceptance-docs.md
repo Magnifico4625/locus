@@ -324,7 +324,7 @@ git commit -m "docs(codex): document richer recall release"
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-c6-acceptance-docs.md`
 - Modify: `docs/superpowers/plans/2026-05-04-track-c-plan-bundle.md`
 
-- [ ] **Step 1: Run focused validation**
+- [x] **Step 1: Run focused validation**
 
 Run:
 
@@ -334,7 +334,7 @@ npm test -- packages/core/tests/recall packages/core/tests/memory/durable-extrac
 
 Expected: PASS.
 
-- [ ] **Step 2: Run workspace validation**
+- [x] **Step 2: Run workspace validation**
 
 Run:
 
@@ -346,7 +346,7 @@ git diff --check
 
 Expected: PASS.
 
-- [ ] **Step 3: Local runtime recall smoke**
+- [x] **Step 3: Local runtime recall smoke**
 
 In a real Codex session after installing the local build or package candidate, ask:
 
@@ -364,7 +364,15 @@ Expected:
 - recall returns useful results or honest clarification
 - review/audit show why memories were stored
 
-- [ ] **Step 4: Update validation notes and commit**
+Validation note (2026-05-11): automated gates passed. The live MCP smoke showed
+`captureLevel=redacted`, FTS5 enabled, and a clean audit with no stored secrets.
+The connected MCP instance was project-bound to `C:\Users\Admin\.codex`, not this
+repository, so `memory_recall("что мы делали вчера?")` and
+`memory_recall("какой у меня стиль работы?")` correctly returned `no_memory`.
+Treat this as a runtime health smoke, not as a repo-bound recall proof. Repo-bound
+recall quality is covered by the Track C fixture-backed integration acceptance.
+
+- [x] **Step 4: Update validation notes and commit**
 
 Run:
 
@@ -373,7 +381,7 @@ git add docs/superpowers/plans/2026-05-04-track-c-c6-acceptance-docs.md docs/sup
 git commit -m "docs(codex): record track c c6 validation"
 ```
 
-- [ ] **Step 5: Create checkpoint tag**
+- [x] **Step 5: Create checkpoint tag**
 
 Run:
 

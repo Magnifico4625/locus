@@ -112,31 +112,28 @@ describe('mergeDurableCandidate', () => {
     ['preference', 'user_workflow_style'],
     ['constraint', 'codex_hooks_strategy'],
     ['next_step', 'release_steps'],
-  ] as const)(
-    'supersedes an older active %s when the newer candidate shares the same topic key',
-    (memoryType, topicKey) => {
-      const existing = makeDurableEntry({
-        id: 11,
-        topicKey,
-        memoryType,
-        summary: `Old ${memoryType} summary.`,
-      });
+  ] as const)('supersedes an older active %s when the newer candidate shares the same topic key', (memoryType, topicKey) => {
+    const existing = makeDurableEntry({
+      id: 11,
+      topicKey,
+      memoryType,
+      summary: `Old ${memoryType} summary.`,
+    });
 
-      const candidate = {
-        topicKey,
-        memoryType,
-        summary: `New ${memoryType} summary.`,
-        evidence: { source: 'newer-memory', confidence: 0.9 },
-        sourceEventId: 'evt-newer-memory',
-        source: 'codex' as const,
-      };
+    const candidate = {
+      topicKey,
+      memoryType,
+      summary: `New ${memoryType} summary.`,
+      evidence: { source: 'newer-memory', confidence: 0.9 },
+      sourceEventId: 'evt-newer-memory',
+      source: 'codex' as const,
+    };
 
-      expect(mergeDurableCandidate([existing], candidate)).toEqual({
-        action: 'supersede_existing',
-        existingId: 11,
-      });
-    },
-  );
+    expect(mergeDurableCandidate([existing], candidate)).toEqual({
+      action: 'supersede_existing',
+      existingId: 11,
+    });
+  });
 
   it('does not supersede rejected alternatives by default', () => {
     const existing = makeDurableEntry({

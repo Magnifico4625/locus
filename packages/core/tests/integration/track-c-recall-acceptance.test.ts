@@ -7,7 +7,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createServer, type ServerContext } from '../../src/server.js';
 import type { MemoryImportCodexResponse, MemoryRecallResult } from '../../src/types.js';
 
-const fixturesDir = join(import.meta.dirname, '..', '..', '..', 'codex', 'tests', 'fixtures', 'track-c');
+const fixturesDir = join(
+  import.meta.dirname,
+  '..',
+  '..',
+  '..',
+  'codex',
+  'tests',
+  'fixtures',
+  'track-c',
+);
 
 const tempRoots: string[] = [];
 
@@ -19,8 +28,11 @@ afterEach(() => {
 });
 
 function getRegisteredTool(ctx: ServerContext, name: string) {
-  const registry = (ctx.server as { _registeredTools?: Record<string, { handler: (args: unknown) => Promise<unknown> }> })
-    ._registeredTools;
+  const registry = (
+    ctx.server as {
+      _registeredTools?: Record<string, { handler: (args: unknown) => Promise<unknown> }>;
+    }
+  )._registeredTools;
   const tool = registry?.[name];
   if (!tool) {
     throw new Error(`Tool not registered: ${name}`);
@@ -28,12 +40,22 @@ function getRegisteredTool(ctx: ServerContext, name: string) {
   return tool.handler;
 }
 
-async function callTextTool(ctx: ServerContext, name: string, args: Record<string, unknown>): Promise<string> {
-  const result = (await getRegisteredTool(ctx, name)(args)) as { content?: Array<{ text?: string }> };
+async function callTextTool(
+  ctx: ServerContext,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const result = (await getRegisteredTool(ctx, name)(args)) as {
+    content?: Array<{ text?: string }>;
+  };
   return result.content?.[0]?.text ?? '';
 }
 
-async function callJsonTool<T>(ctx: ServerContext, name: string, args: Record<string, unknown>): Promise<T> {
+async function callJsonTool<T>(
+  ctx: ServerContext,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<T> {
   return JSON.parse(await callTextTool(ctx, name, args)) as T;
 }
 
@@ -41,7 +63,10 @@ function copyFixtureSessions(codexHome: string): void {
   const sessionsDir = join(codexHome, 'sessions', '2026', '05');
   mkdirSync(sessionsDir, { recursive: true });
 
-  cpSync(join(fixturesDir, 'multi-task-russian.jsonl'), join(sessionsDir, 'rollout-2026-05-08-090000.jsonl'));
+  cpSync(
+    join(fixturesDir, 'multi-task-russian.jsonl'),
+    join(sessionsDir, 'rollout-2026-05-08-090000.jsonl'),
+  );
   cpSync(
     join(fixturesDir, 'decision-rejected-alternative.jsonl'),
     join(sessionsDir, 'rollout-2026-05-08-110000.jsonl'),

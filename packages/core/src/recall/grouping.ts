@@ -72,10 +72,7 @@ export function groupRecallCandidates(
 
     existing.candidates.push(candidate);
     existing.eventIds = mergeUnique(existing.eventIds, candidate.eventIds);
-    existing.durableMemoryIds = mergeUnique(
-      existing.durableMemoryIds,
-      candidate.durableMemoryIds,
-    );
+    existing.durableMemoryIds = mergeUnique(existing.durableMemoryIds, candidate.durableMemoryIds);
     existing.confidence = maxConfidence(existing.confidence, candidate.confidence);
   });
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { MemoryRecallCandidate } from '../../src/types.js';
 import type { ParsedRecallQuery } from '../../src/recall/query-parser.js';
 import { scoreRecallCandidate } from '../../src/recall/scoring.js';
+import type { MemoryRecallCandidate } from '../../src/types.js';
 
 function parsedQuery(overrides: Partial<ParsedRecallQuery> = {}): ParsedRecallQuery {
   return {
@@ -41,18 +41,30 @@ describe('scoreRecallCandidate', () => {
   });
 
   it('scores exact topic key matches higher', () => {
-    const match = scoreRecallCandidate(candidate({ topicKey: 'auth_strategy' }), parsedQuery(), { now });
-    const mismatch = scoreRecallCandidate(candidate({ topicKey: 'database_choice' }), parsedQuery(), { now });
+    const match = scoreRecallCandidate(candidate({ topicKey: 'auth_strategy' }), parsedQuery(), {
+      now,
+    });
+    const mismatch = scoreRecallCandidate(
+      candidate({ topicKey: 'database_choice' }),
+      parsedQuery(),
+      { now },
+    );
 
     expect(match.score).toBeGreaterThan(mismatch.score);
     expect(match.reasons).toContain('topic_match');
   });
 
   it('scores recent candidates higher than old candidates', () => {
-    const recent = scoreRecallCandidate(candidate({ timestamp: now - 60_000 }), parsedQuery(), { now });
-    const old = scoreRecallCandidate(candidate({ timestamp: now - 45 * 24 * 60 * 60 * 1000 }), parsedQuery(), {
+    const recent = scoreRecallCandidate(candidate({ timestamp: now - 60_000 }), parsedQuery(), {
       now,
     });
+    const old = scoreRecallCandidate(
+      candidate({ timestamp: now - 45 * 24 * 60 * 60 * 1000 }),
+      parsedQuery(),
+      {
+        now,
+      },
+    );
 
     expect(recent.score).toBeGreaterThan(old.score);
     expect(recent.reasons).toContain('recent');
@@ -75,8 +87,14 @@ describe('scoreRecallCandidate', () => {
   });
 
   it('scores capture reason matches higher', () => {
-    const match = scoreRecallCandidate(candidate({ captureReason: 'decision' }), parsedQuery(), { now });
-    const mismatch = scoreRecallCandidate(candidate({ captureReason: 'bug_context' }), parsedQuery(), { now });
+    const match = scoreRecallCandidate(candidate({ captureReason: 'decision' }), parsedQuery(), {
+      now,
+    });
+    const mismatch = scoreRecallCandidate(
+      candidate({ captureReason: 'bug_context' }),
+      parsedQuery(),
+      { now },
+    );
 
     expect(match.score).toBeGreaterThan(mismatch.score);
     expect(match.reasons).toContain('capture_reason_match');

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getCodexCaptureMode, shouldImportCodexEvent } from '../src/capture.js';
-import { CODEX_CAPTURE_REASONS } from '../src/types.js';
 import type { CodexCaptureMode, CodexCaptureReason, CodexNormalizedKind } from '../src/types.js';
+import { CODEX_CAPTURE_REASONS } from '../src/types.js';
 
 const allKinds: CodexNormalizedKind[] = [
   'session_start',

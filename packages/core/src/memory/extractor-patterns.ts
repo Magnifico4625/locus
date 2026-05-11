@@ -32,7 +32,8 @@ const EXTRACTOR_PATTERNS: ExtractorPattern[] = [
     matchedPattern: 'ru-rejected-alternative-with-rationale',
     confidence: 0.92,
     reason: 'rejected_alternative_with_rationale',
-    regex: /\b(?:отказались|отказаться|не используем|не использовать)\b.+\b(?:потому что|из за|так как)\b/iu,
+    regex:
+      /\b(?:отказались|отказаться|не используем|не использовать)\b.+\b(?:потому что|из за|так как)\b/iu,
   },
   {
     memoryType: 'validation_fact',
@@ -53,14 +54,16 @@ const EXTRACTOR_PATTERNS: ExtractorPattern[] = [
     matchedPattern: 'explicit-constraint',
     confidence: 0.88,
     reason: 'explicit_constraint',
-    regex: /\b(?:do not touch|must not|keep codex as the primary validation path|нельзя трогать|не трогать)\b/i,
+    regex:
+      /\b(?:do not touch|must not|keep codex as the primary validation path|нельзя трогать|не трогать)\b/i,
   },
   {
     memoryType: 'style',
     matchedPattern: 'collaboration-style',
     confidence: 0.84,
     reason: 'collaboration_style',
-    regex: /\b(?:surgical|avoid unrelated refactors|prove it with tests|хирургическ|без лишних рефакторинг)\b/i,
+    regex:
+      /\b(?:surgical|avoid unrelated refactors|prove it with tests|хирургическ|без лишних рефакторинг)\b/i,
   },
   {
     memoryType: 'style',
@@ -83,7 +86,10 @@ const EXTRACTOR_PATTERNS: ExtractorPattern[] = [
     reason: 'accepted_decision',
     regex: /(?:decision:|decided to|we decided|решили|мы решили)/iu,
     clean: (match, normalized) =>
-      normalized.slice((match.index ?? 0) + match[0].length).replace(/^[:\s-]+/, '').trim(),
+      normalized
+        .slice((match.index ?? 0) + match[0].length)
+        .replace(/^[:\s-]+/, '')
+        .trim(),
   },
   {
     memoryType: 'decision',
@@ -140,7 +146,6 @@ function normalizeSentence(text: string): string {
 
 function isQuestionLike(text: string): boolean {
   return (
-    /\?\s*$/.test(text) ||
-    /^(?:what|why|how|which|кто|что|почему|какой|какие|как)\b/iu.test(text)
+    /\?\s*$/.test(text) || /^(?:what|why|how|which|кто|что|почему|какой|какие|как)\b/iu.test(text)
   );
 }

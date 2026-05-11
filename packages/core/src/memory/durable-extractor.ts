@@ -1,5 +1,5 @@
 import type { ConversationEventRow, DurableMemoryEntry, DurableMemoryType } from '../types.js';
-import { extractPatternMatches, type ExtractorPatternMatch } from './extractor-patterns.js';
+import { type ExtractorPatternMatch, extractPatternMatches } from './extractor-patterns.js';
 import { deriveCanonicalTopicKey } from './topic-key-registry.js';
 
 export interface DurableMemoryCandidate {

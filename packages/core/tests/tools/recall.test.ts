@@ -263,11 +263,15 @@ describe('handleRecall', () => {
   });
 
   it('loads durable preference, style, and constraint memories for preference/style queries', () => {
-    const preferenceId = insertDurableMemory(adapter, 'Prefer one task at a time with approval gates.', {
-      memoryType: 'preference',
-      topicKey: 'user_workflow_style',
-      updatedAt: now - 60_000,
-    });
+    const preferenceId = insertDurableMemory(
+      adapter,
+      'Prefer one task at a time with approval gates.',
+      {
+        memoryType: 'preference',
+        topicKey: 'user_workflow_style',
+        updatedAt: now - 60_000,
+      },
+    );
     const styleId = insertDurableMemory(adapter, 'User likes concise factual progress updates.', {
       memoryType: 'style',
       topicKey: 'user_workflow_style',
@@ -284,7 +288,7 @@ describe('handleRecall', () => {
       now,
     }) as MemoryRecallResult;
 
-    expect(result.status).toBe('needs_clarification');
+    expect(result.status).toBe('ok');
     expect(result.candidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ durableMemoryIds: [preferenceId], sourceKind: 'durable' }),
@@ -387,14 +391,18 @@ describe('handleRecall', () => {
       eventId: 'evt-assistant-npm',
       timestamp: now - 120_000,
       kind: 'ai_response',
-      payloadJson: JSON.stringify({ response: 'Root cause: npm install failed because package-lock was stale.' }),
+      payloadJson: JSON.stringify({
+        response: 'Root cause: npm install failed because package-lock was stale.',
+      }),
       sessionId: 'sess-assistant',
     });
     insertConversationEvent(adapter, {
       eventId: 'evt-summary-npm',
       timestamp: now - 180_000,
       kind: 'session_end',
-      payloadJson: JSON.stringify({ summary: 'Fixed npm install by refreshing workspace dependencies.' }),
+      payloadJson: JSON.stringify({
+        summary: 'Fixed npm install by refreshing workspace dependencies.',
+      }),
       sessionId: 'sess-summary',
     });
 
@@ -403,7 +411,7 @@ describe('handleRecall', () => {
       now,
     }) as MemoryRecallResult;
 
-    expect(result.status).toBe('needs_clarification');
+    expect(result.status).toBe('ok');
     expect(result.candidates).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ eventIds: ['evt-user-npm'], sourceKind: 'conversation' }),

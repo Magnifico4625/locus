@@ -1,7 +1,4 @@
-import type {
-  MemoryRecallIntent,
-  MemoryRecallResolvedRange,
-} from '../types.js';
+import type { MemoryRecallIntent, MemoryRecallResolvedRange } from '../types.js';
 import { parseRecallTemporalRange } from './temporal-parser.js';
 
 export interface ParsedRecallQuery {

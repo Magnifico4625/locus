@@ -36,10 +36,12 @@ describe('parseRecallQuery', () => {
   });
 
   it('returns normalized and stop-word-filtered terms', () => {
-    expect(parseRecallQuery('What did we decide about GitHub OAuth yesterday?', now)).toMatchObject({
-      normalizedTerms: ['what', 'did', 'we', 'decide', 'about', 'github', 'oauth', 'yesterday'],
-      terms: ['github', 'oauth'],
-    });
+    expect(parseRecallQuery('What did we decide about GitHub OAuth yesterday?', now)).toMatchObject(
+      {
+        normalizedTerms: ['what', 'did', 'we', 'decide', 'about', 'github', 'oauth', 'yesterday'],
+        terms: ['github', 'oauth'],
+      },
+    );
   });
 
   it('does not keep RU pronouns as search terms for timeline-style recall', () => {

@@ -2,8 +2,8 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
-  readFileSync,
   readdirSync,
+  readFileSync,
   rmSync,
   writeFileSync,
 } from 'node:fs';
@@ -326,9 +326,7 @@ describe('codex install model', () => {
     expect(readFileSync(join(codexHome, 'hooks.json'), 'utf8')).toContain(
       'locus-memory@3.5.3 hook codex stop',
     );
-    expect(readdirSync(codexHome).some((file) => /^hooks\.json\..+\.bak$/u.test(file))).toBe(
-      true,
-    );
+    expect(readdirSync(codexHome).some((file) => /^hooks\.json\..+\.bak$/u.test(file))).toBe(true);
   });
 
   it('leaves matching hook config unchanged on repeated install', async () => {

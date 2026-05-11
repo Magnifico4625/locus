@@ -6806,13 +6806,27 @@ var USER_CHAR_LIMIT = 280;
 var ASSISTANT_CHAR_LIMIT = 220;
 var USER_MAX_SENTENCES = 3;
 var ASSISTANT_MAX_SENTENCES = 2;
+var GLOBAL_HARD_CHAR_MAX = 640;
+var TRUNCATION_SUFFIX = " ...";
+var SNIPPET_LIMITS_BY_REASON = {
+  style: { chars: 180, sentences: 1 },
+  preference: { chars: 220, sentences: 1 },
+  constraint: { chars: 220, sentences: 1 },
+  decision: { chars: 320, sentences: 2 },
+  rejected_alternative: { chars: 320, sentences: 2 },
+  next_step: { chars: 260, sentences: 2 },
+  release_context: { chars: 420, sentences: 3 },
+  bug_context: { chars: 600, sentences: 4 },
+  validation_fact: { chars: 500, sentences: 3 }
+};
 function boundCodexSnippet(text, options) {
   const normalized = collapseWhitespace(text);
   if (normalized.length === 0) {
     return { text: "", truncated: false };
   }
-  const sentenceLimit = options.role === "assistant" ? ASSISTANT_MAX_SENTENCES : USER_MAX_SENTENCES;
-  const charLimit = options.role === "assistant" ? ASSISTANT_CHAR_LIMIT : USER_CHAR_LIMIT;
+  const limit = limitForReason(options);
+  const sentenceLimit = limit.sentences;
+  const charLimit = limit.chars;
   const sentences = splitSentences(normalized);
   const keptSentences = [];
   for (const sentence of sentences) {
@@ -6830,38 +6844,65 @@ function boundCodexSnippet(text, options) {
     boundedText = normalized.slice(0, charLimit).trimEnd();
   }
   const truncated = boundedText.length < normalized.length;
+  if (!truncated) {
+    return {
+      text: boundedText,
+      truncated
+    };
+  }
+  const textBudget = Math.max(0, limit.chars - TRUNCATION_SUFFIX.length);
   return {
-    text: truncated ? `${boundedText} ...` : boundedText,
+    text: `${boundedText.slice(0, textBudget).trimEnd()}${TRUNCATION_SUFFIX}`,
     truncated
   };
 }
 function collapseWhitespace(text) {
   return text.replace(/\s+/g, " ").trim();
 }
+function limitForReason(options) {
+  const roleDefault = {
+    chars: options.role === "assistant" ? ASSISTANT_CHAR_LIMIT : USER_CHAR_LIMIT,
+    sentences: options.role === "assistant" ? ASSISTANT_MAX_SENTENCES : USER_MAX_SENTENCES
+  };
+  const reasonLimit = SNIPPET_LIMITS_BY_REASON[options.reason] ?? roleDefault;
+  return {
+    chars: Math.min(reasonLimit.chars, GLOBAL_HARD_CHAR_MAX),
+    sentences: reasonLimit.sentences
+  };
+}
 function splitSentences(text) {
-  const matches = text.match(/[^.!?]+[.!?]?/g);
-  if (!matches) {
-    return [text];
-  }
-  return matches.map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 0);
+  return text.split(/(?<=[.!?])\s+(?=[A-ZА-Я])/u).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 0);
 }
 
 // packages/codex/src/relevance.ts
 var NOISE_PATTERNS = [
   /\bfor general learning\b/i,
   /\bexplain what\b/i,
+  /\bin general terms\b/i,
   /\bhistory of\b/i,
   /\bcompare\b/i,
-  /\bwhat are\b/i
+  /\bwhat are\b/i,
+  /что\s+такое/i,
+  /для\s+общего\s+развития/i,
+  /рассказать\s+подробнее/i
 ];
 var BUG_PATTERNS = [
   /\bbug\b/i,
   /\bcrash(?:es|ed|ing)?\b/i,
   /\bfail(?:s|ed|ing|ure)?\b/i,
   /\berror\b/i,
+  /\bfix(?:ed|es|ing)?\b/i,
   /\bregression\b/i,
   /\brefactor\b/i,
-  /\bnull(?:able)?\b/i
+  /\bnull(?:able)?\b/i,
+  /\broot\s+cause\b/i,
+  /\brecall\s+gap\b/i,
+  /пада(?:ет|л|ют)/i,
+  /ошибк/i,
+  /регрес/i,
+  /рефактор/i,
+  /причин[ау]/i,
+  /не\s+сохранял/i
 ];
 var PREFERENCE_PATTERNS = [
   /\bprefer\b/i,
@@ -6871,6 +6912,39 @@ var PREFERENCE_PATTERNS = [
   /\bavoid touching\b/i,
   /\bunrelated modules?\b/i,
   /\bunrelated code\b/i
+];
+var STYLE_PATTERNS = [
+  /\bmy\s+style\b/i,
+  /\bcode\s+style\b/i,
+  /\bshort\s+direct\s+progress\s+reports\b/i,
+  /\bapproval\s+gates?\b/i,
+  /мой\s+стиль/i,
+  /стиль\s+работы/i,
+  /коротк(?:ие|их)\s+отчет/i,
+  /после\s+одобрения/i
+];
+var CONSTRAINT_PATTERNS = [
+  /\bconstraint\b/i,
+  /\bmust\s+not\b/i,
+  /\bdo\s+not\s+modify\b/i,
+  /ограничени[ея]/i,
+  /не\s+трогай/i
+];
+var REJECTED_ALTERNATIVE_PATTERNS = [
+  /\breject(?:ed)?\b/i,
+  /\bdecided\s+against\b/i,
+  /\bnot\s+stable\s+enough\b/i,
+  /отказал(?:ись|и)?/i,
+  /не\s+подош[её]л/i
+];
+var VALIDATION_FACT_PATTERNS = [
+  /\bvalidation\s+passed\b/i,
+  /\btests?\s+passed\b/i,
+  /\btypecheck\b.{0,24}\b(?:green|passed)\b/i,
+  /\bgreen\b/i,
+  /проверено/i,
+  /прош[её]л/i,
+  /зел[её]н/i
 ];
 var NEXT_STEP_PATTERNS = [
   /\bnext\b.{0,24}\b(i|we)\b.{0,24}\bwill\b/i,
@@ -6882,10 +6956,14 @@ var NEXT_STEP_PATTERNS = [
 var DECISION_PATTERNS = [
   /\bdecision\b/i,
   /\bdecide(?:d)?\b/i,
+  /\buse\s+[a-z0-9_-]+/i,
   /\bchoose\b/i,
   /\bkeep the fix\b/i,
   /\bpatch\b.{0,24}\bfirst\b/i,
-  /\bstrategy\b/i
+  /\bstrategy\b/i,
+  /решили/i,
+  /выбрали/i,
+  /использовать/i
 ];
 function classifyCodexRelevance(text, role) {
   const normalized = text.trim();
@@ -6894,6 +6972,18 @@ function classifyCodexRelevance(text, role) {
   }
   if (role === "assistant" && matchesAny(normalized, NEXT_STEP_PATTERNS)) {
     return { keep: true, reason: "next_step" };
+  }
+  if (matchesAny(normalized, REJECTED_ALTERNATIVE_PATTERNS)) {
+    return { keep: true, reason: "rejected_alternative" };
+  }
+  if (matchesAny(normalized, VALIDATION_FACT_PATTERNS)) {
+    return { keep: true, reason: "validation_fact" };
+  }
+  if (matchesAny(normalized, CONSTRAINT_PATTERNS)) {
+    return { keep: true, reason: "constraint" };
+  }
+  if (matchesAny(normalized, STYLE_PATTERNS)) {
+    return { keep: true, reason: "style" };
   }
   if (matchesAny(normalized, PREFERENCE_PATTERNS)) {
     return { keep: true, reason: "preference" };
@@ -6905,6 +6995,9 @@ function classifyCodexRelevance(text, role) {
     return { keep: true, reason: "decision" };
   }
   if (matchesAny(normalized, NOISE_PATTERNS)) {
+    return { keep: false, reason: "noise" };
+  }
+  if (role === "assistant") {
     return { keep: false, reason: "noise" };
   }
   return { keep: true, reason: "general_context" };
@@ -6969,11 +7062,18 @@ function captureCodexEvent(event, mode) {
   }
   return keepBoundedRedactedEvent(event);
 }
-function redactCodexText(text) {
-  return text.replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [REDACTED]").replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[REDACTED]").replace(
-    /\b(password|passwd|secret|api[_-]?key|token)\b(\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s\r\n]+)/gi,
+function redactCodexTextWithMetadata(text) {
+  const redacted = text.replace(
+    /-----BEGIN ([A-Z ]*PRIVATE KEY)-----[\s\S]*?-----END \1-----/g,
+    "-----BEGIN $1-----\n[REDACTED]"
+  ).replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [REDACTED]").replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[REDACTED]").replace(/\bgh[pousr]_[A-Za-z0-9_]{12,}\b/g, "[REDACTED]").replace(/(_authToken\s*=\s*)[^\s\r\n]+/gi, "$1[REDACTED]").replace(
+    /\b(password|passwd|secret|api[_-]?key|github[_-]?token|npm[_-]?token|token)\b(\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s\r\n]+)/gi,
     (_match, key, separator) => `${key}${separator}[REDACTED]`
   );
+  return {
+    text: redacted,
+    redactionApplied: redacted !== text
+  };
 }
 function isCodexCaptureMode(value) {
   return value !== void 0 && VALID_CAPTURE_MODES.has(value);
@@ -6986,10 +7086,11 @@ function captureModeToPolicy(mode) {
 }
 function keepFullEvent(event) {
   if (event.kind === "user_prompt") {
-    const prompt = redactCodexText(stringValue(event.payload.prompt));
+    const prompt = redactCodexTextWithMetadata(stringValue(event.payload.prompt));
     return keepDecision(
       annotateEvent(event, {
-        prompt,
+        prompt: prompt.text,
+        redactionApplied: prompt.redactionApplied,
         capturePolicy: "full",
         truncated: false,
         retained: true,
@@ -6999,11 +7100,12 @@ function keepFullEvent(event) {
     );
   }
   if (event.kind === "ai_response") {
-    const response = redactCodexText(stringValue(event.payload.response));
+    const response = redactCodexTextWithMetadata(stringValue(event.payload.response));
     return keepDecision(
       annotateEvent(event, {
-        response,
+        response: response.text,
         model: optionalString(event.payload.model),
+        redactionApplied: response.redactionApplied,
         capturePolicy: "full",
         truncated: false,
         retained: true,
@@ -7013,9 +7115,11 @@ function keepFullEvent(event) {
     );
   }
   if (event.kind === "session_end") {
+    const summary = maybeRedactSummary(event.payload.summary);
     return keepDecision(
       annotateEvent(event, {
-        summary: maybeRedactSummary(event.payload.summary),
+        summary: summary?.text,
+        redactionApplied: summary?.redactionApplied,
         capturePolicy: "full",
         truncated: false,
         retained: true,
@@ -7042,9 +7146,11 @@ function keepBoundedRedactedEvent(event) {
     return keepBoundedTextEvent(event, "response", "assistant");
   }
   if (event.kind === "session_end") {
+    const summary = maybeRedactSummary(event.payload.summary);
     return keepDecision(
       annotateEvent(event, {
-        summary: maybeRedactSummary(event.payload.summary),
+        summary: summary?.text,
+        redactionApplied: summary?.redactionApplied,
         capturePolicy: "bounded_redacted",
         captureReason: "general_context",
         truncated: false,
@@ -7067,7 +7173,8 @@ function keepBoundedRedactedEvent(event) {
 }
 function keepBoundedTextEvent(event, payloadKey, role) {
   const originalText = stringValue(event.payload[payloadKey]);
-  const redactedText = redactCodexText(originalText);
+  const redaction = redactCodexTextWithMetadata(originalText);
+  const redactedText = redaction.text;
   const relevance = classifyCodexRelevance(redactedText, role);
   if (!relevance.keep) {
     return {
@@ -7099,6 +7206,7 @@ function keepBoundedTextEvent(event, payloadKey, role) {
         prompt: snippet.text,
         capturePolicy: "bounded_redacted",
         captureReason: relevance.reason,
+        redactionApplied: redaction.redactionApplied,
         truncated: snippet.truncated,
         retained: true,
         filtered: false
@@ -7114,6 +7222,7 @@ function keepBoundedTextEvent(event, payloadKey, role) {
       model: optionalString(event.payload.model),
       capturePolicy: "bounded_redacted",
       captureReason: relevance.reason,
+      redactionApplied: redaction.redactionApplied,
       truncated: snippet.truncated,
       retained: true,
       filtered: false
@@ -7159,7 +7268,7 @@ function optionalString(value) {
 }
 function maybeRedactSummary(value) {
   const summary = optionalString(value);
-  return summary === void 0 ? void 0 : redactCodexText(summary);
+  return summary === void 0 ? void 0 : redactCodexTextWithMetadata(summary);
 }
 
 // packages/codex/src/ids.ts
@@ -7212,7 +7321,8 @@ function toInboxPayload(normalizedEvent, capturePolicy, captureReason) {
         },
         capturePolicy,
         captureReason,
-        optionalBoolean(normalizedEvent.payload.truncated)
+        optionalBoolean(normalizedEvent.payload.truncated),
+        optionalBoolean(normalizedEvent.payload.redactionApplied)
       );
     case "ai_response":
       return withCaptureMetadata(
@@ -7222,7 +7332,8 @@ function toInboxPayload(normalizedEvent, capturePolicy, captureReason) {
         }),
         capturePolicy,
         captureReason,
-        optionalBoolean(normalizedEvent.payload.truncated)
+        optionalBoolean(normalizedEvent.payload.truncated),
+        optionalBoolean(normalizedEvent.payload.redactionApplied)
       );
     case "tool_use":
       return compactPayload2({
@@ -7243,18 +7354,24 @@ function toInboxPayload(normalizedEvent, capturePolicy, captureReason) {
         }),
         capturePolicy,
         captureReason,
-        optionalBoolean(normalizedEvent.payload.truncated)
+        optionalBoolean(normalizedEvent.payload.truncated),
+        optionalBoolean(normalizedEvent.payload.redactionApplied)
       );
   }
 }
-function withCaptureMetadata(payload, capturePolicy, captureReason, truncated) {
+function withCaptureMetadata(payload, capturePolicy, captureReason, truncated, redactionApplied) {
+  const redactionPayload = capturePolicy === "bounded_redacted" ? redactionApplied : redactionApplied || void 0;
   if (capturePolicy !== "bounded_redacted") {
-    return payload;
+    return compactPayload2({
+      ...payload,
+      redaction_applied: redactionPayload
+    });
   }
   return compactPayload2({
     ...payload,
     capture_policy: capturePolicy,
     capture_reason: captureReason,
+    redaction_applied: redactionPayload,
     truncated
   });
 }
@@ -31199,8 +31316,8 @@ var REDACT_PATTERNS = [
   },
   // Generic KEY=VALUE (requires 8+ char value to avoid false positives)
   {
-    pattern: /\b([A-Z_]*(?:KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL|AUTH)[A-Z_]*)\s*[=:]\s*['"]?(\S{8,})['"]?/gi,
-    replacement: "$1=[REDACTED]"
+    pattern: /\b([A-Z_]*(?:KEY|SECRET|TOKEN|PASSWORD|CREDENTIAL|AUTH)[A-Z_]*)\s*[=:]\s*(['"]?)([^'",}\\\s]{8,})\2/gi,
+    replacement: "$1=$2[REDACTED]$2"
   }
 ];
 function redact(text) {
@@ -31229,7 +31346,7 @@ function captureLevelGate(event, captureLevel) {
     return event.kind !== "user_prompt" && event.kind !== "ai_response";
   }
   if (captureLevel === "redacted") {
-    return event.kind !== "ai_response";
+    return event.kind !== "ai_response" || event.payload.capture_policy === "bounded_redacted";
   }
   return true;
 }
@@ -31727,30 +31844,201 @@ var DurableMemoryStore = class {
   }
 };
 
-// packages/core/src/memory/topic-keys.ts
+// packages/core/src/memory/extractor-patterns.ts
+var MIN_CONFIDENCE = 0.7;
+var EXTRACTOR_PATTERNS = [
+  {
+    memoryType: "rejected_alternative",
+    matchedPattern: "rejected-alternative-with-rationale",
+    confidence: 0.92,
+    reason: "rejected_alternative_with_rationale",
+    regex: /\b(?:rejected|avoid(?:ed)?|declined)\b.+\b(?:because|due to|as)\b/i
+  },
+  {
+    memoryType: "rejected_alternative",
+    matchedPattern: "ru-rejected-alternative-with-rationale",
+    confidence: 0.92,
+    reason: "rejected_alternative_with_rationale",
+    regex: /\b(?:отказались|отказаться|не используем|не использовать)\b.+\b(?:потому что|из за|так как)\b/iu
+  },
+  {
+    memoryType: "validation_fact",
+    matchedPattern: "validation-passed",
+    confidence: 0.9,
+    reason: "validation_fact",
+    regex: /\b(?:validation passed|tests? passed|typecheck passed|проверка прошла|тесты прошли)\b/i
+  },
+  {
+    memoryType: "next_step",
+    matchedPattern: "next-step",
+    confidence: 0.86,
+    reason: "next_step",
+    regex: /\b(?:next step|next i will|следующий шаг|дальше нужно)\b/i
+  },
+  {
+    memoryType: "constraint",
+    matchedPattern: "explicit-constraint",
+    confidence: 0.88,
+    reason: "explicit_constraint",
+    regex: /\b(?:do not touch|must not|keep codex as the primary validation path|нельзя трогать|не трогать)\b/i
+  },
+  {
+    memoryType: "style",
+    matchedPattern: "collaboration-style",
+    confidence: 0.84,
+    reason: "collaboration_style",
+    regex: /\b(?:surgical|avoid unrelated refactors|prove it with tests|хирургическ|без лишних рефакторинг)\b/i
+  },
+  {
+    memoryType: "style",
+    matchedPattern: "ru-work-style",
+    confidence: 0.86,
+    reason: "collaboration_style",
+    regex: /(?:мой стиль работы|стиль работы).+(?:таск|задач|отчет|отчёт|одобрен|одобрения)/iu
+  },
+  {
+    memoryType: "preference",
+    matchedPattern: "user-preference",
+    confidence: 0.84,
+    reason: "user_preference",
+    regex: /\b(?:i prefer|prefer one task at a time|предпочитаю|лучше по одному)\b/i
+  },
+  {
+    memoryType: "decision",
+    matchedPattern: "decision-prefix",
+    confidence: 0.9,
+    reason: "accepted_decision",
+    regex: /(?:decision:|decided to|we decided|решили|мы решили)/iu,
+    clean: (match, normalized) => normalized.slice((match.index ?? 0) + match[0].length).replace(/^[:\s-]+/, "").trim()
+  },
+  {
+    memoryType: "decision",
+    matchedPattern: "imperative-use-decision",
+    confidence: 0.76,
+    reason: "accepted_decision",
+    regex: /^use\s+/i
+  }
+];
+function extractPatternMatches(text) {
+  const normalized = normalizeSentence(text);
+  if (!normalized) {
+    return [];
+  }
+  if (isQuestionLike(normalized)) {
+    return [];
+  }
+  const matches = [];
+  const seenTypes = /* @__PURE__ */ new Set();
+  for (const pattern of EXTRACTOR_PATTERNS) {
+    if (pattern.confidence < MIN_CONFIDENCE || seenTypes.has(pattern.memoryType)) {
+      continue;
+    }
+    const match = normalized.match(pattern.regex);
+    if (!match) {
+      continue;
+    }
+    const summary = pattern.clean?.(match, normalized) || normalized;
+    if (!summary) {
+      continue;
+    }
+    matches.push({
+      memoryType: pattern.memoryType,
+      summary,
+      matchedPattern: pattern.matchedPattern,
+      confidence: pattern.confidence,
+      reason: pattern.reason
+    });
+    seenTypes.add(pattern.memoryType);
+  }
+  return matches;
+}
+function normalizeSentence(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function isQuestionLike(text) {
+  return /\?\s*$/.test(text) || /^(?:what|why|how|which|кто|что|почему|какой|какие|как)\b/iu.test(text);
+}
+
+// packages/core/src/memory/topic-key-registry.ts
+var TOPIC_KEY_RULES = [
+  {
+    key: "database_choice",
+    memoryTypes: ["decision"],
+    any: ["postgresql", "postgres", "sqlite", "mysql"],
+    all: [
+      [
+        "database",
+        "store",
+        "storage",
+        "memory",
+        "db",
+        "\u0431\u0430\u0437",
+        "\u0445\u0440\u0430\u043D\u0438\u043B\u0438\u0449",
+        "\u043F\u0430\u043C\u044F\u0442",
+        "\u0440\u0435\u0448\u0438\u043B\u0438",
+        "\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C"
+      ]
+    ]
+  },
+  {
+    key: "auth_strategy",
+    memoryTypes: ["decision"],
+    any: ["oauth", "github oauth", "auth strategy", "authentication strategy"],
+    all: [["auth", "authentication", "login", "\u043B\u043E\u0433\u0438\u043D", "\u0430\u0432\u0442\u043E\u0440\u0438\u0437\u0430\u0446", "\u0430\u0443\u0442\u0435\u043D\u0442\u0438\u0444\u0438\u043A\u0430\u0446"]]
+  },
+  {
+    key: "codex_hooks_strategy",
+    memoryTypes: ["decision", "rejected_alternative", "constraint"],
+    any: ["hook-first", "hooks", "hook", "\u0445\u0443\u043A"],
+    all: [["codex", "capture", "\u0437\u0430\u0445\u0432\u0430\u0442"], ["reject", "rejected", "\u043E\u0442\u043A\u0430\u0437", "\u043E\u0442\u043A\u0430\u0437\u0430\u043B\u0438\u0441\u044C", "avoid"]]
+  },
+  {
+    key: "capture_strategy",
+    memoryTypes: ["decision"],
+    any: ["capture strategy", "capture mode", "redacted capture", "bounded redacted"],
+    all: [["capture", "\u0437\u0430\u0445\u0432\u0430\u0442", "memory", "\u043F\u0430\u043C\u044F\u0442", "recall"], ["redacted", "metadata", "full"]]
+  },
+  {
+    key: "user_workflow_style",
+    memoryTypes: ["preference", "style", "constraint"],
+    any: [
+      "one task at a time",
+      "approval gate",
+      "approval gates",
+      "\u043F\u043E \u043E\u0434\u043D\u043E\u043C\u0443 \u0442\u0430\u0441\u043A\u0443",
+      "\u0441\u0442\u0438\u043B\u044C \u0440\u0430\u0431\u043E\u0442\u044B",
+      "\u0430\u0442\u043E\u043C\u0430\u0440\u043D\u043E\u0433\u043E \u0442\u0430\u0441\u043A\u0430"
+    ],
+    all: [["task", "\u0442\u0430\u0441\u043A", "\u0437\u0430\u0434\u0430\u0447"], ["approve", "approval", "\u043E\u0434\u043E\u0431\u0440\u0435\u043D", "\u043E\u0434\u043E\u0431\u0440\u0435\u043D\u0438\u044F"]]
+  },
+  {
+    key: "track_c_acceptance",
+    memoryTypes: ["next_step", "validation_fact"],
+    any: ["track c", "acceptance fixtures", "acceptance matrix", "memory_recall"],
+    all: [["acceptance", "track c"], ["recall", "fixtures", "docs", "matrix"]]
+  }
+];
+function deriveCanonicalTopicKey(input) {
+  const normalized = normalizeSummary(input.summary);
+  for (const rule of TOPIC_KEY_RULES) {
+    if (rule.memoryTypes && !rule.memoryTypes.includes(input.memoryType)) {
+      continue;
+    }
+    if (!includesAny(normalized, rule.any)) {
+      continue;
+    }
+    if (rule.all && !rule.all.every((group) => includesAny(normalized, group))) {
+      continue;
+    }
+    return rule.key;
+  }
+  return void 0;
+}
 function normalizeSummary(summary) {
-  return summary.toLowerCase().replace(/[^a-z0-9]+/gi, " ").trim();
+  return summary.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
 }
 function includesAny(text, needles) {
   return needles.some((needle) => text.includes(needle));
-}
-function deriveTopicKey(input) {
-  if (input.memoryType !== "decision") {
-    return void 0;
-  }
-  const normalized = normalizeSummary(input.summary);
-  if (includesAny(normalized, ["sqlite", "postgresql", "postgres", "mysql"]) && includesAny(normalized, ["database", "store", "memory"])) {
-    return "database_choice";
-  }
-  if (includesAny(normalized, [
-    "oauth",
-    "github oauth",
-    "auth strategy",
-    "authentication strategy"
-  ]) && includesAny(normalized, ["auth", "authentication", "login"])) {
-    return "auth_strategy";
-  }
-  return void 0;
 }
 
 // packages/core/src/memory/durable-extractor.ts
@@ -31764,46 +32052,19 @@ function parsePayload(payloadJson) {
     return void 0;
   }
 }
-function normalizeSentence(text) {
-  return text.replace(/\s+/g, " ").trim();
-}
-function extractDecisionSummary(text) {
-  const normalized = normalizeSentence(text);
-  const match = normalized.match(/decision:\s*(.+)$/i);
-  if (match?.[1]) {
-    return match[1].trim();
-  }
-  if (/^use\s+/i.test(normalized)) {
-    return normalized;
-  }
-  return void 0;
-}
-function extractStyleSummary(text) {
-  const normalized = normalizeSentence(text);
-  const lower = normalized.toLowerCase();
-  if (lower.includes("surgical") || lower.includes("avoid unrelated refactors") || lower.includes("prove it with tests")) {
-    return normalized;
-  }
-  return void 0;
-}
-function extractConstraintSummary(text) {
-  const normalized = normalizeSentence(text);
-  const lower = normalized.toLowerCase();
-  if (lower.includes("do not touch ") || lower.includes("keep codex as the primary validation path")) {
-    return normalized;
-  }
-  return void 0;
-}
-function buildCandidate(event, memoryType, summary) {
+function buildCandidate(event, match) {
   return {
-    topicKey: deriveTopicKey({ memoryType, summary }),
-    memoryType,
-    summary,
+    topicKey: deriveCanonicalTopicKey({ memoryType: match.memoryType, summary: match.summary }),
+    memoryType: match.memoryType,
+    summary: match.summary,
     evidence: {
       eventId: event.event_id,
       kind: event.kind,
       timestamp: event.timestamp,
-      sessionId: event.session_id ?? void 0
+      sessionId: event.session_id ?? void 0,
+      matchedPattern: match.matchedPattern,
+      confidence: match.confidence,
+      reason: match.reason
     },
     sourceEventId: event.event_id,
     source: event.source
@@ -31818,31 +32079,37 @@ function extractDurableCandidatesFromEvent(event) {
   const summaryText = typeof payload.summary === "string" ? payload.summary : void 0;
   const promptText = typeof payload.prompt === "string" ? payload.prompt : void 0;
   const responseText = typeof payload.response === "string" ? payload.response : void 0;
-  const decisionText = summaryText ?? responseText;
-  const decisionSummary = decisionText ? extractDecisionSummary(decisionText) : void 0;
-  if (decisionSummary) {
-    candidates.push(buildCandidate(event, "decision", decisionSummary));
-  }
-  const styleSummary = promptText ? extractStyleSummary(promptText) : void 0;
-  if (styleSummary) {
-    candidates.push(buildCandidate(event, "style", styleSummary));
-  }
-  const constraintSummary = promptText ? extractConstraintSummary(promptText) : void 0;
-  if (constraintSummary) {
-    candidates.push(buildCandidate(event, "constraint", constraintSummary));
+  for (const text of [summaryText, promptText, responseText]) {
+    if (!text) {
+      continue;
+    }
+    for (const match of extractPatternMatches(text)) {
+      if (!candidates.some((candidate) => candidate.memoryType === match.memoryType)) {
+        candidates.push(buildCandidate(event, match));
+      }
+    }
   }
   return candidates;
 }
 
 // packages/core/src/memory/durable-merge.ts
+var SUPERSEDABLE_TYPES = /* @__PURE__ */ new Set([
+  "decision",
+  "preference",
+  "constraint",
+  "next_step"
+]);
 function normalizeSummary2(summary) {
-  return summary.toLowerCase().replace(/[^a-z0-9]+/gi, " ").trim();
+  return summary.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+function hasMappingConfidence(candidate) {
+  return typeof candidate.evidence.confidence === "number";
 }
 function mergeDurableCandidate(existingEntries, candidate) {
   const activeEntries = existingEntries.filter((entry) => entry.state === "active");
-  const matchingTopic = candidate.topicKey ? activeEntries.filter((entry) => entry.topicKey === candidate.topicKey) : activeEntries.filter((entry) => entry.memoryType === candidate.memoryType);
+  const matchingEntries = activeEntries.filter((entry) => entry.memoryType === candidate.memoryType).filter((entry) => candidate.topicKey ? entry.topicKey === candidate.topicKey : true);
   const candidateSummary = normalizeSummary2(candidate.summary);
-  const duplicate = matchingTopic.find(
+  const duplicate = matchingEntries.find(
     (entry) => normalizeSummary2(entry.summary) === candidateSummary
   );
   if (duplicate) {
@@ -31851,8 +32118,8 @@ function mergeDurableCandidate(existingEntries, candidate) {
       existingId: duplicate.id
     };
   }
-  const firstMatchingEntry = matchingTopic[0];
-  if (candidate.memoryType === "decision" && firstMatchingEntry) {
+  const firstMatchingEntry = matchingEntries[0];
+  if (candidate.topicKey && hasMappingConfidence(candidate) && SUPERSEDABLE_TYPES.has(candidate.memoryType) && firstMatchingEntry) {
     return {
       action: "supersede_existing",
       existingId: firstMatchingEntry.id
@@ -32986,6 +33253,8 @@ async function initStorage(dbPath) {
 
 // packages/core/src/tools/audit.ts
 import { statSync as statSync2 } from "node:fs";
+var CAPTURE_REASON_AUDIT_LIMIT = 1e3;
+var CAPTURE_REASON_RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1e3;
 function tableExists2(db, name) {
   const row = db.get(
     "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
@@ -33014,6 +33283,58 @@ function countArrayEntries(json2) {
   } catch {
     return 0;
   }
+}
+function readCaptureReason(payloadJson) {
+  if (!payloadJson) {
+    return void 0;
+  }
+  try {
+    const payload = JSON.parse(payloadJson);
+    const reason = payload.capture_reason;
+    if (typeof reason !== "string") {
+      return void 0;
+    }
+    const trimmed = reason.trim();
+    return trimmed ? trimmed : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function loadCaptureReasonRows(db) {
+  const recentCutoff = Date.now() - CAPTURE_REASON_RECENT_WINDOW_MS;
+  const recentRows = db.all(
+    `SELECT payload_json FROM conversation_events
+     WHERE source = 'codex' AND payload_json IS NOT NULL AND timestamp >= ?
+     ORDER BY timestamp DESC, id DESC
+     LIMIT ?`,
+    [recentCutoff, CAPTURE_REASON_AUDIT_LIMIT]
+  );
+  if (recentRows.length > 0) {
+    return recentRows;
+  }
+  return db.all(
+    `SELECT payload_json FROM conversation_events
+     WHERE source = 'codex' AND payload_json IS NOT NULL
+     ORDER BY timestamp DESC, id DESC
+     LIMIT ?`,
+    [CAPTURE_REASON_AUDIT_LIMIT]
+  );
+}
+function summarizeCaptureReasons(db) {
+  const rows = loadCaptureReasonRows(db);
+  const counts = /* @__PURE__ */ new Map();
+  for (const row of rows) {
+    const reason = readCaptureReason(row.payload_json);
+    if (!reason) {
+      continue;
+    }
+    counts.set(reason, (counts.get(reason) ?? 0) + 1);
+  }
+  if (counts.size === 0) {
+    return void 0;
+  }
+  const summary = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([reason, count]) => `${reason}: ${count}`).join(", ");
+  return `Codex capture reasons: ${summary} (latest ${CAPTURE_REASON_AUDIT_LIMIT} events, 30d preferred).`;
 }
 function handleAudit(deps) {
   const { db, projectPath, dbPath, logPath, captureLevel, fts5 } = deps;
@@ -33044,6 +33365,7 @@ function handleAudit(deps) {
   }
   const episodicSessionCount = episodicSessionIds.size;
   const hookCount = db.get("SELECT COUNT(*) as cnt FROM hook_captures")?.cnt ?? 0;
+  const captureReasonSummary = summarizeCaptureReasons(db);
   const dbBytes = getFileSize(dbPath);
   const logBytes = getFileSize(logPath);
   const allMemoryRows = db.all("SELECT content, session_id FROM memories");
@@ -33064,6 +33386,7 @@ function handleAudit(deps) {
     `Semantic memory:  ${semanticCount} ${semanticCount === 1 ? "entry" : "entries"} (${semanticTokens} tokens est.)`,
     `Episodic memory:  ${episodicCount} ${episodicCount === 1 ? "entry" : "entries"} across ${episodicSessionCount} ${episodicSessionCount === 1 ? "session" : "sessions"} (${episodicTokens} tokens est.)`,
     `Hook captures:   ${hookCount} events (${captureLevel === "metadata" ? "metadata only, no content" : captureLevel} capture)`,
+    ...captureReasonSummary ? [captureReasonSummary] : [],
     "",
     `DB size: ${formatSize(dbBytes)} at ${dbPath}`,
     `Log size: ${formatSize(logBytes)} at ${logPath}`,
@@ -33110,7 +33433,9 @@ function handleAudit(deps) {
   if (captureLevel === "metadata") {
     lines.push("Capture level is 'metadata' \u2014 no raw file content is stored.");
   } else if (captureLevel === "redacted") {
-    lines.push("Capture level is 'redacted' \u2014 content is stored with secrets removed.");
+    lines.push(
+      "Capture level is 'redacted' \u2014 content is stored with secrets removed on a best-effort basis."
+    );
   } else {
     lines.push(
       "WARNING: Capture level is 'full' \u2014 raw file content is being stored. Consider switching to 'metadata' or 'redacted'."
@@ -33345,6 +33670,15 @@ function handleCompact(db, params) {
 }
 
 // packages/core/src/types.ts
+var DURABLE_MEMORY_TYPES = [
+  "decision",
+  "preference",
+  "style",
+  "constraint",
+  "rejected_alternative",
+  "next_step",
+  "validation_fact"
+];
 var LOCUS_DEFAULTS = {
   captureLevel: "metadata",
   logLevel: "error",
@@ -33706,11 +34040,18 @@ function appendCodexChecks(checks, codexDiagnostics) {
       message: "full capture can provide maximum recall, but raw conversation content is stored locally.",
       fix: "Use LOCUS_CODEX_CAPTURE=redacted unless full transcripts are explicitly required."
     });
+  } else if (codexDiagnostics.importedEventCount === 0) {
+    checks.push({
+      name: "Codex recall readiness",
+      status: "warn",
+      message: "redacted capture is enabled, but 0 Codex conversation events have been retained for recall.",
+      fix: "Use memory_search first, then memory_import_codex if you need a manual catch-up."
+    });
   } else {
     checks.push({
       name: "Codex recall readiness",
       status: "ok",
-      message: "redacted capture supports practical bounded conversational recall."
+      message: "redacted capture is the recommended rich recall mode and has retained Codex events."
     });
   }
   checks.push({
@@ -34122,6 +34463,158 @@ function handlePurge(deps, confirmToken) {
   };
 }
 
+// packages/core/src/recall/grouping.ts
+var MAX_HEADING_LENGTH = 80;
+function groupId(candidate, index) {
+  const topicPart = candidate.topicKey ? `:topic:${candidate.topicKey}` : "";
+  if (candidate.sessionId) {
+    return `session:${candidate.sessionId}${topicPart}`;
+  }
+  const durableId = candidate.durableMemoryIds[0];
+  if (durableId !== void 0) {
+    return `durable:${durableId}${topicPart}`;
+  }
+  const eventId = candidate.eventIds[0];
+  if (eventId !== void 0) {
+    return `event:${eventId}${topicPart}`;
+  }
+  return `candidate:${index}${topicPart}`;
+}
+function clipHeading(headline) {
+  if (headline.length <= MAX_HEADING_LENGTH) {
+    return headline;
+  }
+  return `${headline.slice(0, MAX_HEADING_LENGTH - 3)}...`;
+}
+function mergeUnique(left, right) {
+  return [.../* @__PURE__ */ new Set([...left, ...right])];
+}
+function maxConfidence(left, right) {
+  const rank = { low: 0, medium: 1, high: 2 };
+  if (!left) return right;
+  if (!right) return left;
+  return rank[right] > rank[left] ? right : left;
+}
+function groupRecallCandidates(candidates) {
+  const groups = /* @__PURE__ */ new Map();
+  candidates.forEach((candidate, index) => {
+    const id = groupId(candidate, index);
+    const existing = groups.get(id);
+    if (!existing) {
+      groups.set(id, {
+        id,
+        heading: clipHeading(candidate.headline),
+        whyMatched: candidate.whyMatched,
+        candidates: [candidate],
+        eventIds: [...candidate.eventIds],
+        durableMemoryIds: [...candidate.durableMemoryIds],
+        ...candidate.sessionId ? { sessionId: candidate.sessionId } : {},
+        ...candidate.topicKey ? { topicKey: candidate.topicKey } : {},
+        ...candidate.confidence ? { confidence: candidate.confidence } : {}
+      });
+      return;
+    }
+    existing.candidates.push(candidate);
+    existing.eventIds = mergeUnique(existing.eventIds, candidate.eventIds);
+    existing.durableMemoryIds = mergeUnique(
+      existing.durableMemoryIds,
+      candidate.durableMemoryIds
+    );
+    existing.confidence = maxConfidence(existing.confidence, candidate.confidence);
+  });
+  return [...groups.values()];
+}
+
+// packages/core/src/recall/result-builder.ts
+var DOMINANT_GROUP_SCORE_GAP = 3;
+function topScore(candidate) {
+  return candidate?.score ?? 0;
+}
+function isDominantTopGroup(candidates) {
+  const topCandidate = candidates[0];
+  if (!topCandidate) {
+    return false;
+  }
+  const topGroupKey = groupKey(topCandidate);
+  const nextDifferentGroup = candidates.find((candidate) => groupKey(candidate) !== topGroupKey);
+  const scoreGap = topScore(topCandidate) - topScore(nextDifferentGroup);
+  if (topCandidate.confidence === "high") {
+    return scoreGap >= DOMINANT_GROUP_SCORE_GAP;
+  }
+  return topCandidate.sourceKind === "durable" && topCandidate.confidence === "medium" && scoreGap >= 3;
+}
+function groupKey(candidate) {
+  if (candidate.topicKey) {
+    return `topic:${candidate.topicKey}`;
+  }
+  if (candidate.sessionId) {
+    return `session:${candidate.sessionId}`;
+  }
+  if (candidate.durableMemoryIds[0] !== void 0) {
+    return `durable:${candidate.durableMemoryIds[0]}`;
+  }
+  return `event:${candidate.eventIds[0] ?? "unknown"}`;
+}
+function buildRecallResult({
+  question,
+  candidates,
+  resolvedRange,
+  matchedIntent,
+  matchedTopics
+}) {
+  const candidateGroups = groupRecallCandidates(candidates);
+  const resultMetadata = {
+    ...matchedIntent ? { matchedIntent } : {},
+    ...matchedTopics && matchedTopics.length > 0 ? { matchedTopics } : {}
+  };
+  if (candidateGroups.length === 0) {
+    return {
+      status: "no_memory",
+      question,
+      ...resolvedRange ? { resolvedRange } : {},
+      ...resultMetadata,
+      summary: "No matching memory found.",
+      candidates: [],
+      candidateGroups: []
+    };
+  }
+  if (candidateGroups.length === 1) {
+    const group = candidateGroups[0];
+    return {
+      status: "ok",
+      question,
+      ...resolvedRange ? { resolvedRange } : {},
+      ...resultMetadata,
+      summary: group.candidates[0]?.headline ?? group.heading,
+      candidates,
+      candidateGroups,
+      confidence: group.confidence
+    };
+  }
+  if (isDominantTopGroup(candidates)) {
+    const topCandidate = candidates[0];
+    return {
+      status: "ok",
+      question,
+      ...resolvedRange ? { resolvedRange } : {},
+      ...resultMetadata,
+      summary: topCandidate.headline,
+      candidates,
+      candidateGroups,
+      confidence: topCandidate.confidence
+    };
+  }
+  return {
+    status: "needs_clarification",
+    question,
+    ...resolvedRange ? { resolvedRange } : {},
+    ...resultMetadata,
+    summary: "I found multiple possible matches. Please clarify which one you mean.",
+    candidates,
+    candidateGroups
+  };
+}
+
 // packages/core/src/tools/search.ts
 function parseExports2(json2) {
   if (!json2) return [];
@@ -34179,10 +34672,10 @@ function setStartOfDay(date5, mode) {
   }
   date5.setHours(0, 0, 0, 0);
 }
-function resolveTimeRange(range, referenceNow, mode = "local") {
+function resolveTimeRange(range2, referenceNow, mode = "local") {
   const now = referenceNow ?? Date.now();
-  if (range.relative) {
-    switch (range.relative) {
+  if (range2.relative) {
+    switch (range2.relative) {
       case "today": {
         const start = new Date(now);
         setStartOfDay(start, mode);
@@ -34218,8 +34711,8 @@ function resolveTimeRange(range, referenceNow, mode = "local") {
     }
   }
   return {
-    from: range.from ?? 0,
-    to: range.to ?? now
+    from: range2.from ?? 0,
+    to: range2.to ?? now
   };
 }
 function searchStructural(query, db) {
@@ -34373,9 +34866,9 @@ function searchConversationLike(query, db, resolved, opts) {
   const timestamps = rows.map((r) => r.timestamp);
   const minTs = Math.min(...timestamps);
   const maxTs = Math.max(...timestamps);
-  const range = maxTs - minTs;
+  const range2 = maxTs - minTs;
   return rows.map((row) => {
-    const recency = range > 0 ? (row.timestamp - minTs) / range : 1;
+    const recency = range2 > 0 ? (row.timestamp - minTs) / range2 : 1;
     const relevance = 0.5 + 0.2 * recency;
     return {
       layer: "conversation",
@@ -34494,51 +34987,495 @@ function handleTimeline(deps, options) {
   });
 }
 
-// packages/core/src/tools/recall.ts
-var QUESTION_STOP_WORDS = /* @__PURE__ */ new Set([
-  "what",
-  "did",
-  "we",
-  "do",
-  "about",
-  "the",
+// packages/core/src/recall/candidate-loader.ts
+var DURABLE_TYPES_BY_INTENT = {
+  decision: ["decision"],
+  preference_style: ["preference", "style", "constraint"],
+  rejected_alternative: ["rejected_alternative"],
+  next_step: ["next_step"],
+  validation_fact: ["validation_fact"],
+  general: [
+    "decision",
+    "preference",
+    "style",
+    "constraint",
+    "rejected_alternative",
+    "next_step",
+    "validation_fact"
+  ]
+};
+function normalizeText(text) {
+  return text.toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, " ").replace(/\s+/g, " ").trim();
+}
+function stemLite(term) {
+  if (/^ошиб(?:ка|ки|ку|ке|кой|ок|ками)?$/u.test(term)) {
+    return "\u043E\u0448\u0438\u0431\u043A";
+  }
+  return term;
+}
+function unique(values) {
+  return [...new Set(values)];
+}
+function textTerms(text) {
+  const normalized = normalizeText(text);
+  if (!normalized) {
+    return [];
+  }
+  const terms = normalized.split(" ");
+  return unique([...terms, ...terms.map(stemLite)]);
+}
+function matchingTerms(text, queryTerms) {
+  if (queryTerms.length === 0) {
+    return [];
+  }
+  const textTermSet = new Set(textTerms(text));
+  const normalizedText = normalizeText(text);
+  return queryTerms.filter((term) => textTermSet.has(term) || normalizedText.includes(term));
+}
+function shouldKeepByTerms(text, queryTerms) {
+  return queryTerms.length === 0 || matchingTerms(text, queryTerms).length > 0;
+}
+function durableTypesForIntent(intent) {
+  return DURABLE_TYPES_BY_INTENT[intent] ?? [];
+}
+function isExactDurableIntent(intent) {
+  return intent === "rejected_alternative" || intent === "next_step" || intent === "validation_fact";
+}
+function loadDurableCandidates({
+  db,
+  parsedQuery,
+  timeRange,
+  now,
+  limit
+}) {
+  const memoryTypes = durableTypesForIntent(parsedQuery.intent);
+  if (memoryTypes.length === 0) {
+    return [];
+  }
+  const params = [];
+  const clauses = ["state = ?"];
+  params.push("active");
+  clauses.push(`memory_type IN (${memoryTypes.map(() => "?").join(", ")})`);
+  params.push(...memoryTypes);
+  if (timeRange) {
+    const resolved = resolveTimeRange(timeRange, now);
+    clauses.push("updated_at >= ?");
+    params.push(resolved.from);
+    clauses.push("updated_at <= ?");
+    params.push(resolved.to);
+  }
+  const rows = db.all(
+    `SELECT id, topic_key, memory_type, summary, updated_at
+     FROM durable_memories
+     WHERE ${clauses.join(" AND ")}
+     ORDER BY updated_at DESC, id DESC
+     LIMIT ?`,
+    [...params, limit]
+  );
+  return rows.filter((row) => {
+    if (parsedQuery.intent === "preference_style" || isExactDurableIntent(parsedQuery.intent)) {
+      return true;
+    }
+    return parsedQuery.topicHints.includes(row.topic_key ?? "") || shouldKeepByTerms(row.summary, parsedQuery.termVariants);
+  }).map((row) => ({
+    headline: row.summary,
+    whyMatched: `durable ${row.memory_type} memory`,
+    eventIds: [],
+    durableMemoryIds: [row.id],
+    intent: parsedQuery.intent,
+    topicKey: row.topic_key ?? void 0,
+    matchedTerms: matchingTerms(row.summary, parsedQuery.termVariants),
+    sourceKind: "durable",
+    timestamp: row.updated_at
+  }));
+}
+function loadConversationCandidates({
+  db,
+  parsedQuery,
+  timeRange,
+  now,
+  limit
+}) {
+  if (parsedQuery.termVariants.length > 0) {
+    const params = [];
+    const clauses = [];
+    if (timeRange) {
+      const resolved = resolveTimeRange(timeRange, now);
+      clauses.push("timestamp >= ?");
+      params.push(resolved.from);
+      clauses.push("timestamp <= ?");
+      params.push(resolved.to);
+    }
+    const termClauses = parsedQuery.termVariants.map(
+      () => "LOWER(COALESCE(payload_json, ?)) LIKE ?"
+    );
+    const termParams = parsedQuery.termVariants.flatMap((term) => ["", `%${term.toLowerCase()}%`]);
+    clauses.push(`(${termClauses.join(" OR ")})`);
+    params.push(...termParams);
+    const rows = db.all(
+      `SELECT event_id, kind, timestamp, payload_json, session_id
+       FROM conversation_events
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY timestamp DESC, id DESC
+       LIMIT ?`,
+      [...params, limit]
+    );
+    return rows.map((row) => {
+      const headline = summarizePayload(row.kind, row.payload_json);
+      return {
+        sessionId: row.session_id ?? void 0,
+        headline,
+        whyMatched: "recent conversation context",
+        eventIds: [row.event_id],
+        durableMemoryIds: [],
+        intent: parsedQuery.intent,
+        matchedTerms: matchingTerms(headline, parsedQuery.termVariants),
+        sourceKind: "conversation",
+        timestamp: row.timestamp,
+        captureReason: row.kind
+      };
+    }).filter((candidate) => candidate.matchedTerms.length > 0);
+  }
+  const entries = handleTimeline(
+    { db },
+    {
+      timeRange,
+      summary: false,
+      limit,
+      now
+    }
+  );
+  return entries.filter((entry) => typeof entry.summary === "string").map((entry) => ({
+    sessionId: entry.sessionId ?? void 0,
+    headline: entry.summary ?? entry.kind,
+    whyMatched: "recent conversation context",
+    eventIds: [entry.eventId],
+    durableMemoryIds: [],
+    intent: parsedQuery.intent,
+    matchedTerms: [],
+    sourceKind: "conversation",
+    timestamp: entry.timestamp,
+    captureReason: entry.kind
+  }));
+}
+function loadRecallCandidates(options) {
+  return [
+    ...loadDurableCandidates(options),
+    ...loadConversationCandidates(options)
+  ];
+}
+
+// packages/core/src/recall/temporal-parser.ts
+var DAY_MS = 24 * 60 * 60 * 1e3;
+var WEEKDAY_TO_UTC_DAY = /* @__PURE__ */ new Map([
+  ["sunday", 0],
+  ["monday", 1],
+  ["tuesday", 2],
+  ["wednesday", 3],
+  ["thursday", 4],
+  ["friday", 5],
+  ["saturday", 6],
+  ["\u0432\u043E\u0441\u043A\u0440\u0435\u0441\u0435\u043D\u044C\u0435", 0],
+  ["\u043F\u043E\u043D\u0435\u0434\u0435\u043B\u044C\u043D\u0438\u043A", 1],
+  ["\u0432\u0442\u043E\u0440\u043D\u0438\u043A", 2],
+  ["\u0441\u0440\u0435\u0434\u0443", 3],
+  ["\u0441\u0440\u0435\u0434\u0430", 3],
+  ["\u0447\u0435\u0442\u0432\u0435\u0440\u0433", 4],
+  ["\u043F\u044F\u0442\u043D\u0438\u0446\u0443", 5],
+  ["\u043F\u044F\u0442\u043D\u0438\u0446\u0430", 5],
+  ["\u0441\u0443\u0431\u0431\u043E\u0442\u0443", 6],
+  ["\u0441\u0443\u0431\u0431\u043E\u0442\u0430", 6]
+]);
+function startOfUtcDay(timestamp) {
+  const date5 = new Date(timestamp);
+  return Date.UTC(date5.getUTCFullYear(), date5.getUTCMonth(), date5.getUTCDate());
+}
+function range(label, from, to) {
+  return {
+    label,
+    from,
+    to,
+    fromIso: new Date(from).toISOString(),
+    toIso: new Date(to).toISOString()
+  };
+}
+function normalizeQuestion(question) {
+  return question.toLowerCase().replace(/\s+/g, " ").trim();
+}
+function parseDaysAgo(question, now) {
+  const match = /\b(?<days>\d{1,3})\s+days?\s+ago\b/u.exec(question) ?? /(?<days>\d{1,3})\s+дн(?:я|ей|ь)\s+назад/u.exec(question);
+  if (!match?.groups?.days) {
+    return void 0;
+  }
+  const days = Number(match.groups.days);
+  if (!Number.isInteger(days) || days < 1) {
+    return void 0;
+  }
+  const start = startOfUtcDay(now) - days * DAY_MS;
+  return range(match[0], start, start + DAY_MS);
+}
+function parseWeekday(question, now) {
+  for (const [word, weekday] of WEEKDAY_TO_UTC_DAY.entries()) {
+    if (!question.includes(word)) {
+      continue;
+    }
+    const todayStart = startOfUtcDay(now);
+    const currentDay = new Date(todayStart).getUTCDay();
+    const delta = (currentDay - weekday + 7) % 7 || 7;
+    const start = todayStart - delta * DAY_MS;
+    return range(question.includes(`\u0432 ${word}`) ? `\u0432 ${word}` : word, start, start + DAY_MS);
+  }
+  return void 0;
+}
+function parseRecallTemporalRange(question, now) {
+  const normalized = normalizeQuestion(question);
+  const todayStart = startOfUtcDay(now);
+  if (/\btoday\b/u.test(normalized) || normalized.includes("\u0441\u0435\u0433\u043E\u0434\u043D\u044F")) {
+    return range(
+      normalized.includes("\u0441\u0435\u0433\u043E\u0434\u043D\u044F") ? "\u0441\u0435\u0433\u043E\u0434\u043D\u044F" : "today",
+      todayStart,
+      todayStart + DAY_MS
+    );
+  }
+  if (/\byesterday\b/u.test(normalized) || normalized.includes("\u0432\u0447\u0435\u0440\u0430")) {
+    return range(
+      normalized.includes("\u0432\u0447\u0435\u0440\u0430") ? "\u0432\u0447\u0435\u0440\u0430" : "yesterday",
+      todayStart - DAY_MS,
+      todayStart
+    );
+  }
+  if (normalized.includes("last week") || normalized.includes("\u043D\u0430 \u043F\u0440\u043E\u0448\u043B\u043E\u0439 \u043D\u0435\u0434\u0435\u043B\u0435")) {
+    return range(
+      normalized.includes("\u043D\u0430 \u043F\u0440\u043E\u0448\u043B\u043E\u0439 \u043D\u0435\u0434\u0435\u043B\u0435") ? "\u043D\u0430 \u043F\u0440\u043E\u0448\u043B\u043E\u0439 \u043D\u0435\u0434\u0435\u043B\u0435" : "last week",
+      now - 7 * DAY_MS,
+      now
+    );
+  }
+  return parseDaysAgo(normalized, now) ?? parseWeekday(normalized, now);
+}
+
+// packages/core/src/recall/query-parser.ts
+var STOP_WORDS = /* @__PURE__ */ new Set([
   "a",
-  "an",
-  "our",
-  "last",
-  "week",
-  "yesterday",
-  "today",
-  "just",
+  "about",
+  "and",
+  "did",
+  "do",
   "decide",
   "decided",
-  "fix",
-  "fixed"
+  "during",
+  "happened",
+  "is",
+  "just",
+  "last",
+  "me",
+  "my",
+  "the",
+  "to",
+  "we",
+  "what",
+  "which",
+  "why",
+  "yesterday",
+  "\u0431\u044B\u043B\u0438",
+  "\u0431\u044B\u043B\u043E",
+  "\u0434\u0435\u043B\u0430\u043B\u0438",
+  "\u043A\u0430\u043A\u0438\u0435",
+  "\u043A\u0430\u043A\u043E\u0439",
+  "\u043C\u0435\u043D\u044F",
+  "\u043C\u044B",
+  "\u043D\u0430",
+  "\u043D\u0430\u0437\u0430\u0434",
+  "\u043D\u0435\u0434\u0435\u043B\u0435",
+  "\u043E\u0441\u0442\u0430\u043B\u043E\u0441\u044C",
+  "\u043F\u043E\u0447\u0435\u043C\u0443",
+  "\u043F\u0440\u0438",
+  "\u043F\u0440\u043E",
+  "\u043F\u0440\u043E\u0448\u043B\u043E\u0439",
+  "\u0440\u0430\u0441\u0441\u043A\u0430\u0436\u0438",
+  "\u0440\u0435\u0430\u043B\u044C\u043D\u043E",
+  "\u0440\u0435\u0448\u0438\u043B\u0438",
+  "\u0441\u0434\u0435\u043B\u0430\u0442\u044C",
+  "\u0441\u0435\u0433\u043E\u0434\u043D\u044F",
+  "\u0447\u0442\u043E",
+  "\u0432\u0447\u0435\u0440\u0430"
 ]);
-function parseQuestionTerms(question) {
-  const normalized = question.toLowerCase().replace(/[^a-z0-9\s]+/gi, " ");
-  return normalized.split(/\s+/).map((term) => term.trim()).filter((term) => term.length >= 3 && !QUESTION_STOP_WORDS.has(term));
+var INTENT_PATTERNS = [
+  {
+    intent: "rejected_alternative",
+    patterns: [/\bwhy\b.*\breject(?:ed)?\b/u, /\bwhy\s+not\b/u, /почему\s+отказал/u]
+  },
+  {
+    intent: "validation_fact",
+    patterns: [/\b(?:passed|validation|verified|checked)\b/u, /проверен|проверено/u]
+  },
+  {
+    intent: "next_step",
+    patterns: [/\b(?:what\s+remains|next\s+steps?|todo)\b/u, /что\s+осталось|следующ/u]
+  },
+  {
+    intent: "preference_style",
+    patterns: [/\b(?:my\s+)?(?:code\s+)?style\b/u, /\bpreferences?\b/u, /стиль|предпочтен/u]
+  },
+  {
+    intent: "bug_context",
+    patterns: [
+      /\b(?:errors?|failures?|bugs?|failed|failing|fix(?:ed|es)?)\b/u,
+      /ошибк|падал|сломал|исправил/u
+    ]
+  },
+  {
+    intent: "decision",
+    patterns: [/\bdecid(?:e|ed)\b/u, /что\s+решили|решили\s+по/u]
+  },
+  {
+    intent: "work_summary",
+    patterns: [/\bwhat\s+did\s+we\s+do\b/u, /что\s+(?:мы\s+)?делали/u]
+  }
+];
+var TOPIC_HINTS = [
+  { topic: "auth_strategy", patterns: [/\bauth\b/u, /\boauth\b/u, /авторизац/u] },
+  { topic: "capture_strategy", patterns: [/\bcapture\s+strategy\b/u, /capture\s+mode/u] },
+  { topic: "codex_hooks_strategy", patterns: [/\bhook-first\b/u, /\bcodex\s+hooks?\b/u] },
+  { topic: "package_installation", patterns: [/\bnpm\s+install\b/u, /\binstall\b/u] },
+  { topic: "user_workflow_style", patterns: [/\bwork\s+style\b/u, /стиль\s+работ/u] }
+];
+function normalizeQuestion2(question) {
+  return question.toLowerCase().replace(/[^\p{L}\p{N}_-]+/gu, " ").replace(/\s+/g, " ").trim();
 }
-function matchesTerms(text, terms) {
-  const normalized = text.toLowerCase();
-  if (terms.length === 0) {
-    return true;
-  }
-  return terms.some((term) => normalized.includes(term));
+function unique2(values) {
+  return [...new Set(values)];
 }
-function parseRange(question, now) {
-  const lower = question.toLowerCase();
-  if (lower.includes("yesterday")) {
-    return buildResolvedRange("yesterday", { relative: "yesterday" }, now);
+function stemLite2(term) {
+  if (/^ошиб(?:ка|ки|ку|ке|кой|ок|ками)?$/u.test(term)) {
+    return "\u043E\u0448\u0438\u0431\u043A";
   }
-  if (lower.includes("last week")) {
-    return buildResolvedRange("last week", { relative: "last_7d" }, now);
-  }
-  if (lower.includes("today")) {
-    return buildResolvedRange("today", { relative: "today" }, now);
-  }
-  return {};
+  return term;
 }
+function detectIntent(normalized) {
+  for (const { intent, patterns } of INTENT_PATTERNS) {
+    if (patterns.some((pattern) => pattern.test(normalized))) {
+      return intent;
+    }
+  }
+  return "general";
+}
+function detectTopicHints(normalized) {
+  return TOPIC_HINTS.filter(
+    ({ patterns }) => patterns.some((pattern) => pattern.test(normalized))
+  ).map(({ topic }) => topic);
+}
+function parseRecallQuery(question, now) {
+  const normalized = normalizeQuestion2(question);
+  const normalizedTerms = normalized.length > 0 ? normalized.split(" ") : [];
+  const terms = normalizedTerms.filter((term) => term.length >= 2 && !STOP_WORDS.has(term));
+  const termVariants = unique2(terms.map(stemLite2));
+  const temporalRange = parseRecallTemporalRange(question, now);
+  return {
+    original: question,
+    normalized,
+    normalizedTerms,
+    terms,
+    termVariants,
+    intent: detectIntent(normalized),
+    ...temporalRange ? { temporalRange } : {},
+    topicHints: detectTopicHints(normalized)
+  };
+}
+
+// packages/core/src/recall/scoring.ts
+var DAY_MS2 = 24 * 60 * 60 * 1e3;
+var DURABLE_PRIORITY_INTENTS = /* @__PURE__ */ new Set([
+  "decision",
+  "preference_style",
+  "rejected_alternative",
+  "next_step",
+  "validation_fact"
+]);
+var COMPLETION_EVENT_INTENTS = /* @__PURE__ */ new Set(["bug_context", "validation_fact", "work_summary"]);
+var COMPLETION_CAPTURE_REASONS = /* @__PURE__ */ new Set(["session_end", "task_complete"]);
+var VALIDATION_COMMAND_PATTERN = /\b(?:npm\s+(?:test|-w)|typecheck|vitest|pytest|cargo\s+test)\b/i;
+function confidenceForScore(score) {
+  if (score >= 12) {
+    return "high";
+  }
+  if (score >= 6) {
+    return "medium";
+  }
+  return "low";
+}
+function recencyScore(timestamp, now) {
+  const ageDays = Math.max(0, (now - timestamp) / DAY_MS2);
+  if (ageDays <= 1) {
+    return 3;
+  }
+  if (ageDays <= 7) {
+    return 2;
+  }
+  if (ageDays <= 30) {
+    return 1;
+  }
+  return 0;
+}
+function scoreRecallCandidate(candidate, parsedQuery, options) {
+  let score = 0;
+  const reasons = [];
+  if (candidate.intent === parsedQuery.intent) {
+    score += 3;
+    reasons.push("intent_match");
+  }
+  if (candidate.topicKey && parsedQuery.topicHints.includes(candidate.topicKey)) {
+    score += 4;
+    reasons.push("topic_match");
+  }
+  if (candidate.matchedTerms && candidate.matchedTerms.length > 0) {
+    score += Math.min(candidate.matchedTerms.length, 4);
+    reasons.push("term_overlap");
+  }
+  if (typeof candidate.timestamp === "number") {
+    const bonus = recencyScore(candidate.timestamp, options.now);
+    if (bonus > 0) {
+      score += bonus;
+      reasons.push("recent");
+    }
+  }
+  if (candidate.sourceKind === "durable" && DURABLE_PRIORITY_INTENTS.has(parsedQuery.intent)) {
+    score += 3;
+    reasons.push("durable_priority");
+  }
+  if (candidate.captureReason === parsedQuery.intent) {
+    score += 2;
+    reasons.push("capture_reason_match");
+  }
+  if (candidate.captureReason && COMPLETION_CAPTURE_REASONS.has(candidate.captureReason) && COMPLETION_EVENT_INTENTS.has(parsedQuery.intent)) {
+    score += 5;
+    reasons.push("completion_event");
+  }
+  if (parsedQuery.intent === "validation_fact" && VALIDATION_COMMAND_PATTERN.test(candidate.headline)) {
+    score += 3;
+    reasons.push("validation_command_context");
+  }
+  if (candidate.eventIds.length > 0 || candidate.durableMemoryIds.length > 0) {
+    score += 1;
+    reasons.push("evidence_present");
+  }
+  const confidence = confidenceForScore(score);
+  return {
+    candidate: {
+      ...candidate,
+      score,
+      confidence
+    },
+    score,
+    confidence,
+    reasons
+  };
+}
+function scoreRecallCandidates(candidates, parsedQuery, options) {
+  return candidates.map((candidate) => scoreRecallCandidate(candidate, parsedQuery, options).candidate).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+}
+
+// packages/core/src/recall/engine.ts
 function resolveRangeLabel(timeRange) {
   if (timeRange.relative) {
     return timeRange.relative;
@@ -34558,133 +35495,87 @@ function buildResolvedRange(label, timeRange, now) {
     }
   };
 }
-function loadDurableCandidates(db, questionTerms, timeRange, now, limit) {
-  const params = [];
-  const clauses = ["memory_type = 'decision'", "state = 'active'"];
-  if (timeRange) {
-    const resolved = resolveTimeRange(timeRange, now);
-    clauses.push("updated_at >= ?");
-    params.push(resolved.from);
-    clauses.push("updated_at <= ?");
-    params.push(resolved.to);
-  }
-  const rows = db.all(
-    `SELECT id, summary, updated_at
-     FROM durable_memories
-     WHERE ${clauses.join(" AND ")}
-     ORDER BY updated_at DESC, id DESC
-     LIMIT ?`,
-    [...params, limit]
-  );
-  return rows.filter((row) => matchesTerms(row.summary, questionTerms)).map((row) => ({
-    headline: row.summary,
-    whyMatched: "durable decision memory",
-    eventIds: [],
-    durableMemoryIds: [row.id]
-  }));
-}
-function loadConversationCandidates(db, questionTerms, timeRange, now, limit) {
-  if (questionTerms.length > 0) {
-    const params = [];
-    const clauses = [];
-    if (timeRange) {
-      const resolved = resolveTimeRange(timeRange, now);
-      clauses.push("timestamp >= ?");
-      params.push(resolved.from);
-      clauses.push("timestamp <= ?");
-      params.push(resolved.to);
-    }
-    const termClauses = questionTerms.map(() => "LOWER(COALESCE(payload_json, ?)) LIKE ?");
-    const termParams = questionTerms.flatMap((term) => ["", `%${term.toLowerCase()}%`]);
-    clauses.push(`(${termClauses.join(" OR ")})`);
-    params.push(...termParams);
-    const rows = db.all(
-      `SELECT event_id, kind, payload_json, session_id
-       FROM conversation_events
-       WHERE ${clauses.join(" AND ")}
-       ORDER BY timestamp DESC, id DESC
-       LIMIT ?`,
-      [...params, limit]
-    );
-    return rows.map((row) => ({
-      sessionId: row.session_id ?? void 0,
-      headline: summarizePayload(row.kind, row.payload_json),
-      whyMatched: "recent conversation context",
-      eventIds: [row.event_id],
-      durableMemoryIds: []
-    })).filter((candidate) => matchesTerms(candidate.headline, questionTerms));
-  }
-  const entries = handleTimeline(
-    { db },
-    {
-      timeRange,
-      summary: false,
-      limit,
-      now
-    }
-  );
-  return entries.filter(
-    (entry) => typeof entry.summary === "string" && matchesTerms(entry.summary, questionTerms)
-  ).map((entry) => ({
-    sessionId: entry.sessionId ?? void 0,
-    headline: entry.summary ?? entry.kind,
-    whyMatched: "recent conversation context",
-    eventIds: [entry.eventId],
-    durableMemoryIds: []
-  }));
-}
-function buildResult(question, candidates, resolvedRange) {
-  if (candidates.length === 0) {
-    return {
-      status: "no_memory",
-      question,
-      ...resolvedRange ? { resolvedRange } : {},
-      summary: "No matching memory found.",
-      candidates: []
-    };
-  }
-  if (candidates.length > 1) {
-    return {
-      status: "needs_clarification",
-      question,
-      ...resolvedRange ? { resolvedRange } : {},
-      summary: "I found multiple possible matches. Please clarify which one you mean.",
-      candidates
-    };
-  }
-  const candidate = candidates[0];
-  return {
-    status: "ok",
-    question,
-    ...resolvedRange ? { resolvedRange } : {},
-    summary: candidate.headline,
-    candidates: [candidate]
-  };
-}
-function handleRecall(question, deps, options) {
+function runRecallEngine(question, deps, options) {
   const now = options?.now ?? deps.now ?? Date.now();
   const limit = Math.max(1, options?.limit ?? 10);
-  const questionTerms = parseQuestionTerms(question);
-  const questionRange = parseRange(question, now);
+  const parsedQuery = parseRecallQuery(question, now);
   const explicitRange = options?.timeRange ? buildResolvedRange(resolveRangeLabel(options.timeRange), options.timeRange, now) : void 0;
-  const timeRange = explicitRange?.timeRange ?? questionRange.timeRange;
-  const resolvedRange = explicitRange?.resolvedRange ?? questionRange.resolvedRange;
-  const durableCandidates = loadDurableCandidates(deps.db, questionTerms, timeRange, now, limit);
-  const conversationCandidates = loadConversationCandidates(
-    deps.db,
-    questionTerms,
+  const timeRange = explicitRange?.timeRange ?? (parsedQuery.temporalRange ? { from: parsedQuery.temporalRange.from, to: parsedQuery.temporalRange.to } : void 0);
+  const resolvedRange = explicitRange?.resolvedRange ?? parsedQuery.temporalRange;
+  const candidates = loadRecallCandidates({
+    db: deps.db,
+    parsedQuery,
     timeRange,
     now,
     limit
-  );
-  const candidates = [...durableCandidates, ...conversationCandidates];
-  return buildResult(question, candidates, resolvedRange);
+  });
+  const scoredCandidates = scoreRecallCandidates(candidates, parsedQuery, { now }).slice(0, limit);
+  return buildRecallResult({
+    question,
+    candidates: scoredCandidates,
+    resolvedRange,
+    matchedIntent: parsedQuery.intent,
+    matchedTopics: parsedQuery.topicHints
+  });
+}
+
+// packages/core/src/tools/recall.ts
+function handleRecall(question, deps, options) {
+  return runRecallEngine(question, deps, options);
 }
 
 // packages/core/src/tools/remember.ts
 function handleRemember(text, tags, deps) {
   const redacted = redact(text);
   return deps.semantic.add(redacted, tags);
+}
+
+// packages/core/src/memory/evidence.ts
+function readNonEmptyString(value) {
+  if (typeof value !== "string") {
+    return void 0;
+  }
+  const trimmed = value.trim();
+  return trimmed ? trimmed : void 0;
+}
+function readConfidence(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return void 0;
+  }
+  return value;
+}
+function normalizeDurableEvidence(evidence) {
+  if (!evidence) {
+    return {};
+  }
+  const sourceEventId = readNonEmptyString(evidence.eventId) ?? readNonEmptyString(evidence.sourceEventId);
+  return {
+    confidence: readConfidence(evidence.confidence),
+    reason: readNonEmptyString(evidence.reason),
+    matchedPattern: readNonEmptyString(evidence.matchedPattern),
+    sourceEventId,
+    sessionId: readNonEmptyString(evidence.sessionId)
+  };
+}
+function formatConfidence(confidence) {
+  return `${Math.round(confidence * 100)}% confidence`;
+}
+function formatEvidenceWhyStored(memoryType, evidence) {
+  const parts = [`Stored as ${memoryType}`];
+  if (evidence.matchedPattern) {
+    parts.push(`because matched "${evidence.matchedPattern}"`);
+  } else if (evidence.reason) {
+    parts.push(`because ${evidence.reason}`);
+  }
+  if (typeof evidence.confidence === "number") {
+    parts.push(`with ${formatConfidence(evidence.confidence)}`);
+  }
+  if (evidence.sessionId) {
+    parts.push(`from session ${evidence.sessionId}`);
+  } else if (evidence.sourceEventId) {
+    parts.push(`from event ${evidence.sourceEventId}`);
+  }
+  return `${parts.join(" ")}.`;
 }
 
 // packages/core/src/memory/review.ts
@@ -34697,14 +35588,24 @@ function createEmptyStateCounts() {
   };
 }
 function buildCandidate2(entry) {
+  const evidence = normalizeDurableEvidence(entry.evidence);
+  const sourceEventId = entry.sourceEventId ?? evidence.sourceEventId;
+  const whyStored = formatEvidenceWhyStored(entry.memoryType, {
+    ...evidence,
+    sourceEventId
+  });
   if (entry.state === "superseded") {
     return {
       durableId: entry.id,
       topicKey: entry.topicKey,
+      memoryType: entry.memoryType,
       state: entry.state,
       reason: "superseded_by_newer_memory",
       recommendedAction: "delete",
       summary: entry.summary,
+      confidence: evidence.confidence,
+      sourceEventId,
+      whyStored,
       supersededById: entry.supersededById,
       updatedAt: entry.updatedAt
     };
@@ -34713,10 +35614,14 @@ function buildCandidate2(entry) {
     return {
       durableId: entry.id,
       topicKey: entry.topicKey,
+      memoryType: entry.memoryType,
       state: entry.state,
       reason: "stale_low_value",
       recommendedAction: "review",
       summary: entry.summary,
+      confidence: evidence.confidence,
+      sourceEventId,
+      whyStored,
       supersededById: entry.supersededById,
       updatedAt: entry.updatedAt
     };
@@ -34725,10 +35630,14 @@ function buildCandidate2(entry) {
     return {
       durableId: entry.id,
       topicKey: entry.topicKey,
+      memoryType: entry.memoryType,
       state: entry.state,
       reason: "aged_but_readable",
       recommendedAction: "archive",
       summary: entry.summary,
+      confidence: evidence.confidence,
+      sourceEventId,
+      whyStored,
       supersededById: entry.supersededById,
       updatedAt: entry.updatedAt
     };
@@ -34740,9 +35649,13 @@ function reviewDurableMemories(deps, options) {
   const store = new DurableMemoryStore(deps.db, false);
   const entries = store.listAll(limit);
   const countsByState = entries.length > 0 ? store.countByState() : createEmptyStateCounts();
-  const candidates = entries.map((entry) => buildCandidate2(entry)).filter((candidate) => candidate !== null).slice(0, limit);
+  const candidates = entries.filter((entry) => options?.state ? entry.state === options.state : true).filter((entry) => options?.topicKey ? entry.topicKey === options.topicKey : true).filter((entry) => options?.memoryType ? entry.memoryType === options.memoryType : true).map((entry) => buildCandidate2(entry)).filter((candidate) => candidate !== null).filter(
+    (candidate) => typeof options?.confidence === "number" ? typeof candidate.confidence === "number" && candidate.confidence >= options.confidence : true
+  ).slice(0, limit);
   return {
     totalCandidates: candidates.length,
+    returnedCandidates: candidates.length,
+    totalMatchingCandidates: candidates.length,
     countsByState,
     candidates
   };
@@ -34751,10 +35664,18 @@ function reviewDurableMemories(deps, options) {
 // packages/core/src/tools/review.ts
 function handleReview(deps, options = {}) {
   const effectiveLimit = Math.max(1, options.limit ?? 20);
-  const review = reviewDurableMemories(deps, { limit: 1e3 });
-  const filtered = review.candidates.filter((candidate) => options.state ? candidate.state === options.state : true).filter((candidate) => options.topicKey ? candidate.topicKey === options.topicKey : true).slice(0, effectiveLimit);
+  const review = reviewDurableMemories(deps, {
+    state: options.state,
+    topicKey: options.topicKey,
+    memoryType: options.memoryType,
+    confidence: options.confidence,
+    limit: 1e3
+  });
+  const filtered = review.candidates.slice(0, effectiveLimit);
   return {
     totalCandidates: filtered.length,
+    returnedCandidates: filtered.length,
+    totalMatchingCandidates: review.candidates.length,
     countsByState: review.countsByState,
     candidates: filtered.map((candidate) => ({ ...candidate }))
   };
@@ -35637,7 +36558,7 @@ function buildCodexTruth(codexDiagnostics) {
       recallReadiness: "limited",
       recommendedCaptureMode: "redacted",
       desktopParity: "unverified",
-      recallMessage: "metadata capture imports structural session events and diagnostics, but conversational recall is intentionally limited.",
+      recallMessage: "metadata capture imports structural session events and diagnostics, but conversational recall is weak by design.",
       desktopMessage
     };
   }
@@ -35646,7 +36567,7 @@ function buildCodexTruth(codexDiagnostics) {
       recallReadiness: "practical",
       recommendedCaptureMode: "redacted",
       desktopParity: "unverified",
-      recallMessage: "redacted capture stores bounded, filtered conversation snippets for practical recall without full transcripts.",
+      recallMessage: "redacted capture is the recommended rich recall mode: it stores bounded, filtered conversation snippets without full transcripts.",
       desktopMessage
     };
   }
@@ -35654,7 +36575,7 @@ function buildCodexTruth(codexDiagnostics) {
     recallReadiness: "maximum",
     recommendedCaptureMode: "redacted",
     desktopParity: "unverified",
-    recallMessage: "full capture stores raw conversation content and can provide maximum recall, but it is explicit warning territory.",
+    recallMessage: "full capture stores raw conversation content and can provide maximum recall, but it carries privacy risk and is explicit warning territory.",
     desktopMessage
   };
 }
@@ -35942,13 +36863,17 @@ async function createServer(options) {
     {
       state: external_exports3.enum(["active", "stale", "superseded", "archivable"]).optional(),
       topicKey: external_exports3.string().optional(),
+      memoryType: external_exports3.enum(DURABLE_MEMORY_TYPES).optional(),
+      confidence: external_exports3.number().min(0).max(1).optional().describe("Minimum durable evidence confidence to include (0-1)"),
       limit: external_exports3.number().optional().describe("Max review candidates to return (default 20)")
     },
-    async ({ state, topicKey, limit }) => ({
+    async ({ state, topicKey, memoryType, confidence, limit }) => ({
       content: [
         {
           type: "text",
-          text: JSON.stringify(handleReview({ db }, { state, topicKey, limit }))
+          text: JSON.stringify(
+            handleReview({ db }, { state, topicKey, memoryType, confidence, limit })
+          )
         }
       ]
     })

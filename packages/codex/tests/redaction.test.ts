@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import {
-  captureCodexEvent,
-  redactCodexText,
-  redactCodexTextWithMetadata,
-} from '../src/capture.js';
+import { captureCodexEvent, redactCodexText, redactCodexTextWithMetadata } from '../src/capture.js';
 import type { CodexNormalizedEvent } from '../src/types.js';
 
-function event(payload: Record<string, unknown>, kind: CodexNormalizedEvent['kind']): CodexNormalizedEvent {
+function event(
+  payload: Record<string, unknown>,
+  kind: CodexNormalizedEvent['kind'],
+): CodexNormalizedEvent {
   return {
     kind,
     timestamp: Date.parse('2026-05-07T10:00:00.000Z'),
@@ -72,8 +71,7 @@ describe('redactCodexText v2', () => {
     const captured = captureCodexEvent(
       event(
         {
-          prompt:
-            'Bug: parser failed after refactor. Authorization: Bearer safeexampletoken123',
+          prompt: 'Bug: parser failed after refactor. Authorization: Bearer safeexampletoken123',
         },
         'user_prompt',
       ),

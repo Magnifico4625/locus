@@ -82,13 +82,59 @@ function timestamp(date) {
   return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".", "");
 }
 
+// packages/cli/src/codex/hooks.ts
+import {
+  copyFileSync as copyFileSync2,
+  existsSync as existsSync2,
+  mkdirSync,
+  readFileSync as readFileSync3,
+  renameSync,
+  writeFileSync as writeFileSync2
+} from "node:fs";
+import { dirname as dirname2, join as join2 } from "node:path";
+
+// packages/cli/src/package-info.ts
+import { existsSync, readFileSync as readFileSync2 } from "node:fs";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+function findPackageRoot(startDir = dirname(fileURLToPath(import.meta.url))) {
+  let current = resolve(startDir);
+  while (true) {
+    const packagePath = resolve(current, "package.json");
+    if (existsSync(packagePath)) {
+      const packageJson = JSON.parse(readFileSync2(packagePath, "utf8"));
+      if (packageJson.name === "locus-memory") {
+        return current;
+      }
+    }
+    const parent = dirname(current);
+    if (parent === current) {
+      throw new Error(`Could not find locus-memory package root from ${startDir}`);
+    }
+    current = parent;
+  }
+}
+function resolvePackageVersion(startDir) {
+  const root = findPackageRoot(startDir);
+  const packageJson = JSON.parse(
+    readFileSync2(resolve(root, "package.json"), "utf8")
+  );
+  if (!packageJson.version) {
+    throw new Error("Root package.json is missing version");
+  }
+  return packageJson.version;
+}
+function buildRuntimePackageSpecifier(version) {
+  return `locus-memory@${version}`;
+}
+
 // packages/cli/src/codex/paths.ts
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve as resolve2 } from "node:path";
 function resolveCodexHome(env = process.env) {
   const configured = env.CODEX_HOME;
   if (configured && configured.trim().length > 0) {
-    return resolve(expandTilde(configured));
+    return resolve2(expandTilde(configured));
   }
   return join(homedir(), ".codex");
 }
@@ -108,39 +154,155 @@ function expandTilde(pathValue) {
   return pathValue;
 }
 
-// packages/cli/src/package-info.ts
-import { existsSync, readFileSync as readFileSync2 } from "node:fs";
-import { dirname, resolve as resolve2 } from "node:path";
-import { fileURLToPath } from "node:url";
-function findPackageRoot(startDir = dirname(fileURLToPath(import.meta.url))) {
-  let current = resolve2(startDir);
-  while (true) {
-    const packagePath = resolve2(current, "package.json");
-    if (existsSync(packagePath)) {
-      const packageJson = JSON.parse(readFileSync2(packagePath, "utf8"));
-      if (packageJson.name === "locus-memory") {
-        return current;
+// packages/cli/src/codex/hooks.ts
+var hookEvents = [
+  {
+    configEvent: "SessionStart",
+    commandEvent: "session-start",
+    matcher: "startup|resume|clear",
+    statusMessage: "Preparing Locus recall freshness"
+  },
+  {
+    configEvent: "UserPromptSubmit",
+    commandEvent: "user-prompt-submit",
+    statusMessage: "Notifying Locus about a new prompt"
+  },
+  {
+    configEvent: "Stop",
+    commandEvent: "stop",
+    statusMessage: "Notifying Locus that the turn stopped"
+  }
+];
+function buildCodexHooksConfig(options) {
+  const timeout = options.timeoutSeconds ?? 3;
+  const hooks = {};
+  for (const event of hookEvents) {
+    hooks[event.configEvent] = [
+      {
+        ...event.matcher ? { matcher: event.matcher } : {},
+        hooks: [
+          {
+            type: "command",
+            command: buildCodexHookCommand({
+              event: event.commandEvent,
+              version: options.version,
+              platform: options.platform,
+              binaryPath: options.binaryPath
+            }),
+            timeout,
+            statusMessage: event.statusMessage
+          }
+        ]
       }
-    }
-    const parent = dirname(current);
-    if (parent === current) {
-      throw new Error(`Could not find locus-memory package root from ${startDir}`);
-    }
-    current = parent;
+    ];
   }
+  return { hooks };
 }
-function resolvePackageVersion(startDir) {
-  const root = findPackageRoot(startDir);
-  const packageJson = JSON.parse(
-    readFileSync2(resolve2(root, "package.json"), "utf8")
+function buildCodexHookCommand(options) {
+  const command = options.binaryPath ?? (options.platform === "win32" ? "npx.cmd" : "npx");
+  const args = options.binaryPath ? ["hook", "codex", options.event] : [
+    "-y",
+    buildRuntimePackageSpecifier(requiredVersion(options.version)),
+    "hook",
+    "codex",
+    options.event
+  ];
+  return [command, ...args].map(quoteShellArg).join(" ");
+}
+function renderCodexHooksJson(config) {
+  return `${JSON.stringify(config, null, 2)}
+`;
+}
+function resolveCodexHooksPath(env = process.env) {
+  return join2(resolveCodexHome(env), "hooks.json");
+}
+function installCodexHooks(options) {
+  const hooksPath = resolveCodexHooksPath(options.env);
+  const next = renderCodexHooksJson(
+    buildCodexHooksConfig({
+      version: options.version,
+      platform: options.platform
+    })
   );
-  if (!packageJson.version) {
-    throw new Error("Root package.json is missing version");
+  if (existsSync2(hooksPath)) {
+    const current = readFileSync3(hooksPath, "utf8");
+    if (current === next) {
+      return { action: "unchanged", path: hooksPath };
+    }
+    const backupPath = `${hooksPath}.${timestamp2(options.now ?? /* @__PURE__ */ new Date())}.bak`;
+    copyFileSync2(hooksPath, backupPath);
+    writeHooksFileAtomically(hooksPath, next);
+    return { action: "updated", path: hooksPath, backupPath };
   }
-  return packageJson.version;
+  writeHooksFileAtomically(hooksPath, next);
+  return { action: "created", path: hooksPath };
 }
-function buildRuntimePackageSpecifier(version) {
-  return `locus-memory@${version}`;
+function inspectCodexHooks(options = {}) {
+  const hooksPath = resolveCodexHooksPath(options.env);
+  if (!existsSync2(hooksPath)) {
+    return { status: "not configured", path: hooksPath };
+  }
+  const text = readFileSync3(hooksPath, "utf8");
+  return {
+    status: hasLocusHookCommand(text) ? "configured" : "not configured",
+    path: hooksPath
+  };
+}
+function requiredVersion(version) {
+  if (!version || version.trim().length === 0) {
+    throw new Error("Codex hook config requires a pinned locus-memory version");
+  }
+  return version;
+}
+function quoteShellArg(value) {
+  if (!/[ \t"]/u.test(value)) {
+    return value;
+  }
+  return `"${value.replaceAll('"', '\\"')}"`;
+}
+function hasLocusHookCommand(text) {
+  try {
+    const parsed = JSON.parse(text);
+    if (!isRecord(parsed) || !isRecord(parsed.hooks)) {
+      return false;
+    }
+    return Object.values(parsed.hooks).some((groups) => {
+      if (!Array.isArray(groups)) {
+        return false;
+      }
+      return groups.some((group) => {
+        if (!isRecord(group) || !Array.isArray(group.hooks)) {
+          return false;
+        }
+        return group.hooks.some((handler) => {
+          if (!isRecord(handler) || handler.type !== "command") {
+            return false;
+          }
+          return isLocusHookCommand(handler.command);
+        });
+      });
+    });
+  } catch {
+    return false;
+  }
+}
+function isLocusHookCommand(command) {
+  if (typeof command !== "string") {
+    return false;
+  }
+  return /\blocus-memory(?:\.cmd)?(?:@[\w.-]+)?\b/u.test(command) && /\bhook codex\b/u.test(command);
+}
+function isRecord(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+function writeHooksFileAtomically(path, text) {
+  mkdirSync(dirname2(path), { recursive: true });
+  const tempPath = `${path}.locus-tmp`;
+  writeFileSync2(tempPath, text, "utf8");
+  renameSync(tempPath, path);
+}
+function timestamp2(date) {
+  return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".", "");
 }
 
 // packages/cli/src/commands/doctor-codex.ts
@@ -148,8 +310,11 @@ async function formatDoctorCodex(options) {
   const env = options.env ?? process.env;
   const version = resolvePackageVersion(options.startDir);
   const codexVersion = await options.commandRunner("codex", ["--version"]);
+  const hookFeature = await options.commandRunner("codex", ["features", "list"]);
   const config = options.readMcpServer?.() ?? parseCodexMcpGetOutput((await options.commandRunner("codex", ["mcp", "get", "locus"])).stdout);
   const ownership = classifyMcpOwnership(config);
+  const hooks = inspectCodexHooks({ env });
+  const hookStatus = hookFeature.exitCode !== 0 || !codexSupportsHooks(hookFeature.stdout) ? "unavailable" : hooks.status;
   return [
     "Locus Codex doctor",
     `Node version: ${process.version}`,
@@ -160,17 +325,102 @@ async function formatDoctorCodex(options) {
     `Runtime package: ${buildRuntimePackageSpecifier(version)}`,
     "Cache warming: not attempted by doctor",
     "Network: first run after cache cleanup requires network access",
-    `Ownership: ${ownership}`
+    `Ownership: ${ownership}`,
+    `Hooks: ${hookStatus}`,
+    `Hooks path: ${hooks.path}`
   ].join("\n");
+}
+function codexSupportsHooks(featuresList) {
+  return /^hooks\s+\S+\s+true\s*$/imu.test(featuresList);
+}
+
+// packages/cli/src/commands/hook-codex.ts
+import { randomBytes } from "node:crypto";
+import { mkdirSync as mkdirSync2, renameSync as renameSync2, writeFileSync as writeFileSync3 } from "node:fs";
+import { join as join3 } from "node:path";
+var supportedEvents = /* @__PURE__ */ new Set(["session-start", "user-prompt-submit", "stop"]);
+function runCodexHook(options) {
+  const event = options.event;
+  if (!isSupportedEvent(event)) {
+    return {
+      exitCode: 1,
+      stdout: "",
+      stderr: `Unsupported Codex hook event: ${event ?? "(missing)"}`
+    };
+  }
+  const parsed = parseHookInput(options.stdin);
+  if (!parsed.ok) {
+    return {
+      exitCode: 0,
+      stdout: JSON.stringify({ continue: true, suppressOutput: true }),
+      stderr: "malformed Codex hook input; failing open"
+    };
+  }
+  if (event === "stop") {
+    const writeResult = writeStopTrigger({
+      env: options.env,
+      input: parsed.value,
+      now: options.now ?? /* @__PURE__ */ new Date()
+    });
+    if (!writeResult.ok) {
+      return {
+        exitCode: 0,
+        stdout: JSON.stringify({ continue: true, suppressOutput: true }),
+        stderr: `could not write Codex hook trigger; failing open: ${writeResult.error.message}`
+      };
+    }
+  }
+  return {
+    exitCode: 0,
+    stdout: JSON.stringify({ continue: true, suppressOutput: true })
+  };
+}
+function isSupportedEvent(event) {
+  return typeof event === "string" && supportedEvents.has(event);
+}
+function parseHookInput(stdin) {
+  if (!stdin || stdin.trim().length === 0) {
+    return { ok: true, value: {} };
+  }
+  try {
+    const value = JSON.parse(stdin);
+    return value && typeof value === "object" && !Array.isArray(value) ? { ok: true, value } : { ok: true, value: {} };
+  } catch {
+    return { ok: false };
+  }
+}
+function writeStopTrigger(options) {
+  try {
+    const triggerDir = join3(resolveCodexHome(options.env), "locus", "hook-triggers");
+    mkdirSync2(triggerDir, { recursive: true });
+    const id = `${options.now.getTime()}-${randomBytes(4).toString("hex")}`;
+    const finalPath = join3(triggerDir, `stop-${id}.json`);
+    const tempPath = `${finalPath}.tmp`;
+    const payload = {
+      event: "stop",
+      createdAt: options.now.toISOString(),
+      sessionId: stringField(options.input.session_id),
+      turnId: stringField(options.input.turn_id)
+    };
+    writeFileSync3(tempPath, `${JSON.stringify(payload, null, 2)}
+`, "utf8");
+    renameSync2(tempPath, finalPath);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
+  }
+}
+function stringField(value) {
+  return typeof value === "string" && value.trim().length > 0 ? value : void 0;
 }
 
 // packages/cli/src/commands/install-codex.ts
-import { existsSync as existsSync8 } from "node:fs";
-import { join as join9 } from "node:path";
+import { existsSync as existsSync9 } from "node:fs";
+import { join as join11 } from "node:path";
 
 // packages/cli/src/codex/cleanup.ts
-import { existsSync as existsSync2, readdirSync, rmSync, statSync } from "node:fs";
-import { join as join2 } from "node:path";
+import { existsSync as existsSync3, readdirSync, rmSync, statSync } from "node:fs";
+import { join as join4 } from "node:path";
 function cleanupInterruptedInstall(codexHome) {
   const removed = [];
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
@@ -181,16 +431,16 @@ function cleanupInterruptedInstall(codexHome) {
   return { removed };
 }
 function findInterruptedInstallTempFiles(codexHome) {
-  const skillDir = join2(codexHome, "skills", "locus-memory");
+  const skillDir = join4(codexHome, "skills", "locus-memory");
   const tempFiles = [];
-  if (!existsSync2(skillDir)) {
+  if (!existsSync3(skillDir)) {
     return tempFiles;
   }
   for (const entry of readdirSync(skillDir)) {
     if (!entry.endsWith(".locus-tmp")) {
       continue;
     }
-    const path = join2(skillDir, entry);
+    const path = join4(skillDir, entry);
     if (!statSync(path).isFile()) {
       continue;
     }
@@ -224,13 +474,13 @@ function buildCodexMcpRemoveArgs(name) {
 }
 
 // packages/cli/src/codex/lock.ts
-import { existsSync as existsSync3, mkdirSync, readFileSync as readFileSync3, rmSync as rmSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { join as join3 } from "node:path";
+import { existsSync as existsSync4, mkdirSync as mkdirSync3, readFileSync as readFileSync4, rmSync as rmSync2, writeFileSync as writeFileSync4 } from "node:fs";
+import { join as join5 } from "node:path";
 var defaultStaleAfterMs = 15 * 60 * 1e3;
 function acquireInstallLock(codexHome, options = {}) {
-  mkdirSync(codexHome, { recursive: true });
-  const lockPath = join3(codexHome, ".locus-install.lock");
-  if (existsSync3(lockPath)) {
+  mkdirSync3(codexHome, { recursive: true });
+  const lockPath = join5(codexHome, ".locus-install.lock");
+  if (existsSync4(lockPath)) {
     const stale = isStaleLock(lockPath, options);
     return {
       acquired: false,
@@ -240,7 +490,7 @@ function acquireInstallLock(codexHome, options = {}) {
     };
   }
   try {
-    writeFileSync2(
+    writeFileSync4(
       lockPath,
       JSON.stringify(
         {
@@ -273,7 +523,7 @@ function isStaleLock(lockPath, options) {
   const staleAfterMs = options.staleAfterMs ?? defaultStaleAfterMs;
   const now = options.now ?? /* @__PURE__ */ new Date();
   try {
-    const lock = JSON.parse(readFileSync3(lockPath, "utf8"));
+    const lock = JSON.parse(readFileSync4(lockPath, "utf8"));
     if (!lock.createdAt) {
       return false;
     }
@@ -285,14 +535,14 @@ function isStaleLock(lockPath, options) {
 
 // packages/cli/src/codex/skill.ts
 import {
-  copyFileSync as copyFileSync4,
-  existsSync as existsSync7,
-  mkdirSync as mkdirSync5,
-  readFileSync as readFileSync7,
-  renameSync as renameSync2,
-  writeFileSync as writeFileSync5
+  copyFileSync as copyFileSync5,
+  existsSync as existsSync8,
+  mkdirSync as mkdirSync7,
+  readFileSync as readFileSync8,
+  renameSync as renameSync4,
+  writeFileSync as writeFileSync7
 } from "node:fs";
-import { dirname as dirname4 } from "node:path";
+import { dirname as dirname5 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // packages/codex/src/ids.ts
@@ -300,29 +550,29 @@ import { createHash } from "node:crypto";
 import { basename } from "node:path";
 
 // packages/codex/src/importer.ts
-import { readFileSync as readFileSync4 } from "node:fs";
+import { readFileSync as readFileSync5 } from "node:fs";
 
 // packages/codex/src/inbox-writer.ts
-import { existsSync as existsSync4, mkdirSync as mkdirSync2, renameSync, writeFileSync as writeFileSync3 } from "node:fs";
-import { join as join4 } from "node:path";
+import { existsSync as existsSync5, mkdirSync as mkdirSync4, renameSync as renameSync3, writeFileSync as writeFileSync5 } from "node:fs";
+import { join as join6 } from "node:path";
 
 // packages/codex/src/paths.ts
 import { homedir as homedir2 } from "node:os";
-import { join as join5, resolve as resolve3 } from "node:path";
+import { join as join7, resolve as resolve3 } from "node:path";
 
 // packages/codex/src/session-files.ts
 import { readdirSync as readdirSync2 } from "node:fs";
-import { basename as basename2, join as join6, resolve as resolve4 } from "node:path";
+import { basename as basename2, join as join8, resolve as resolve4 } from "node:path";
 
 // packages/codex/src/plugin-sync.ts
-import { copyFileSync as copyFileSync2, existsSync as existsSync5, mkdirSync as mkdirSync3, readFileSync as readFileSync5, rmSync as rmSync3, writeFileSync as writeFileSync4 } from "node:fs";
-import { dirname as dirname2, join as join7, resolve as resolve5 } from "node:path";
+import { copyFileSync as copyFileSync3, existsSync as existsSync6, mkdirSync as mkdirSync5, readFileSync as readFileSync6, rmSync as rmSync3, writeFileSync as writeFileSync6 } from "node:fs";
+import { dirname as dirname3, join as join9, resolve as resolve5 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/codex/src/skill-sync.ts
-import { copyFileSync as copyFileSync3, existsSync as existsSync6, mkdirSync as mkdirSync4, readFileSync as readFileSync6 } from "node:fs";
+import { copyFileSync as copyFileSync4, existsSync as existsSync7, mkdirSync as mkdirSync6, readFileSync as readFileSync7 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
-import { dirname as dirname3, join as join8, resolve as resolve6 } from "node:path";
+import { dirname as dirname4, join as join10, resolve as resolve6 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 function resolveCanonicalCodexSkillPath() {
   return resolve6(fileURLToPath3(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
@@ -332,11 +582,11 @@ function resolveCanonicalCodexSkillPath() {
 function installCodexSkill(options = {}) {
   const sourcePath = options.sourcePath ?? resolvePackagedCodexSkillPath();
   const targetPath = resolveCodexSkillPath(options.env, "locus-memory");
-  const sourceContent = readFileSync7(sourcePath, "utf8");
+  const sourceContent = readFileSync8(sourcePath, "utf8");
   try {
-    mkdirSync5(dirname4(targetPath), { recursive: true });
-    if (existsSync7(targetPath)) {
-      const targetContent = readFileSync7(targetPath, "utf8");
+    mkdirSync7(dirname5(targetPath), { recursive: true });
+    if (existsSync8(targetPath)) {
+      const targetContent = readFileSync8(targetPath, "utf8");
       if (targetContent === sourceContent) {
         return { action: "unchanged", path: targetPath, targetPath };
       }
@@ -377,26 +627,26 @@ function resolvePackagedCodexSkillPath() {
     fileURLToPath4(new URL("../packages/codex/skills/locus-memory/SKILL.md", import.meta.url))
   ];
   for (const candidate of candidates) {
-    if (existsSync7(candidate)) {
+    if (existsSync8(candidate)) {
       return candidate;
     }
   }
   return candidates[0] ?? resolveCanonicalCodexSkillPath();
 }
 function backupSkill(targetPath, now) {
-  const backupPath = `${targetPath}.${timestamp2(now)}.bak`;
-  copyFileSync4(targetPath, backupPath);
+  const backupPath = `${targetPath}.${timestamp3(now)}.bak`;
+  copyFileSync5(targetPath, backupPath);
   return {
     action: "backed_up",
     path: backupPath
   };
 }
-function writeAtomically(targetPath, content, writeFile = writeFileSync5) {
+function writeAtomically(targetPath, content, writeFile = writeFileSync7) {
   const tempPath = `${targetPath}.locus-tmp`;
   writeFile(tempPath, content, "utf8");
-  renameSync2(tempPath, targetPath);
+  renameSync4(tempPath, targetPath);
 }
-function timestamp2(date) {
+function timestamp3(date) {
   return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".", "");
 }
 function isPermissionError(error) {
@@ -410,7 +660,7 @@ function formatInstallCodexDryRun(options = {}) {
   const codexHome = resolveCodexHome(env);
   const skillPath = resolveCodexSkillPath(env, "locus-memory");
   const runtimeSpecifier = buildRuntimePackageSpecifier(resolvePackageVersion(options.startDir));
-  const lockPath = join9(codexHome, ".locus-install.lock");
+  const lockPath = join11(codexHome, ".locus-install.lock");
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
   return [
     "Locus Codex install dry-run",
@@ -418,8 +668,10 @@ function formatInstallCodexDryRun(options = {}) {
     `Skill path: ${skillPath}`,
     `MCP runtime: npx -y ${runtimeSpecifier} mcp`,
     `MCP cwd: ${codexHome}`,
+    `Hooks path: ${resolveCodexHooksPath(env)}`,
+    `Hooks: ${options.withHooks ? "requested (would install)" : "not requested"}`,
     "Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error",
-    `Install lock: ${existsSync8(lockPath) ? `present at ${lockPath}` : "none"}`,
+    `Install lock: ${existsSync9(lockPath) ? `present at ${lockPath}` : "none"}`,
     `Stale temp files: ${tempFiles.length}`
   ].join("\n");
 }
@@ -498,6 +750,7 @@ async function runInstallCodex(options) {
     }
     const cwdResult = setMcpServerCwd(resolveCodexConfigPath(env), "locus", codexHome);
     const skill = installCodexSkill({ env, overwrite: true, backup: true });
+    const hooks = options.withHooks ? installCodexHooks({ env, version, platform: options.platform }) : void 0;
     return {
       exitCode: skill.error ? 1 : 0,
       output: [
@@ -511,6 +764,9 @@ async function runInstallCodex(options) {
         `Skill: ${skill.action}`,
         `Skill path: ${skill.targetPath}`,
         skill.backup ? `Backup: ${skill.backup.path}` : void 0,
+        hooks ? `Hooks: ${hooks.action}` : "Hooks: not requested",
+        hooks ? `Hooks path: ${hooks.path}` : void 0,
+        hooks?.backupPath ? `Hooks backup: ${hooks.backupPath}` : void 0,
         skill.error ? `Error: ${skill.error.message}` : void 0
       ].filter((line) => Boolean(line)).join("\n")
     };
@@ -598,6 +854,7 @@ Commands:
   locus-memory mcp              Start the Locus MCP server
   locus-memory install codex    Install Locus for Codex
   locus-memory doctor codex     Diagnose the Codex installation
+  locus-memory hook codex       Run a Codex lifecycle hook
   locus-memory uninstall codex  Remove Locus from Codex config
 
 Options:
@@ -620,8 +877,28 @@ async function runCli(argv = process.argv.slice(2), io = {
   if (command === "mcp") {
     return runMcp();
   }
+  if (command === "hook" && subcommand === "codex") {
+    const result = runCodexHook({
+      event: argv[2],
+      stdin: options.stdin,
+      env: options.env
+    });
+    if (result.stdout) {
+      io.stdout(result.stdout);
+    }
+    if (result.stderr) {
+      io.stderr(result.stderr);
+    }
+    return result.exitCode;
+  }
   if (command === "install" && subcommand === "codex" && argv.includes("--dry-run")) {
-    io.stdout(formatInstallCodexDryRun({ env: options.env, startDir: options.startDir }));
+    io.stdout(
+      formatInstallCodexDryRun({
+        env: options.env,
+        startDir: options.startDir,
+        withHooks: argv.includes("--with-hooks")
+      })
+    );
     return 0;
   }
   if (command === "install" && subcommand === "codex" && argv.includes("--yes")) {
@@ -629,7 +906,8 @@ async function runCli(argv = process.argv.slice(2), io = {
       env: options.env,
       startDir: options.startDir,
       commandRunner: options.commandRunner ?? defaultCommandRunner,
-      platform: options.platform
+      platform: options.platform,
+      withHooks: argv.includes("--with-hooks")
     });
     io.stdout(result.output);
     return result.exitCode;

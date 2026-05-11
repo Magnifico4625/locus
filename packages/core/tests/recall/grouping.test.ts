@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { MemoryRecallCandidate } from '../../src/types.js';
 import { groupRecallCandidates } from '../../src/recall/grouping.js';
 import { buildRecallResult } from '../../src/recall/result-builder.js';
+import type { MemoryRecallCandidate } from '../../src/types.js';
 
 function candidate(overrides: Partial<MemoryRecallCandidate> = {}): MemoryRecallCandidate {
   return {
@@ -20,13 +20,27 @@ function candidate(overrides: Partial<MemoryRecallCandidate> = {}): MemoryRecall
 describe('groupRecallCandidates', () => {
   it('creates separate groups for multiple sessions', () => {
     const groups = groupRecallCandidates([
-      candidate({ sessionId: 'sess-auth', eventIds: ['evt-auth'], headline: 'Implemented auth login fixes.' }),
-      candidate({ sessionId: 'sess-billing', eventIds: ['evt-billing'], headline: 'Implemented billing retry fixes.' }),
+      candidate({
+        sessionId: 'sess-auth',
+        eventIds: ['evt-auth'],
+        headline: 'Implemented auth login fixes.',
+      }),
+      candidate({
+        sessionId: 'sess-billing',
+        eventIds: ['evt-billing'],
+        headline: 'Implemented billing retry fixes.',
+      }),
     ]);
 
     expect(groups).toEqual([
-      expect.objectContaining({ id: 'session:sess-auth', heading: 'Implemented auth login fixes.' }),
-      expect.objectContaining({ id: 'session:sess-billing', heading: 'Implemented billing retry fixes.' }),
+      expect.objectContaining({
+        id: 'session:sess-auth',
+        heading: 'Implemented auth login fixes.',
+      }),
+      expect.objectContaining({
+        id: 'session:sess-billing',
+        heading: 'Implemented billing retry fixes.',
+      }),
     ]);
   });
 
@@ -157,5 +171,4 @@ describe('buildRecallResult', () => {
     expect(result.status).toBe('ok');
     expect(result.summary).toContain('acceptance docs');
   });
-
 });

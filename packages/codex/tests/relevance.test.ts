@@ -36,7 +36,10 @@ describe('classifyCodexRelevance', () => {
 
   it.each([
     ['My style is short direct progress reports and approval gates between tasks.', 'user'],
-    ['Мой стиль работы: короткие отчеты и переход к следующей задаче только после одобрения.', 'user'],
+    [
+      'Мой стиль работы: короткие отчеты и переход к следующей задаче только после одобрения.',
+      'user',
+    ],
   ] as const)('detects style preferences: %s', (text, role) => {
     expect(classifyCodexRelevance(text, role)).toEqual({ keep: true, reason: 'style' });
   });
@@ -69,9 +72,15 @@ describe('classifyCodexRelevance', () => {
   });
 
   it.each([
-    ['Root cause: capture mode was metadata, so semantic recall had no dialogue content.', 'assistant'],
+    [
+      'Root cause: capture mode was metadata, so semantic recall had no dialogue content.',
+      'assistant',
+    ],
     ['Fixed the durable runner watermark recall gap and kept debounce intact.', 'assistant'],
-    ['Причина: JSONL импорт работал, но redacted snippets не сохраняли нужный контекст.', 'assistant'],
+    [
+      'Причина: JSONL импорт работал, но redacted snippets не сохраняли нужный контекст.',
+      'assistant',
+    ],
   ] as const)('keeps assistant root-cause and fix summaries: %s', (text, role) => {
     expect(classifyCodexRelevance(text, role)).toEqual({ keep: true, reason: 'bug_context' });
   });

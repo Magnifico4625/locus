@@ -375,7 +375,8 @@ function appendCodexChecks(
     checks.push({
       name: 'Codex recall readiness',
       status: 'ok',
-      message: 'redacted capture is the recommended rich recall mode and has retained Codex events.',
+      message:
+        'redacted capture is the recommended rich recall mode and has retained Codex events.',
     });
   }
 

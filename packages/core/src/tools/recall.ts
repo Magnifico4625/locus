@@ -1,5 +1,5 @@
-import type { DatabaseAdapter, MemoryRecallResult, TimeRange } from '../types.js';
 import { runRecallEngine } from '../recall/index.js';
+import type { DatabaseAdapter, MemoryRecallResult, TimeRange } from '../types.js';
 
 interface RecallDeps {
   db: DatabaseAdapter;

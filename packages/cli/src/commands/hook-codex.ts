@@ -64,9 +64,9 @@ function isSupportedEvent(event: string | undefined): event is CodexHookEvent {
   return typeof event === 'string' && supportedEvents.has(event as CodexHookEvent);
 }
 
-function parseHookInput(stdin: string | undefined):
-  | { ok: true; value: Record<string, unknown> }
-  | { ok: false } {
+function parseHookInput(
+  stdin: string | undefined,
+): { ok: true; value: Record<string, unknown> } | { ok: false } {
   if (!stdin || stdin.trim().length === 0) {
     return { ok: true, value: {} };
   }

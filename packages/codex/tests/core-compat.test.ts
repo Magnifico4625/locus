@@ -181,8 +181,7 @@ describe('Codex importer core ingest compatibility', () => {
           type: 'event_msg',
           subtype: 'user_message',
           timestamp: '2026-05-07T09:00:02.000Z',
-          message:
-            'Отказались от hook-first capture, потому что это риск для стабильного релиза.',
+          message: 'Отказались от hook-first capture, потому что это риск для стабильного релиза.',
         }),
         JSON.stringify({
           type: 'response_item',
@@ -193,8 +192,7 @@ describe('Codex importer core ingest compatibility', () => {
             content: [
               {
                 type: 'output_text',
-                text:
-                  'Validation passed: npm test -- packages/codex/tests/relevance.test.ts and npm -w @locus/codex run typecheck are green.',
+                text: 'Validation passed: npm test -- packages/codex/tests/relevance.test.ts and npm -w @locus/codex run typecheck are green.',
               },
             ],
           },
@@ -242,11 +240,13 @@ describe('Codex importer core ingest compatibility', () => {
       'ai_response',
       'user_prompt',
     ]);
-    expect(storedRows.some((row) => row.payload_json?.includes('"capture_reason":"decision"'))).toBe(
-      true,
-    );
     expect(
-      storedRows.some((row) => row.payload_json?.includes('"capture_reason":"rejected_alternative"')),
+      storedRows.some((row) => row.payload_json?.includes('"capture_reason":"decision"')),
+    ).toBe(true);
+    expect(
+      storedRows.some((row) =>
+        row.payload_json?.includes('"capture_reason":"rejected_alternative"'),
+      ),
     ).toBe(true);
     expect(
       storedRows.some(

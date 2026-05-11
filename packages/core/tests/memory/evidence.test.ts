@@ -1,8 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  formatEvidenceWhyStored,
-  normalizeDurableEvidence,
-} from '../../src/memory/evidence.js';
+import { formatEvidenceWhyStored, normalizeDurableEvidence } from '../../src/memory/evidence.js';
 
 describe('normalizeDurableEvidence', () => {
   it('normalizes supported durable evidence fields', () => {

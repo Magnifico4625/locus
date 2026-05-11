@@ -22,7 +22,8 @@ const DURABLE_PRIORITY_INTENTS = new Set([
 ]);
 const COMPLETION_EVENT_INTENTS = new Set(['bug_context', 'validation_fact', 'work_summary']);
 const COMPLETION_CAPTURE_REASONS = new Set(['session_end', 'task_complete']);
-const VALIDATION_COMMAND_PATTERN = /\b(?:npm\s+(?:test|-w)|typecheck|vitest|pytest|cargo\s+test)\b/i;
+const VALIDATION_COMMAND_PATTERN =
+  /\b(?:npm\s+(?:test|-w)|typecheck|vitest|pytest|cargo\s+test)\b/i;
 
 function confidenceForScore(score: number): MemoryRecallConfidence {
   if (score >= 12) {
@@ -81,10 +82,7 @@ export function scoreRecallCandidate(
     }
   }
 
-  if (
-    candidate.sourceKind === 'durable' &&
-    DURABLE_PRIORITY_INTENTS.has(parsedQuery.intent)
-  ) {
+  if (candidate.sourceKind === 'durable' && DURABLE_PRIORITY_INTENTS.has(parsedQuery.intent)) {
     score += 3;
     reasons.push('durable_priority');
   }

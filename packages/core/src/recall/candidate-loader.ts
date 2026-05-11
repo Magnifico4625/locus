@@ -1,11 +1,11 @@
+import { resolveTimeRange, summarizePayload } from '../tools/search.js';
+import { handleTimeline } from '../tools/timeline.js';
 import type {
   DatabaseAdapter,
   DurableMemoryType,
   MemoryRecallCandidate,
   TimeRange,
 } from '../types.js';
-import { resolveTimeRange, summarizePayload } from '../tools/search.js';
-import { handleTimeline } from '../tools/timeline.js';
 import type { ParsedRecallQuery } from './query-parser.js';
 
 interface DurableRecallRow {
@@ -99,9 +99,7 @@ function durableTypesForIntent(intent: ParsedRecallQuery['intent']): DurableMemo
 
 function isExactDurableIntent(intent: ParsedRecallQuery['intent']): boolean {
   return (
-    intent === 'rejected_alternative' ||
-    intent === 'next_step' ||
-    intent === 'validation_fact'
+    intent === 'rejected_alternative' || intent === 'next_step' || intent === 'validation_fact'
   );
 }
 
@@ -253,8 +251,5 @@ function loadConversationCandidates({
 }
 
 export function loadRecallCandidates(options: CandidateLoaderOptions): MemoryRecallCandidate[] {
-  return [
-    ...loadDurableCandidates(options),
-    ...loadConversationCandidates(options),
-  ];
+  return [...loadDurableCandidates(options), ...loadConversationCandidates(options)];
 }

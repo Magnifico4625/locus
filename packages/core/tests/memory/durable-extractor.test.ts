@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { extractDurableCandidatesFromEvent } from '../../src/memory/durable-extractor.js';
-import { DURABLE_MEMORY_TYPES } from '../../src/types.js';
-import type { ConversationEventRow, DurableMemoryType } from '../../src/types.js';
 import type { DurableMemoryCandidate } from '../../src/memory/durable-extractor.js';
+import { extractDurableCandidatesFromEvent } from '../../src/memory/durable-extractor.js';
+import type { ConversationEventRow, DurableMemoryType } from '../../src/types.js';
+import { DURABLE_MEMORY_TYPES } from '../../src/types.js';
 
 function makeConversationRow(
   overrides: Partial<ConversationEventRow> & { payload_json: string },

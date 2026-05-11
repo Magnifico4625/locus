@@ -476,8 +476,7 @@ describe('importCodexSessionsToInbox', () => {
         type: 'event_msg',
         subtype: 'user_message',
         timestamp: '2026-05-07T09:00:02.000Z',
-        message:
-          'Отказались от hook-first capture, потому что это риск для стабильного релиза.',
+        message: 'Отказались от hook-first capture, потому что это риск для стабильного релиза.',
       }),
       JSON.stringify({
         type: 'response_item',
@@ -488,8 +487,7 @@ describe('importCodexSessionsToInbox', () => {
           content: [
             {
               type: 'output_text',
-              text:
-                'Validation passed: npm test -- packages/codex/tests/relevance.test.ts and npm -w @locus/codex run typecheck are green.',
+              text: 'Validation passed: npm test -- packages/codex/tests/relevance.test.ts and npm -w @locus/codex run typecheck are green.',
             },
           ],
         },

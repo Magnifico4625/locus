@@ -157,9 +157,10 @@ export function installCodexHooks(options: {
   return { action: 'created', path: hooksPath };
 }
 
-export function inspectCodexHooks(options: {
-  env?: Record<string, string | undefined>;
-} = {}): { status: CodexHooksStatus; path: string } {
+export function inspectCodexHooks(options: { env?: Record<string, string | undefined> } = {}): {
+  status: CodexHooksStatus;
+  path: string;
+} {
   const hooksPath = resolveCodexHooksPath(options.env);
   if (!existsSync(hooksPath)) {
     return { status: 'not configured', path: hooksPath };
@@ -224,8 +225,7 @@ function isLocusHookCommand(command: unknown): boolean {
   }
 
   return (
-    /\blocus-memory(?:\.cmd)?(?:@[\w.-]+)?\b/u.test(command) &&
-    /\bhook codex\b/u.test(command)
+    /\blocus-memory(?:\.cmd)?(?:@[\w.-]+)?\b/u.test(command) && /\bhook codex\b/u.test(command)
   );
 }
 

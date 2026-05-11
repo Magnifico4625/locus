@@ -44,7 +44,7 @@
 - [x] After `C3`, tag: `track-c-c3-local`
 - [x] After `C4`, tag: `track-c-c4-local`
 - [x] After `C5` if executed, tag: `track-c-c5-local`
-- [ ] After `C6`, tag: `track-c-c6-local`
+- [x] After `C6`, tag: `track-c-c6-local`
 
 ## Review Gates
 
@@ -69,9 +69,15 @@
 
 Before `v3.6.0` can be called ready:
 
-- [ ] `npm run check` passes.
-- [ ] Focused Track C tests pass.
-- [ ] Existing Track A/B regression tests pass.
+- [x] `npm run check` passes.
+- [x] Focused Track C tests pass.
+- [x] Existing Track A/B regression tests pass.
 - [ ] Real local Codex redacted recall smoke test passes.
 - [ ] `memory_status`, `memory_doctor`, `memory_review`, and `memory_audit` tell the same capture/recall story.
-- [ ] README, roadmap, acceptance matrix, package docs, plugin skill, and release notes avoid unvalidated desktop parity claims.
+- [x] README, roadmap, acceptance matrix, package docs, plugin skill, and release notes avoid unvalidated desktop parity claims.
+
+Validation note (2026-05-11): focused Track C/Track A validation passed,
+`npm run build` passed, `npm run check` passed with 1265 tests, and
+`git diff --check` passed. The live MCP smoke was healthy in `redacted` mode but
+was bound to `C:\Users\Admin\.codex`, so it is not counted as the final
+repo-bound Codex redacted recall smoke.

@@ -1,11 +1,4 @@
-import {
-  existsSync,
-  mkdtempSync,
-  readFileSync,
-  readdirSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -132,11 +125,7 @@ describe('codex hook config generation', () => {
   it('generates lifecycle hooks for safe recall freshness triggers', () => {
     const config = buildCodexHooksConfig({ version: '3.5.3' });
 
-    expect(Object.keys(config.hooks).sort()).toEqual([
-      'SessionStart',
-      'Stop',
-      'UserPromptSubmit',
-    ]);
+    expect(Object.keys(config.hooks).sort()).toEqual(['SessionStart', 'Stop', 'UserPromptSubmit']);
     expect(config.hooks.PostToolUse).toBeUndefined();
 
     for (const event of ['SessionStart', 'UserPromptSubmit', 'Stop'] as const) {
@@ -178,7 +167,7 @@ describe('codex hook config generation', () => {
     const json = renderCodexHooksJson(buildCodexHooksConfig({ version: '3.5.3' }));
 
     expect(JSON.parse(json)).toEqual(buildCodexHooksConfig({ version: '3.5.3' }));
-    expect(json).toMatch(/^\{\n  "hooks":/u);
+    expect(json).toMatch(/^\{\n {2}"hooks":/u);
     expect(json.endsWith('\n')).toBe(true);
   });
 

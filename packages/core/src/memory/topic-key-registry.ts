@@ -50,13 +50,19 @@ const TOPIC_KEY_RULES: TopicKeyRule[] = [
     key: 'codex_hooks_strategy',
     memoryTypes: ['decision', 'rejected_alternative', 'constraint'],
     any: ['hook-first', 'hooks', 'hook', 'хук'],
-    all: [['codex', 'capture', 'захват'], ['reject', 'rejected', 'отказ', 'отказались', 'avoid']],
+    all: [
+      ['codex', 'capture', 'захват'],
+      ['reject', 'rejected', 'отказ', 'отказались', 'avoid'],
+    ],
   },
   {
     key: 'capture_strategy',
     memoryTypes: ['decision'],
     any: ['capture strategy', 'capture mode', 'redacted capture', 'bounded redacted'],
-    all: [['capture', 'захват', 'memory', 'памят', 'recall'], ['redacted', 'metadata', 'full']],
+    all: [
+      ['capture', 'захват', 'memory', 'памят', 'recall'],
+      ['redacted', 'metadata', 'full'],
+    ],
   },
   {
     key: 'user_workflow_style',
@@ -69,13 +75,19 @@ const TOPIC_KEY_RULES: TopicKeyRule[] = [
       'стиль работы',
       'атомарного таска',
     ],
-    all: [['task', 'таск', 'задач'], ['approve', 'approval', 'одобрен', 'одобрения']],
+    all: [
+      ['task', 'таск', 'задач'],
+      ['approve', 'approval', 'одобрен', 'одобрения'],
+    ],
   },
   {
     key: 'track_c_acceptance',
     memoryTypes: ['next_step', 'validation_fact'],
     any: ['track c', 'acceptance fixtures', 'acceptance matrix', 'memory_recall'],
-    all: [['acceptance', 'track c'], ['recall', 'fixtures', 'docs', 'matrix']],
+    all: [
+      ['acceptance', 'track c'],
+      ['recall', 'fixtures', 'docs', 'matrix'],
+    ],
   },
 ];
 

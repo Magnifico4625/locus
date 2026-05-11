@@ -33,7 +33,9 @@ function isDominantTopGroup(candidates: MemoryRecallCandidate[]): boolean {
     return scoreGap >= DOMINANT_GROUP_SCORE_GAP;
   }
 
-  return topCandidate.sourceKind === 'durable' && topCandidate.confidence === 'medium' && scoreGap >= 3;
+  return (
+    topCandidate.sourceKind === 'durable' && topCandidate.confidence === 'medium' && scoreGap >= 3
+  );
 }
 
 function groupKey(candidate: MemoryRecallCandidate): string {
@@ -75,7 +77,11 @@ export function buildRecallResult({
   }
 
   if (candidateGroups.length === 1) {
-    const group = candidateGroups[0]!;
+    const group = candidateGroups[0];
+    if (!group) {
+      throw new Error('Expected a recall candidate group.');
+    }
+
     return {
       status: 'ok',
       question,
@@ -88,8 +94,8 @@ export function buildRecallResult({
     };
   }
 
-  if (isDominantTopGroup(candidates)) {
-    const topCandidate = candidates[0]!;
+  const topCandidate = candidates[0];
+  if (topCandidate && isDominantTopGroup(candidates)) {
     return {
       status: 'ok',
       question,
