@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [3.6.0] - 2026-05-11
+## [3.6.0] - 2026-05-12
 
 ### Added
 - Track C richer Codex recall acceptance with redacted JSONL fixtures covering Russian dated recall, capture strategy, rejected hook-first rationale, user workflow style, npm install errors, next steps, and validation facts.
@@ -21,8 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `redacted` is documented as the recommended rich recall mode for Codex; `metadata` remains diagnostics-first and limited for conversational memory.
 - `full` is documented as maximum recall with explicit privacy-warning requirements, not a risk-free setting.
 
+### Fixed
+- `locus-memory install codex` now executes the documented one-command installer path without requiring the legacy `--yes` flag.
+- `memory_recall` now includes explicit semantic memories saved through `memory_remember`, so user-saved decisions and preferences are recallable through the primary recall tool.
+- Codex installer, doctor, and uninstall commands now run `codex mcp ...` with the resolved `CODEX_HOME`, matching the config location they manage on Windows / Codex CLI `0.130.0`.
+
 ### Notes
-- Codex CLI remains the validated primary path.
+- Codex CLI remains the validated primary path. Final local release preflight used Codex CLI `0.130.0`.
 - Codex desktop / extension parity remains unverified until directly tested in that surface.
 - Optional Codex hooks are treated as future freshness triggers; canonical recall remains JSONL transcript import plus the shared inbox/core ingest path.
 

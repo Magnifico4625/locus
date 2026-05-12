@@ -714,7 +714,11 @@ async function runInstallCodex(options) {
         ].filter(Boolean).join("\n")
       };
     }
-    const existing = await options.commandRunner("codex", ["mcp", "get", "locus"], codexCommandOptions);
+    const existing = await options.commandRunner(
+      "codex",
+      ["mcp", "get", "locus"],
+      codexCommandOptions
+    );
     const ownership = classifyMcpOwnership(
       existing.exitCode === 0 ? parseCodexMcpGetOutput(existing.stdout) : void 0
     );

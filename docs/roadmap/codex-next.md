@@ -3,7 +3,7 @@
 **Date:** 2026-04-16  
 **Last updated:** 2026-05-11
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is published to npm through `locus-memory@3.5.3`. Track C richer recall is completed locally as a `v3.6.0` release candidate and is going through docs/final validation.
+**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is published to npm through `locus-memory@3.5.3`. Track C richer recall is completed locally as a `v3.6.0` release candidate and is in release publication prep.
 
 ---
 
@@ -177,7 +177,7 @@ Known follow-up:
 
 **Priority:** `P0`  
 **Target window:** May 2026 and after the trust-gap work establishes the baseline  
-**Current status:** core implementation completed locally as `v3.6.0` release-candidate work; C6 docs and final validation are in progress.
+**Current status:** core implementation, C6 docs, and local release preflight are complete as `v3.6.0` release-candidate work. Registry-hosted validation remains pending until `locus-memory@3.6.0` is published to npm.
 **Why it matters:** once the product is no longer misleading at the baseline level, the next step is to deepen recall quality and make richer capture modes production-worthy rather than experimental.
 
 ### Goal

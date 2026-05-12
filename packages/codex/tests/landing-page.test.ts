@@ -74,7 +74,7 @@ describe('GitHub Pages landing page', () => {
     expect(codexReadme).toContain('candidateGroups');
     expect(codexReadme).toContain('Codex hooks are optional');
 
-    expect(configExample).toContain('locus-memory@3.5.3');
+    expect(configExample).toContain('locus-memory@3.6.0');
     expect(configExample).toContain('npx.cmd');
     expect(configExample).not.toContain('args = ["-y", "locus-memory@latest", "mcp"]');
     expect(configExample).not.toContain('coming soon');

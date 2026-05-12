@@ -91,7 +91,7 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 
 Track C adds fixture-backed richer recall validation for Codex CLI: Russian dated questions, capture-strategy decisions, rejected alternatives, user workflow style, npm install errors, next steps, and validation facts now pass through import, inbox, durable memory, and `memory_recall`.
 
-Last documented install validation target: Codex CLI `0.125.0` surface as of April 28, 2026. Install smoke during Track B used the registry-hosted `locus-memory@3.5.3` package locally after npm publish. Track C recall validation is repository-local until the `v3.6.0` release is cut.
+Last documented local install validation target: Codex CLI `0.130.0` surface as of May 12, 2026. Track C local smoke covered the one-command installer, `codex mcp list`, `doctor codex`, and raw MCP `memory_remember` -> `memory_recall`. Registry-hosted `locus-memory@3.6.0` validation must run after npm publish.
 
 Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is reported as unverified until checked there.
 
