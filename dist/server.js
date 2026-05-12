@@ -35018,8 +35018,53 @@ function loadConversationCandidates({
     captureReason: entry.kind
   }));
 }
+function loadSemanticCandidates({
+  db,
+  parsedQuery,
+  timeRange,
+  now,
+  limit
+}) {
+  if (parsedQuery.termVariants.length === 0) {
+    return [];
+  }
+  const params = [];
+  const clauses = ["layer = 'semantic'"];
+  if (timeRange) {
+    const resolved = resolveTimeRange(timeRange, now);
+    clauses.push("updated_at >= ?");
+    params.push(resolved.from);
+    clauses.push("updated_at <= ?");
+    params.push(resolved.to);
+  }
+  const termClauses = parsedQuery.termVariants.map(() => "LOWER(content) LIKE ?");
+  clauses.push(`(${termClauses.join(" OR ")})`);
+  params.push(...parsedQuery.termVariants.map((term) => `%${term.toLowerCase()}%`));
+  const rows = db.all(
+    `SELECT id, content, updated_at
+     FROM memories
+     WHERE ${clauses.join(" AND ")}
+     ORDER BY updated_at DESC, id DESC
+     LIMIT ?`,
+    [...params, limit]
+  );
+  return rows.map((row) => ({
+    headline: row.content,
+    whyMatched: `explicit semantic memory ${row.id}`,
+    eventIds: [],
+    durableMemoryIds: [],
+    intent: parsedQuery.intent,
+    matchedTerms: matchingTerms(row.content, parsedQuery.termVariants),
+    sourceKind: "semantic",
+    timestamp: row.updated_at
+  })).filter((candidate) => candidate.matchedTerms.length > 0);
+}
 function loadRecallCandidates(options) {
-  return [...loadDurableCandidates(options), ...loadConversationCandidates(options)];
+  return [
+    ...loadDurableCandidates(options),
+    ...loadSemanticCandidates(options),
+    ...loadConversationCandidates(options)
+  ];
 }
 
 // packages/core/src/recall/temporal-parser.ts
@@ -35452,6 +35497,10 @@ function scoreRecallCandidate(candidate, parsedQuery, options) {
     score += 3;
     reasons.push("durable_priority");
   }
+  if (candidate.sourceKind === "semantic") {
+    score += 2;
+    reasons.push("explicit_memory");
+  }
   if (candidate.captureReason === parsedQuery.intent) {
     score += 2;
     reasons.push("capture_reason_match");
@@ -35464,7 +35513,7 @@ function scoreRecallCandidate(candidate, parsedQuery, options) {
     score += 3;
     reasons.push("validation_command_context");
   }
-  if (candidate.eventIds.length > 0 || candidate.durableMemoryIds.length > 0) {
+  if (candidate.eventIds.length > 0 || candidate.durableMemoryIds.length > 0 || candidate.sourceKind === "semantic") {
     score += 1;
     reasons.push("evidence_present");
   }

@@ -24,6 +24,12 @@ interface ConversationRecallRow {
   session_id: string | null;
 }
 
+interface SemanticRecallRow {
+  id: number;
+  content: string;
+  updated_at: number;
+}
+
 export interface CandidateLoaderOptions {
   db: DatabaseAdapter;
   parsedQuery: ParsedRecallQuery;
@@ -250,6 +256,59 @@ function loadConversationCandidates({
     }));
 }
 
+function loadSemanticCandidates({
+  db,
+  parsedQuery,
+  timeRange,
+  now,
+  limit,
+}: CandidateLoaderOptions): MemoryRecallCandidate[] {
+  if (parsedQuery.termVariants.length === 0) {
+    return [];
+  }
+
+  const params: unknown[] = [];
+  const clauses = ["layer = 'semantic'"];
+
+  if (timeRange) {
+    const resolved = resolveTimeRange(timeRange, now);
+    clauses.push('updated_at >= ?');
+    params.push(resolved.from);
+    clauses.push('updated_at <= ?');
+    params.push(resolved.to);
+  }
+
+  const termClauses = parsedQuery.termVariants.map(() => 'LOWER(content) LIKE ?');
+  clauses.push(`(${termClauses.join(' OR ')})`);
+  params.push(...parsedQuery.termVariants.map((term) => `%${term.toLowerCase()}%`));
+
+  const rows = db.all<SemanticRecallRow>(
+    `SELECT id, content, updated_at
+     FROM memories
+     WHERE ${clauses.join(' AND ')}
+     ORDER BY updated_at DESC, id DESC
+     LIMIT ?`,
+    [...params, limit],
+  );
+
+  return rows
+    .map((row) => ({
+      headline: row.content,
+      whyMatched: `explicit semantic memory ${row.id}`,
+      eventIds: [],
+      durableMemoryIds: [],
+      intent: parsedQuery.intent,
+      matchedTerms: matchingTerms(row.content, parsedQuery.termVariants),
+      sourceKind: 'semantic' as const,
+      timestamp: row.updated_at,
+    }))
+    .filter((candidate) => candidate.matchedTerms.length > 0);
+}
+
 export function loadRecallCandidates(options: CandidateLoaderOptions): MemoryRecallCandidate[] {
-  return [...loadDurableCandidates(options), ...loadConversationCandidates(options)];
+  return [
+    ...loadDurableCandidates(options),
+    ...loadSemanticCandidates(options),
+    ...loadConversationCandidates(options),
+  ];
 }

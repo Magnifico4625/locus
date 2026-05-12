@@ -689,13 +689,11 @@ async function runInstallCodex(options) {
   }
   try {
     const cleanup = cleanupInterruptedInstall(codexHome);
-    const cacheResult = await options.commandRunner("npm", [
-      "exec",
-      "-y",
-      runtimeSpecifier,
-      "--",
-      "--help"
-    ], { cwd: codexHome });
+    const cacheResult = await options.commandRunner(
+      "npm",
+      ["exec", "-y", runtimeSpecifier, "--", "--help"],
+      { cwd: codexHome }
+    );
     if (cacheResult.exitCode !== 0) {
       return {
         exitCode: 1,

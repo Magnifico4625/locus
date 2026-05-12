@@ -103,6 +103,39 @@ afterEach(() => {
 });
 
 describe('memory_recall integration', () => {
+  it('recalls explicit memories stored through memory_remember', async () => {
+    const root = makeTempRoot();
+    const projectDir = join(root, 'project');
+    const dbPath = join(root, 'locus.db');
+
+    mkdirSync(projectDir, { recursive: true });
+
+    const ctx = await createServer({ cwd: projectDir, dbPath });
+    try {
+      await callTextTool(ctx, 'memory_remember', {
+        text: 'Track C smoke decision: use redacted capture as the default practical recall mode for Codex.',
+        tags: ['track-c', 'smoke'],
+      });
+
+      const recallText = await callTextTool(ctx, 'memory_recall', {
+        question: 'What capture mode did we choose for Track C smoke?',
+        limit: 5,
+      });
+      const result = JSON.parse(recallText) as MemoryRecallResult;
+
+      expect(result.status).toBe('ok');
+      expect(result.summary).toContain('redacted capture');
+      expect(result.candidates).toEqual([
+        expect.objectContaining({
+          sourceKind: 'semantic',
+          whyMatched: expect.stringContaining('explicit semantic memory'),
+        }),
+      ]);
+    } finally {
+      ctx.cleanup();
+    }
+  });
+
   it('returns structured JSON recall results from ingested conversation events', async () => {
     const root = makeTempRoot();
     const projectDir = join(root, 'project');

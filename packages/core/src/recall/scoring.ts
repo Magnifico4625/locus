@@ -87,6 +87,11 @@ export function scoreRecallCandidate(
     reasons.push('durable_priority');
   }
 
+  if (candidate.sourceKind === 'semantic') {
+    score += 2;
+    reasons.push('explicit_memory');
+  }
+
   if (candidate.captureReason === parsedQuery.intent) {
     score += 2;
     reasons.push('capture_reason_match');
@@ -109,7 +114,11 @@ export function scoreRecallCandidate(
     reasons.push('validation_command_context');
   }
 
-  if (candidate.eventIds.length > 0 || candidate.durableMemoryIds.length > 0) {
+  if (
+    candidate.eventIds.length > 0 ||
+    candidate.durableMemoryIds.length > 0 ||
+    candidate.sourceKind === 'semantic'
+  ) {
     score += 1;
     reasons.push('evidence_present');
   }

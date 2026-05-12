@@ -187,7 +187,7 @@ export interface MemoryRecallCandidate {
   topicKey?: string;
   matchedTerms?: string[];
   captureReason?: string;
-  sourceKind?: 'durable' | 'conversation';
+  sourceKind?: 'durable' | 'conversation' | 'semantic';
   timestamp?: number;
 }
 
