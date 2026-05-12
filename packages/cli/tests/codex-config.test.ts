@@ -36,12 +36,12 @@ describe('codex mcp config model', () => {
     expect(detectNpxCommand('win32')).toBe('npx.cmd');
 
     const server = buildMcpServerConfig({
-      version: '3.6.0',
+      version: '3.6.1',
       platform: 'win32',
       cwd: 'C:\\Users\\Admin\\.codex',
     });
     expect(server.command).toBe('npx.cmd');
-    expect(server.args).toEqual(['-y', 'locus-memory@3.6.0', 'mcp']);
+    expect(server.args).toEqual(['-y', 'locus-memory@3.6.1', 'mcp']);
     expect(server.cwd).toBe('C:\\Users\\Admin\\.codex');
     expect(server.args.join(' ')).not.toContain('@latest');
     expect(server.env).toEqual({
@@ -56,7 +56,7 @@ describe('codex mcp config model', () => {
     expect(
       classifyMcpOwnership({
         command: 'npx',
-        args: ['-y', 'locus-memory@3.6.0', 'mcp'],
+        args: ['-y', 'locus-memory@3.6.1', 'mcp'],
         cwd: 'C:/Users/Admin/.codex',
       }),
     ).toBe('package-owned');
@@ -105,7 +105,7 @@ describe('codex mcp config model', () => {
   it('builds codex mcp add/remove args without shell concatenation', () => {
     const addArgs = buildCodexMcpAddArgs({
       name: 'locus',
-      version: '3.6.0',
+      version: '3.6.1',
       platform: 'linux',
     });
 
@@ -122,10 +122,43 @@ describe('codex mcp config model', () => {
       '--',
       'npx',
       '-y',
-      'locus-memory@3.6.0',
+      'locus-memory@3.6.1',
       'mcp',
     ]);
     expect(buildCodexMcpRemoveArgs('locus')).toEqual(['mcp', 'remove', 'locus']);
+  });
+
+  it('includes CODEX_HOME in MCP env when provided by the installer', () => {
+    const addArgs = buildCodexMcpAddArgs({
+      name: 'locus',
+      version: '3.6.1',
+      platform: 'win32',
+      env: {
+        CODEX_HOME: 'C:\\Users\\Admin\\.codex',
+        LOCUS_LOG: 'error',
+        LOCUS_CODEX_CAPTURE: 'redacted',
+        LOCUS_CAPTURE_LEVEL: 'redacted',
+      },
+    });
+
+    expect(addArgs).toEqual([
+      'mcp',
+      'add',
+      '--env',
+      'CODEX_HOME=C:\\Users\\Admin\\.codex',
+      '--env',
+      'LOCUS_LOG=error',
+      '--env',
+      'LOCUS_CODEX_CAPTURE=redacted',
+      '--env',
+      'LOCUS_CAPTURE_LEVEL=redacted',
+      'locus',
+      '--',
+      'npx.cmd',
+      '-y',
+      'locus-memory@3.6.1',
+      'mcp',
+    ]);
   });
 
   it('adds a safe cwd to the locus MCP TOML block after codex mcp add', () => {
@@ -136,7 +169,7 @@ describe('codex mcp config model', () => {
       [
         '[mcp_servers.locus]',
         'command = "npx.cmd"',
-        'args = ["-y", "locus-memory@3.6.0", "mcp"]',
+        'args = ["-y", "locus-memory@3.6.1", "mcp"]',
         '',
         '[mcp_servers.locus.env]',
         'LOCUS_CAPTURE_LEVEL = "redacted"',
@@ -169,7 +202,7 @@ describe('codex mcp config model', () => {
       [
         '[mcp_servers.locus]',
         'command = "npx.cmd"',
-        'args = ["-y", "locus-memory@3.6.0", "mcp"]',
+        'args = ["-y", "locus-memory@3.6.1", "mcp"]',
         'cwd = "C:\\\\old"',
         '',
       ].join('\n'),

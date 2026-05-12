@@ -687,6 +687,7 @@ async function runInstallCodex(options) {
   const env = options.env ?? process.env;
   const codexHome = resolveCodexHome(env);
   const codexCommandOptions = { env: { CODEX_HOME: codexHome } };
+  const mcpEnv = { CODEX_HOME: codexHome, ...defaultCodexMcpEnv };
   const version = resolvePackageVersion(options.startDir);
   const runtimeSpecifier = buildRuntimePackageSpecifier(version);
   const lock = acquireInstallLock(codexHome);
@@ -750,7 +751,8 @@ async function runInstallCodex(options) {
       buildCodexMcpAddArgs({
         name: "locus",
         version,
-        platform: options.platform
+        platform: options.platform,
+        env: mcpEnv
       }),
       codexCommandOptions
     );

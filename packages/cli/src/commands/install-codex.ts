@@ -2,7 +2,12 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanupInterruptedInstall, findInterruptedInstallTempFiles } from '../codex/cleanup.js';
 import { buildCodexMcpAddArgs } from '../codex/commands.js';
-import { classifyMcpOwnership, parseCodexMcpGetOutput, setMcpServerCwd } from '../codex/config.js';
+import {
+  classifyMcpOwnership,
+  defaultCodexMcpEnv,
+  parseCodexMcpGetOutput,
+  setMcpServerCwd,
+} from '../codex/config.js';
 import { installCodexHooks, resolveCodexHooksPath } from '../codex/hooks.js';
 import { acquireInstallLock } from '../codex/lock.js';
 import { resolveCodexConfigPath, resolveCodexHome, resolveCodexSkillPath } from '../codex/paths.js';
@@ -50,6 +55,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
   const env = options.env ?? process.env;
   const codexHome = resolveCodexHome(env);
   const codexCommandOptions = { env: { CODEX_HOME: codexHome } };
+  const mcpEnv = { CODEX_HOME: codexHome, ...defaultCodexMcpEnv };
   const version = resolvePackageVersion(options.startDir);
   const runtimeSpecifier = buildRuntimePackageSpecifier(version);
   const lock = acquireInstallLock(codexHome);
@@ -124,6 +130,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
         name: 'locus',
         version,
         platform: options.platform,
+        env: mcpEnv,
       }),
       codexCommandOptions,
     );

@@ -143,7 +143,7 @@ codex mcp add locus -- node /path/to/locus/dist/server.js
 - Codex acceptance matrix: [docs/codex-acceptance-matrix.md](docs/codex-acceptance-matrix.md)
 - Codex VS Code extension notes: [docs/codex-vscode-extension.md](docs/codex-vscode-extension.md)
 - Future roadmap: [docs/roadmap/codex-next.md](docs/roadmap/codex-next.md)
-- Release notes: [docs/releases/v3.6.0.md](docs/releases/v3.6.0.md)
+- Release notes: [docs/releases/v3.6.1.md](docs/releases/v3.6.1.md)
 - Full comparison: [docs/comparison.md](docs/comparison.md)
 
 ## Development

@@ -14,10 +14,10 @@ describe('GitHub Pages landing page', () => {
     expect(existsSync(indexPath)).toBe(true);
   });
 
-  it('describes the current v3.6.0 product state honestly', () => {
+  it('describes the current v3.6.1 product state honestly', () => {
     const html = readFileSync(indexPath, 'utf-8');
 
-    expect(html).toContain('v3.6.0');
+    expect(html).toContain('v3.6.1');
     expect(html).toContain('Track C');
     expect(html).toContain('one-command install');
     expect(html).toContain('npx -y locus-memory@latest install codex');
@@ -55,7 +55,7 @@ describe('GitHub Pages landing page', () => {
     const configExample = readRepoFile('packages/codex/config/config.toml.example');
     const acceptanceMatrix = readRepoFile('docs/codex-acceptance-matrix.md');
     const roadmap = readRepoFile('docs/roadmap/codex-next.md');
-    const releaseNotes = readRepoFile('docs/releases/v3.6.0.md');
+    const releaseNotes = readRepoFile('docs/releases/v3.6.1.md');
 
     expect(readme).toContain('npx -y locus-memory@latest install codex');
     expect(readme).toContain('Manual MCP fallback');
@@ -74,7 +74,7 @@ describe('GitHub Pages landing page', () => {
     expect(codexReadme).toContain('candidateGroups');
     expect(codexReadme).toContain('Codex hooks are optional');
 
-    expect(configExample).toContain('locus-memory@3.6.0');
+    expect(configExample).toContain('locus-memory@3.6.1');
     expect(configExample).toContain('npx.cmd');
     expect(configExample).not.toContain('args = ["-y", "locus-memory@latest", "mcp"]');
     expect(configExample).not.toContain('coming soon');
@@ -85,10 +85,10 @@ describe('GitHub Pages landing page', () => {
     expect(acceptanceMatrix).toContain('desktop / extension parity remains unverified');
 
     expect(roadmap).toContain('Track C');
-    expect(roadmap).toContain('completed locally');
-    expect(roadmap).toContain('v3.6.0');
+    expect(roadmap).toContain('shipped in `v3.6.0`');
+    expect(roadmap).toContain('v3.6.1');
 
-    expect(releaseNotes).toContain('Locus v3.6.0 Release Notes');
+    expect(releaseNotes).toContain('Locus v3.6.1 Release Notes');
     expect(releaseNotes).toContain('Track C');
     expect(releaseNotes).toContain('Known Boundaries');
     expect(releaseNotes).toContain('Codex desktop / extension parity remains unverified');

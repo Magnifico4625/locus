@@ -53,13 +53,13 @@ describe('codex doctor command', () => {
       },
       readMcpServer: () => ({
         command: 'npx',
-        args: ['-y', 'locus-memory@3.6.0', 'mcp'],
+        args: ['-y', 'locus-memory@3.6.1', 'mcp'],
       }),
     });
 
     expect(exitCode).toBe(0);
     expect(stdout.join('\n')).toContain('Codex version: codex-cli 0.125.0');
-    expect(stdout.join('\n')).toContain('Runtime package: locus-memory@3.6.0');
+    expect(stdout.join('\n')).toContain('Runtime package: locus-memory@3.6.1');
     expect(stdout.join('\n')).toContain('Ownership: package-owned');
     expect(stdout.join('\n')).toContain('Cache warming: not attempted by doctor');
     expect(stdout.join('\n')).toContain('first run after cache cleanup requires network');
@@ -86,7 +86,7 @@ describe('codex doctor command', () => {
           return {
             exitCode: 0,
             stdout:
-              'locus\n  command: npx.cmd\n  args: -y locus-memory@3.6.0 mcp\n  cwd: C:\\Users\\Admin\\.codex\n',
+              'locus\n  command: npx.cmd\n  args: -y locus-memory@3.6.1 mcp\n  cwd: C:\\Users\\Admin\\.codex\n',
             stderr: '',
           };
         }
@@ -114,7 +114,7 @@ describe('codex doctor command', () => {
     mkdirSync(codexHome, { recursive: true });
     writeFileSync(
       join(codexHome, 'hooks.json'),
-      renderCodexHooksJson(buildCodexHooksConfig({ version: '3.6.0' })),
+      renderCodexHooksJson(buildCodexHooksConfig({ version: '3.6.1' })),
       'utf8',
     );
     const { io, stdout } = createIo();
@@ -133,7 +133,7 @@ describe('codex doctor command', () => {
       },
       readMcpServer: () => ({
         command: 'npx',
-        args: ['-y', 'locus-memory@3.6.0', 'mcp'],
+        args: ['-y', 'locus-memory@3.6.1', 'mcp'],
       }),
     });
 
@@ -168,7 +168,7 @@ describe('codex doctor command', () => {
     mkdirSync(codexHome, { recursive: true });
     writeFileSync(
       join(codexHome, 'hooks.json'),
-      renderCodexHooksJson(buildCodexHooksConfig({ version: '3.6.0' })),
+      renderCodexHooksJson(buildCodexHooksConfig({ version: '3.6.1' })),
       'utf8',
     );
     const { io, stdout } = createIo();

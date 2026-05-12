@@ -216,7 +216,7 @@ describe('codex install model', () => {
             [
               '[mcp_servers.locus]',
               'command = "npx"',
-              'args = ["-y", "locus-memory@3.6.0", "mcp"]',
+              'args = ["-y", "locus-memory@3.6.1", "mcp"]',
               '',
             ].join('\n'),
             'utf8',
@@ -229,7 +229,7 @@ describe('codex install model', () => {
     expect(exitCode).toBe(0);
     expect(commands[0]).toEqual({
       command: 'npm',
-      args: ['exec', '-y', 'locus-memory@3.6.0', '--', '--help'],
+      args: ['exec', '-y', 'locus-memory@3.6.1', '--', '--help'],
       cwd: codexHome,
     });
     expect(commands[1]).toEqual({
@@ -241,11 +241,13 @@ describe('codex install model', () => {
       args: expect.arrayContaining([
         'mcp',
         'add',
+        '--env',
+        `CODEX_HOME=${codexHome}`,
         'locus',
         '--',
         'npx',
         '-y',
-        'locus-memory@3.6.0',
+        'locus-memory@3.6.1',
         'mcp',
       ]),
     });
@@ -289,7 +291,7 @@ describe('codex install model', () => {
             [
               '[mcp_servers.locus]',
               'command = "npx"',
-              'args = ["-y", "locus-memory@3.6.0", "mcp"]',
+              'args = ["-y", "locus-memory@3.6.1", "mcp"]',
               '',
             ].join('\n'),
             'utf8',
@@ -302,7 +304,7 @@ describe('codex install model', () => {
     expect(exitCode).toBe(0);
     expect(commands[0]).toEqual({
       command: 'npm',
-      args: ['exec', '-y', 'locus-memory@3.6.0', '--', '--help'],
+      args: ['exec', '-y', 'locus-memory@3.6.1', '--', '--help'],
       cwd: codexHome,
       env: { CODEX_HOME: codexHome },
     });
@@ -316,11 +318,13 @@ describe('codex install model', () => {
       args: expect.arrayContaining([
         'mcp',
         'add',
+        '--env',
+        `CODEX_HOME=${codexHome}`,
         'locus',
         '--',
         'npx',
         '-y',
-        'locus-memory@3.6.0',
+        'locus-memory@3.6.1',
         'mcp',
       ]),
       env: { CODEX_HOME: codexHome },
@@ -346,7 +350,7 @@ describe('codex install model', () => {
             [
               '[mcp_servers.locus]',
               'command = "npx"',
-              'args = ["-y", "locus-memory@3.6.0", "mcp"]',
+              'args = ["-y", "locus-memory@3.6.1", "mcp"]',
               '',
             ].join('\n'),
             'utf8',
@@ -359,7 +363,7 @@ describe('codex install model', () => {
     expect(exitCode).toBe(0);
     expect(stdout.join('\n')).toContain('Hooks: created');
     expect(readFileSync(join(codexHome, 'hooks.json'), 'utf8')).toContain(
-      'locus-memory@3.6.0 hook codex stop',
+      'locus-memory@3.6.1 hook codex stop',
     );
   });
 
@@ -380,7 +384,7 @@ describe('codex install model', () => {
             [
               '[mcp_servers.locus]',
               'command = "npx"',
-              'args = ["-y", "locus-memory@3.6.0", "mcp"]',
+              'args = ["-y", "locus-memory@3.6.1", "mcp"]',
               '',
             ].join('\n'),
             'utf8',
@@ -394,7 +398,7 @@ describe('codex install model', () => {
     expect(stdout.join('\n')).toContain('Hooks: updated');
     expect(stdout.join('\n')).toContain('Hooks backup:');
     expect(readFileSync(join(codexHome, 'hooks.json'), 'utf8')).toContain(
-      'locus-memory@3.6.0 hook codex stop',
+      'locus-memory@3.6.1 hook codex stop',
     );
     expect(readdirSync(codexHome).some((file) => /^hooks\.json\..+\.bak$/u.test(file))).toBe(true);
   });
@@ -404,7 +408,7 @@ describe('codex install model', () => {
     mkdirSync(codexHome, { recursive: true });
     writeFileSync(
       join(codexHome, 'hooks.json'),
-      renderCodexHooksJson(buildCodexHooksConfig({ version: '3.6.0', platform: 'linux' })),
+      renderCodexHooksJson(buildCodexHooksConfig({ version: '3.6.1', platform: 'linux' })),
       'utf8',
     );
     const { io, stdout } = createIo();
@@ -420,7 +424,7 @@ describe('codex install model', () => {
             [
               '[mcp_servers.locus]',
               'command = "npx"',
-              'args = ["-y", "locus-memory@3.6.0", "mcp"]',
+              'args = ["-y", "locus-memory@3.6.1", "mcp"]',
               '',
             ].join('\n'),
             'utf8',
@@ -452,7 +456,7 @@ describe('codex install model', () => {
     expect(commands).toEqual([
       {
         command: 'npm',
-        args: ['exec', '-y', 'locus-memory@3.6.0', '--', '--help'],
+        args: ['exec', '-y', 'locus-memory@3.6.1', '--', '--help'],
       },
     ]);
     expect(stdout.join('\n')).toContain('Runtime package unavailable');
@@ -483,7 +487,7 @@ describe('codex install model', () => {
             [
               '[mcp_servers.locus]',
               'command = "npx"',
-              'args = ["-y", "locus-memory@3.6.0", "mcp"]',
+              'args = ["-y", "locus-memory@3.6.1", "mcp"]',
               '',
             ].join('\n'),
             'utf8',
@@ -495,7 +499,7 @@ describe('codex install model', () => {
 
     expect(exitCode).toBe(0);
     expect(commands.map((entry) => entry.args.join(' '))).toEqual([
-      'exec -y locus-memory@3.6.0 -- --help',
+      'exec -y locus-memory@3.6.1 -- --help',
       'mcp get locus',
       'mcp remove locus',
       expect.stringContaining('mcp add'),

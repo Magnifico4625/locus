@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.6.1] - 2026-05-12
+
+### Fixed
+- `locus-memory install codex` now writes `CODEX_HOME` into the generated MCP server environment, so fresh one-command installs start Locus as a Codex client and use `$CODEX_HOME/memory/` instead of the generic fallback storage path.
+
 ## [3.6.0] - 2026-05-12
 
 ### Added
@@ -246,7 +251,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - PostToolUse hook for automatic capture
 - `memory_scan`, `memory_search`, `memory_explore`, `memory_remember`, `memory_forget`, `memory_purge`, `memory_status`, `memory_doctor`, `memory_audit` tools
 
-[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.6.0...HEAD
+[Unreleased]: https://github.com/Magnifico4625/locus/compare/v3.6.1...HEAD
+[3.6.1]: https://github.com/Magnifico4625/locus/compare/v3.6.0...v3.6.1
 [3.6.0]: https://github.com/Magnifico4625/locus/compare/v3.5.3...v3.6.0
 [3.5.3]: https://github.com/Magnifico4625/locus/compare/v3.5.2...v3.5.3
 [3.5.2]: https://github.com/Magnifico4625/locus/compare/v3.5.1...v3.5.2

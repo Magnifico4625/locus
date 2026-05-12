@@ -1,9 +1,9 @@
 # Codex Next Roadmap
 
 **Date:** 2026-04-16  
-**Last updated:** 2026-05-11
+**Last updated:** 2026-05-12
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is published to npm through `locus-memory@3.5.3`. Track C richer recall is completed locally as a `v3.6.0` release candidate and is in release publication prep.
+**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is published to npm through `locus-memory@3.5.3`. Track C richer recall shipped in `v3.6.0`, with `v3.6.1` as a focused Codex installer hotfix that keeps one-command installs on `$CODEX_HOME/memory/`.
 
 ---
 
@@ -177,7 +177,7 @@ Known follow-up:
 
 **Priority:** `P0`  
 **Target window:** May 2026 and after the trust-gap work establishes the baseline  
-**Current status:** core implementation, C6 docs, and local release preflight are complete as `v3.6.0` release-candidate work. Registry-hosted validation remains pending until `locus-memory@3.6.0` is published to npm.
+**Current status:** shipped in `v3.6.0`; `v3.6.1` hotfix ensures fresh one-command Codex installs pass `CODEX_HOME` into the generated MCP environment and use Codex storage instead of generic fallback storage.
 **Why it matters:** once the product is no longer misleading at the baseline level, the next step is to deepen recall quality and make richer capture modes production-worthy rather than experimental.
 
 ### Goal
@@ -212,7 +212,7 @@ Turn Codex memory from “recent context is finally trustworthy” into “recen
 
 ### Release intent
 
-Best treated as **`v3.6.0`** candidate work now that Track A shipped in `v3.4.0` and Track B shipped to npm as `v3.5.3`.
+Shipped as **`v3.6.0`** with a focused **`v3.6.1`** installer hotfix.
 
 ### Delivered locally
 
@@ -381,6 +381,7 @@ This is a planning suggestion, not a hard contract.
 | `v3.4` | shipped Track A memory-trust work: reliable auto-import, validated recall, automatic high-value memory persistence, honest diagnostics/docs |
 | `v3.5` | shipped one-command install foundations: npm runtime, installer/doctor/uninstall, marketplace bundle generation, install UX cleanup |
 | `v3.6.0` | Track C richer Codex conversational recall (`redacted` / `full`) and stronger capture/privacy UX |
+| `v3.6.1` | Codex one-command install hotfix: generated MCP env includes `CODEX_HOME`, keeping storage under `$CODEX_HOME/memory/` |
 | `v4.0` | HTML dashboard + broader product-grade memory visibility |
 
 Secondary IDE adapters should be scheduled only when they do not block the Codex-first path above.
@@ -389,12 +390,12 @@ Secondary IDE adapters should be scheduled only when they do not block the Codex
 
 ## Immediate Next Candidates
 
-1. Finish GitHub release publication for Track B:
-   - push the release branch
-   - open/review/merge PR intentionally
-   - create the final GitHub release/tag
-   - verify README, landing page, and release notes from the public GitHub surfaces
-2. Continue improving high-value memory persistence quality after Track B ships:
+1. Publish and validate the `v3.6.1` Codex installer hotfix:
+   - publish `locus-memory@3.6.1`
+   - validate a disposable `CODEX_HOME` install
+   - restart Codex and verify `memory_status` uses `.codex/memory`
+   - push/tag/release on GitHub
+2. Continue improving high-value memory persistence quality after Track C ships:
    - accepted decisions
    - user preferences
    - collaboration style
