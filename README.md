@@ -1,456 +1,143 @@
 # Locus
 
-> Persistent project-aware memory for AI coding tools. Built on [MCP](https://modelcontextprotocol.io). Works with Claude Code, Codex CLI, Cursor, Windsurf, and any MCP-compatible client.
+> Local persistent memory for AI coding tools. Built on MCP. Optimized for Codex CLI.
 
 ![Locus hero image](docs/assets/social-preview-github.jpg)
 
 [![npm version](https://img.shields.io/npm/v/locus-memory)](https://www.npmjs.com/package/locus-memory)
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-vitest-brightgreen)](https://github.com/Magnifico4625/locus)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)](https://modelcontextprotocol.io)
 
-## What is Locus?
+**Languages:** [English](README.md) · [Русский](docs/README.ru.md) · [简体中文](docs/README.zh-CN.md)
 
-AI coding tools lose context between sessions. Every new conversation starts from scratch — no memory of your architecture decisions, no awareness of which files exist, no record of what changed last week.
+## What Locus Does
 
-Locus solves this with three persistent memory layers:
+AI coding agents forget project context between sessions. Locus gives them a local memory database they can query through MCP:
 
-- **Structural** — an auto-parsed map of files, exports, and imports, built from regex analysis of your codebase. Zero tokens consumed, always up to date.
-- **Semantic** — decisions you save explicitly ("why JWT not sessions?", "why Postgres not Mongo?") with optional tags. Automatically redacted before storage.
-- **Episodic** — a compressed history of what happened in each session: tools used, files changed, context captured via hooks.
+- project structure: files, exports, imports
+- saved decisions: architecture choices, preferences, constraints
+- Codex conversation recall: recent work, errors, rejected alternatives, next steps
+- diagnostics: what is stored, what was imported, what capture mode is active
 
-**New in v3.0 — Carbon Copy:** Zero-cost passive capture of prompts, AI responses, and file changes via an inbox-based event protocol. A 4-phase ingest pipeline processes events into searchable conversation history — no tokens consumed on write, only on recall.
+Locus is local-first. It stores data on your machine, uses SQLite, and does not require a cloud account, hosted database, embeddings provider, or LLM call to write memory.
 
-**New in v3.4 — Codex Memory Trust:** Codex CLI now has validated practical conversational recall in `redacted` mode. Live Codex dialogue can be imported from rollout JSONL, searched through `memory_search`, and summarized through `memory_recall` without requiring explicit `memory_remember`.
-
-**New in v3.5 — One-command Codex install:** Locus is packaged as the public `locus-memory` npm runtime with a Codex installer, doctor, uninstall command, and generated marketplace bundle. The recurring MCP runtime is version-pinned, runs from `$CODEX_HOME` to avoid local `npx` workspace resolution issues, and `doctor codex` reports package-owned installs correctly.
-
-**New in v3.6 — Track C richer Codex recall:** Codex CLI recall is now tested against redacted multi-session fixtures that include Russian dated questions, capture-strategy decisions, rejected alternatives, user workflow style, npm install errors, next steps, and validation facts. `memory_recall` is the summary-first path; when several plausible matches exist, `candidateGroups` make the clarification visible instead of hiding ambiguity. Explicit memories saved with `memory_remember` are also recallable through `memory_recall`.
-
-**Codex recall truth:** Codex CLI is the primary validated path for useful recall. `metadata` remains the safe default for diagnostics and minimal capture, but it is not strong conversational memory. For practical Codex recall, use `LOCUS_CODEX_CAPTURE=redacted` with `LOCUS_CAPTURE_LEVEL=redacted`. `full` is maximum recall and must be treated as explicit warning territory, not a risk-free mode.
-
-Locus stores metadata only by default. No raw file content is ever written to disk unless you explicitly opt in.
-
-## Compatibility
-
-Locus is an MCP server. It works with any tool that supports the [Model Context Protocol](https://modelcontextprotocol.io).
-
-| Feature | Claude Code | Codex CLI | Cursor / Windsurf / Cline / Zed |
-|---------|-------------|-----------|----------------------------------|
-| 14 MCP tools (search, recall, explore, remember...) | Full support | Full support | Full support |
-| 3 MCP resources (project-map, decisions, recent) | Auto-injected | On demand | Manual config |
-| Carbon Copy capture | Full support via hooks (v3.0) | Auto-import before `memory_search` + manual `memory_import_codex`; useful recall validated in `redacted` mode | Future adapters planned |
-
-**How it works:** The MCP server provides 14 tools and 3 resources to any connected client. Storage location is auto-detected per client (`~/.claude/memory/` for Claude Code, `$CODEX_HOME/memory/` for Codex CLI, `~/.locus/memory/` for others). In Claude Code, three native hooks additionally capture conversation events into a local inbox for passive memory. In Codex CLI, the newest rollout session is auto-imported before `memory_search` in a bounded, debounced, best-effort way, and `memory_import_codex` remains available for explicit catch-up or filtered manual import. `memory_status` and `memory_doctor` now distinguish healthy ingest plumbing from actually useful recall.
-
-## Features
-
-- 3 memory layers: structural (auto-parsed), semantic (user-curated), episodic (auto-captured)
-- **Carbon Copy**: passive conversation capture via inbox-based event protocol
-- 14 MCP tools for exploring, recalling, searching, remembering, and managing memory
-- 3 auto-injected MCP resources (<3.5k tokens total)
-- Incremental scanning: git-diff → mtime → full rescan strategies
-- 4-layer security: metadata-only → file denylist → content redaction → audit UX
-- FTS5 full-text search across all memory layers + conversation events
-- Zero native dependencies — Node 22+ built-in sqlite, sql.js fallback
-- Cross-platform: Windows, macOS, Linux
-
-## Quick Start
-
-**Prerequisites:** Node.js >= 22.0.0
-
-### Claude Code (plugin — recommended)
+## Install For Codex
 
 ```bash
-# Install as a plugin
-claude plugin install locus
-
-# Or from local directory (for development)
-claude --plugin-dir /path/to/locus
+npx -y locus-memory@latest install codex --yes
 ```
 
-Once installed, Locus auto-injects 3 resources into every conversation — no configuration required. Three hooks automatically capture conversation events into a local inbox.
-
-### Codex CLI
-
-Install Locus for Codex with one command:
-
-```bash
-npx -y locus-memory@latest install codex
-```
-
-Then restart Codex and verify:
+Restart Codex, then verify:
 
 ```bash
 npx -y locus-memory@latest doctor codex
 ```
 
-To remove the MCP entry while preserving local memory data:
+Remove the Codex MCP entry while keeping local memory data:
 
 ```bash
 npx -y locus-memory@latest uninstall codex --yes
 ```
 
-The installer:
+The installer adds the Locus MCP server, installs the Codex skill, sets practical `redacted` capture defaults, and pins the recurring MCP runtime to the installed package version.
 
-- installs the canonical Codex skill into `$CODEX_HOME/skills/locus-memory/SKILL.md`
-- configures the `locus` MCP server with `redacted` capture defaults
-- writes a recurring runtime command pinned to the installed package version, not `@latest`
-- preserves existing manual setup unless it can classify it as a Locus migration
+## New In v3.6
 
-### Manual MCP fallback
+**New in v3.6 / Track C:** richer Codex recall. `memory_recall` can summarize imported redacted Codex sessions, durable decisions, explicit `memory_remember` entries, rejected alternatives, validation facts, user style, and dated questions such as "what did we do yesterday?". If several matches are plausible, Locus returns `candidateGroups` so the agent can ask a focused clarification instead of guessing.
 
-Manual MCP setup remains supported for development, local checkouts, and users who do not want npm-based install.
+Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is still treated as unverified until tested there.
 
-Add Locus as an MCP server from a local checkout:
+## Why Choose Locus
+
+| Need | Locus approach |
+| --- | --- |
+| One-command Codex setup | `npx -y locus-memory@latest install codex --yes` |
+| Local-only storage | SQLite under `$CODEX_HOME/memory/`, `~/.claude/memory/`, or `~/.locus/memory/` |
+| Low token cost | Writes happen locally; tokens are spent only when the agent recalls memory |
+| Privacy control | `metadata`, `redacted`, and `full` capture modes; `full` is explicit warning territory |
+| Project-aware memory | Structural scan plus durable decisions and conversation events |
+| Inspectability | `memory_status`, `memory_doctor`, `memory_audit`, `memory_review` |
+| Cross-client base | Any MCP client can use the server; Codex and Claude Code have the strongest adapters today |
+
+## Competitive Snapshot
+
+Locus is not trying to be a full agent runtime or cloud memory platform. It is a small local memory layer for coding agents, with Codex as the first-class product path.
+
+| Project | Main strength | Trade-off vs Locus |
+| --- | --- | --- |
+| [agentmemory](https://github.com/rohitg00/agentmemory) | Very broad coding-agent memory stack with many tools, hooks, viewer, and benchmark claims | Larger system surface; Locus is smaller, simpler, Codex-first, and ships as one npm MCP runtime |
+| [AIDE Memory](https://www.aide-memory.dev/) | Path-scoped local memory and very small context nudge | Locus focuses more on MCP tools, Codex JSONL import, diagnostics, and explicit recall UX |
+| [Mem0](https://github.com/mem0ai/mem0) | Popular general-purpose memory layer for AI agents with SDKs, hosted/self-hosted options, and benchmarks | Usually an application integration layer; Locus is ready-to-use for coding tools through MCP |
+| [Letta](https://github.com/letta-ai/letta) | Full stateful agent platform with advanced memory | More framework/runtime commitment; Locus plugs into existing tools instead of replacing them |
+| [Zep / Graphiti](https://github.com/getzep/graphiti) | Temporal knowledge graphs and production context infrastructure | Strong for app/enterprise memory; Locus is lighter and local by default for individual coding workflows |
+
+Full comparison: [docs/comparison.md](docs/comparison.md)
+
+## Capture Modes
+
+| Mode | Use it when | What to expect |
+| --- | --- | --- |
+| `metadata` | You want safest diagnostics-first behavior | Minimal content recall |
+| `redacted` | You want practical Codex memory | Bounded snippets and keyword extraction with best-effort secret redaction |
+| `full` | You explicitly want maximum recall | More content stored locally after redaction; not risk-free |
+
+Recommended Codex settings:
+
+```bash
+LOCUS_CODEX_CAPTURE=redacted
+LOCUS_CAPTURE_LEVEL=redacted
+```
+
+For product claims: `full` is maximum recall and must be treated as explicit opt-in, not a safe default.
+
+## MCP Tools
+
+Locus exposes 14 MCP tools:
+
+| Tool | Purpose |
+| --- | --- |
+| `memory_recall` | Summary-first recall for questions about past work |
+| `memory_search` | Full-text search across structure, decisions, and conversation events |
+| `memory_remember` | Save important decisions or preferences |
+| `memory_review` | Inspect durable memories, states, evidence, and topic keys |
+| `memory_import_codex` | Manually import Codex rollout JSONL sessions |
+| `memory_timeline` | Chronological event feed |
+| `memory_scan` | Index project structure |
+| `memory_explore` | Browse indexed project structure |
+| `memory_status` | Runtime state and Codex diagnostics |
+| `memory_doctor` | Actionable health checks |
+| `memory_audit` | Storage and privacy audit |
+| `memory_config` | Show effective configuration |
+| `memory_compact` | Prune old episodic entries |
+| `memory_forget` / `memory_purge` | Delete selected or all memory with safety confirmation |
+
+## Other Clients
+
+Locus is an MCP server, so it can run in Claude Code, Cursor, Windsurf, Cline, Zed, Claude Desktop, and similar clients.
+
+Current maturity:
+
+| Surface | Status |
+| --- | --- |
+| Codex CLI | Primary validated path |
+| Claude Code | Supported through hooks and shared runtime |
+| Codex desktop / extension | Same config model where MCP is exposed; parity still unverified |
+| Cursor / Windsurf / Cline / Zed | MCP tools work; passive conversation adapters are future work |
+
+Manual MCP fallback:
 
 ```bash
 codex mcp add locus -- node /path/to/locus/dist/server.js
 ```
 
-Or add directly to `~/.codex/config.toml`:
-
-```toml
-[mcp_servers.locus]
-command = "node"
-args = ["/path/to/locus/dist/server.js"]
-
-[mcp_servers.locus.env]
-LOCUS_LOG = "error"
-LOCUS_CODEX_CAPTURE = "redacted"
-LOCUS_CAPTURE_LEVEL = "redacted"
-```
-
-Repo-local plugin packaging is also available for local Codex onboarding:
-
-- plugin bundle: [plugins/locus-memory](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/plugins/locus-memory)
-- repo marketplace: [.agents/plugins/marketplace.json](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/.agents/plugins/marketplace.json)
-- plugin sync helper: `npm run sync:codex-plugin`
-- marketplace bundle generator: `npm run sync:codex-marketplace`
-
-> **Note:** Codex CLI storage goes to `$CODEX_HOME/memory/`. All 14 MCP tools and 3 resources work immediately. Before `memory_search`, Locus auto-imports the newest Codex rollout session with a local debounce window. `memory_status` now exposes structured Codex diagnostics plus `codexTruth`, `memory_doctor` adds Codex-specific health checks, and `memory_import_codex` remains available when you want explicit control, filtered import, or manual catch-up across older sessions.
-> Last documented validation target: Codex CLI `0.125.0` surface as of April 28, 2026.
-
-Manual MCP setup remains fully supported. The local plugin bundle and generated marketplace bundle are packaging layers, not second sources of product logic.
-
-Recent Codex history becomes searchable automatically when you use `memory_search`, but recall quality depends on capture mode. `metadata` proves import health and preserves limited session context. `redacted` is the recommended practical mode for useful conversational recall. `full` stores the most content and must be treated as explicit opt-in with an explicit privacy warning.
-
-`memory_recall` is summary-first and can recover useful Codex context from imported conversation events and durable decisions. If several events match the same question, it may return `needs_clarification`; that is expected when the same marker or decision appears in prompts, session summaries, and follow-up diagnostics.
-Agents should inspect `candidateGroups` in that response and ask a focused clarification question instead of guessing.
-
-Recommended Codex workflow:
-
-- use `memory_recall` first for summary-first questions like "what did we do yesterday?" or "what did we decide about auth?"
-- use `memory_search` when raw search is still useful after recall or when you need exact terms
-- use `memory_status` to inspect `codexAutoImport` and `codexDiagnostics` if recent dialogue does not appear as expected
-- use `memory_doctor` for actionable Codex checks when you need to diagnose session discovery, rollout readability, capture mode, or imported-event counts
-- use `memory_import_codex` only for older sessions, filtered imports, or explicit manual catch-up
-- use `memory_review` when you want to inspect what durable memories were stored, why they exist, or what may be stale/superseded
-- use `memory_remember` for important architectural decisions and why they were made
-
-Common Codex fixes:
-
-- confirm `CODEX_HOME` points at the active Codex home directory
-- confirm `$CODEX_HOME/sessions/` exists and contains `rollout-*.jsonl` files
-- confirm `LOCUS_CODEX_CAPTURE` is not set to `off`
-- if `memory_status.codexTruth.recallReadiness` is `limited`, switch Codex to `redacted` capture for practical recall
-- use `memory_search` first, then `memory_status`, then `memory_doctor`, and only then run `memory_import_codex` for manual catch-up
-
-To keep the locally installed Codex skill aligned with the repo copy:
-
-```bash
-npm run sync:codex-skill
-```
-
-To keep the repo-local Codex plugin bundle aligned with the canonical skill:
-
-```bash
-npm run sync:codex-plugin
-```
-
-Import the latest Codex rollout session on demand:
-
-```text
-memory_import_codex({"latestOnly":true})
-```
-
-Import only sessions for one project or session id:
-
-```text
-memory_import_codex({"projectRoot":"C:\\Users\\Admin\\my-project"})
-memory_import_codex({"sessionId":"sess_abc123"})
-memory_import_codex({"since":1710000000000})
-```
-
-### Codex VS Code Extension
-
-The Codex VS Code extension uses the same Codex MCP configuration model as Codex CLI. In practice, this means Locus can work there through the same server setup, but MCP visibility in the extension may still depend on upstream preview behavior.
-
-Treat Codex CLI as the primary validated path. Desktop/extension parity is intentionally reported as unverified until tested in that surface. If the extension does not expose Locus tools in a given build, that is an IDE integration boundary, not a separate Locus skill format.
-
-Use the dedicated guide for setup, reload, verification, and troubleshooting:
-
-- [Codex VS Code Extension](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-vscode-extension.md)
-
-Recommended diagnosis order in the extension:
-
-- run `memory_search` first
-- inspect `memory_status`
-- inspect `memory_doctor`
-- use `memory_import_codex` only for explicit manual catch-up
-
-The repo-local plugin bundle can support local Codex onboarding here too, but manual MCP setup remains the documented fallback if extension/plugin behavior differs from Codex CLI in a given build.
-
-### Any MCP Client (Cursor, Windsurf, Cline, Zed, etc.)
-
-Add Locus to your MCP configuration. The exact file depends on your tool:
-
-| Tool | Config file |
-|------|------------|
-| Cursor | `.cursor/mcp.json` |
-| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
-| Cline | VS Code MCP settings |
-| Claude Desktop | `claude_desktop_config.json` |
-
-Add this server entry:
-
-```json
-{
-  "mcpServers": {
-    "locus": {
-      "command": "node",
-      "args": ["/path/to/locus/dist/server.js"],
-      "env": {
-        "LOCUS_LOG": "error"
-      }
-    }
-  }
-}
-```
-
-> **Note:** When using Locus outside Claude Code, the MCP tools and resources work fully. Codex CLI additionally supports auto-import before `memory_search` plus manual session import via `memory_import_codex`. Adapter support for IDE log files in Cursor, Windsurf, and similar clients remains a future track.
-
-For other MCP IDEs, Locus works through MCP tools/resources. The Codex-specific skill is not the primary integration mechanism there.
-
-### First Use
-
-Use `memory_scan` to index your project structure on first run, then `memory_search` to explore what was found. Use `memory_remember` to save decisions as you make them.
-
-### Carbon Copy Capture (Claude Code)
-
-By default, Locus captures tool use metadata (files read/written, tools used). To enable richer capture:
-
-```bash
-export LOCUS_CAPTURE_LEVEL=full      # prompts + AI responses (secrets redacted)
-# or
-export LOCUS_CAPTURE_LEVEL=redacted  # prompts as keywords only, no AI responses
-```
-
-## Tools Reference
-
-| Tool | Parameters | Description |
-|------|-----------|-------------|
-| `memory_explore` | `path: string` | Navigate project structure by directory |
-| `memory_search` | `query: string, timeRange?, filePath?, kind?` | Full-text search across all memory layers + conversation events |
-| `memory_remember` | `text: string, tags?: string[]` | Store a decision with auto-redaction |
-| `memory_review` | `state?, topicKey?, limit?` | Inspect durable memories that may need review, cleanup, or archival |
-| `memory_forget` | `query: string, confirmToken?: string` | Delete matching memories (bulk-delete safety) |
-| `memory_scan` | — | Scan project and index code structure |
-| `memory_status` | — | Runtime stats, config, inbox metrics, DB info, and Codex diagnostics when `CODEX_HOME` is present |
-| `memory_doctor` | — | 12-point environment health check plus Codex-specific checks when `CODEX_HOME` is present |
-| `memory_audit` | — | Data inventory and security audit |
-| `memory_config` | — | Show current configuration and sources |
-| `memory_compact` | `maxAgeDays?, keepSessions?` | Clean up old episodic memory entries |
-| `memory_purge` | `confirmToken?: string` | Clear all project memory (two-step confirmation) |
-| `memory_timeline` | `timeRange?, kind?, filePath?, summary?` | Chronological event feed with optional summary mode |
-| `memory_import_codex` | `latestOnly?, projectRoot?, sessionId?, since?` | Manually import Codex rollout JSONL sessions into inbox and storage |
-| `memory_recall` | `question: string, timeRange?, limit?` | Summary-first recall over recent conversation context and durable decisions |
-
-### Extended Search Parameters (v3.0)
-
-`memory_search` supports filters for conversation events:
-
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `timeRange` | `{relative?: string}` or `{from?: number, to?: number}` | Filter by time. Relative: `today`, `yesterday`, `this_week`, `last_7d`, `last_30d` |
-| `filePath` | `string` | Filter events by file path (exact match via event_files join) |
-| `kind` | `string` | Event kind: `user_prompt`, `ai_response`, `tool_use`, `file_diff`, `session_start`, `session_end` |
-| `source` | `string` | Filter by event source (e.g., `claude-code`) |
-| `limit` | `number` | Max conversation results (default: 20) |
-| `offset` | `number` | Pagination offset for conversation results |
-
-## Resources
-
-Three MCP resources provide lightweight context at the start of every session (<3.5k tokens combined).
-
-| URI | Description | Token Budget |
-|-----|-------------|-------------|
-| `memory://project-map` | File tree with exports, imports, and confidence metrics | <2,000 tokens |
-| `memory://decisions` | Recent semantic memories (up to 15 entries) | <500 tokens |
-| `memory://recent` | Session activity log + conversation stats | <1,000 tokens |
-
-> In Claude Code, resources are auto-injected. In other MCP clients, configure your tool to read these resources at session start.
-
-## Configuration
-
-**Environment Variables:**
-
-| Variable | Values | Default | Description |
-|----------|--------|---------|-------------|
-| `LOCUS_LOG` | `error`, `info`, `debug` | `error` | Logging verbosity |
-| `LOCUS_CAPTURE_LEVEL` | `metadata`, `redacted`, `full` | `metadata` | Capture detail level (hooks + MCP server) |
-| `LOCUS_CODEX_CAPTURE` | `off`, `metadata`, `redacted`, `full` | `metadata` | Codex JSONL import behavior for both auto-import before `memory_search` and `memory_import_codex` |
-| `CODEX_HOME` | filesystem path | platform default | Codex home used for `sessions/`, installed skills, and Codex-specific storage paths |
-
-**Capture Levels:**
-
-| Level | Tool Use | User Prompts | AI Responses | File Diffs |
-|-------|----------|-------------|-------------|------------|
-| `metadata` (default) | stats only | Filtered | Filtered | stats only |
-| `redacted` | + error kind, command name | keywords only (RAKE) | Filtered | stats only |
-| `full` | + full command (redacted) | full text (redacted) | full text (redacted) | full diff (redacted) |
-
-> **Note:** Secrets are always redacted before storage regardless of capture level. At `redacted` level, user prompts are processed through RAKE keyword extraction — only statistically significant phrases are stored, not the full text. AI responses are never captured below `full` level. Defense-in-depth: hooks apply the captureLevel gate *before* writing to disk, and the ingest pipeline enforces it again as a second layer.
-
-For Codex specifically, read the modes as product behavior:
-
-- `metadata`: safe default and diagnostics-first mode; limited conversational recall.
-- `redacted`: recommended practical mode for useful Codex recall; stores bounded, filtered, best-effort-redacted snippets.
-- `full`: maximum recall with raw conversation text after best-effort redaction; explicit opt-in only and never risk-free.
-
-See [Codex Acceptance Matrix](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-acceptance-matrix.md) for the current validation status.
-
-**Default Configuration:**
-
-```
-captureLevel:         metadata     # No raw file content stored
-maxScanFiles:         10,000       # Skip projects with >10k files
-maxFileSize:          1 MB         # Skip files larger than 1 MB
-compressionThreshold: 10,000       # Compress episodic memory above 10k tokens
-rescanThreshold:      30%          # Rescan if >30% files changed
-fullRescanCooldown:   5 min        # Minimum interval between full rescans
-minScanInterval:      10 sec       # Minimum interval between any scans
-```
-
-**Search Engine:** Locus uses SQLite FTS5 for full-text search when available. FTS5 indexes are self-healing — if the database was created without FTS5 and later opened with FTS5 available, indexes are auto-created and populated on startup. If your Node.js build doesn't include FTS5, search automatically falls back to LIKE queries (slower, less accurate). Run `memory_doctor` to check your search engine status.
-
-## Security
-
-Locus uses a 4-layer security model:
-
-1. **Metadata-only** — by default, only file paths, exports, and imports are stored. No raw file content is written to disk.
-2. **File denylist** — `.env`, `*.key`, `credentials.*`, and other sensitive patterns are never indexed — enforced in both the structural scanner and the conversation ingest pipeline.
-3. **Content redaction** — passwords, API keys, and tokens are automatically stripped from any content before storage. Redaction is applied twice: once in hooks before writing to disk, and again in the ingest pipeline before database storage.
-4. **Audit UX** — the `memory_audit` tool shows exactly what is stored for the current project and flags any security concerns.
-
-## Architecture
-
-```
-+------------------------------------------+
-|         AI Coding Tool Session           |
-|  (Claude Code / Codex CLI / Cursor / ..) |
-+------------+------------+----------------+
-| Resource   | Resource   | Resource       |
-| project    | decisions  | recent         |
-| -map       |            |                |
-+------------+------------+----------------+
-|            14 MCP Tools                  |
-+------------------------------------------+
-|         Scanner (regex-based)            |
-|    git-diff -> mtime -> full rescan      |
-+------------------------------------------+
-|     Storage: node:sqlite | sql.js        |
-|     Client-aware path resolution:        |
-|     Claude: ~/.claude/memory/locus-{h}/  |
-|     Codex:  $CODEX_HOME/memory/locus-{h}/|
-|     Other:  ~/.locus/memory/locus-{h}/   |
-+------------------------------------------+
-|   4-Phase Ingest Pipeline                |
-|   Intake -> Filter -> Transform -> Store |
-+------------------------------------------+
-|   Adapters (event sources):              |
-|   Claude Code hooks (v3.0)               |
-|   Codex JSONL adapter + auto/manual      |
-|   import into inbox before search        |
-|   log-tailer / cli-wrapper (future)      |
-|   -> inbox/ (atomic JSON events)         |
-+------------------------------------------+
-```
-
-- **Structural memory**: regex-parsed exports and imports with confidence tagging
-- **Semantic memory**: user-curated decisions, automatically redacted before storage
-- **Episodic memory**: hook captures, lazy-compressed when the token count exceeds the threshold
-- **Conversation events**: passively captured via adapters and indexed for search
-- **Storage**: node:sqlite (Node 22+) primary, sql.js fallback
-- **FTS5**: full-text search across all layers, auto-detected at startup
-- **Monorepo**: `@locus/core` (MCP server) + `@locus/shared-runtime` (path resolution) + `@locus/claude-code` (hooks) + `@locus/codex` (skill + JSONL adapter + config)
-
-## FAQ
-
-### What works without hooks (Cursor, Windsurf, Cline, Zed)?
-
-The MCP server is fully functional without hooks. Here's what you get:
-
-**Works out of the box:**
-
-| Tool | What it does |
-|------|-------------|
-| `memory_scan` | Scans your project, builds a structural map of files, exports, and imports |
-| `memory_explore` | Navigate the project structure interactively |
-| `memory_search` | Full-text search across project structure and saved decisions |
-| `memory_remember` | Store architecture decisions ("why Redis not Memcached?") |
-| `memory_forget` | Delete stored decisions |
-| `memory_doctor` | 12-point health check of the environment |
-| `memory_status` | Runtime stats, DB info, configuration |
-| `memory_config` | Show current settings and their sources |
-| `memory_audit` | Data inventory and security review |
-| `memory_purge` | Wipe all project memory (two-step safety) |
-
-These tools cover the structural and semantic memory layers — your AI assistant will remember your project structure and decisions between sessions without any hooks.
-
-**Requires a capture adapter:**
-
-| Tool | What it needs |
-|------|--------------|
-| `memory_timeline` | Conversation events captured by Claude hooks or Codex JSONL import |
-| `memory_search` with `timeRange`, `filePath`, `kind` filters | Conversation event data |
-| `memory_recall` over recent dialogue | Conversation events plus durable decisions |
-| `memory://recent` resource (conversation stats section) | Activity data from a capture adapter |
-
-The conversation layer (Carbon Copy) passively records what files you touched, what tools were used, and optionally what you asked. Claude Code writes through hooks. Codex CLI uses rollout JSONL import with auto-import before search/recall plus manual `memory_import_codex`. Other IDEs still need future adapter work for passive conversation capture.
-
-**Bottom line:** the core value — "AI remembers your project between sessions" — works anywhere MCP tools are exposed. Passive conversation history works today for Claude Code and Codex CLI; broader IDE adapter support remains a future release track.
-
-### How is Locus different from CLAUDE.md?
-
-They complement each other. `CLAUDE.md` is for static rules — coding conventions, architecture constraints, things that rarely change. Locus is for dynamic knowledge — current project state, evolving decisions, session history. Put "always use single quotes" in `CLAUDE.md`. Use `memory_remember` for "we chose JWT over sessions because the API is stateless".
-
-### Does Locus send my code anywhere?
-
-No. Locus runs entirely locally. Your data is stored on your machine in a client-specific directory (`~/.claude/memory/` for Claude Code, `$CODEX_HOME/memory/` for Codex CLI, or `~/.locus/memory/` for other tools). Override with `LOCUS_STORAGE_ROOT` to share memory across clients. No network requests, no telemetry, no cloud storage. The MCP server communicates only with the AI client via stdio.
-
-### What about secrets and sensitive files?
-
-Locus has 4 layers of protection: (1) metadata-only storage by default — no file content stored, (2) file denylist — `.env`, `*.key`, credentials are never indexed, (3) automatic secret redaction — API keys and passwords are stripped before storage, (4) `memory_audit` tool to review what's stored. See the [Security](#security) section for details.
-
-### When will Cursor / Windsurf get full hook support?
-
-The next Codex-focused release tracks target recall ranking polish, dashboard UX, and additional IDE adapters such as `@locus/log-tailer`. See the [Roadmap](#roadmap) below.
-
-## Roadmap
-
-| Version | Status | Highlights |
-|---------|--------|------------|
-| v3.0 | Released | Carbon Copy capture, 4-phase ingest, FTS5 conversation search, 12 MCP tools |
-| v3.0.5 | Released | FTS5 self-healing indexes, 12-point doctor, FTS health audit |
-| v3.1 | Released | Multi-client architecture: `@locus/shared-runtime` (client-aware paths), `@locus/codex` (Codex CLI skill + config) |
-| v3.1.1 | Released | Fix: hooks failed in plugin cache due to bare module import of `@locus/shared-runtime` |
-| v3.3 | Released | Codex release: manual import, auto-import before search, doctor/status diagnostics, skill sync, VS Code docs, repo-local plugin packaging |
-| v3.4 | Released | Codex memory trust release: validated useful recall in `redacted`, current Codex JSONL compatibility, honest diagnostics/docs |
-| v3.5 | Released | One-command Codex install: npm runtime, installer/doctor/uninstall commands, generated marketplace bundle, manual MCP fallback preserved |
-| v3.6 | **Current** | Track C richer Codex recall: redacted fixture-backed recall, `candidateGroups`, durable fact extraction, privacy/inspection docs |
-| v4.0 | Planned | HTML dashboard for memory visualization |
+## Docs
+
+- Codex acceptance matrix: [docs/codex-acceptance-matrix.md](docs/codex-acceptance-matrix.md)
+- Codex VS Code extension notes: [docs/codex-vscode-extension.md](docs/codex-vscode-extension.md)
+- Future roadmap: [docs/roadmap/codex-next.md](docs/roadmap/codex-next.md)
+- Release notes: [docs/releases/v3.6.0.md](docs/releases/v3.6.0.md)
+- Full comparison: [docs/comparison.md](docs/comparison.md)
 
 ## Development
 
@@ -459,13 +146,10 @@ git clone https://github.com/Magnifico4625/locus.git
 cd locus
 npm install
 
-npm test            # vitest suite
-npm run typecheck   # TypeScript strict mode
-npm run lint        # Biome linter
-npm run build       # Bundle -> dist/server.js (~1.1 MB)
-npm run check       # All of the above
+npm run check
+npm run build
 ```
 
 ## License
 
-MIT — see [LICENSE](LICENSE)
+MIT — see [LICENSE](LICENSE).
