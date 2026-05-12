@@ -308,10 +308,18 @@ function timestamp2(date) {
 // packages/cli/src/commands/doctor-codex.ts
 async function formatDoctorCodex(options) {
   const env = options.env ?? process.env;
+  const codexHome = resolveCodexHome(env);
+  const codexCommandOptions = { env: { CODEX_HOME: codexHome } };
   const version = resolvePackageVersion(options.startDir);
-  const codexVersion = await options.commandRunner("codex", ["--version"]);
-  const hookFeature = await options.commandRunner("codex", ["features", "list"]);
-  const config = options.readMcpServer?.() ?? parseCodexMcpGetOutput((await options.commandRunner("codex", ["mcp", "get", "locus"])).stdout);
+  const codexVersion = await options.commandRunner("codex", ["--version"], codexCommandOptions);
+  const hookFeature = await options.commandRunner(
+    "codex",
+    ["features", "list"],
+    codexCommandOptions
+  );
+  const config = options.readMcpServer?.() ?? parseCodexMcpGetOutput(
+    (await options.commandRunner("codex", ["mcp", "get", "locus"], codexCommandOptions)).stdout
+  );
   const ownership = classifyMcpOwnership(config);
   const hooks = inspectCodexHooks({ env });
   const hookStatus = hookFeature.exitCode !== 0 || !codexSupportsHooks(hookFeature.stdout) ? "unavailable" : hooks.status;
@@ -319,7 +327,7 @@ async function formatDoctorCodex(options) {
     "Locus Codex doctor",
     `Node version: ${process.version}`,
     `Codex version: ${codexVersion.exitCode === 0 ? codexVersion.stdout.trim() : "unavailable"}`,
-    `Codex home: ${resolveCodexHome(env)}`,
+    `Codex home: ${codexHome}`,
     `Codex config: ${resolveCodexConfigPath(env)}`,
     `Skill path: ${resolveCodexSkillPath(env, "locus-memory")}`,
     `Runtime package: ${buildRuntimePackageSpecifier(version)}`,
@@ -678,6 +686,7 @@ function formatInstallCodexDryRun(options = {}) {
 async function runInstallCodex(options) {
   const env = options.env ?? process.env;
   const codexHome = resolveCodexHome(env);
+  const codexCommandOptions = { env: { CODEX_HOME: codexHome } };
   const version = resolvePackageVersion(options.startDir);
   const runtimeSpecifier = buildRuntimePackageSpecifier(version);
   const lock = acquireInstallLock(codexHome);
@@ -692,7 +701,7 @@ async function runInstallCodex(options) {
     const cacheResult = await options.commandRunner(
       "npm",
       ["exec", "-y", runtimeSpecifier, "--", "--help"],
-      { cwd: codexHome }
+      { cwd: codexHome, env: { CODEX_HOME: codexHome } }
     );
     if (cacheResult.exitCode !== 0) {
       return {
@@ -705,7 +714,7 @@ async function runInstallCodex(options) {
         ].filter(Boolean).join("\n")
       };
     }
-    const existing = await options.commandRunner("codex", ["mcp", "get", "locus"]);
+    const existing = await options.commandRunner("codex", ["mcp", "get", "locus"], codexCommandOptions);
     const ownership = classifyMcpOwnership(
       existing.exitCode === 0 ? parseCodexMcpGetOutput(existing.stdout) : void 0
     );
@@ -716,7 +725,11 @@ async function runInstallCodex(options) {
       };
     }
     if (ownership === "manual-locus" || ownership === "package-owned") {
-      const removeResult = await options.commandRunner("codex", ["mcp", "remove", "locus"]);
+      const removeResult = await options.commandRunner(
+        "codex",
+        ["mcp", "remove", "locus"],
+        codexCommandOptions
+      );
       if (removeResult.exitCode !== 0) {
         return {
           exitCode: 1,
@@ -734,7 +747,8 @@ async function runInstallCodex(options) {
         name: "locus",
         version,
         platform: options.platform
-      })
+      }),
+      codexCommandOptions
     );
     if (addResult.exitCode !== 0) {
       return {
@@ -789,6 +803,7 @@ var defaultCommandRunner = async (command, args, options) => {
     const result = await execFileAsync(resolvedCommand, resolvedArgs, {
       encoding: "utf8",
       cwd: options?.cwd,
+      env: options?.env ? { ...process.env, ...options.env } : void 0,
       windowsHide: true
     });
     return {
@@ -826,11 +841,20 @@ function quoteWindowsArg(value) {
 
 // packages/cli/src/commands/uninstall-codex.ts
 async function runUninstallCodex(options) {
-  const config = options.readMcpServer?.() ?? parseCodexMcpGetOutput((await options.commandRunner("codex", ["mcp", "get", "locus"])).stdout);
+  const env = options.env ?? process.env;
+  const codexHome = resolveCodexHome(env);
+  const codexCommandOptions = { env: { CODEX_HOME: codexHome } };
+  const config = options.readMcpServer?.() ?? parseCodexMcpGetOutput(
+    (await options.commandRunner("codex", ["mcp", "get", "locus"], codexCommandOptions)).stdout
+  );
   const ownership = classifyMcpOwnership(config);
   const lines = [`Ownership: ${ownership}`];
   if (ownership === "package-owned") {
-    const result = await options.commandRunner("codex", buildCodexMcpRemoveArgs("locus"));
+    const result = await options.commandRunner(
+      "codex",
+      buildCodexMcpRemoveArgs("locus"),
+      codexCommandOptions
+    );
     if (result.exitCode !== 0) {
       return {
         exitCode: 1,
@@ -841,7 +865,7 @@ async function runUninstallCodex(options) {
   } else {
     lines.push("MCP entry not removed automatically.");
   }
-  lines.push(`Skill preserved: ${resolveCodexSkillPath(options.env, "locus-memory")}`);
+  lines.push(`Skill preserved: ${resolveCodexSkillPath(env, "locus-memory")}`);
   lines.push("Memory data untouched.");
   return { exitCode: 0, output: lines.join("\n") };
 }

@@ -264,7 +264,12 @@ describe('codex install model', () => {
 
   it('installs Codex MCP config and skill with the documented one-command form', async () => {
     const codexHome = makeTempDir();
-    const commands: Array<{ command: string; args: string[]; cwd?: string }> = [];
+    const commands: Array<{
+      command: string;
+      args: string[];
+      cwd?: string;
+      env?: Record<string, string | undefined>;
+    }> = [];
     const { io, stdout } = createIo();
 
     const exitCode = await runCli(['install', 'codex'], io, {
@@ -272,7 +277,12 @@ describe('codex install model', () => {
       startDir: repoRoot,
       platform: 'linux',
       commandRunner: async (command, args, options) => {
-        commands.push({ command, args, ...(options?.cwd ? { cwd: options.cwd } : {}) });
+        commands.push({
+          command,
+          args,
+          ...(options?.cwd ? { cwd: options.cwd } : {}),
+          ...(options?.env ? { env: options.env } : {}),
+        });
         if (args.includes('add')) {
           writeFileSync(
             join(codexHome, 'config.toml'),
@@ -294,10 +304,12 @@ describe('codex install model', () => {
       command: 'npm',
       args: ['exec', '-y', 'locus-memory@3.5.3', '--', '--help'],
       cwd: codexHome,
+      env: { CODEX_HOME: codexHome },
     });
     expect(commands[1]).toEqual({
       command: 'codex',
       args: ['mcp', 'get', 'locus'],
+      env: { CODEX_HOME: codexHome },
     });
     expect(commands[2]).toEqual({
       command: 'codex',
@@ -311,6 +323,7 @@ describe('codex install model', () => {
         'locus-memory@3.5.3',
         'mcp',
       ]),
+      env: { CODEX_HOME: codexHome },
     });
     expect(stdout.join('\n')).toContain('Locus Codex install complete');
     expect(readFileSync(join(codexHome, 'skills', 'locus-memory', 'SKILL.md'), 'utf8')).toContain(

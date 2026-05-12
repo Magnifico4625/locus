@@ -49,6 +49,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
 }> {
   const env = options.env ?? process.env;
   const codexHome = resolveCodexHome(env);
+  const codexCommandOptions = { env: { CODEX_HOME: codexHome } };
   const version = resolvePackageVersion(options.startDir);
   const runtimeSpecifier = buildRuntimePackageSpecifier(version);
   const lock = acquireInstallLock(codexHome);
@@ -65,7 +66,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
     const cacheResult = await options.commandRunner(
       'npm',
       ['exec', '-y', runtimeSpecifier, '--', '--help'],
-      { cwd: codexHome },
+      { cwd: codexHome, env: { CODEX_HOME: codexHome } },
     );
 
     if (cacheResult.exitCode !== 0) {
@@ -82,7 +83,11 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
       };
     }
 
-    const existing = await options.commandRunner('codex', ['mcp', 'get', 'locus']);
+    const existing = await options.commandRunner(
+      'codex',
+      ['mcp', 'get', 'locus'],
+      codexCommandOptions,
+    );
     const ownership = classifyMcpOwnership(
       existing.exitCode === 0 ? parseCodexMcpGetOutput(existing.stdout) : undefined,
     );
@@ -96,7 +101,11 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
     }
 
     if (ownership === 'manual-locus' || ownership === 'package-owned') {
-      const removeResult = await options.commandRunner('codex', ['mcp', 'remove', 'locus']);
+      const removeResult = await options.commandRunner(
+        'codex',
+        ['mcp', 'remove', 'locus'],
+        codexCommandOptions,
+      );
       if (removeResult.exitCode !== 0) {
         return {
           exitCode: 1,
@@ -116,6 +125,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
         version,
         platform: options.platform,
       }),
+      codexCommandOptions,
     );
 
     if (addResult.exitCode !== 0) {

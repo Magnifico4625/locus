@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { buildCodexHooksConfig, renderCodexHooksJson } from '../src/codex/hooks.js';
+import { resolveCodexHome } from '../src/codex/paths.js';
 import { runCli } from '../src/index.js';
 
 const repoRoot = join(import.meta.dirname, '..', '..', '..');
@@ -66,14 +67,18 @@ describe('codex doctor command', () => {
   });
 
   it('detects package-owned MCP config through codex mcp get when no reader is injected', async () => {
-    const commands: Array<{ command: string; args: string[] }> = [];
+    const commands: Array<{
+      command: string;
+      args: string[];
+      options?: { env?: Record<string, string | undefined> };
+    }> = [];
     const { io, stdout } = createIo();
 
     const exitCode = await runCli(['doctor', 'codex'], io, {
       env: { CODEX_HOME: 'C:/tmp/codex-home' },
       startDir: repoRoot,
-      commandRunner: async (command, args) => {
-        commands.push({ command, args });
+      commandRunner: async (command, args, options) => {
+        commands.push({ command, args, options });
         if (command === 'codex' && args[0] === '--version') {
           return { exitCode: 0, stdout: 'codex-cli 0.125.0\n', stderr: '' };
         }
@@ -95,6 +100,12 @@ describe('codex doctor command', () => {
       'features list',
       'mcp get locus',
     ]);
+    expect(
+      commands.every(
+        (entry) =>
+          entry.options?.env?.CODEX_HOME === resolveCodexHome({ CODEX_HOME: 'C:/tmp/codex-home' }),
+      ),
+    ).toBe(true);
     expect(stdout.join('\n')).toContain('Ownership: package-owned');
   });
 

@@ -11,6 +11,7 @@ export interface CommandResult {
 
 export interface CommandRunnerOptions {
   cwd?: string;
+  env?: Record<string, string | undefined>;
 }
 
 export type CommandRunner = (
@@ -25,6 +26,7 @@ export const defaultCommandRunner: CommandRunner = async (command, args, options
     const result = await execFileAsync(resolvedCommand, resolvedArgs, {
       encoding: 'utf8',
       cwd: options?.cwd,
+      env: options?.env ? { ...process.env, ...options.env } : undefined,
       windowsHide: true,
     });
 

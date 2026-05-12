@@ -17,12 +17,20 @@ export interface DoctorCodexOptions {
 
 export async function formatDoctorCodex(options: DoctorCodexOptions): Promise<string> {
   const env = options.env ?? process.env;
+  const codexHome = resolveCodexHome(env);
+  const codexCommandOptions = { env: { CODEX_HOME: codexHome } };
   const version = resolvePackageVersion(options.startDir);
-  const codexVersion = await options.commandRunner('codex', ['--version']);
-  const hookFeature = await options.commandRunner('codex', ['features', 'list']);
+  const codexVersion = await options.commandRunner('codex', ['--version'], codexCommandOptions);
+  const hookFeature = await options.commandRunner(
+    'codex',
+    ['features', 'list'],
+    codexCommandOptions,
+  );
   const config =
     options.readMcpServer?.() ??
-    parseCodexMcpGetOutput((await options.commandRunner('codex', ['mcp', 'get', 'locus'])).stdout);
+    parseCodexMcpGetOutput(
+      (await options.commandRunner('codex', ['mcp', 'get', 'locus'], codexCommandOptions)).stdout,
+    );
   const ownership = classifyMcpOwnership(config);
   const hooks = inspectCodexHooks({ env });
   const hookStatus =
@@ -34,7 +42,7 @@ export async function formatDoctorCodex(options: DoctorCodexOptions): Promise<st
     'Locus Codex doctor',
     `Node version: ${process.version}`,
     `Codex version: ${codexVersion.exitCode === 0 ? codexVersion.stdout.trim() : 'unavailable'}`,
-    `Codex home: ${resolveCodexHome(env)}`,
+    `Codex home: ${codexHome}`,
     `Codex config: ${resolveCodexConfigPath(env)}`,
     `Skill path: ${resolveCodexSkillPath(env, 'locus-memory')}`,
     `Runtime package: ${buildRuntimePackageSpecifier(version)}`,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { resolveCodexHome } from '../src/codex/paths.js';
 import { runCli } from '../src/index.js';
 
 function createIo() {
@@ -38,12 +39,17 @@ describe('codex uninstall command', () => {
   });
 
   it('detects package-owned MCP config through codex mcp get when no reader is injected', async () => {
-    const commands: Array<{ command: string; args: string[] }> = [];
+    const commands: Array<{
+      command: string;
+      args: string[];
+      options?: { env?: Record<string, string | undefined> };
+    }> = [];
     const { io, stdout } = createIo();
 
     const exitCode = await runCli(['uninstall', 'codex', '--yes'], io, {
-      commandRunner: async (command, args) => {
-        commands.push({ command, args });
+      env: { CODEX_HOME: 'C:/tmp/codex-home' },
+      commandRunner: async (command, args, options) => {
+        commands.push({ command, args, options });
         if (args.join(' ') === 'mcp get locus') {
           return {
             exitCode: 0,
@@ -60,6 +66,12 @@ describe('codex uninstall command', () => {
       'mcp get locus',
       'mcp remove locus',
     ]);
+    expect(
+      commands.every(
+        (entry) =>
+          entry.options?.env?.CODEX_HOME === resolveCodexHome({ CODEX_HOME: 'C:/tmp/codex-home' }),
+      ),
+    ).toBe(true);
     expect(stdout.join('\n')).toContain('Ownership: package-owned');
   });
 });

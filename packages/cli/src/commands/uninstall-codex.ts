@@ -4,7 +4,7 @@ import {
   classifyMcpOwnership,
   parseCodexMcpGetOutput,
 } from '../codex/config.js';
-import { resolveCodexSkillPath } from '../codex/paths.js';
+import { resolveCodexHome, resolveCodexSkillPath } from '../codex/paths.js';
 import type { CommandRunner } from './runner.js';
 
 export interface UninstallCodexOptions {
@@ -17,14 +17,23 @@ export async function runUninstallCodex(options: UninstallCodexOptions): Promise
   exitCode: number;
   output: string;
 }> {
+  const env = options.env ?? process.env;
+  const codexHome = resolveCodexHome(env);
+  const codexCommandOptions = { env: { CODEX_HOME: codexHome } };
   const config =
     options.readMcpServer?.() ??
-    parseCodexMcpGetOutput((await options.commandRunner('codex', ['mcp', 'get', 'locus'])).stdout);
+    parseCodexMcpGetOutput(
+      (await options.commandRunner('codex', ['mcp', 'get', 'locus'], codexCommandOptions)).stdout,
+    );
   const ownership = classifyMcpOwnership(config);
   const lines = [`Ownership: ${ownership}`];
 
   if (ownership === 'package-owned') {
-    const result = await options.commandRunner('codex', buildCodexMcpRemoveArgs('locus'));
+    const result = await options.commandRunner(
+      'codex',
+      buildCodexMcpRemoveArgs('locus'),
+      codexCommandOptions,
+    );
     if (result.exitCode !== 0) {
       return {
         exitCode: 1,
@@ -36,7 +45,7 @@ export async function runUninstallCodex(options: UninstallCodexOptions): Promise
     lines.push('MCP entry not removed automatically.');
   }
 
-  lines.push(`Skill preserved: ${resolveCodexSkillPath(options.env, 'locus-memory')}`);
+  lines.push(`Skill preserved: ${resolveCodexSkillPath(env, 'locus-memory')}`);
   lines.push('Memory data untouched.');
 
   return { exitCode: 0, output: lines.join('\n') };
