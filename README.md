@@ -8,8 +8,15 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen)](https://nodejs.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![MCP](https://img.shields.io/badge/MCP-compatible-blueviolet)](https://modelcontextprotocol.io)
+[![Compare](https://img.shields.io/badge/compare-vs%20agent%20memory%20tools-B7F34A?labelColor=111111)](docs/comparison.md)
 
-**Languages:** [English](README.md) · [Русский](docs/README.ru.md) · [简体中文](docs/README.zh-CN.md)
+<p>
+  <a href="README.md"><img alt="English README" src="https://img.shields.io/badge/English-README-222222"></a>
+  <a href="docs/README.ru.md"><img alt="Russian README" src="https://img.shields.io/badge/Русский-README-222222"></a>
+  <a href="docs/README.zh-CN.md"><img alt="Chinese README" src="https://img.shields.io/badge/简体中文-README-222222"></a>
+</p>
+
+**Quick links:** [Install](#install-for-codex) · [Why Locus](#why-choose-locus) · [Competitive Snapshot](#competitive-snapshot) · [Full comparison](docs/comparison.md)
 
 ## What Locus Does
 

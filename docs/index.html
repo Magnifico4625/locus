@@ -42,6 +42,18 @@
         </a>
         <div class="flex items-center gap-3">
           <a
+            href="README.ru.md"
+            class="hidden md:inline-flex rounded-full border border-locus-border px-3 py-1 text-xs font-mono text-zinc-400 hover:border-locus-accent hover:text-white transition-colors"
+          >
+            RU
+          </a>
+          <a
+            href="README.zh-CN.md"
+            class="hidden md:inline-flex rounded-full border border-locus-border px-3 py-1 text-xs font-mono text-zinc-400 hover:border-locus-accent hover:text-white transition-colors"
+          >
+            中文
+          </a>
+          <a
             href="https://github.com/Magnifico4625/locus"
             target="_blank"
             rel="noreferrer"
@@ -50,7 +62,13 @@
             GitHub
           </a>
           <a
-            href="https://github.com/Magnifico4625/locus#quick-start"
+            href="comparison.md"
+            class="hidden sm:inline-flex text-sm text-zinc-400 hover:text-white transition-colors"
+          >
+            Compare
+          </a>
+          <a
+            href="https://github.com/Magnifico4625/locus#install-for-codex"
             target="_blank"
             rel="noreferrer"
             class="inline-flex items-center gap-2 rounded-md border border-locus-border px-4 py-2 text-sm text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors"
@@ -113,9 +131,18 @@
                 <i data-lucide="copy" class="w-4 h-4"></i>
                 Copy repo URL
               </button>
+              <a
+                href="comparison.md"
+                class="inline-flex items-center justify-center gap-2 rounded-md border border-locus-accent/60 bg-locus-accent/10 px-6 py-3.5 font-medium text-locus-accent hover:border-locus-accent hover:bg-locus-accent/15 transition-colors"
+              >
+                <i data-lucide="scale" class="w-5 h-5"></i>
+                Compare Locus
+              </a>
             </div>
 
             <div class="mt-8 flex flex-wrap gap-3 text-xs font-mono text-zinc-500">
+              <a href="README.ru.md" class="rounded-full border border-zinc-800 px-3 py-1 hover:border-locus-accent hover:text-white transition-colors">Русский</a>
+              <a href="README.zh-CN.md" class="rounded-full border border-zinc-800 px-3 py-1 hover:border-locus-accent hover:text-white transition-colors">简体中文</a>
               <span class="rounded-full border border-zinc-800 px-3 py-1">Codex CLI</span>
               <span class="rounded-full border border-zinc-800 px-3 py-1">Codex desktop / extension</span>
               <span class="rounded-full border border-zinc-800 px-3 py-1">Claude Code</span>
@@ -168,6 +195,62 @@
                 <span class="typing-cursor">finish the auth module and keep the previous token model</span>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="border-t border-locus-border/60 px-6 py-20 bg-[#070708]">
+        <div class="max-w-6xl mx-auto">
+          <div class="max-w-2xl mb-12">
+            <h2 class="text-3xl md:text-4xl font-semibold tracking-tight">How Locus compares</h2>
+            <p class="mt-4 text-zinc-400 leading-relaxed">
+              Locus is intentionally not a full agent runtime or cloud memory platform. It is a smaller
+              local MCP memory layer for coding agents, with Codex as the first-class product path.
+            </p>
+          </div>
+
+          <div class="overflow-hidden rounded-2xl border border-locus-border bg-locus-surface/80 shadow-soft">
+            <div class="grid grid-cols-1 divide-y divide-locus-border text-sm md:grid-cols-[0.9fr_1fr_1.2fr] md:divide-x md:divide-y-0">
+              <div class="bg-black/25 p-5 font-mono text-xs uppercase tracking-[0.2em] text-zinc-500">Project</div>
+              <div class="bg-black/25 p-5 font-mono text-xs uppercase tracking-[0.2em] text-zinc-500">Main strength</div>
+              <div class="bg-black/25 p-5 font-mono text-xs uppercase tracking-[0.2em] text-zinc-500">Why Locus is different</div>
+            </div>
+            <div class="divide-y divide-locus-border">
+              <div class="grid grid-cols-1 md:grid-cols-[0.9fr_1fr_1.2fr] md:divide-x md:divide-locus-border">
+                <div class="p-5 font-semibold text-white">agentmemory</div>
+                <div class="p-5 text-zinc-400">Broad coding-agent memory stack with many tools, hooks, viewer, and benchmark claims.</div>
+                <div class="p-5 text-zinc-300">Locus is smaller, simpler, Codex-first, and ships as one npm MCP runtime.</div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-[0.9fr_1fr_1.2fr] md:divide-x md:divide-locus-border">
+                <div class="p-5 font-semibold text-white">AIDE Memory</div>
+                <div class="p-5 text-zinc-400">Path-scoped local memory and tiny context nudges.</div>
+                <div class="p-5 text-zinc-300">Locus focuses on MCP tools, Codex JSONL import, diagnostics, and explicit recall UX.</div>
+              </div>
+              <div class="grid grid-cols-1 md:grid-cols-[0.9fr_1fr_1.2fr] md:divide-x md:divide-locus-border">
+                <div class="p-5 font-semibold text-white">Mem0 / Letta / Zep</div>
+                <div class="p-5 text-zinc-400">Larger agent memory platforms, SDKs, stateful runtimes, or graph infrastructure.</div>
+                <div class="p-5 text-zinc-300">Locus plugs into existing coding tools instead of asking users to run a bigger platform.</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-8 flex flex-col gap-4 sm:flex-row">
+            <a
+              href="comparison.md"
+              class="inline-flex items-center justify-center gap-2 rounded-md bg-locus-accent px-6 py-3.5 font-semibold text-black hover:bg-lime-300 transition-colors"
+            >
+              <i data-lucide="scale" class="w-5 h-5"></i>
+              Read full comparison
+            </a>
+            <a
+              href="https://github.com/Magnifico4625/locus#competitive-snapshot"
+              target="_blank"
+              rel="noreferrer"
+              class="inline-flex items-center justify-center gap-2 rounded-md border border-locus-border px-6 py-3.5 font-medium text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors"
+            >
+              <i data-lucide="github" class="w-5 h-5"></i>
+              View README comparison
+            </a>
           </div>
         </div>
       </section>
@@ -349,7 +432,10 @@
         </div>
         <div class="flex flex-wrap gap-5 text-sm text-zinc-400">
           <a href="https://github.com/Magnifico4625/locus" target="_blank" rel="noreferrer" class="hover:text-white transition-colors">Repository</a>
-          <a href="https://github.com/Magnifico4625/locus#quick-start" target="_blank" rel="noreferrer" class="hover:text-white transition-colors">Quick Start</a>
+          <a href="comparison.md" class="hover:text-white transition-colors">Compare</a>
+          <a href="README.ru.md" class="hover:text-white transition-colors">Русский</a>
+          <a href="README.zh-CN.md" class="hover:text-white transition-colors">中文</a>
+          <a href="https://github.com/Magnifico4625/locus#install-for-codex" target="_blank" rel="noreferrer" class="hover:text-white transition-colors">Quick Start</a>
           <a href="https://github.com/Magnifico4625/locus/blob/main/docs/roadmap/codex.md" target="_blank" rel="noreferrer" class="hover:text-white transition-colors">Roadmap</a>
         </div>
       </div>

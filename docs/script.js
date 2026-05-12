@@ -1,5 +1,5 @@
 const REPO_URL = 'https://github.com/Magnifico4625/locus';
-const CODEX_INSTALL_COMMAND = 'npx -y locus-memory@latest install codex';
+const CODEX_INSTALL_COMMAND = 'npx -y locus-memory@latest install codex --yes';
 
 function showToast(message = 'Copied') {
   const toast = document.getElementById('toast');
