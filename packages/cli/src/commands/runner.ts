@@ -9,13 +9,22 @@ export interface CommandResult {
   stderr: string;
 }
 
-export type CommandRunner = (command: string, args: string[]) => Promise<CommandResult>;
+export interface CommandRunnerOptions {
+  cwd?: string;
+}
 
-export const defaultCommandRunner: CommandRunner = async (command, args) => {
+export type CommandRunner = (
+  command: string,
+  args: string[],
+  options?: CommandRunnerOptions,
+) => Promise<CommandResult>;
+
+export const defaultCommandRunner: CommandRunner = async (command, args, options) => {
   try {
     const [resolvedCommand, resolvedArgs] = resolveCommandForPlatform(command, args);
     const result = await execFileAsync(resolvedCommand, resolvedArgs, {
       encoding: 'utf8',
+      cwd: options?.cwd,
       windowsHide: true,
     });
 

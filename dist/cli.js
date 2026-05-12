@@ -695,7 +695,7 @@ async function runInstallCodex(options) {
       runtimeSpecifier,
       "--",
       "--help"
-    ]);
+    ], { cwd: codexHome });
     if (cacheResult.exitCode !== 0) {
       return {
         exitCode: 1,
@@ -785,11 +785,12 @@ async function runMcp() {
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 var execFileAsync = promisify(execFile);
-var defaultCommandRunner = async (command, args) => {
+var defaultCommandRunner = async (command, args, options) => {
   try {
     const [resolvedCommand, resolvedArgs] = resolveCommandForPlatform(command, args);
     const result = await execFileAsync(resolvedCommand, resolvedArgs, {
       encoding: "utf8",
+      cwd: options?.cwd,
       windowsHide: true
     });
     return {
@@ -860,7 +861,20 @@ Commands:
 Options:
   --help, help     Show this help
   --version        Show package version`;
-var notImplemented = "This command is not implemented yet in the current Track B task.";
+var installCodexUsage = `Usage: locus-memory install codex [--dry-run] [--with-hooks]
+
+Installs Locus into Codex by configuring the package-owned MCP server and skill.
+
+Options:
+  --dry-run        Show planned changes without writing files
+  --with-hooks     Also install optional Codex lifecycle hooks
+  --yes            Accepted for backwards compatibility`;
+var uninstallCodexUsage = `Usage: locus-memory uninstall codex --yes
+
+Removes the package-owned Codex MCP entry while preserving skills and memory data.
+
+Options:
+  --yes            Confirm removal`;
 async function runCli(argv = process.argv.slice(2), io = {
   stdout: (message) => console.log(message),
   stderr: (message) => console.error(message)
@@ -891,6 +905,10 @@ async function runCli(argv = process.argv.slice(2), io = {
     }
     return result.exitCode;
   }
+  if (command === "install" && subcommand === "codex" && argv.includes("--help")) {
+    io.stdout(installCodexUsage);
+    return 0;
+  }
   if (command === "install" && subcommand === "codex" && argv.includes("--dry-run")) {
     io.stdout(
       formatInstallCodexDryRun({
@@ -901,7 +919,7 @@ async function runCli(argv = process.argv.slice(2), io = {
     );
     return 0;
   }
-  if (command === "install" && subcommand === "codex" && argv.includes("--yes")) {
+  if (command === "install" && subcommand === "codex") {
     const result = await runInstallCodex({
       env: options.env,
       startDir: options.startDir,
@@ -923,6 +941,10 @@ async function runCli(argv = process.argv.slice(2), io = {
     );
     return 0;
   }
+  if (command === "uninstall" && subcommand === "codex" && argv.includes("--help")) {
+    io.stdout(uninstallCodexUsage);
+    return 0;
+  }
   if (command === "uninstall" && subcommand === "codex" && argv.includes("--yes")) {
     const result = await runUninstallCodex({
       env: options.env,
@@ -932,8 +954,8 @@ async function runCli(argv = process.argv.slice(2), io = {
     io.stdout(result.output);
     return result.exitCode;
   }
-  if ((command === "install" || command === "doctor" || command === "uninstall") && subcommand === "codex") {
-    io.stderr(`${command} codex: ${notImplemented}`);
+  if (command === "uninstall" && subcommand === "codex") {
+    io.stderr(uninstallCodexUsage);
     return 1;
   }
   io.stderr(`Unknown command: ${argv.join(" ")}`);

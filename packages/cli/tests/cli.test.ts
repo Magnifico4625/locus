@@ -46,13 +46,23 @@ describe('locus-memory cli', () => {
     expect(stderr.join('\n')).toContain('Usage: locus-memory');
   });
 
-  it('exposes placeholder codex commands before installer implementation', async () => {
+  it('prints install codex help', async () => {
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex', '--help'], io);
+
+    expect(exitCode).toBe(0);
+    expect(stdout.join('\n')).toContain('Usage: locus-memory install codex');
+    expect(stdout.join('\n')).toContain('--dry-run');
+  });
+
+  it('prints uninstall codex confirmation help when --yes is omitted', async () => {
     const { io, stderr } = createIo();
 
-    const exitCode = await runCli(['install', 'codex'], io);
+    const exitCode = await runCli(['uninstall', 'codex'], io);
 
     expect(exitCode).toBe(1);
-    expect(stderr.join('\n')).toContain('not implemented');
+    expect(stderr.join('\n')).toContain('Usage: locus-memory uninstall codex --yes');
   });
 
   it('quotes Windows command lines for shim commands without shell=true', () => {

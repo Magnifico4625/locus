@@ -62,13 +62,11 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
 
   try {
     const cleanup = cleanupInterruptedInstall(codexHome);
-    const cacheResult = await options.commandRunner('npm', [
-      'exec',
-      '-y',
-      runtimeSpecifier,
-      '--',
-      '--help',
-    ]);
+    const cacheResult = await options.commandRunner(
+      'npm',
+      ['exec', '-y', runtimeSpecifier, '--', '--help'],
+      { cwd: codexHome },
+    );
 
     if (cacheResult.exitCode !== 0) {
       return {

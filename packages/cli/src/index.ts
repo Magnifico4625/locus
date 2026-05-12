@@ -35,7 +35,21 @@ Options:
   --help, help     Show this help
   --version        Show package version`;
 
-const notImplemented = 'This command is not implemented yet in the current Track B task.';
+const installCodexUsage = `Usage: locus-memory install codex [--dry-run] [--with-hooks]
+
+Installs Locus into Codex by configuring the package-owned MCP server and skill.
+
+Options:
+  --dry-run        Show planned changes without writing files
+  --with-hooks     Also install optional Codex lifecycle hooks
+  --yes            Accepted for backwards compatibility`;
+
+const uninstallCodexUsage = `Usage: locus-memory uninstall codex --yes
+
+Removes the package-owned Codex MCP entry while preserving skills and memory data.
+
+Options:
+  --yes            Confirm removal`;
 
 export async function runCli(
   argv = process.argv.slice(2),
@@ -76,6 +90,11 @@ export async function runCli(
     return result.exitCode;
   }
 
+  if (command === 'install' && subcommand === 'codex' && argv.includes('--help')) {
+    io.stdout(installCodexUsage);
+    return 0;
+  }
+
   if (command === 'install' && subcommand === 'codex' && argv.includes('--dry-run')) {
     io.stdout(
       formatInstallCodexDryRun({
@@ -87,7 +106,7 @@ export async function runCli(
     return 0;
   }
 
-  if (command === 'install' && subcommand === 'codex' && argv.includes('--yes')) {
+  if (command === 'install' && subcommand === 'codex') {
     const result = await runInstallCodex({
       env: options.env,
       startDir: options.startDir,
@@ -111,6 +130,11 @@ export async function runCli(
     return 0;
   }
 
+  if (command === 'uninstall' && subcommand === 'codex' && argv.includes('--help')) {
+    io.stdout(uninstallCodexUsage);
+    return 0;
+  }
+
   if (command === 'uninstall' && subcommand === 'codex' && argv.includes('--yes')) {
     const result = await runUninstallCodex({
       env: options.env,
@@ -121,11 +145,8 @@ export async function runCli(
     return result.exitCode;
   }
 
-  if (
-    (command === 'install' || command === 'doctor' || command === 'uninstall') &&
-    subcommand === 'codex'
-  ) {
-    io.stderr(`${command} codex: ${notImplemented}`);
+  if (command === 'uninstall' && subcommand === 'codex') {
+    io.stderr(uninstallCodexUsage);
     return 1;
   }
 

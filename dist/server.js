@@ -31990,13 +31990,19 @@ var TOPIC_KEY_RULES = [
     key: "codex_hooks_strategy",
     memoryTypes: ["decision", "rejected_alternative", "constraint"],
     any: ["hook-first", "hooks", "hook", "\u0445\u0443\u043A"],
-    all: [["codex", "capture", "\u0437\u0430\u0445\u0432\u0430\u0442"], ["reject", "rejected", "\u043E\u0442\u043A\u0430\u0437", "\u043E\u0442\u043A\u0430\u0437\u0430\u043B\u0438\u0441\u044C", "avoid"]]
+    all: [
+      ["codex", "capture", "\u0437\u0430\u0445\u0432\u0430\u0442"],
+      ["reject", "rejected", "\u043E\u0442\u043A\u0430\u0437", "\u043E\u0442\u043A\u0430\u0437\u0430\u043B\u0438\u0441\u044C", "avoid"]
+    ]
   },
   {
     key: "capture_strategy",
     memoryTypes: ["decision"],
     any: ["capture strategy", "capture mode", "redacted capture", "bounded redacted"],
-    all: [["capture", "\u0437\u0430\u0445\u0432\u0430\u0442", "memory", "\u043F\u0430\u043C\u044F\u0442", "recall"], ["redacted", "metadata", "full"]]
+    all: [
+      ["capture", "\u0437\u0430\u0445\u0432\u0430\u0442", "memory", "\u043F\u0430\u043C\u044F\u0442", "recall"],
+      ["redacted", "metadata", "full"]
+    ]
   },
   {
     key: "user_workflow_style",
@@ -32009,13 +32015,19 @@ var TOPIC_KEY_RULES = [
       "\u0441\u0442\u0438\u043B\u044C \u0440\u0430\u0431\u043E\u0442\u044B",
       "\u0430\u0442\u043E\u043C\u0430\u0440\u043D\u043E\u0433\u043E \u0442\u0430\u0441\u043A\u0430"
     ],
-    all: [["task", "\u0442\u0430\u0441\u043A", "\u0437\u0430\u0434\u0430\u0447"], ["approve", "approval", "\u043E\u0434\u043E\u0431\u0440\u0435\u043D", "\u043E\u0434\u043E\u0431\u0440\u0435\u043D\u0438\u044F"]]
+    all: [
+      ["task", "\u0442\u0430\u0441\u043A", "\u0437\u0430\u0434\u0430\u0447"],
+      ["approve", "approval", "\u043E\u0434\u043E\u0431\u0440\u0435\u043D", "\u043E\u0434\u043E\u0431\u0440\u0435\u043D\u0438\u044F"]
+    ]
   },
   {
     key: "track_c_acceptance",
     memoryTypes: ["next_step", "validation_fact"],
     any: ["track c", "acceptance fixtures", "acceptance matrix", "memory_recall"],
-    all: [["acceptance", "track c"], ["recall", "fixtures", "docs", "matrix"]]
+    all: [
+      ["acceptance", "track c"],
+      ["recall", "fixtures", "docs", "matrix"]
+    ]
   }
 ];
 function deriveCanonicalTopicKey(input) {
@@ -34463,158 +34475,6 @@ function handlePurge(deps, confirmToken) {
   };
 }
 
-// packages/core/src/recall/grouping.ts
-var MAX_HEADING_LENGTH = 80;
-function groupId(candidate, index) {
-  const topicPart = candidate.topicKey ? `:topic:${candidate.topicKey}` : "";
-  if (candidate.sessionId) {
-    return `session:${candidate.sessionId}${topicPart}`;
-  }
-  const durableId = candidate.durableMemoryIds[0];
-  if (durableId !== void 0) {
-    return `durable:${durableId}${topicPart}`;
-  }
-  const eventId = candidate.eventIds[0];
-  if (eventId !== void 0) {
-    return `event:${eventId}${topicPart}`;
-  }
-  return `candidate:${index}${topicPart}`;
-}
-function clipHeading(headline) {
-  if (headline.length <= MAX_HEADING_LENGTH) {
-    return headline;
-  }
-  return `${headline.slice(0, MAX_HEADING_LENGTH - 3)}...`;
-}
-function mergeUnique(left, right) {
-  return [.../* @__PURE__ */ new Set([...left, ...right])];
-}
-function maxConfidence(left, right) {
-  const rank = { low: 0, medium: 1, high: 2 };
-  if (!left) return right;
-  if (!right) return left;
-  return rank[right] > rank[left] ? right : left;
-}
-function groupRecallCandidates(candidates) {
-  const groups = /* @__PURE__ */ new Map();
-  candidates.forEach((candidate, index) => {
-    const id = groupId(candidate, index);
-    const existing = groups.get(id);
-    if (!existing) {
-      groups.set(id, {
-        id,
-        heading: clipHeading(candidate.headline),
-        whyMatched: candidate.whyMatched,
-        candidates: [candidate],
-        eventIds: [...candidate.eventIds],
-        durableMemoryIds: [...candidate.durableMemoryIds],
-        ...candidate.sessionId ? { sessionId: candidate.sessionId } : {},
-        ...candidate.topicKey ? { topicKey: candidate.topicKey } : {},
-        ...candidate.confidence ? { confidence: candidate.confidence } : {}
-      });
-      return;
-    }
-    existing.candidates.push(candidate);
-    existing.eventIds = mergeUnique(existing.eventIds, candidate.eventIds);
-    existing.durableMemoryIds = mergeUnique(
-      existing.durableMemoryIds,
-      candidate.durableMemoryIds
-    );
-    existing.confidence = maxConfidence(existing.confidence, candidate.confidence);
-  });
-  return [...groups.values()];
-}
-
-// packages/core/src/recall/result-builder.ts
-var DOMINANT_GROUP_SCORE_GAP = 3;
-function topScore(candidate) {
-  return candidate?.score ?? 0;
-}
-function isDominantTopGroup(candidates) {
-  const topCandidate = candidates[0];
-  if (!topCandidate) {
-    return false;
-  }
-  const topGroupKey = groupKey(topCandidate);
-  const nextDifferentGroup = candidates.find((candidate) => groupKey(candidate) !== topGroupKey);
-  const scoreGap = topScore(topCandidate) - topScore(nextDifferentGroup);
-  if (topCandidate.confidence === "high") {
-    return scoreGap >= DOMINANT_GROUP_SCORE_GAP;
-  }
-  return topCandidate.sourceKind === "durable" && topCandidate.confidence === "medium" && scoreGap >= 3;
-}
-function groupKey(candidate) {
-  if (candidate.topicKey) {
-    return `topic:${candidate.topicKey}`;
-  }
-  if (candidate.sessionId) {
-    return `session:${candidate.sessionId}`;
-  }
-  if (candidate.durableMemoryIds[0] !== void 0) {
-    return `durable:${candidate.durableMemoryIds[0]}`;
-  }
-  return `event:${candidate.eventIds[0] ?? "unknown"}`;
-}
-function buildRecallResult({
-  question,
-  candidates,
-  resolvedRange,
-  matchedIntent,
-  matchedTopics
-}) {
-  const candidateGroups = groupRecallCandidates(candidates);
-  const resultMetadata = {
-    ...matchedIntent ? { matchedIntent } : {},
-    ...matchedTopics && matchedTopics.length > 0 ? { matchedTopics } : {}
-  };
-  if (candidateGroups.length === 0) {
-    return {
-      status: "no_memory",
-      question,
-      ...resolvedRange ? { resolvedRange } : {},
-      ...resultMetadata,
-      summary: "No matching memory found.",
-      candidates: [],
-      candidateGroups: []
-    };
-  }
-  if (candidateGroups.length === 1) {
-    const group = candidateGroups[0];
-    return {
-      status: "ok",
-      question,
-      ...resolvedRange ? { resolvedRange } : {},
-      ...resultMetadata,
-      summary: group.candidates[0]?.headline ?? group.heading,
-      candidates,
-      candidateGroups,
-      confidence: group.confidence
-    };
-  }
-  if (isDominantTopGroup(candidates)) {
-    const topCandidate = candidates[0];
-    return {
-      status: "ok",
-      question,
-      ...resolvedRange ? { resolvedRange } : {},
-      ...resultMetadata,
-      summary: topCandidate.headline,
-      candidates,
-      candidateGroups,
-      confidence: topCandidate.confidence
-    };
-  }
-  return {
-    status: "needs_clarification",
-    question,
-    ...resolvedRange ? { resolvedRange } : {},
-    ...resultMetadata,
-    summary: "I found multiple possible matches. Please clarify which one you mean.",
-    candidates,
-    candidateGroups
-  };
-}
-
 // packages/core/src/tools/search.ts
 function parseExports2(json2) {
   if (!json2) return [];
@@ -35159,10 +35019,7 @@ function loadConversationCandidates({
   }));
 }
 function loadRecallCandidates(options) {
-  return [
-    ...loadDurableCandidates(options),
-    ...loadConversationCandidates(options)
-  ];
+  return [...loadDurableCandidates(options), ...loadConversationCandidates(options)];
 }
 
 // packages/core/src/recall/temporal-parser.ts
@@ -35380,6 +35237,158 @@ function parseRecallQuery(question, now) {
     intent: detectIntent(normalized),
     ...temporalRange ? { temporalRange } : {},
     topicHints: detectTopicHints(normalized)
+  };
+}
+
+// packages/core/src/recall/grouping.ts
+var MAX_HEADING_LENGTH = 80;
+function groupId(candidate, index) {
+  const topicPart = candidate.topicKey ? `:topic:${candidate.topicKey}` : "";
+  if (candidate.sessionId) {
+    return `session:${candidate.sessionId}${topicPart}`;
+  }
+  const durableId = candidate.durableMemoryIds[0];
+  if (durableId !== void 0) {
+    return `durable:${durableId}${topicPart}`;
+  }
+  const eventId = candidate.eventIds[0];
+  if (eventId !== void 0) {
+    return `event:${eventId}${topicPart}`;
+  }
+  return `candidate:${index}${topicPart}`;
+}
+function clipHeading(headline) {
+  if (headline.length <= MAX_HEADING_LENGTH) {
+    return headline;
+  }
+  return `${headline.slice(0, MAX_HEADING_LENGTH - 3)}...`;
+}
+function mergeUnique(left, right) {
+  return [.../* @__PURE__ */ new Set([...left, ...right])];
+}
+function maxConfidence(left, right) {
+  const rank = { low: 0, medium: 1, high: 2 };
+  if (!left) return right;
+  if (!right) return left;
+  return rank[right] > rank[left] ? right : left;
+}
+function groupRecallCandidates(candidates) {
+  const groups = /* @__PURE__ */ new Map();
+  candidates.forEach((candidate, index) => {
+    const id = groupId(candidate, index);
+    const existing = groups.get(id);
+    if (!existing) {
+      groups.set(id, {
+        id,
+        heading: clipHeading(candidate.headline),
+        whyMatched: candidate.whyMatched,
+        candidates: [candidate],
+        eventIds: [...candidate.eventIds],
+        durableMemoryIds: [...candidate.durableMemoryIds],
+        ...candidate.sessionId ? { sessionId: candidate.sessionId } : {},
+        ...candidate.topicKey ? { topicKey: candidate.topicKey } : {},
+        ...candidate.confidence ? { confidence: candidate.confidence } : {}
+      });
+      return;
+    }
+    existing.candidates.push(candidate);
+    existing.eventIds = mergeUnique(existing.eventIds, candidate.eventIds);
+    existing.durableMemoryIds = mergeUnique(existing.durableMemoryIds, candidate.durableMemoryIds);
+    existing.confidence = maxConfidence(existing.confidence, candidate.confidence);
+  });
+  return [...groups.values()];
+}
+
+// packages/core/src/recall/result-builder.ts
+var DOMINANT_GROUP_SCORE_GAP = 3;
+function topScore(candidate) {
+  return candidate?.score ?? 0;
+}
+function isDominantTopGroup(candidates) {
+  const topCandidate = candidates[0];
+  if (!topCandidate) {
+    return false;
+  }
+  const topGroupKey = groupKey(topCandidate);
+  const nextDifferentGroup = candidates.find((candidate) => groupKey(candidate) !== topGroupKey);
+  const scoreGap = topScore(topCandidate) - topScore(nextDifferentGroup);
+  if (topCandidate.confidence === "high") {
+    return scoreGap >= DOMINANT_GROUP_SCORE_GAP;
+  }
+  return topCandidate.sourceKind === "durable" && topCandidate.confidence === "medium" && scoreGap >= 3;
+}
+function groupKey(candidate) {
+  if (candidate.topicKey) {
+    return `topic:${candidate.topicKey}`;
+  }
+  if (candidate.sessionId) {
+    return `session:${candidate.sessionId}`;
+  }
+  if (candidate.durableMemoryIds[0] !== void 0) {
+    return `durable:${candidate.durableMemoryIds[0]}`;
+  }
+  return `event:${candidate.eventIds[0] ?? "unknown"}`;
+}
+function buildRecallResult({
+  question,
+  candidates,
+  resolvedRange,
+  matchedIntent,
+  matchedTopics
+}) {
+  const candidateGroups = groupRecallCandidates(candidates);
+  const resultMetadata = {
+    ...matchedIntent ? { matchedIntent } : {},
+    ...matchedTopics && matchedTopics.length > 0 ? { matchedTopics } : {}
+  };
+  if (candidateGroups.length === 0) {
+    return {
+      status: "no_memory",
+      question,
+      ...resolvedRange ? { resolvedRange } : {},
+      ...resultMetadata,
+      summary: "No matching memory found.",
+      candidates: [],
+      candidateGroups: []
+    };
+  }
+  if (candidateGroups.length === 1) {
+    const group = candidateGroups[0];
+    if (!group) {
+      throw new Error("Expected a recall candidate group.");
+    }
+    return {
+      status: "ok",
+      question,
+      ...resolvedRange ? { resolvedRange } : {},
+      ...resultMetadata,
+      summary: group.candidates[0]?.headline ?? group.heading,
+      candidates,
+      candidateGroups,
+      confidence: group.confidence
+    };
+  }
+  const topCandidate = candidates[0];
+  if (topCandidate && isDominantTopGroup(candidates)) {
+    return {
+      status: "ok",
+      question,
+      ...resolvedRange ? { resolvedRange } : {},
+      ...resultMetadata,
+      summary: topCandidate.headline,
+      candidates,
+      candidateGroups,
+      confidence: topCandidate.confidence
+    };
+  }
+  return {
+    status: "needs_clarification",
+    question,
+    ...resolvedRange ? { resolvedRange } : {},
+    ...resultMetadata,
+    summary: "I found multiple possible matches. Please clarify which one you mean.",
+    candidates,
+    candidateGroups
   };
 }
 

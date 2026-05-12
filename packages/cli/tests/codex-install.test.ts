@@ -201,15 +201,15 @@ describe('codex install model', () => {
 
   it('installs Codex MCP config and skill with a lock when confirmed', async () => {
     const codexHome = makeTempDir();
-    const commands: Array<{ command: string; args: string[] }> = [];
+    const commands: Array<{ command: string; args: string[]; cwd?: string }> = [];
     const { io, stdout } = createIo();
 
     const exitCode = await runCli(['install', 'codex', '--yes'], io, {
       env: { CODEX_HOME: codexHome },
       startDir: repoRoot,
       platform: 'linux',
-      commandRunner: async (command, args) => {
-        commands.push({ command, args });
+      commandRunner: async (command, args, options) => {
+        commands.push({ command, args, ...(options?.cwd ? { cwd: options.cwd } : {}) });
         if (args.includes('add')) {
           writeFileSync(
             join(codexHome, 'config.toml'),
@@ -230,6 +230,7 @@ describe('codex install model', () => {
     expect(commands[0]).toEqual({
       command: 'npm',
       args: ['exec', '-y', 'locus-memory@3.5.3', '--', '--help'],
+      cwd: codexHome,
     });
     expect(commands[1]).toEqual({
       command: 'codex',
@@ -259,6 +260,62 @@ describe('codex install model', () => {
     expect(stdout.join('\n')).toContain('Skill: created');
     expect(stdout.join('\n')).toContain('Hooks: not requested');
     expect(existsSync(join(codexHome, 'hooks.json'))).toBe(false);
+  });
+
+  it('installs Codex MCP config and skill with the documented one-command form', async () => {
+    const codexHome = makeTempDir();
+    const commands: Array<{ command: string; args: string[]; cwd?: string }> = [];
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex'], io, {
+      env: { CODEX_HOME: codexHome },
+      startDir: repoRoot,
+      platform: 'linux',
+      commandRunner: async (command, args, options) => {
+        commands.push({ command, args, ...(options?.cwd ? { cwd: options.cwd } : {}) });
+        if (args.includes('add')) {
+          writeFileSync(
+            join(codexHome, 'config.toml'),
+            [
+              '[mcp_servers.locus]',
+              'command = "npx"',
+              'args = ["-y", "locus-memory@3.5.3", "mcp"]',
+              '',
+            ].join('\n'),
+            'utf8',
+          );
+        }
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(commands[0]).toEqual({
+      command: 'npm',
+      args: ['exec', '-y', 'locus-memory@3.5.3', '--', '--help'],
+      cwd: codexHome,
+    });
+    expect(commands[1]).toEqual({
+      command: 'codex',
+      args: ['mcp', 'get', 'locus'],
+    });
+    expect(commands[2]).toEqual({
+      command: 'codex',
+      args: expect.arrayContaining([
+        'mcp',
+        'add',
+        'locus',
+        '--',
+        'npx',
+        '-y',
+        'locus-memory@3.5.3',
+        'mcp',
+      ]),
+    });
+    expect(stdout.join('\n')).toContain('Locus Codex install complete');
+    expect(readFileSync(join(codexHome, 'skills', 'locus-memory', 'SKILL.md'), 'utf8')).toContain(
+      'memory_recall',
+    );
   });
 
   it('installs Codex hooks only when explicitly requested', async () => {
