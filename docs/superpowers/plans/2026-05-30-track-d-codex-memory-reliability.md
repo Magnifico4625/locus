@@ -1,0 +1,2631 @@
+# Track D Codex Memory Reliability Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Make Locus reliable enough for Codex Desktop and CLI agents to use as their default project-memory source by adding strict project isolation, temporal/date-bucket recall, freshness/surface truth, stronger ranking, project-state summaries, and acceptance coverage.
+
+**Architecture:** Keep the existing Track C recall engine shape and extend it instead of replacing it. Add project/date metadata at the storage boundary, feed that metadata into candidate loading and scoring, expose calendar and project-state tools, and make status/doctor tell one consistent freshness story for Codex Desktop and CLI.
+
+**Tech Stack:** TypeScript, Node.js 22+, Vitest, existing `DatabaseAdapter`, SQLite migrations, existing MCP server registration, existing Codex JSONL importer, no new runtime dependency.
+
+---
+
+## Source Context
+
+- Roadmap anchor: `docs/roadmap/codex-next.md`, Track D.
+- Roadmap commit: `3a4db1c docs(roadmap): prioritize codex memory reliability`.
+- Existing recall modules: `packages/core/src/recall/*`.
+- Existing Codex import modules: `packages/codex/src/*`.
+- Existing MCP tool registration: `packages/core/src/server.ts`.
+- Existing Track C plan style: `docs/superpowers/plans/2026-05-04-track-c-c1-recall-engine-v2.md`.
+
+## Scope
+
+In scope:
+
+- Project-scoped recall by default for current `projectRoot`.
+- Event-date based temporal recall for day/week/month questions.
+- A calendar-style memory discovery tool.
+- `memory_recall` result metadata showing resolved range and searched date buckets.
+- Candidate ranking that heavily prefers current project, requested time range, exact entities, file paths, active durable memories, and recent context.
+- Unified Codex freshness/surface status for Desktop and CLI.
+- Project-state summary and verification tool.
+- Acceptance tests proving unrelated project memory is not returned.
+- Docs and skill sync for the new workflow.
+
+Out of scope:
+
+- Cloud embeddings or external semantic search providers.
+- Unlimited transcript storage.
+- Hidden deletion or automatic destructive cleanup.
+- Rewriting Claude Code hooks.
+- HTML dashboard implementation.
+- Secondary IDE passive capture adapters.
+
+## File Structure
+
+Create:
+
+- `packages/core/src/recall/project-scope.ts` - project-root normalization, scoped SQL helpers, and legacy/global inclusion policy.
+- `packages/core/src/recall/calendar.ts` - date bucket helpers and calendar summary builder.
+- `packages/core/src/tools/calendar.ts` - `memory_calendar` handler.
+- `packages/core/src/tools/project-state.ts` - `memory_project_state` handler.
+- `packages/core/tests/recall/project-scope.test.ts`
+- `packages/core/tests/recall/calendar.test.ts`
+- `packages/core/tests/tools/calendar.test.ts`
+- `packages/core/tests/tools/project-state.test.ts`
+- `packages/core/tests/tools/search-project-scope.test.ts`
+- `packages/core/tests/tools/timeline-project-scope.test.ts`
+- `packages/core/tests/integration/track-d-memory-reliability.test.ts`
+- `packages/codex/tests/fixtures/track-d/current-project-may.jsonl`
+- `packages/codex/tests/fixtures/track-d/other-project-may.jsonl`
+- `packages/codex/tests/fixtures/track-d/desktop-marker.jsonl`
+
+Modify:
+
+- `packages/core/src/types.ts`
+- `packages/core/src/storage/migrations.ts`
+- `packages/core/src/memory/semantic.ts`
+- `packages/core/src/tools/remember.ts`
+- `packages/core/src/memory/durable.ts`
+- `packages/core/src/memory/durable-runner.ts`
+- `packages/core/src/memory/durable-merge.ts`
+- `packages/core/src/memory/topic-key-registry.ts`
+- `packages/core/src/recall/index.ts`
+- `packages/core/src/recall/temporal-parser.ts`
+- `packages/core/src/recall/query-parser.ts`
+- `packages/core/src/recall/candidate-loader.ts`
+- `packages/core/src/recall/scoring.ts`
+- `packages/core/src/recall/result-builder.ts`
+- `packages/core/src/recall/grouping.ts`
+- `packages/core/src/tools/recall.ts`
+- `packages/core/src/tools/search.ts`
+- `packages/core/src/tools/timeline.ts`
+- `packages/core/src/tools/auto-import-codex.ts`
+- `packages/core/src/tools/codex-diagnostics.ts`
+- `packages/core/src/tools/status.ts`
+- `packages/core/src/tools/doctor.ts`
+- `packages/core/src/server.ts`
+- `packages/shared-runtime/detect-client.js`
+- `packages/shared-runtime/detect-client.d.ts`
+- `packages/core/tests/shared-runtime/detect-client.test.ts`
+- `packages/core/tests/tools/recall.test.ts`
+- `packages/core/tests/tools/status.test.ts`
+- `packages/core/tests/tools/doctor.test.ts`
+- `packages/core/tests/tools/codex-diagnostics.test.ts`
+- `packages/core/tests/tools/auto-import-codex.test.ts`
+- `packages/core/tests/storage/migrations.test.ts`
+- `packages/core/tests/ingest/pipeline-store.test.ts`
+- `packages/core/tests/tools/search.test.ts`
+- `packages/core/tests/tools/timeline.test.ts`
+- `packages/core/tests/memory/durable-merge.test.ts`
+- `packages/core/tests/memory/durable-runner.test.ts`
+- `packages/core/tests/recall/temporal-parser.test.ts`
+- `packages/core/tests/recall/query-parser.test.ts`
+- `packages/core/tests/recall/scoring.test.ts`
+- `packages/core/tests/integration/track-c-recall-acceptance.test.ts` only for compatibility assertions if Track D fields affect the result shape.
+- `packages/codex/README.md`
+- `packages/codex/skills/locus-memory/SKILL.md`
+- `README.md`
+- `docs/codex-acceptance-matrix.md`
+- `docs/roadmap/codex-next.md`
+
+Do not modify:
+
+- `packages/claude-code/**` unless a shared-runtime contract test proves a required compatibility update.
+- `dist/**` until a release/build checkpoint requires generated artifacts.
+
+---
+
+## Task D0: Baseline And Plan Checkpoint
+
+**Files:**
+- Modify: `docs/superpowers/plans/2026-05-30-track-d-codex-memory-reliability.md`
+
+- [ ] **Step D0.1: Verify roadmap commit and clean staged state**
+
+Run:
+
+```bash
+git log --oneline -3
+git status --short
+```
+
+Expected:
+
+- `3a4db1c docs(roadmap): prioritize codex memory reliability` appears in recent history.
+- Only this plan file is modified or untracked.
+
+- [ ] **Step D0.2: Run current focused baseline tests**
+
+Run:
+
+```bash
+npm test -- packages/core/tests/recall packages/core/tests/tools/recall.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/integration/track-c-recall-acceptance.test.ts
+```
+
+Expected: PASS before Track D changes.
+
+- [ ] **Step D0.3: Commit the approved plan**
+
+Run:
+
+```bash
+git add docs/superpowers/plans/2026-05-30-track-d-codex-memory-reliability.md
+git commit -m "docs(codex): plan track d memory reliability"
+```
+
+Expected: docs-only plan checkpoint.
+
+---
+
+## Task D1: Project Scope Contract And Storage Metadata
+
+**Files:**
+- Create: `packages/core/src/recall/project-scope.ts`
+- Modify: `packages/core/src/types.ts`
+- Modify: `packages/core/src/storage/migrations.ts`
+- Modify: `packages/core/src/ingest/pipeline.ts`
+- Modify: `packages/codex/src/importer.ts`
+- Modify: `packages/core/src/memory/semantic.ts`
+- Modify: `packages/core/src/tools/remember.ts`
+- Modify: `packages/core/src/memory/durable.ts`
+- Modify: `packages/core/src/memory/durable-runner.ts`
+- Test: `packages/core/tests/recall/project-scope.test.ts`
+- Test: `packages/core/tests/storage/migrations.test.ts`
+- Test: `packages/core/tests/ingest/pipeline-store.test.ts`
+- Test: `packages/codex/tests/importer.test.ts`
+- Test: `packages/core/tests/memory/semantic.test.ts`
+- Test: `packages/core/tests/memory/durable.test.ts`
+
+- [ ] **Step D1.1: Write failing project scope helper tests**
+
+Create `packages/core/tests/recall/project-scope.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import {
+  buildProjectScopeClause,
+  isSameProjectRoot,
+  normalizeProjectRootForScope,
+} from '../../src/recall/project-scope.js';
+
+describe('project scope helpers', () => {
+  it('normalizes Windows and POSIX paths for stable scope identity', () => {
+    expect(normalizeProjectRootForScope('C:\\Users\\Admin\\Project')).toBe(
+      'c:/users/admin/project',
+    );
+    expect(normalizeProjectRootForScope('C:/Users/Admin//Project/')).toBe(
+      'c:/users/admin/project',
+    );
+  });
+
+  it('matches equivalent project roots', () => {
+    expect(isSameProjectRoot('C:\\Users\\Admin\\Project', 'c:/users/admin/project')).toBe(true);
+    expect(isSameProjectRoot('/repo/locus', '/repo/other')).toBe(false);
+  });
+
+  it('builds strict SQL scope by default', () => {
+    expect(buildProjectScopeClause('project_root', 'C:/repo/locus')).toEqual({
+      clause: 'project_root = ?',
+      params: ['c:/repo/locus'],
+    });
+  });
+
+  it('can include legacy global rows only when explicitly allowed', () => {
+    expect(
+      buildProjectScopeClause('project_root', 'C:/repo/locus', { includeLegacyGlobal: true }),
+    ).toEqual({
+      clause: '(project_root = ? OR project_root IS NULL)',
+      params: ['c:/repo/locus'],
+    });
+  });
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/recall/project-scope.test.ts
+```
+
+Expected: FAIL because `project-scope.ts` does not exist.
+
+- [ ] **Step D1.2: Implement project scope helper**
+
+Create `packages/core/src/recall/project-scope.ts`:
+
+```ts
+import { normalizePathForIdentity } from '@locus/shared-runtime';
+
+export interface ProjectScopeClauseOptions {
+  includeLegacyGlobal?: boolean;
+}
+
+export interface ProjectScopeClause {
+  clause: string;
+  params: string[];
+}
+
+export function normalizeProjectRootForScope(projectRoot: string): string {
+  const normalized = normalizePathForIdentity(projectRoot.trim());
+  if (normalized === '/' || /^[a-z]:\/$/u.test(normalized)) {
+    return normalized;
+  }
+  return normalized.replace(/\/$/u, '');
+}
+
+export function isSameProjectRoot(left: string | null | undefined, right: string): boolean {
+  if (!left) {
+    return false;
+  }
+  return normalizeProjectRootForScope(left) === normalizeProjectRootForScope(right);
+}
+
+export function buildProjectScopeClause(
+  column: string,
+  projectRoot: string,
+  options?: ProjectScopeClauseOptions,
+): ProjectScopeClause {
+  const normalized = normalizeProjectRootForScope(projectRoot);
+  if (options?.includeLegacyGlobal) {
+    return {
+      clause: `(${column} = ? OR ${column} IS NULL)`,
+      params: [normalized],
+    };
+  }
+  return {
+    clause: `${column} = ?`,
+    params: [normalized],
+  };
+}
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/recall/project-scope.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D1.3: Write failing migration tests for project metadata**
+
+Extend `packages/core/tests/storage/migrations.test.ts`:
+
+```ts
+const memoryColumns = adapter.all<{ name: string }>('PRAGMA table_info(memories)');
+expect(memoryColumns.map((row) => row.name)).toContain('project_root');
+
+const durableColumns = adapter.all<{ name: string }>('PRAGMA table_info(durable_memories)');
+expect(durableColumns.map((row) => row.name)).toContain('project_root');
+
+const conversationColumns = adapter.all<{ name: string }>(
+  'PRAGMA table_info(conversation_events)',
+);
+expect(conversationColumns.map((row) => row.name)).toContain('project_root');
+
+const indexes = adapter.all<{ name: string }>(
+  "SELECT name FROM sqlite_master WHERE type = 'index'",
+);
+expect(indexes.map((row) => row.name)).toEqual(
+  expect.arrayContaining([
+    'idx_memories_project_updated',
+    'idx_dm_project_state_topic_updated',
+    'idx_ce_project_timestamp',
+    'idx_ce_project_session_timestamp',
+  ]),
+);
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/storage/migrations.test.ts
+```
+
+Expected: FAIL because the new columns/indexes do not exist.
+
+- [ ] **Step D1.4: Add migration v4 for project metadata and indexes**
+
+Modify `packages/core/src/storage/migrations.ts`:
+
+```ts
+import { normalizeProjectRootForScope } from '../recall/project-scope.js';
+
+function columnExists(db: DatabaseAdapter, table: string, column: string): boolean {
+  return db.all<{ name: string }>(`PRAGMA table_info(${table})`).some((row) => row.name === column);
+}
+
+function normalizeStoredProjectRoots(db: DatabaseAdapter, table: string): void {
+  const rows = db.all<{ id: number; project_root: string | null }>(
+    `SELECT id, project_root FROM ${table} WHERE project_root IS NOT NULL`,
+  );
+  for (const row of rows) {
+    if (!row.project_root) continue;
+    const normalized = normalizeProjectRootForScope(row.project_root);
+    if (normalized !== row.project_root) {
+      db.run(`UPDATE ${table} SET project_root = ? WHERE id = ?`, [normalized, row.id]);
+    }
+  }
+}
+
+function migrationV4(db: DatabaseAdapter): void {
+  if (!columnExists(db, 'memories', 'project_root')) {
+    db.exec('ALTER TABLE memories ADD COLUMN project_root TEXT');
+  }
+
+  if (!columnExists(db, 'durable_memories', 'project_root')) {
+    db.exec('ALTER TABLE durable_memories ADD COLUMN project_root TEXT');
+  }
+
+  if (!columnExists(db, 'conversation_events', 'project_root')) {
+    throw new Error('conversation_events.project_root is required before migration v4');
+  }
+
+  normalizeStoredProjectRoots(db, 'conversation_events');
+  normalizeStoredProjectRoots(db, 'memories');
+  normalizeStoredProjectRoots(db, 'durable_memories');
+
+  db.exec('CREATE INDEX IF NOT EXISTS idx_memories_project_updated ON memories(project_root, updated_at)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_dm_project_state_topic_updated ON durable_memories(project_root, state, topic_key, updated_at)',
+  );
+  db.exec('CREATE INDEX IF NOT EXISTS idx_ce_project_timestamp ON conversation_events(project_root, timestamp)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_ce_project_session_timestamp ON conversation_events(project_root, session_id, timestamp)',
+  );
+
+  db.run('UPDATE schema_version SET version = ?', [4]);
+}
+```
+
+In `runMigrations`, add:
+
+```ts
+if (currentVersion < 4) {
+  migrationV4(db);
+}
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/storage/migrations.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D1.4a: Normalize project root at ingestion**
+
+Modify `packages/core/src/ingest/pipeline.ts` so stored `conversation_events.project_root` always uses `normalizeProjectRootForScope(event.project_root)`:
+
+```ts
+const projectRoot = normalizeProjectRootForScope(event.project_root);
+```
+
+Use `projectRoot` in the conversation insert instead of `event.project_root`.
+
+Add/extend `packages/core/tests/ingest/pipeline-store.test.ts`:
+
+```ts
+it('normalizes project_root before storing conversation events', async () => {
+  const event = makeValidEvent({
+    event_id: 'evt-project-normalized',
+    project_root: 'C:\\Users\\Admin\\Project',
+  });
+  writeInboxEvent(inboxDir, event);
+  processInbox(inboxDir, adapter, { captureLevel: 'redacted', fts5Available: true });
+
+  const row = adapter.get<{ project_root: string }>(
+    'SELECT project_root FROM conversation_events WHERE event_id = ?',
+    ['evt-project-normalized'],
+  );
+  expect(row?.project_root).toBe('c:/users/admin/project');
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/ingest/pipeline-store.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D1.4b: Normalize Codex importer project filters**
+
+Codex 0.135 resume and app-server flows can preserve or override `cwd` across resumed threads. The importer must compare equivalent project roots by identity, not raw string form, before it decides to drop events.
+
+Modify `packages/codex/src/importer.ts`:
+
+```ts
+import { normalizePathForIdentity } from '@locus/shared-runtime';
+
+function sameProjectRoot(left: string, right: string): boolean {
+  return normalizePathForIdentity(left) === normalizePathForIdentity(right);
+}
+
+function matchesFilters(event: CodexNormalizedEvent, options: CodexImportOptions): boolean {
+  if (options.projectRoot !== undefined && !sameProjectRoot(event.projectRoot, options.projectRoot)) {
+    return false;
+  }
+
+  if (options.sessionId !== undefined && event.sessionId !== options.sessionId) {
+    return false;
+  }
+
+  if (options.since !== undefined && event.timestamp < options.since) {
+    return false;
+  }
+
+  return true;
+}
+```
+
+Extend `packages/codex/tests/importer.test.ts`:
+
+```ts
+it('filters projectRoot with normalized path identity', () => {
+  const sessionsDir = join(root, 'sessions');
+  mkdirSync(sessionsDir, { recursive: true });
+  writeRollout(sessionsDir, 'rollout-normalized-project.jsonl', [
+    '{"type":"session_meta","timestamp":"2026-05-30T10:00:00.000Z","session_id":"sess-normalized","cwd":"C:\\\\Projects\\\\SampleApp","model":"gpt-5.4"}',
+    '{"type":"event_msg","timestamp":"2026-05-30T10:01:00.000Z","subtype":"user_message","message":"TRACKD-NORMALIZED-PROJECT"}',
+  ]);
+
+  const metrics = importCodexSessionsToInbox({
+    sessionsDir,
+    inboxDir,
+    captureMode: 'redacted',
+    projectRoot: 'c:/projects/sampleapp',
+  });
+
+  expect(metrics.imported).toBeGreaterThan(0);
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/codex/tests/importer.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D1.5: Extend semantic memory to store project root**
+
+Modify `packages/core/src/types.ts`:
+
+```ts
+export interface MemoryEntry {
+  id: number;
+  layer: 'semantic' | 'episodic';
+  content: string;
+  tags: string[];
+  createdAt: number;
+  updatedAt: number;
+  sessionId?: string;
+  projectRoot?: string;
+}
+```
+
+Modify `packages/core/src/memory/semantic.ts`:
+
+```ts
+export interface SemanticMemoryAddOptions {
+  projectRoot?: string;
+}
+```
+
+Change `add` signature:
+
+```ts
+add(content: string, tags: string[], options?: SemanticMemoryAddOptions): MemoryEntry
+```
+
+Insert with project root:
+
+```ts
+const projectRoot = options?.projectRoot
+  ? normalizeProjectRootForScope(options.projectRoot)
+  : null;
+const result = this.db.run(
+  'INSERT INTO memories (layer, content, tags_json, created_at, updated_at, project_root) VALUES (?, ?, ?, ?, ?, ?)',
+  ['semantic', content, tagsJson, now, now, projectRoot],
+);
+```
+
+Update `rowToEntry` to map `project_root`.
+
+Run:
+
+```bash
+npm test -- packages/core/tests/memory/semantic.test.ts packages/core/tests/tools/remember.test.ts
+```
+
+Expected: tests pass after updates.
+
+- [ ] **Step D1.6: Pass project root through memory_remember**
+
+Modify `packages/core/src/tools/remember.ts`:
+
+```ts
+export interface RememberDeps {
+  semantic: SemanticMemory;
+  projectRoot?: string;
+}
+
+export function handleRemember(text: string, tags: string[], deps: RememberDeps): MemoryEntry {
+  const redacted = redact(text);
+  return deps.semantic.add(redacted, tags, { projectRoot: deps.projectRoot });
+}
+```
+
+Modify `packages/core/src/server.ts` registration:
+
+```ts
+const entry = handleRemember(text, tags ?? [], { semantic, projectRoot: root });
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/remember.test.ts packages/core/tests/integration/server.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D1.7: Extend durable memory project root contract**
+
+Modify `packages/core/src/types.ts`:
+
+```ts
+export interface DurableMemoryEntry {
+  id: number;
+  projectRoot?: string;
+  topicKey?: string;
+  memoryType: DurableMemoryType;
+  state: DurableMemoryState;
+  summary: string;
+  evidence: Record<string, unknown>;
+  sourceEventId?: string;
+  source: 'codex' | 'claude-code' | 'manual';
+  supersededById?: number;
+  createdAt: number;
+  updatedAt: number;
+}
+```
+
+Modify `CreateDurableMemoryInput` in `packages/core/src/memory/durable.ts`:
+
+```ts
+projectRoot?: string;
+```
+
+Include normalized `project_root` in insert and row mapping:
+
+```ts
+const projectRoot = input.projectRoot ? normalizeProjectRootForScope(input.projectRoot) : null;
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/memory/durable.test.ts packages/core/tests/memory/durable-merge.test.ts
+```
+
+Expected: PASS after expected fixture updates.
+
+- [ ] **Step D1.8: Attach durable memory project root from source events**
+
+Modify `packages/core/src/memory/durable-runner.ts` so rows selected from `conversation_events` include `project_root` and pass it into `store.insert`.
+
+Expected insertion shape:
+
+```ts
+store.insert({
+  topicKey: candidate.topicKey,
+  memoryType: candidate.memoryType,
+  summary: candidate.summary,
+  evidence: candidate.evidence,
+  sourceEventId: event.event_id,
+  projectRoot: event.project_root,
+  source: candidate.source,
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/memory/durable-extractor.test.ts packages/core/tests/memory/durable-merge.test.ts packages/core/tests/integration/track-c-recall-acceptance.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D1.9: Commit project scope metadata**
+
+Run:
+
+```bash
+git add packages/core/src/recall/project-scope.ts packages/core/src/types.ts packages/core/src/storage/migrations.ts packages/core/src/ingest/pipeline.ts packages/codex/src/importer.ts packages/core/src/memory/semantic.ts packages/core/src/tools/remember.ts packages/core/src/memory/durable.ts packages/core/src/memory/durable-runner.ts packages/core/tests/recall/project-scope.test.ts packages/core/tests/storage/migrations.test.ts packages/core/tests/ingest/pipeline-store.test.ts packages/codex/tests/importer.test.ts packages/core/tests/memory/semantic.test.ts packages/core/tests/memory/durable.test.ts
+git commit -m "feat(core): add project-scoped memory metadata"
+```
+
+---
+
+## Task D2: Temporal Parser And Date Buckets
+
+**Files:**
+- Create: `packages/core/src/recall/calendar.ts`
+- Modify: `packages/core/src/types.ts`
+- Modify: `packages/core/src/recall/temporal-parser.ts`
+- Modify: `packages/core/src/recall/query-parser.ts`
+- Modify: `packages/core/src/recall/index.ts`
+- Modify: `packages/core/src/server.ts`
+- Test: `packages/core/tests/recall/temporal-parser.test.ts`
+- Test: `packages/core/tests/recall/query-parser.test.ts`
+- Test: `packages/core/tests/recall/calendar.test.ts`
+
+- [ ] **Step D2.1: Write failing parser tests for month/week phrases**
+
+Extend `packages/core/tests/recall/temporal-parser.test.ts` with:
+
+```ts
+const may30 = Date.parse('2026-05-30T12:00:00.000Z');
+
+it.each([
+  [
+    'вспомни работу в этом месяце',
+    'в этом месяце',
+    '2026-05-01T00:00:00.000Z',
+    '2026-06-01T00:00:00.000Z',
+  ],
+  [
+    'what did we do this month?',
+    'this month',
+    '2026-05-01T00:00:00.000Z',
+    '2026-06-01T00:00:00.000Z',
+  ],
+  [
+    'что делали в мае?',
+    'май 2026',
+    '2026-05-01T00:00:00.000Z',
+    '2026-06-01T00:00:00.000Z',
+  ],
+  [
+    'what happened in April?',
+    'april 2026',
+    '2026-04-01T00:00:00.000Z',
+    '2026-05-01T00:00:00.000Z',
+  ],
+])('parses period query %s', (question, label, fromIso, toIso) => {
+  expect(parseRecallTemporalRange(question, may30)).toEqual({
+    label,
+    from: Date.parse(fromIso),
+    to: Date.parse(toIso),
+    fromIso,
+    toIso,
+  });
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/recall/temporal-parser.test.ts
+```
+
+Expected: FAIL for month phrases.
+
+- [ ] **Step D2.2: Add date bucket types**
+
+Modify `packages/core/src/types.ts`:
+
+```ts
+export interface MemoryDateBucket {
+  key: string;
+  label: string;
+  from: number;
+  to: number;
+  eventCount: number;
+  sessionCount: number;
+  durableCount: number;
+  topicKeys: string[];
+}
+
+export interface MemoryRecallResolvedRange {
+  label: string;
+  from: number;
+  to: number;
+  fromIso: string;
+  toIso: string;
+  granularity?: 'day' | 'week' | 'month' | 'custom';
+}
+```
+
+Run:
+
+```bash
+npm -w @locus/core run typecheck
+```
+
+Expected: PASS or only failures in code that needs the new optional field imported.
+
+- [ ] **Step D2.3: Implement calendar helper**
+
+Create `packages/core/src/recall/calendar.ts`:
+
+```ts
+export type DateBucketGranularity = 'day' | 'week' | 'month';
+
+export interface DateBucketRange {
+  key: string;
+  label: string;
+  from: number;
+  to: number;
+}
+
+export function startOfUtcDay(timestamp: number): number {
+  const date = new Date(timestamp);
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
+export function weekBucket(timestamp: number): DateBucketRange {
+  const dayStart = startOfUtcDay(timestamp);
+  const day = new Date(dayStart).getUTCDay();
+  const mondayOffset = day === 0 ? 6 : day - 1;
+  const from = dayStart - mondayOffset * 24 * 60 * 60 * 1000;
+  const to = from + 7 * 24 * 60 * 60 * 1000;
+  const key = `${new Date(from).toISOString().slice(0, 10)}/week`;
+  return { key, label: key, from, to };
+}
+
+export function monthBucket(timestamp: number): DateBucketRange {
+  const date = new Date(timestamp);
+  const from = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
+  const to = Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + 1, 1);
+  const key = new Date(from).toISOString().slice(0, 7);
+  return { key, label: key, from, to };
+}
+
+export function dayBucket(timestamp: number): DateBucketRange {
+  const from = startOfUtcDay(timestamp);
+  const to = from + 24 * 60 * 60 * 1000;
+  const key = new Date(from).toISOString().slice(0, 10);
+  return { key, label: key, from, to };
+}
+```
+
+Add tests in `packages/core/tests/recall/calendar.test.ts`:
+
+```ts
+import { describe, expect, it } from 'vitest';
+import { dayBucket, monthBucket, weekBucket } from '../../src/recall/calendar.js';
+
+describe('calendar buckets', () => {
+  it('builds stable UTC day buckets', () => {
+    expect(dayBucket(Date.parse('2026-05-30T12:34:00.000Z'))).toMatchObject({
+      key: '2026-05-30',
+      from: Date.parse('2026-05-30T00:00:00.000Z'),
+      to: Date.parse('2026-05-31T00:00:00.000Z'),
+    });
+  });
+
+  it('builds stable UTC month buckets', () => {
+    expect(monthBucket(Date.parse('2026-05-30T12:34:00.000Z'))).toMatchObject({
+      key: '2026-05',
+      from: Date.parse('2026-05-01T00:00:00.000Z'),
+      to: Date.parse('2026-06-01T00:00:00.000Z'),
+    });
+  });
+
+  it('builds stable Monday-based UTC week buckets', () => {
+    expect(weekBucket(Date.parse('2026-05-30T12:34:00.000Z'))).toMatchObject({
+      key: '2026-05-25/week',
+      from: Date.parse('2026-05-25T00:00:00.000Z'),
+      to: Date.parse('2026-06-01T00:00:00.000Z'),
+    });
+  });
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/recall/calendar.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D2.4: Implement month phrase parsing**
+
+Modify `packages/core/src/recall/temporal-parser.ts`:
+
+- Import `monthBucket`.
+- Add EN/RU month name maps.
+- Detect `this month`, `в этом месяце`, `in May`, `в мае`.
+- Use the current year when no year is in the question.
+
+Expected helper shape:
+
+```ts
+const MONTH_NAMES = new Map<string, number>([
+  ['january', 0],
+  ['february', 1],
+  ['march', 2],
+  ['april', 3],
+  ['may', 4],
+  ['june', 5],
+  ['july', 6],
+  ['august', 7],
+  ['september', 8],
+  ['october', 9],
+  ['november', 10],
+  ['december', 11],
+  ['январ', 0],
+  ['феврал', 1],
+  ['март', 2],
+  ['апрел', 3],
+  ['май', 4],
+  ['мае', 4],
+  ['мая', 4],
+  ['июн', 5],
+  ['июл', 6],
+  ['август', 7],
+  ['сентябр', 8],
+  ['октябр', 9],
+  ['ноябр', 10],
+  ['декабр', 11],
+]);
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/recall/temporal-parser.test.ts packages/core/tests/recall/query-parser.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D2.5: Extend MCP timeRange enum safely**
+
+Modify `packages/core/src/types.ts`:
+
+```ts
+export type TimeRangeRelative =
+  | 'today'
+  | 'yesterday'
+  | 'this_week'
+  | 'last_7d'
+  | 'last_30d'
+  | 'this_month'
+  | 'last_month';
+```
+
+Modify every MCP schema in `packages/core/src/server.ts` that currently lists relative values to include `this_month` and `last_month`.
+
+Modify `resolveTimeRange` in `packages/core/src/tools/search.ts` to support the new values with explicit month boundary helpers:
+
+```ts
+function startOfMonth(timestamp: number, mode: TimeResolutionMode): Date {
+  const date = new Date(timestamp);
+  if (mode === 'utc') {
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+  }
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date: Date, months: number, mode: TimeResolutionMode): Date {
+  const next = new Date(date);
+  if (mode === 'utc') {
+    next.setUTCMonth(next.getUTCMonth() + months);
+  } else {
+    next.setMonth(next.getMonth() + months);
+  }
+  return next;
+}
+```
+
+Add cases:
+
+```ts
+case 'this_month': {
+  const start = startOfMonth(now, mode);
+  const end = addMonths(start, 1, mode);
+  return { from: start.getTime(), to: end.getTime() };
+}
+case 'last_month': {
+  const thisMonth = startOfMonth(now, mode);
+  const previousMonth = addMonths(thisMonth, -1, mode);
+  return { from: previousMonth.getTime(), to: thisMonth.getTime() };
+}
+```
+
+Extend `packages/core/tests/tools/search.test.ts`, `packages/core/tests/tools/timeline.test.ts`, and `packages/core/tests/tools/recall.test.ts` with fixed-date assertions for `this_month` and `last_month`.
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/search.test.ts packages/core/tests/tools/timeline.test.ts packages/core/tests/tools/recall.test.ts
+npm -w @locus/core run typecheck
+```
+
+Expected: PASS.
+
+- [ ] **Step D2.5a: Unify timezone policy for recall, search, timeline, and calendar**
+
+Current code mixes UTC recall parsing with local `resolveTimeRange` defaults. Track D must make this explicit before date-bucket recall ships.
+
+Implementation rule:
+
+- User-facing MCP tools use local-time boundaries by default because users ask "today", "this month", and named months in their local working context.
+- Unit tests may pass `mode: 'utc'` or a fixed `now` helper for deterministic assertions.
+- `resolvedRange.fromIso` and `toIso` remain ISO timestamps so agents can report exact absolute boundaries.
+
+Modify `packages/core/src/recall/temporal-parser.ts`:
+
+```ts
+export interface RecallTemporalParseOptions {
+  mode?: 'local' | 'utc';
+}
+
+export function parseRecallTemporalRange(
+  question: string,
+  now: number,
+  options?: RecallTemporalParseOptions,
+): ParsedRecallRange | undefined
+```
+
+Modify `parseRecallQuery` and `runRecallEngine` to pass the same mode used by MCP recall. Keep existing UTC tests by passing `{ mode: 'utc' }`.
+
+Modify `packages/core/src/recall/calendar.ts` so bucket helpers accept the same mode:
+
+```ts
+export interface DateBucketOptions {
+  mode?: 'local' | 'utc';
+}
+
+export function dayBucket(timestamp: number, options?: DateBucketOptions): DateBucketRange
+export function weekBucket(timestamp: number, options?: DateBucketOptions): DateBucketRange
+export function monthBucket(timestamp: number, options?: DateBucketOptions): DateBucketRange
+```
+
+Update `handleCalendar` and `buildBucketsForCandidates` to pass `{ mode: 'local' }` for MCP calls. Unit tests that assert exact UTC boundaries pass `{ mode: 'utc' }`.
+
+Run:
+
+```bash
+npm test -- packages/core/tests/recall/temporal-parser.test.ts packages/core/tests/tools/search.test.ts packages/core/tests/tools/timeline.test.ts packages/core/tests/tools/recall.test.ts
+```
+
+Expected: PASS and no mismatch between recall/search/timeline date boundaries.
+
+- [ ] **Step D2.6: Commit temporal bucket support**
+
+Run:
+
+```bash
+git add packages/core/src/types.ts packages/core/src/recall/calendar.ts packages/core/src/recall/temporal-parser.ts packages/core/src/recall/query-parser.ts packages/core/src/recall/index.ts packages/core/src/tools/search.ts packages/core/src/server.ts packages/core/tests/recall/calendar.test.ts packages/core/tests/recall/temporal-parser.test.ts packages/core/tests/recall/query-parser.test.ts packages/core/tests/tools/search.test.ts packages/core/tests/tools/timeline.test.ts packages/core/tests/tools/recall.test.ts
+git commit -m "feat(core): add temporal recall buckets"
+```
+
+---
+
+## Task D3: Calendar Discovery Tool
+
+**Files:**
+- Create: `packages/core/src/tools/calendar.ts`
+- Modify: `packages/core/src/types.ts`
+- Modify: `packages/core/src/server.ts`
+- Test: `packages/core/tests/tools/calendar.test.ts`
+- Test: `packages/core/tests/integration/server.test.ts`
+
+- [ ] **Step D3.1: Add public result types**
+
+Modify `packages/core/src/types.ts`:
+
+```ts
+export interface MemoryCalendarOptions {
+  timeRange?: TimeRange;
+  granularity?: 'day' | 'week' | 'month';
+  projectRoot?: string;
+  limit?: number;
+}
+
+export interface MemoryCalendarResult {
+  projectRoot: string;
+  resolvedRange?: MemoryRecallResolvedRange;
+  granularity: 'day' | 'week' | 'month';
+  buckets: MemoryDateBucket[];
+}
+```
+
+Run:
+
+```bash
+npm -w @locus/core run typecheck
+```
+
+Expected: PASS after imports compile.
+
+- [ ] **Step D3.2: Write failing calendar tool tests**
+
+Create `packages/core/tests/tools/calendar.test.ts`:
+
+```ts
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { runMigrations } from '../../src/storage/migrations.js';
+import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
+import { handleCalendar } from '../../src/tools/calendar.js';
+
+describe('handleCalendar', () => {
+  let dir: string;
+  let db: NodeSqliteAdapter;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'locus-calendar-'));
+    // biome-ignore lint/suspicious/noExplicitAny: node:sqlite dynamic require
+    const sqlite = require('node:sqlite') as any;
+    db = new NodeSqliteAdapter(new sqlite.DatabaseSync(join(dir, 'test.db')));
+    runMigrations(db, true);
+  });
+
+  afterEach(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('returns day buckets only for the requested project', () => {
+    const may12 = Date.parse('2026-05-12T10:00:00.000Z');
+    const may24 = Date.parse('2026-05-24T10:00:00.000Z');
+    db.run(
+      `INSERT INTO conversation_events
+       (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['locus-1', 'codex', null, 'c:/repo/locus', 'sess-locus', may12, 'session_end', '{"summary":"v3.6.1"}', 'high', null, may12],
+    );
+    db.run(
+      `INSERT INTO conversation_events
+       (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['vpn-1', 'codex', null, 'c:/repo/proxyvpn', 'sess-vpn', may24, 'session_end', '{"summary":"VPN"}', 'high', null, may24],
+    );
+
+    const result = handleCalendar(
+      { db, projectRoot: 'C:/repo/locus', now: Date.parse('2026-05-30T12:00:00.000Z') },
+      { timeRange: { relative: 'this_month' }, granularity: 'day' },
+    );
+
+    expect(result.buckets).toEqual([
+      expect.objectContaining({
+        key: '2026-05-12',
+        eventCount: 1,
+        sessionCount: 1,
+      }),
+    ]);
+  });
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/calendar.test.ts
+```
+
+Expected: FAIL because `tools/calendar.ts` does not exist.
+
+- [ ] **Step D3.3: Implement `handleCalendar`**
+
+Create `packages/core/src/tools/calendar.ts` with this public shape:
+
+```ts
+import type { DatabaseAdapter, MemoryCalendarOptions, MemoryCalendarResult } from '../types.js';
+import { dayBucket, monthBucket, weekBucket } from '../recall/calendar.js';
+import { normalizeProjectRootForScope } from '../recall/project-scope.js';
+import { resolveTimeRange } from './search.js';
+
+export interface CalendarDeps {
+  db: DatabaseAdapter;
+  projectRoot: string;
+  now?: number;
+}
+
+export function handleCalendar(
+  deps: CalendarDeps,
+  options?: MemoryCalendarOptions,
+): MemoryCalendarResult {
+  // Query conversation_events and durable_memories separately, then merge counts by bucket key.
+}
+```
+
+Implementation requirements:
+
+- Filter `conversation_events.project_root` by normalized current project root.
+- Filter `durable_memories.project_root` by normalized current project root.
+- Use `weekBucket()` when `granularity === 'week'`; do not silently fall back to day/month.
+- Pass `{ mode: 'local' }` to bucket helpers for user-facing MCP output.
+- Default `timeRange` to `{ relative: 'last_30d' }`.
+- Default `granularity` to `day`.
+- Add durable `topic_key` values to each bucket's `topicKeys` array, sorted and de-duplicated.
+- Sort buckets ascending by `from`.
+- Return at most `limit ?? 90` buckets.
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/calendar.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D3.4: Register `memory_calendar` MCP tool**
+
+Modify `packages/core/src/server.ts`:
+
+```ts
+import { handleCalendar } from './tools/calendar.js';
+```
+
+Add tool registration after `memory_recall`:
+
+```ts
+server.tool(
+  'memory_calendar',
+  {
+    timeRange: z
+      .object({
+        from: z.number().optional(),
+        to: z.number().optional(),
+        relative: z
+          .enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d', 'this_month', 'last_month'])
+          .optional(),
+      })
+      .optional()
+      .describe('Filter memory buckets by time range'),
+    granularity: z.enum(['day', 'week', 'month']).optional(),
+    limit: z.number().optional(),
+  },
+  async ({ timeRange, granularity, limit }) => {
+    const now = Date.now();
+    runPreQueryCodexFlow(now);
+    const result = handleCalendar(
+      { db, projectRoot: root, now },
+      { timeRange, granularity, limit },
+    );
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+  },
+);
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/integration/server.test.ts packages/core/tests/tools/calendar.test.ts
+```
+
+Expected: PASS and registered tools include `memory_calendar`.
+
+- [ ] **Step D3.5: Commit calendar discovery**
+
+Run:
+
+```bash
+git add packages/core/src/types.ts packages/core/src/tools/calendar.ts packages/core/src/server.ts packages/core/tests/tools/calendar.test.ts packages/core/tests/integration/server.test.ts
+git commit -m "feat(core): expose memory calendar"
+```
+
+---
+
+## Task D4: Project-Scoped Recall And Ranking v3
+
+**Files:**
+- Modify: `packages/core/src/types.ts`
+- Modify: `packages/core/src/recall/engine.ts`
+- Modify: `packages/core/src/recall/candidate-loader.ts`
+- Modify: `packages/core/src/recall/scoring.ts`
+- Modify: `packages/core/src/recall/grouping.ts`
+- Modify: `packages/core/src/recall/result-builder.ts`
+- Modify: `packages/core/src/tools/recall.ts`
+- Modify: `packages/core/src/tools/search.ts`
+- Modify: `packages/core/src/tools/timeline.ts`
+- Modify: `packages/core/src/server.ts`
+- Test: `packages/core/tests/tools/recall.test.ts`
+- Test: `packages/core/tests/tools/search-project-scope.test.ts`
+- Test: `packages/core/tests/tools/timeline-project-scope.test.ts`
+- Test: `packages/core/tests/recall/scoring.test.ts`
+- Test: `packages/core/tests/integration/track-d-memory-reliability.test.ts`
+
+- [ ] **Step D4.1: Write failing cross-project recall test**
+
+Create `packages/core/tests/integration/track-d-memory-reliability.test.ts`:
+
+```ts
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { runMigrations } from '../../src/storage/migrations.js';
+import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
+import { handleRecall } from '../../src/tools/recall.js';
+import type { MemoryRecallResult } from '../../src/types.js';
+
+describe('Track D memory reliability', () => {
+  let dir: string;
+  let db: NodeSqliteAdapter;
+  const now = Date.parse('2026-05-30T12:00:00.000Z');
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'locus-track-d-'));
+    // biome-ignore lint/suspicious/noExplicitAny: node:sqlite dynamic require
+    const sqlite = require('node:sqlite') as any;
+    db = new NodeSqliteAdapter(new sqlite.DatabaseSync(join(dir, 'test.db')));
+    runMigrations(db, true);
+  });
+
+  afterEach(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('does not return unrelated project memories for current-project recall', () => {
+    const may12 = Date.parse('2026-05-12T10:00:00.000Z');
+    db.run(
+      `INSERT INTO conversation_events
+       (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['locus-1', 'codex', null, 'c:/repo/locus', 'sess-locus', may12, 'session_end', '{"summary":"Locus v3.6.1 CODEX_HOME hotfix."}', 'high', null, may12],
+    );
+    db.run(
+      `INSERT INTO conversation_events
+       (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['vpn-1', 'codex', null, 'c:/repo/proxyvpn', 'sess-vpn', may12, 'session_end', '{"summary":"ProxyVpn v3 route update."}', 'high', null, may12],
+    );
+
+    const result = handleRecall(
+      'вспомни работу в этом месяце по v3',
+      { db, now, projectRoot: 'C:/repo/locus' },
+      { limit: 10, now },
+    ) as MemoryRecallResult;
+
+    const text = JSON.stringify(result).toLowerCase();
+    expect(text).toContain('locus');
+    expect(text).not.toContain('proxyvpn');
+  });
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/integration/track-d-memory-reliability.test.ts
+```
+
+Expected: FAIL until recall accepts and applies `projectRoot`.
+
+- [ ] **Step D4.2: Add project fields to recall types**
+
+Modify `packages/core/src/types.ts`:
+
+```ts
+export interface MemoryRecallCandidate {
+  projectRoot?: string;
+  localDate?: string;
+  monthKey?: string;
+  sessionId?: string;
+  headline: string;
+  whyMatched: string;
+  eventIds: string[];
+  durableMemoryIds: number[];
+  intent?: MemoryRecallIntent;
+  confidence?: MemoryRecallConfidence;
+  score?: number;
+  topicKey?: string;
+  matchedTerms?: string[];
+  captureReason?: string;
+  sourceKind?: 'durable' | 'conversation' | 'semantic';
+  timestamp?: number;
+}
+
+export interface MemoryRecallResult {
+  status: MemoryRecallStatus;
+  question: string;
+  resolvedRange?: MemoryRecallResolvedRange;
+  searchedDateBuckets?: MemoryDateBucket[];
+  summary: string;
+  candidates: MemoryRecallCandidate[];
+  matchedIntent?: MemoryRecallIntent;
+  matchedTopics?: string[];
+  confidence?: MemoryRecallConfidence;
+  candidateGroups?: MemoryRecallCandidateGroup[];
+}
+```
+
+Run:
+
+```bash
+npm -w @locus/core run typecheck
+```
+
+Expected: PASS after downstream code compiles.
+
+- [ ] **Step D4.3: Pass projectRoot through recall engine**
+
+Modify `packages/core/src/recall/engine.ts`:
+
+```ts
+export interface RecallEngineDeps {
+  db: DatabaseAdapter;
+  now?: number;
+  projectRoot?: string;
+}
+```
+
+Pass `projectRoot: deps.projectRoot` to `loadRecallCandidates`.
+
+Modify `packages/core/src/tools/recall.ts` so `handleRecall` deps include `projectRoot?: string`.
+
+Modify `packages/core/src/server.ts`:
+
+```ts
+const result = handleRecall(
+  question,
+  { db, now, projectRoot: root },
+  { timeRange, limit, now },
+);
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/recall.test.ts
+```
+
+Expected: PASS after candidate loader changes in the next step.
+
+- [ ] **Step D4.4: Filter durable, semantic, and conversation candidates by project**
+
+Modify `packages/core/src/recall/candidate-loader.ts`:
+
+- Add `projectRoot?: string` to `CandidateLoaderOptions`.
+- Use `buildProjectScopeClause` for:
+  - `conversation_events.project_root`
+  - `durable_memories.project_root`
+  - `memories.project_root`
+- Default strict behavior: if `projectRoot` is present, do not include other projects.
+- Include legacy `NULL` project rows only for semantic memories as a second pass when strict project-scoped semantic search returns zero rows and the query has exact term overlap.
+
+Expected SQL addition for conversations:
+
+```ts
+if (projectRoot) {
+  const scope = buildProjectScopeClause('project_root', projectRoot);
+  clauses.push(scope.clause);
+  params.push(...scope.params);
+}
+```
+
+Expected semantic fallback shape:
+
+```ts
+const strictSemantic = loadSemanticCandidates({
+  query,
+  projectRoot,
+  includeLegacyGlobal: false,
+});
+
+const semanticCandidates =
+  strictSemantic.length > 0
+    ? strictSemantic
+    : loadSemanticCandidates({
+        query,
+        projectRoot,
+        includeLegacyGlobal: true,
+        requireExactTermOverlap: true,
+      });
+```
+
+Add tests:
+
+```ts
+it('includes legacy semantic memory only when no scoped semantic match exists', () => {
+  // Insert one memories row with project_root NULL and content "legacy CODEX_HOME import".
+  // Query from project c:/repo/locus for CODEX_HOME.
+  // Expected: legacy row appears only because there is no scoped semantic row.
+});
+
+it('prefers scoped semantic memory over legacy global memory', () => {
+  // Insert scoped c:/repo/locus memory and legacy NULL memory with the same query term.
+  // Expected: scoped row appears and legacy row is excluded.
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/recall.test.ts packages/core/tests/integration/track-d-memory-reliability.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D4.4a: Scope `memory_search` and `memory_timeline` to the current project**
+
+Modify `packages/core/src/tools/search.ts`:
+
+```ts
+export interface SearchOptions {
+  timeRange?: TimeRange;
+  kind?: EventKind;
+  source?: string;
+  filePath?: string;
+  projectRoot?: string;
+  limit?: number;
+  offset?: number;
+  now?: number;
+}
+```
+
+Apply `buildProjectScopeClause` to:
+
+- `durable_memories.project_root` in both FTS and LIKE durable paths.
+- `memories.project_root` for semantic and episodic memory rows.
+- `ce.project_root` in conversation FTS and LIKE paths.
+
+Implementation rule:
+
+```ts
+const projectRoot = options?.projectRoot
+  ? normalizeProjectRootForScope(options.projectRoot)
+  : undefined;
+```
+
+When `projectRoot` is present, `memory_search` must not return other project semantic, durable, episodic, or conversation rows. Structural file search remains repository-local by construction and does not need `project_root`.
+
+Modify `packages/core/src/tools/timeline.ts`:
+
+```ts
+export interface TimelineDeps {
+  db: DatabaseAdapter;
+  projectRoot?: string;
+}
+```
+
+Add project scope to the timeline query:
+
+```ts
+if (deps.projectRoot) {
+  const scope = buildProjectScopeClause('ce.project_root', deps.projectRoot);
+  clauses.push(scope.clause);
+  params.push(...scope.params);
+}
+```
+
+Modify `packages/core/src/server.ts`:
+
+```ts
+const results = handleSearch(query, { db, semantic, fts5 }, { ...options, projectRoot: root });
+const entries = handleTimeline({ db, projectRoot: root }, { timeRange, kind, filePath, summary, limit, offset });
+```
+
+Create `packages/core/tests/tools/search-project-scope.test.ts`:
+
+```ts
+it('memory_search excludes durable and conversation rows from other projects', () => {
+  // Insert c:/repo/locus and c:/repo/proxyvpn rows containing the same token.
+  // Call handleSearch('TRACKD-SCOPE', { db, semantic, fts5: true }, { projectRoot: 'C:/repo/locus' }).
+  // Expected: every result containing TRACKD-SCOPE comes from c:/repo/locus.
+});
+```
+
+Create `packages/core/tests/tools/timeline-project-scope.test.ts`:
+
+```ts
+it('memory_timeline lists only the requested project', () => {
+  // Insert two conversation_events in the same month for different project_root values.
+  // Call handleTimeline({ db, projectRoot: 'C:/repo/locus' }).
+  // Expected: locus event appears and proxyvpn event is absent.
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/search-project-scope.test.ts packages/core/tests/tools/timeline-project-scope.test.ts packages/core/tests/tools/search.test.ts packages/core/tests/tools/timeline.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D4.5: Add searched date buckets to recall results**
+
+Modify `packages/core/src/recall/result-builder.ts` to accept:
+
+```ts
+searchedDateBuckets?: MemoryDateBucket[];
+```
+
+Modify `runRecallEngine` to build buckets from matched candidates when `resolvedRange` exists:
+
+```ts
+const searchedDateBuckets = buildBucketsForCandidates(scoredCandidates, resolvedRange);
+```
+
+Implementation rule:
+
+- A period query with no candidates still returns an empty `searchedDateBuckets: []`.
+- A period query with candidates groups by `localDate`.
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/recall.test.ts
+```
+
+Expected: PASS and period tests assert `searchedDateBuckets`.
+
+- [ ] **Step D4.6: Strengthen ranking v3**
+
+Modify `packages/core/src/recall/scoring.ts`:
+
+Scoring requirements:
+
+- `project_match`: +10
+- `project_mismatch`: exclude the candidate in loaders before scoring; do not keep a negative-score fallback.
+- `time_range_fit`: +5
+- `topic_match`: keep +4
+- `exact_entity_match`: +4 for exact path/tag/version strings such as `v3.6.1`, `CODEX_HOME`, `memory_recall`
+- `durable_active`: +3 for active durable memory
+- `legacy_global`: -4 if `projectRoot` is missing
+
+Extend `RecallScoringOptions`:
+
+```ts
+export interface RecallScoringOptions {
+  now: number;
+  projectRoot?: string;
+  resolvedRange?: { from: number; to: number };
+}
+
+export function filterProjectCandidates(
+  candidates: MemoryRecallCandidate[],
+  projectRoot?: string,
+): MemoryRecallCandidate[]
+```
+
+`filterProjectCandidates` keeps candidates with no `projectRoot` for legacy fallback scoring, keeps current-project matches, and drops explicit other-project candidates before score calculation.
+
+Run:
+
+```bash
+npm test -- packages/core/tests/recall/scoring.test.ts packages/core/tests/tools/recall.test.ts packages/core/tests/integration/track-d-memory-reliability.test.ts
+```
+
+Expected: PASS.
+
+Add this test in `packages/core/tests/recall/scoring.test.ts`:
+
+```ts
+it('drops explicit other-project candidates before scoring', () => {
+  const kept = filterProjectCandidates(
+    [
+      {
+        projectRoot: 'c:/repo/locus',
+        headline: 'Locus memory work',
+        whyMatched: 'test',
+        eventIds: ['evt-locus'],
+        durableMemoryIds: [],
+        sourceKind: 'conversation',
+      },
+      {
+        projectRoot: 'c:/repo/proxyvpn',
+        headline: 'ProxyVpn memory work',
+        whyMatched: 'test',
+        eventIds: ['evt-proxy'],
+        durableMemoryIds: [],
+        sourceKind: 'conversation',
+      },
+    ],
+    'C:/repo/locus',
+  );
+
+  expect(kept.map((candidate) => candidate.headline)).toEqual(['Locus memory work']);
+});
+```
+
+- [ ] **Step D4.7: Commit project-scoped recall**
+
+Run:
+
+```bash
+git add packages/core/src/types.ts packages/core/src/recall/engine.ts packages/core/src/recall/candidate-loader.ts packages/core/src/recall/scoring.ts packages/core/src/recall/result-builder.ts packages/core/src/recall/grouping.ts packages/core/src/tools/recall.ts packages/core/src/tools/search.ts packages/core/src/tools/timeline.ts packages/core/src/server.ts packages/core/tests/tools/recall.test.ts packages/core/tests/tools/search-project-scope.test.ts packages/core/tests/tools/timeline-project-scope.test.ts packages/core/tests/recall/scoring.test.ts packages/core/tests/integration/track-d-memory-reliability.test.ts
+git commit -m "feat(core): scope recall to current project"
+```
+
+---
+
+## Task D5: Codex Freshness And Surface Truth
+
+**Files:**
+- Modify: `packages/core/src/types.ts`
+- Modify: `packages/core/src/tools/auto-import-codex.ts`
+- Modify: `packages/core/src/tools/codex-diagnostics.ts`
+- Modify: `packages/core/src/tools/status.ts`
+- Modify: `packages/core/src/tools/doctor.ts`
+- Modify: `packages/shared-runtime/detect-client.js`
+- Modify: `packages/shared-runtime/detect-client.d.ts`
+- Test: `packages/core/tests/tools/auto-import-codex.test.ts`
+- Test: `packages/core/tests/tools/codex-diagnostics.test.ts`
+- Test: `packages/core/tests/tools/status.test.ts`
+- Test: `packages/core/tests/tools/doctor.test.ts`
+- Test: `packages/core/tests/shared-runtime/detect-client.test.ts`
+
+- [ ] **Step D5.1: Add surface override tests**
+
+Extend `packages/core/tests/shared-runtime/detect-client.test.ts`:
+
+```ts
+it('honors an explicit Locus Codex surface override', async () => {
+  const { detectClientRuntime } = await import('@locus/shared-runtime');
+  expect(
+    detectClientRuntime({
+      CODEX_HOME: 'C:/Users/Admin/.codex',
+      LOCUS_CODEX_SURFACE: 'desktop',
+    }).surface,
+  ).toBe('desktop');
+});
+
+it('falls back to cli when CODEX_HOME is the only Codex evidence', async () => {
+  const { detectClientRuntime } = await import('@locus/shared-runtime');
+  expect(detectClientRuntime({ CODEX_HOME: 'C:/Users/Admin/.codex' }).surface).toBe('cli');
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/shared-runtime/detect-client.test.ts
+```
+
+Expected: FAIL until shared runtime supports the override.
+
+- [ ] **Step D5.2: Implement explicit Codex surface override**
+
+Modify `packages/shared-runtime/detect-client.js`:
+
+```js
+function codexSurfaceFromEnv(env) {
+  const value = env.LOCUS_CODEX_SURFACE;
+  if (value === 'desktop' || value === 'extension' || value === 'cli') {
+    return value;
+  }
+  return 'cli';
+}
+```
+
+Use it when `CODEX_HOME` is present:
+
+```js
+const surface = codexSurfaceFromEnv(env);
+return {
+  client: 'codex',
+  surface,
+  detected: true,
+  evidence: surface === 'cli' ? ['env:CODEX_HOME'] : ['env:CODEX_HOME', `env:LOCUS_CODEX_SURFACE=${surface}`],
+};
+```
+
+Update `packages/shared-runtime/detect-client.d.ts` only if exported typedef comments need the env key documented.
+
+Run:
+
+```bash
+npm test -- packages/core/tests/shared-runtime/detect-client.test.ts
+npm -w @locus/core run typecheck
+```
+
+Expected: PASS.
+
+- [ ] **Step D5.3: Add freshness snapshot types**
+
+Modify `packages/core/src/types.ts`:
+
+```ts
+export type CodexDesktopParity = 'unverified' | 'observed_mcp' | 'validated';
+
+export interface CodexFreshnessSnapshot {
+  checkedAt: number;
+  client: ClientEnv;
+  clientSurface: ClientSurface;
+  latestRolloutPath?: string;
+  latestRolloutTimestamp?: number;
+  latestImportedTimestamp?: number;
+  importedEventCount: number;
+  fresh: boolean;
+  lagMs?: number;
+  message: string;
+}
+
+export interface MemoryStatus {
+  codexFreshness?: CodexFreshnessSnapshot;
+}
+```
+
+Run:
+
+```bash
+npm -w @locus/core run typecheck
+```
+
+Expected: PASS after consumers are updated.
+
+- [ ] **Step D5.4: Build freshness from diagnostics and auto-import snapshot**
+
+Modify `packages/core/src/tools/codex-diagnostics.ts` to compute `latestRolloutTimestamp` from the newest rollout file mtime or latest parsed event timestamp. Prefer mtime first for a cheap implementation:
+
+```ts
+const latestRolloutTimestamp = latestRolloutPath ? statSync(latestRolloutPath).mtimeMs : undefined;
+```
+
+Modify `packages/core/src/tools/status.ts`:
+
+```ts
+function buildCodexFreshness(
+  diagnostics: CodexDiagnosticsSnapshot | undefined,
+  checkedAt: number,
+): CodexFreshnessSnapshot | undefined {
+  if (!diagnostics) return undefined;
+  const latestRolloutTimestamp = diagnostics.latestRolloutTimestamp;
+  const latestImportedTimestamp = diagnostics.latestImportedTimestamp;
+  const lagMs =
+    latestRolloutTimestamp !== undefined && latestImportedTimestamp !== undefined
+      ? Math.max(0, latestRolloutTimestamp - latestImportedTimestamp)
+      : undefined;
+  const fresh = lagMs !== undefined ? lagMs <= 60_000 : diagnostics.importedEventCount > 0;
+  return {
+    checkedAt,
+    client: diagnostics.client,
+    clientSurface: diagnostics.clientSurface,
+    latestRolloutPath: diagnostics.latestRolloutPath,
+    latestRolloutTimestamp,
+    latestImportedTimestamp,
+    importedEventCount: diagnostics.importedEventCount,
+    fresh,
+    lagMs,
+    message: fresh ? 'Codex import appears fresh.' : 'Codex import may be stale.',
+  };
+}
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts
+```
+
+Expected: PASS with new assertions.
+
+- [ ] **Step D5.5: Update doctor desktop and freshness checks**
+
+Modify `packages/core/src/tools/doctor.ts`:
+
+- If `clientSurface === 'desktop'` and imported events exist, `Codex desktop parity` should be `ok` with message `Codex Desktop MCP path has retained Codex events in this environment.`
+- If `clientSurface !== 'desktop'`, keep the warning.
+- Add `Codex freshness` check using `latestRolloutTimestamp`, `latestImportedTimestamp`, and lag.
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/doctor.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D5.6: Commit freshness and surface truth**
+
+Run:
+
+```bash
+git add packages/core/src/types.ts packages/core/src/tools/auto-import-codex.ts packages/core/src/tools/codex-diagnostics.ts packages/core/src/tools/status.ts packages/core/src/tools/doctor.ts packages/shared-runtime/detect-client.js packages/shared-runtime/detect-client.d.ts packages/core/tests/tools/auto-import-codex.test.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/shared-runtime/detect-client.test.ts
+git commit -m "feat(codex): report freshness and desktop surface"
+```
+
+---
+
+## Task D6: Project State Summary And Verification Tool
+
+**Files:**
+- Create: `packages/core/src/tools/project-state.ts`
+- Modify: `packages/core/src/types.ts`
+- Modify: `packages/core/src/memory/durable-merge.ts`
+- Modify: `packages/core/src/memory/durable-runner.ts`
+- Modify: `packages/core/src/memory/topic-key-registry.ts`
+- Modify: `packages/core/src/server.ts`
+- Test: `packages/core/tests/tools/project-state.test.ts`
+- Test: `packages/core/tests/memory/durable-merge.test.ts`
+- Test: `packages/core/tests/memory/durable-runner.test.ts`
+- Test: `packages/core/tests/memory/topic-key-registry.test.ts`
+- Test: `packages/core/tests/integration/server.test.ts`
+
+- [ ] **Step D6.1: Add project-state types**
+
+Modify `packages/core/src/types.ts`:
+
+```ts
+export interface MemoryProjectStateResult {
+  projectRoot: string;
+  packageName?: string;
+  packageVersion?: string;
+  gitHead?: string;
+  gitBranch?: string;
+  dirty?: boolean;
+  activeDurableCount: number;
+  latestConversationTimestamp?: number;
+  latestConversationIso?: string;
+  warnings: string[];
+  nextSteps: string[];
+}
+```
+
+Run:
+
+```bash
+npm -w @locus/core run typecheck
+```
+
+Expected: PASS after handler exists or imports are not yet added.
+
+- [ ] **Step D6.2: Write failing project-state tests**
+
+Create `packages/core/tests/tools/project-state.test.ts`:
+
+```ts
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { runMigrations } from '../../src/storage/migrations.js';
+import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
+import { handleProjectState } from '../../src/tools/project-state.js';
+
+describe('handleProjectState', () => {
+  let dir: string;
+  let db: NodeSqliteAdapter;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'locus-project-state-'));
+    mkdirSync(join(dir, 'repo'), { recursive: true });
+    writeFileSync(
+      join(dir, 'repo', 'package.json'),
+      JSON.stringify({ name: 'locus-memory', version: '3.7.0' }),
+    );
+    // biome-ignore lint/suspicious/noExplicitAny: node:sqlite dynamic require
+    const sqlite = require('node:sqlite') as any;
+    db = new NodeSqliteAdapter(new sqlite.DatabaseSync(join(dir, 'test.db')));
+    runMigrations(db, true);
+  });
+
+  afterEach(() => {
+    db.close();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('summarizes package metadata and memory freshness', () => {
+    const ts = Date.parse('2026-05-30T10:00:00.000Z');
+    db.run(
+      `INSERT INTO conversation_events
+       (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ['evt-1', 'codex', null, join(dir, 'repo').replace(/\\/g, '/').toLowerCase(), 'sess-1', ts, 'session_end', '{"summary":"Track D planned."}', 'high', null, ts],
+    );
+
+    const result = handleProjectState({ db, projectRoot: join(dir, 'repo') });
+
+    expect(result).toMatchObject({
+      packageName: 'locus-memory',
+      packageVersion: '3.7.0',
+      activeDurableCount: 0,
+      latestConversationIso: '2026-05-30T10:00:00.000Z',
+    });
+  });
+
+  it('reports git state and active durable next steps', () => {
+    const ts = Date.parse('2026-05-30T10:00:00.000Z');
+    const normalizedRoot = join(dir, 'repo').replace(/\\/g, '/').toLowerCase();
+    db.run(
+      `INSERT INTO durable_memories
+       (topic_key, memory_type, state, summary, evidence_json, source_event_id, source, superseded_by_id, created_at, updated_at, project_root)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'track_d_memory_reliability',
+        'next_step',
+        'active',
+        'Implement Track D project-scoped recall tests.',
+        '{"source":"test"}',
+        'evt-1',
+        'codex',
+        null,
+        ts,
+        ts,
+        normalizedRoot,
+      ],
+    );
+
+    const result = handleProjectState({
+      db,
+      projectRoot: join(dir, 'repo'),
+      readGitState: () => ({ gitHead: 'abc1234', gitBranch: 'codex/track-d', dirty: true }),
+    });
+
+    expect(result).toMatchObject({
+      gitHead: 'abc1234',
+      gitBranch: 'codex/track-d',
+      dirty: true,
+      nextSteps: ['Implement Track D project-scoped recall tests.'],
+    });
+  });
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/project-state.test.ts
+```
+
+Expected: FAIL because handler does not exist.
+
+- [ ] **Step D6.3: Implement `handleProjectState`**
+
+Create `packages/core/src/tools/project-state.ts`:
+
+```ts
+import { execFileSync } from 'node:child_process';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import type { DatabaseAdapter, MemoryProjectStateResult } from '../types.js';
+import { normalizeProjectRootForScope } from '../recall/project-scope.js';
+
+export interface ProjectGitState {
+  gitHead?: string;
+  gitBranch?: string;
+  dirty?: boolean;
+}
+
+export interface ProjectStateDeps {
+  db: DatabaseAdapter;
+  projectRoot: string;
+  readGitState?: (cwd: string) => ProjectGitState;
+}
+
+function readGitState(cwd: string): ProjectGitState {
+  try {
+    const gitHead = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    const gitBranch = execFileSync('git', ['branch', '--show-current'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    const status = execFileSync('git', ['status', '--porcelain'], {
+      cwd,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    return { gitHead, gitBranch, dirty: status.length > 0 };
+  } catch {
+    return {};
+  }
+}
+
+export function handleProjectState(deps: ProjectStateDeps): MemoryProjectStateResult {
+  const projectRoot = normalizeProjectRootForScope(deps.projectRoot);
+  const packagePath = join(deps.projectRoot, 'package.json');
+  const packageJson = existsSync(packagePath)
+    ? (JSON.parse(readFileSync(packagePath, 'utf8')) as { name?: string; version?: string })
+    : {};
+  const activeDurableCount =
+    deps.db.get<{ cnt: number }>(
+      'SELECT COUNT(*) AS cnt FROM durable_memories WHERE state = ? AND project_root = ?',
+      ['active', projectRoot],
+    )?.cnt ?? 0;
+  const latest = deps.db.get<{ timestamp: number }>(
+    'SELECT timestamp FROM conversation_events WHERE project_root = ? ORDER BY timestamp DESC LIMIT 1',
+    [projectRoot],
+  );
+  const nextSteps = deps.db
+    .all<{ summary: string }>(
+      `SELECT summary
+       FROM durable_memories
+       WHERE memory_type = 'next_step' AND state = 'active' AND project_root = ?
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 5`,
+      [projectRoot],
+    )
+    .map((row) => row.summary);
+  const git = (deps.readGitState ?? readGitState)(deps.projectRoot);
+
+  return {
+    projectRoot,
+    packageName: packageJson.name,
+    packageVersion: packageJson.version,
+    gitHead: git.gitHead,
+    gitBranch: git.gitBranch,
+    dirty: git.dirty,
+    activeDurableCount,
+    latestConversationTimestamp: latest?.timestamp,
+    latestConversationIso: latest ? new Date(latest.timestamp).toISOString() : undefined,
+    warnings: latest ? [] : ['No conversation events found for this project.'],
+    nextSteps,
+  };
+}
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/tools/project-state.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D6.4: Register `memory_project_state`**
+
+Modify `packages/core/src/server.ts`:
+
+```ts
+import { handleProjectState } from './tools/project-state.js';
+```
+
+Register:
+
+```ts
+server.tool('memory_project_state', {}, async () => {
+  const result = handleProjectState({ db, projectRoot: root });
+  return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/integration/server.test.ts packages/core/tests/tools/project-state.test.ts
+```
+
+Expected: PASS.
+
+- [ ] **Step D6.4a: Keep resolved next steps accurate**
+
+Modify `packages/core/src/memory/topic-key-registry.ts` so Track D next-step and validation facts share a stable topic. Add the new union member:
+
+```ts
+export type CanonicalTopicKey =
+  | 'auth_strategy'
+  | 'capture_strategy'
+  | 'codex_hooks_strategy'
+  | 'database_choice'
+  | 'track_c_acceptance'
+  | 'track_d_memory_reliability'
+  | 'user_workflow_style';
+```
+
+Append this rule to `TOPIC_KEY_RULES`:
+
+```ts
+{
+  key: 'track_d_memory_reliability',
+  memoryTypes: ['next_step', 'validation_fact', 'decision'],
+  any: ['track d', 'memory reliability', 'project-scoped recall', 'date buckets', 'memory_calendar'],
+  all: [['track d', 'memory', 'recall']],
+},
+```
+
+Add a topic registry test:
+
+```ts
+expect(
+  deriveCanonicalTopicKey({
+    memoryType: 'validation_fact',
+    summary: 'Validation passed: Track D memory recall project-scoped tests.',
+  }),
+).toBe('track_d_memory_reliability');
+```
+
+Add tests in `packages/core/tests/memory/durable-merge.test.ts`:
+
+```ts
+it('supersedes an active next_step when a same-topic validation_fact resolves it', () => {
+  const decision = mergeDurableCandidate(
+    [
+      {
+        id: 10,
+        topicKey: 'track_d_memory_reliability',
+        memoryType: 'next_step',
+        state: 'active',
+        summary: 'Implement Track D project-scoped recall tests.',
+        evidence: { source: 'test' },
+        sourceEventId: 'evt-old',
+        source: 'codex',
+        supersededById: undefined,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+    {
+      topicKey: 'track_d_memory_reliability',
+      memoryType: 'validation_fact',
+      summary: 'Validation passed: Track D project-scoped recall tests.',
+      evidence: { source: 'test', confidence: 0.9 },
+      sourceEventId: 'evt-new',
+      source: 'codex',
+    },
+  );
+
+  expect(decision).toEqual({ action: 'supersede_existing', existingId: 10 });
+});
+```
+
+Modify `packages/core/src/memory/durable-merge.ts` before the existing same-type matching logic:
+
+```ts
+const resolvedNextStep = activeEntries.find(
+  (entry) =>
+    candidate.memoryType === 'validation_fact' &&
+    entry.memoryType === 'next_step' &&
+    candidate.topicKey &&
+    entry.topicKey === candidate.topicKey &&
+    /\b(passed|validated|released|published|shipped)\b/i.test(candidate.summary),
+);
+if (resolvedNextStep) {
+  return { action: 'supersede_existing', existingId: resolvedNextStep.id };
+}
+```
+
+Create `packages/core/tests/memory/durable-runner.test.ts` if it does not exist, and add this runner test:
+
+```ts
+it('supersedes resolved next_step memories during extraction', () => {
+  const ts = Date.parse('2026-05-30T10:00:00.000Z');
+  db.run(
+    `INSERT INTO conversation_events
+     (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      'evt-next',
+      'codex',
+      null,
+      'c:/repo/locus',
+      'sess-1',
+      ts,
+      'session_end',
+      '{"summary":"Next step: implement Track D memory recall project-scoped tests."}',
+      'high',
+      null,
+      ts,
+    ],
+  );
+  db.run(
+    `INSERT INTO conversation_events
+     (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      'evt-validation',
+      'codex',
+      null,
+      'c:/repo/locus',
+      'sess-1',
+      ts + 1000,
+      'session_end',
+      '{"summary":"Validation passed: Track D memory recall project-scoped tests."}',
+      'high',
+      null,
+      ts + 1000,
+    ],
+  );
+
+  const metrics = runDurableExtraction(db);
+  const rows = db.all<{ memory_type: string; state: string; superseded_by_id: number | null }>(
+    `SELECT memory_type, state, superseded_by_id
+     FROM durable_memories
+     WHERE topic_key = ?
+     ORDER BY id ASC`,
+    ['track_d_memory_reliability'],
+  );
+
+  expect(metrics.superseded).toBe(1);
+  expect(rows).toEqual([
+    expect.objectContaining({ memory_type: 'next_step', state: 'superseded' }),
+    expect.objectContaining({ memory_type: 'validation_fact', state: 'active' }),
+  ]);
+  expect(rows[0]?.superseded_by_id).toBeGreaterThan(0);
+});
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/memory/topic-key-registry.test.ts packages/core/tests/memory/durable-merge.test.ts packages/core/tests/memory/durable-runner.test.ts packages/core/tests/tools/project-state.test.ts
+```
+
+Expected: PASS. This implements the roadmap requirement that resolved blockers/next steps stop looking active when later validation proves them resolved.
+
+- [ ] **Step D6.5: Commit project-state tool**
+
+Run:
+
+```bash
+git add packages/core/src/types.ts packages/core/src/tools/project-state.ts packages/core/src/memory/topic-key-registry.ts packages/core/src/memory/durable-merge.ts packages/core/src/memory/durable-runner.ts packages/core/src/server.ts packages/core/tests/tools/project-state.test.ts packages/core/tests/memory/topic-key-registry.test.ts packages/core/tests/memory/durable-merge.test.ts packages/core/tests/memory/durable-runner.test.ts packages/core/tests/integration/server.test.ts
+git commit -m "feat(core): add project state memory summary"
+```
+
+---
+
+## Task D7: Desktop Marker Acceptance And Docs Truth Pass
+
+**Files:**
+- Create: `packages/codex/tests/fixtures/track-d/current-project-may.jsonl`
+- Create: `packages/codex/tests/fixtures/track-d/other-project-may.jsonl`
+- Create: `packages/codex/tests/fixtures/track-d/desktop-marker.jsonl`
+- Modify: `packages/core/tests/integration/track-d-memory-reliability.test.ts`
+- Modify: `packages/codex/README.md`
+- Modify: `packages/codex/skills/locus-memory/SKILL.md`
+- Modify: `README.md`
+- Modify: `docs/codex-acceptance-matrix.md`
+- Modify: `docs/roadmap/codex-next.md`
+
+- [ ] **Step D7.1: Add Track D JSONL fixtures**
+
+Create three fixtures:
+
+- `current-project-may.jsonl`: `cwd` is `C:\Users\Admin\gemini-project\ClaudeMagnificoMem`, contains `TRACKD-LOCUS-MAY-20260530`.
+- `other-project-may.jsonl`: `cwd` is `C:\Users\Admin\gemini-project\APPS\ProxyVpn`, contains `TRACKD-PROXYVPN-NOISE-20260530`.
+- `desktop-marker.jsonl`: `cwd` is `C:\Users\Admin\gemini-project\ClaudeMagnificoMem`, contains `TRACKD-DESKTOP-MARKER-20260530`.
+
+The first line in each fixture must be `session_meta` with `cwd`, `session_id`, and `model`. Include at least one `event_msg` user prompt and one `response_item` assistant message.
+
+Run:
+
+```bash
+npm test -- packages/codex/tests/normalize.test.ts packages/codex/tests/importer.test.ts
+```
+
+Expected: PASS because fixtures do not change code yet.
+
+- [ ] **Step D7.2: Extend Track D integration acceptance**
+
+Add tests to `packages/core/tests/integration/track-d-memory-reliability.test.ts`:
+
+```ts
+it('recalls current-project month work without other-project noise', async () => {
+  const root = makeTempRoot();
+  const projectDir = join(root, 'ClaudeMagnificoMem');
+  const codexHome = join(root, 'codex-home');
+  const sessionsDir = join(codexHome, 'sessions', '2026', '05');
+  mkdirSync(projectDir, { recursive: true });
+  mkdirSync(sessionsDir, { recursive: true });
+  cpSync(join(trackDFixturesDir, 'current-project-may.jsonl'), join(sessionsDir, 'current-project-may.jsonl'));
+  cpSync(join(trackDFixturesDir, 'other-project-may.jsonl'), join(sessionsDir, 'other-project-may.jsonl'));
+
+  await withEnv(
+    { CODEX_HOME: codexHome, LOCUS_CODEX_CAPTURE: 'redacted', LOCUS_CAPTURE_LEVEL: 'redacted' },
+    async () => {
+      const ctx = await createServer({ cwd: projectDir, dbPath: join(root, 'locus.db') });
+      try {
+        await callTextTool(ctx, 'memory_import_codex', {});
+        const recallText = await callTextTool(ctx, 'memory_recall', {
+          question: 'вспомни работу в этом месяце',
+          timeRange: { relative: 'this_month' },
+          limit: 10,
+        });
+        expect(recallText).toContain('TRACKD-LOCUS-MAY-20260530');
+        expect(recallText).not.toContain('TRACKD-PROXYVPN-NOISE-20260530');
+      } finally {
+        ctx.cleanup();
+      }
+    },
+  );
+});
+
+it('reports date buckets searched for this month', async () => {
+  const root = makeTempRoot();
+  const projectDir = join(root, 'ClaudeMagnificoMem');
+  const codexHome = join(root, 'codex-home');
+  const sessionsDir = join(codexHome, 'sessions', '2026', '05');
+  mkdirSync(projectDir, { recursive: true });
+  mkdirSync(sessionsDir, { recursive: true });
+  cpSync(join(trackDFixturesDir, 'current-project-may.jsonl'), join(sessionsDir, 'current-project-may.jsonl'));
+
+  await withEnv(
+    { CODEX_HOME: codexHome, LOCUS_CODEX_CAPTURE: 'redacted', LOCUS_CAPTURE_LEVEL: 'redacted' },
+    async () => {
+      const ctx = await createServer({ cwd: projectDir, dbPath: join(root, 'locus.db') });
+      try {
+        await callTextTool(ctx, 'memory_import_codex', {});
+        const recall = JSON.parse(
+          await callTextTool(ctx, 'memory_recall', {
+            question: 'вспомни работу в этом месяце',
+            timeRange: { relative: 'this_month' },
+          }),
+        ) as MemoryRecallResult;
+
+        expect(recall.searchedDateBuckets).toEqual(
+          expect.arrayContaining([expect.objectContaining({ key: '2026-05-30' })]),
+        );
+      } finally {
+        ctx.cleanup();
+      }
+    },
+  );
+});
+
+it('treats explicit desktop surface as observed when LOCUS_CODEX_SURFACE=desktop', async () => {
+  const root = makeTempRoot();
+  const projectDir = join(root, 'ClaudeMagnificoMem');
+  const codexHome = join(root, 'codex-home');
+  const sessionsDir = join(codexHome, 'sessions', '2026', '05');
+  mkdirSync(projectDir, { recursive: true });
+  mkdirSync(sessionsDir, { recursive: true });
+  cpSync(join(trackDFixturesDir, 'desktop-marker.jsonl'), join(sessionsDir, 'desktop-marker.jsonl'));
+
+  await withEnv(
+    {
+      CODEX_HOME: codexHome,
+      LOCUS_CODEX_CAPTURE: 'redacted',
+      LOCUS_CAPTURE_LEVEL: 'redacted',
+      LOCUS_CODEX_SURFACE: 'desktop',
+    },
+    async () => {
+      const ctx = await createServer({ cwd: projectDir, dbPath: join(root, 'locus.db') });
+      try {
+        await callTextTool(ctx, 'memory_import_codex', {});
+
+        const status = JSON.parse(await callTextTool(ctx, 'memory_status', {})) as MemoryStatus;
+        expect(status.codexDiagnostics).toMatchObject({ clientSurface: 'desktop' });
+        expect(status.codexAutoImport?.clientSurface).toBe('desktop');
+        expect((status.codexAutoImport?.lastImported ?? 0) > 0).toBe(true);
+
+        const doctor = JSON.parse(await callTextTool(ctx, 'memory_doctor', {})) as DoctorReport;
+        expect(doctor.checks).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ name: 'Codex desktop parity', status: 'ok' }),
+          ]),
+        );
+      } finally {
+        ctx.cleanup();
+      }
+    },
+  );
+});
+```
+
+Add this helper to the same test file:
+
+```ts
+async function withEnv<T>(values: Record<string, string>, fn: () => Promise<T>): Promise<T> {
+  const previous = new Map<string, string | undefined>();
+  for (const key of Object.keys(values)) {
+    previous.set(key, process.env[key]);
+    process.env[key] = values[key];
+  }
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+```
+
+Run:
+
+```bash
+npm test -- packages/core/tests/integration/track-d-memory-reliability.test.ts
+```
+
+Expected: PASS after Tasks D1-D6.
+
+- [ ] **Step D7.3: Update Codex skill workflow**
+
+Modify `packages/codex/skills/locus-memory/SKILL.md`:
+
+- Add `memory_calendar` before broad period recall when the user asks about a period.
+- Add `memory_project_state` for "current state of project" questions.
+- State that period recall should report searched date buckets.
+- State that current-project recall should not mix other project memories unless the user asks for global recall.
+
+Run:
+
+```bash
+npm test -- packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts
+```
+
+Expected: PASS after tests are updated to assert the new instructions.
+
+- [ ] **Step D7.4: Update public docs and acceptance matrix**
+
+Modify:
+
+- `README.md`
+- `packages/codex/README.md`
+- `docs/codex-acceptance-matrix.md`
+- `docs/roadmap/codex-next.md`
+
+Required wording:
+
+- Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes.
+- `memory_calendar` is the recommended first tool for broad period questions.
+- `memory_recall` should show searched date buckets for date-scoped queries.
+- `memory_project_state` is the recommended current-state summary tool.
+- Update any MCP tool-count wording from the old value to the new count after adding `memory_calendar` and `memory_project_state`.
+
+Run:
+
+```bash
+rg -n "memory_calendar|memory_project_state|Codex Desktop|date bucket|project isolation" README.md packages/codex/README.md docs/codex-acceptance-matrix.md docs/roadmap/codex-next.md packages/codex/skills/locus-memory/SKILL.md
+```
+
+Expected: each file contains the relevant new guidance.
+
+- [ ] **Step D7.5: Commit acceptance and docs**
+
+Run:
+
+```bash
+git add packages/codex/tests/fixtures/track-d packages/core/tests/integration/track-d-memory-reliability.test.ts packages/codex/skills/locus-memory/SKILL.md packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts README.md packages/codex/README.md docs/codex-acceptance-matrix.md docs/roadmap/codex-next.md
+git commit -m "docs(codex): validate track d memory workflow"
+```
+
+---
+
+## Task D8: Final Validation Gate
+
+**Files:**
+- Modify only if validation reveals a concrete failing source or doc mismatch.
+
+- [ ] **Step D8.1: Run focused Track D test set**
+
+Run:
+
+```bash
+npm test -- packages/core/tests/recall packages/core/tests/tools/recall.test.ts packages/core/tests/tools/calendar.test.ts packages/core/tests/tools/project-state.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/integration/track-d-memory-reliability.test.ts packages/codex/tests
+```
+
+Expected: PASS.
+
+- [ ] **Step D8.2: Run full repository gate**
+
+Run:
+
+```bash
+npm run check
+```
+
+Expected: PASS.
+
+- [ ] **Step D8.3: Build generated runtime**
+
+Run:
+
+```bash
+npm run build
+```
+
+Expected: PASS, and `dist/` updates only if the build process writes generated files.
+
+- [ ] **Step D8.4: Run local MCP smoke in Codex Desktop**
+
+Before the Desktop smoke, record the Codex runtime version and MCP registration view:
+
+```bash
+codex --version
+codex mcp list
+codex mcp get locus
+```
+
+Expected: Codex is `0.135.0` or newer for the Track D compatibility smoke, and `locus` is registered as an MCP server. Do not assume a specific Codex-side prefixed tool naming mode; the Locus server-side tool names remain `memory_status`, `memory_calendar`, `memory_recall`, and `memory_project_state`.
+
+Manual smoke from a fresh Codex Desktop session in this repo:
+
+1. Ask Locus for `memory_status`.
+2. Ask Locus for `memory_calendar` with this month.
+3. Ask Locus `memory_recall`: `вспомни работу в этом месяце`.
+4. Ask Locus for `memory_project_state`.
+
+Expected:
+
+- `memory_status.codexDiagnostics.clientSurface` is `desktop` when `LOCUS_CODEX_SURFACE=desktop` is configured.
+- `memory_calendar` shows only this project buckets.
+- `memory_recall` includes searched date buckets.
+- `memory_project_state` returns repo/package state.
+- No ProxyVpn or unrelated project memory appears in current-project recall.
+
+- [ ] **Step D8.5: Record validation in roadmap and release notes draft**
+
+Modify `docs/roadmap/codex-next.md` to mark Track D local validation facts once they pass.
+
+If a release note exists for the next release, add a draft under `docs/releases/`.
+
+Run:
+
+```bash
+git diff --check
+git status --short
+```
+
+Expected: no whitespace errors; only intended docs/generated files remain.
+
+- [ ] **Step D8.6: Final commit**
+
+Run:
+
+```bash
+git add .
+git commit -m "chore(codex): validate track d memory reliability"
+```
+
+Expected: final validation commit. Do not push or tag without explicit user approval.
+
+---
+
+## Review Gates
+
+- [ ] Review this plan before Task D0 is executed.
+- [ ] Execute one task at a time.
+- [ ] Stop for user review after each commit.
+- [ ] Do not start HTML dashboard work until Track D is passing focused acceptance.
+- [ ] Do not claim Codex Desktop parity beyond the evidence recorded by Track D tests and the live Desktop smoke.
+
+## Validation Matrix
+
+Minimum final evidence:
+
+- [ ] `npm test -- packages/core/tests/recall`
+- [ ] `npm test -- packages/core/tests/tools/recall.test.ts`
+- [ ] `npm test -- packages/core/tests/tools/calendar.test.ts`
+- [ ] `npm test -- packages/core/tests/tools/project-state.test.ts`
+- [ ] `npm test -- packages/core/tests/tools/status.test.ts`
+- [ ] `npm test -- packages/core/tests/tools/doctor.test.ts`
+- [ ] `npm test -- packages/core/tests/tools/codex-diagnostics.test.ts`
+- [ ] `npm test -- packages/core/tests/integration/track-d-memory-reliability.test.ts`
+- [ ] `npm test -- packages/codex/tests`
+- [ ] `npm run check`
+- [ ] `npm run build`
+- [ ] Codex Desktop live MCP smoke
+
+## Self-Review
+
+Spec coverage:
+
+- Project isolation: Tasks D1 and D4.
+- Temporal/date-bucket recall: Tasks D2, D3, and D4.
+- Calendar discovery: Task D3.
+- Freshness/surface truth: Task D5.
+- Codex Desktop validation: Tasks D5 and D7.
+- Ranking v3: Task D4.
+- Project-state summary: Task D6.
+- Decision lifecycle/stale handling: Task D6.4a supersedes same-topic active `next_step` rows when later `validation_fact` evidence resolves them; broader stale cleanup remains review-only.
+- Evidence anchors: D4 candidate fields and D6 project-state output; deeper evidence formatting can extend after D4/D6 pass.
+- Docs and skill workflow: Task D7.
+
+Placeholder scan:
+
+- No forbidden placeholder markers are present.
+- Every implementation task lists exact files and concrete commands.
+
+Type consistency:
+
+- New project root metadata uses `projectRoot` in TypeScript and `project_root` in SQLite.
+- Date buckets use `MemoryDateBucket`.
+- Calendar tool returns `MemoryCalendarResult`.
+- Project state tool returns `MemoryProjectStateResult`.
