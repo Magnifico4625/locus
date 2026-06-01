@@ -77,11 +77,9 @@ Modify:
 - `packages/core/src/recall/candidate-loader.ts`
 - `packages/core/src/recall/scoring.ts`
 - `packages/core/src/recall/result-builder.ts`
-- `packages/core/src/recall/grouping.ts`
 - `packages/core/src/tools/recall.ts`
 - `packages/core/src/tools/search.ts`
 - `packages/core/src/tools/timeline.ts`
-- `packages/core/src/tools/auto-import-codex.ts`
 - `packages/core/src/tools/codex-diagnostics.ts`
 - `packages/core/src/tools/status.ts`
 - `packages/core/src/tools/doctor.ts`
@@ -93,7 +91,6 @@ Modify:
 - `packages/core/tests/tools/status.test.ts`
 - `packages/core/tests/tools/doctor.test.ts`
 - `packages/core/tests/tools/codex-diagnostics.test.ts`
-- `packages/core/tests/tools/auto-import-codex.test.ts`
 - `packages/core/tests/storage/migrations.test.ts`
 - `packages/core/tests/ingest/pipeline-store.test.ts`
 - `packages/core/tests/tools/search.test.ts`
@@ -327,6 +324,13 @@ npm test -- packages/core/tests/storage/migrations.test.ts
 Expected: FAIL because the new columns/indexes do not exist.
 
 - [ ] **Step D1.4: Add migration v4 for project metadata and indexes**
+
+Current schema facts before this migration:
+
+- `conversation_events.project_root` already exists in migration V2 and must not be added again.
+- `memories.project_root` does not exist in migration V1 and must be added defensively.
+- `durable_memories.project_root` does not exist in migration V3 and must be added defensively.
+- `columnExists` guards are required so fresh databases, upgraded databases, and partially migrated local databases all survive V4.
 
 Modify `packages/core/src/storage/migrations.ts`:
 
@@ -979,6 +983,59 @@ export function parseRecallTemporalRange(
 
 Modify `parseRecallQuery` and `runRecallEngine` to pass the same mode used by MCP recall. Keep existing UTC tests by passing `{ mode: 'utc' }`.
 
+Modify `packages/core/src/recall/query-parser.ts`:
+
+```ts
+export interface ParseRecallQueryOptions {
+  temporalMode?: 'local' | 'utc';
+}
+
+export function parseRecallQuery(
+  question: string,
+  now: number,
+  options?: ParseRecallQueryOptions,
+): ParsedRecallQuery {
+  const normalized = normalizeQuestion(question);
+  const normalizedTerms = normalized.length > 0 ? normalized.split(' ') : [];
+  const terms = normalizedTerms.filter((term) => term.length >= 2 && !STOP_WORDS.has(term));
+  const termVariants = unique(terms.map(stemLite));
+  const temporalRange = parseRecallTemporalRange(question, now, {
+    mode: options?.temporalMode ?? 'local',
+  });
+
+  return {
+    original: question,
+    normalized,
+    normalizedTerms,
+    terms,
+    termVariants,
+    intent: detectIntent(normalized),
+    ...(temporalRange ? { temporalRange } : {}),
+    topicHints: detectTopicHints(normalized),
+  };
+}
+```
+
+Modify `packages/core/src/recall/engine.ts`:
+
+```ts
+export interface RecallEngineOptions {
+  timeRange?: TimeRange;
+  limit?: number;
+  now?: number;
+  temporalMode?: 'local' | 'utc';
+}
+
+const temporalMode = options?.temporalMode ?? 'local';
+const parsedQuery = parseRecallQuery(question, now, { temporalMode });
+```
+
+Pass `temporalMode` into `buildResolvedRange` so explicit MCP `timeRange` and natural-language temporal parsing use the same boundary policy:
+
+```ts
+const resolved = resolveTimeRange(timeRange, now, temporalMode);
+```
+
 Modify `packages/core/src/recall/calendar.ts` so bucket helpers accept the same mode:
 
 ```ts
@@ -993,13 +1050,47 @@ export function monthBucket(timestamp: number, options?: DateBucketOptions): Dat
 
 Update `handleCalendar` and `buildBucketsForCandidates` to pass `{ mode: 'local' }` for MCP calls. Unit tests that assert exact UTC boundaries pass `{ mode: 'utc' }`.
 
+Update `packages/core/tests/recall/query-parser.test.ts`:
+
+```ts
+it('passes UTC temporal mode through query parsing for deterministic tests', () => {
+  const parsed = parseRecallQuery('what happened this month?', Date.parse('2026-05-30T12:00:00.000Z'), {
+    temporalMode: 'utc',
+  });
+
+  expect(parsed.temporalRange).toMatchObject({
+    fromIso: '2026-05-01T00:00:00.000Z',
+    toIso: '2026-06-01T00:00:00.000Z',
+  });
+});
+```
+
 Run:
 
 ```bash
-npm test -- packages/core/tests/recall/temporal-parser.test.ts packages/core/tests/tools/search.test.ts packages/core/tests/tools/timeline.test.ts packages/core/tests/tools/recall.test.ts
+npm test -- packages/core/tests/recall/temporal-parser.test.ts packages/core/tests/recall/query-parser.test.ts packages/core/tests/tools/search.test.ts packages/core/tests/tools/timeline.test.ts packages/core/tests/tools/recall.test.ts
 ```
 
 Expected: PASS and no mismatch between recall/search/timeline date boundaries.
+
+- [ ] **Step D2.5b: Update recall barrel exports**
+
+Modify `packages/core/src/recall/index.ts` so downstream tests and tools can import the new temporal and calendar contracts without reaching into private files:
+
+```ts
+export type { DateBucketOptions, DateBucketRange } from './calendar.js';
+export { dayBucket, monthBucket, weekBucket } from './calendar.js';
+export type { ParseRecallQueryOptions } from './query-parser.js';
+export type { RecallTemporalParseOptions } from './temporal-parser.js';
+```
+
+Run:
+
+```bash
+npm -w @locus/core run typecheck
+```
+
+Expected: PASS.
 
 - [ ] **Step D2.6: Commit temporal bucket support**
 
@@ -1228,7 +1319,6 @@ git commit -m "feat(core): expose memory calendar"
 - Modify: `packages/core/src/recall/engine.ts`
 - Modify: `packages/core/src/recall/candidate-loader.ts`
 - Modify: `packages/core/src/recall/scoring.ts`
-- Modify: `packages/core/src/recall/grouping.ts`
 - Modify: `packages/core/src/recall/result-builder.ts`
 - Modify: `packages/core/src/tools/recall.ts`
 - Modify: `packages/core/src/tools/search.ts`
@@ -1399,6 +1489,7 @@ Modify `packages/core/src/recall/candidate-loader.ts`:
   - `memories.project_root`
 - Default strict behavior: if `projectRoot` is present, do not include other projects.
 - Include legacy `NULL` project rows only for semantic memories as a second pass when strict project-scoped semantic search returns zero rows and the query has exact term overlap.
+- Keep `loadSemanticCandidates` private in `candidate-loader.ts`; implement fallback inside `loadRecallCandidates` so no private helper has to be exported.
 
 Expected SQL addition for conversations:
 
@@ -1410,24 +1501,121 @@ if (projectRoot) {
 }
 ```
 
-Expected semantic fallback shape:
+Add private semantic loader options and exact-overlap helpers:
 
 ```ts
-const strictSemantic = loadSemanticCandidates({
-  query,
-  projectRoot,
-  includeLegacyGlobal: false,
-});
+interface SemanticCandidateLoaderOptions extends CandidateLoaderOptions {
+  includeLegacyGlobal?: boolean;
+  requireExactTermOverlap?: boolean;
+}
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function hasExactTermOverlap(content: string, terms: readonly string[]): boolean {
+  const normalized = content.toLowerCase();
+  return terms.some((term) => {
+    const escaped = escapeRegExp(term.toLowerCase());
+    return new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}([^\\p{L}\\p{N}_-]|$)`, 'u').test(
+      normalized,
+    );
+  });
+}
+```
+
+Change the private semantic loader signature:
+
+```ts
+function loadSemanticCandidates(options: SemanticCandidateLoaderOptions): MemoryRecallCandidate[]
+```
+
+Extend the semantic row type and SELECT:
+
+```ts
+interface SemanticRecallRow {
+  id: number;
+  content: string;
+  updated_at: number;
+  project_root: string | null;
+}
+
+`SELECT id, content, updated_at, project_root
+ FROM memories
+ WHERE ${clauses.join(' AND ')}
+ ORDER BY updated_at DESC, id DESC
+ LIMIT ?`
+```
+
+Inside `loadSemanticCandidates`, apply project scope before the term clauses:
+
+```ts
+if (options.projectRoot) {
+  const scope = buildProjectScopeClause('project_root', options.projectRoot, {
+    includeLegacyGlobal: options.includeLegacyGlobal,
+  });
+  clauses.push(scope.clause);
+  params.push(...scope.params);
+}
+```
+
+After mapping rows, apply exact-overlap filtering only for the legacy fallback path:
+
+```ts
+const candidates = rows
+  .map((row) => ({
+    projectRoot: row.project_root ?? undefined,
+    headline: row.content,
+    whyMatched: row.project_root ? `explicit semantic memory ${row.id}` : `legacy semantic memory ${row.id}`,
+    eventIds: [],
+    durableMemoryIds: [],
+    intent: options.parsedQuery.intent,
+    matchedTerms: matchingTerms(row.content, options.parsedQuery.termVariants),
+    sourceKind: 'semantic' as const,
+    timestamp: row.updated_at,
+    ...candidateDateFields(row.updated_at),
+  }))
+  .filter((candidate) => candidate.matchedTerms.length > 0);
+
+return options.requireExactTermOverlap
+  ? candidates.filter((candidate) => hasExactTermOverlap(candidate.headline, options.parsedQuery.terms))
+  : candidates;
+```
+
+Implement the fallback directly in `loadRecallCandidates`:
+
+```ts
+const durableCandidates = loadDurableCandidates(options);
+const strictSemanticCandidates = loadSemanticCandidates(options);
 const semanticCandidates =
-  strictSemantic.length > 0
-    ? strictSemantic
-    : loadSemanticCandidates({
-        query,
-        projectRoot,
+  options.projectRoot && strictSemanticCandidates.length === 0
+    ? loadSemanticCandidates({
+        ...options,
         includeLegacyGlobal: true,
         requireExactTermOverlap: true,
-      });
+      })
+    : strictSemanticCandidates;
+const conversationCandidates = loadConversationCandidates(options);
+
+return [...durableCandidates, ...semanticCandidates, ...conversationCandidates];
+```
+
+Add date fields when mapping durable, semantic, and conversation candidates:
+
+```ts
+function candidateDateFields(timestamp: number | undefined): Pick<MemoryRecallCandidate, 'localDate' | 'monthKey'> {
+  if (timestamp === undefined) {
+    return {};
+  }
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return {
+    localDate: `${year}-${month}-${day}`,
+    monthKey: `${year}-${month}`,
+  };
+}
 ```
 
 Add tests:
@@ -1551,13 +1739,102 @@ searchedDateBuckets?: MemoryDateBucket[];
 Modify `runRecallEngine` to build buckets from matched candidates when `resolvedRange` exists:
 
 ```ts
-const searchedDateBuckets = buildBucketsForCandidates(scoredCandidates, resolvedRange);
+const searchedDateBuckets = resolvedRange
+  ? buildBucketsForCandidates(scoredCandidates, resolvedRange)
+  : undefined;
 ```
 
 Implementation rule:
 
 - A period query with no candidates still returns an empty `searchedDateBuckets: []`.
 - A period query with candidates groups by `localDate`.
+
+Add this helper to `packages/core/src/recall/engine.ts`:
+
+```ts
+import { dayBucket } from './calendar.js';
+import type { MemoryDateBucket, MemoryRecallCandidate, MemoryRecallResolvedRange } from '../types.js';
+
+interface BucketAccumulator {
+  key: string;
+  label: string;
+  from: number;
+  to: number;
+  eventCount: number;
+  durableCount: number;
+  sessionIds: Set<string>;
+  topicKeys: Set<string>;
+}
+
+function buildBucketsForCandidates(
+  candidates: readonly MemoryRecallCandidate[],
+  resolvedRange: MemoryRecallResolvedRange,
+): MemoryDateBucket[] {
+  const buckets = new Map<string, BucketAccumulator>();
+
+  for (const candidate of candidates) {
+    if (candidate.timestamp === undefined) {
+      continue;
+    }
+    if (candidate.timestamp < resolvedRange.from || candidate.timestamp > resolvedRange.to) {
+      continue;
+    }
+
+    const day = dayBucket(candidate.timestamp, { mode: 'local' });
+    const key = candidate.localDate ?? day.key;
+    const bucket =
+      buckets.get(key) ??
+      {
+        key,
+        label: key,
+        from: day.from,
+        to: day.to,
+        eventCount: 0,
+        durableCount: 0,
+        sessionIds: new Set<string>(),
+        topicKeys: new Set<string>(),
+      };
+
+    bucket.eventCount += candidate.eventIds.length;
+    bucket.durableCount += candidate.durableMemoryIds.length;
+    if (candidate.sessionId) {
+      bucket.sessionIds.add(candidate.sessionId);
+    }
+    if (candidate.topicKey) {
+      bucket.topicKeys.add(candidate.topicKey);
+    }
+    buckets.set(key, bucket);
+  }
+
+  return [...buckets.values()]
+    .sort((left, right) => left.from - right.from)
+    .map((bucket) => ({
+      key: bucket.key,
+      label: bucket.label,
+      from: bucket.from,
+      to: bucket.to,
+      eventCount: bucket.eventCount,
+      sessionCount: bucket.sessionIds.size,
+      durableCount: bucket.durableCount,
+      topicKeys: [...bucket.topicKeys].sort(),
+    }));
+}
+```
+
+Update `BuildRecallResultOptions` and every return branch in `buildRecallResult` to include `searchedDateBuckets` when defined:
+
+```ts
+export interface BuildRecallResultOptions {
+  question: string;
+  candidates: MemoryRecallCandidate[];
+  resolvedRange?: MemoryRecallResolvedRange;
+  searchedDateBuckets?: MemoryDateBucket[];
+  matchedIntent?: MemoryRecallIntent;
+  matchedTopics?: string[];
+}
+```
+
+Call `buildRecallResult` with `searchedDateBuckets` from `runRecallEngine`.
 
 Run:
 
@@ -1597,6 +1874,43 @@ export function filterProjectCandidates(
 ```
 
 `filterProjectCandidates` keeps candidates with no `projectRoot` for legacy fallback scoring, keeps current-project matches, and drops explicit other-project candidates before score calculation.
+
+Implement it in `packages/core/src/recall/scoring.ts`:
+
+```ts
+import { isSameProjectRoot } from './project-scope.js';
+
+export function filterProjectCandidates(
+  candidates: MemoryRecallCandidate[],
+  projectRoot?: string,
+): MemoryRecallCandidate[] {
+  if (!projectRoot) {
+    return candidates;
+  }
+  return candidates.filter(
+    (candidate) => !candidate.projectRoot || isSameProjectRoot(candidate.projectRoot, projectRoot),
+  );
+}
+```
+
+Modify `packages/core/src/recall/engine.ts` so filtering happens before scoring:
+
+```ts
+const loadedCandidates = loadRecallCandidates({
+  db: deps.db,
+  parsedQuery,
+  timeRange,
+  now,
+  limit,
+  projectRoot: deps.projectRoot,
+});
+const candidates = filterProjectCandidates(loadedCandidates, deps.projectRoot);
+const scoredCandidates = scoreRecallCandidates(candidates, parsedQuery, {
+  now,
+  projectRoot: deps.projectRoot,
+  resolvedRange: resolvedRange ? { from: resolvedRange.from, to: resolvedRange.to } : undefined,
+}).slice(0, limit);
+```
 
 Run:
 
@@ -1641,7 +1955,7 @@ it('drops explicit other-project candidates before scoring', () => {
 Run:
 
 ```bash
-git add packages/core/src/types.ts packages/core/src/recall/engine.ts packages/core/src/recall/candidate-loader.ts packages/core/src/recall/scoring.ts packages/core/src/recall/result-builder.ts packages/core/src/recall/grouping.ts packages/core/src/tools/recall.ts packages/core/src/tools/search.ts packages/core/src/tools/timeline.ts packages/core/src/server.ts packages/core/tests/tools/recall.test.ts packages/core/tests/tools/search-project-scope.test.ts packages/core/tests/tools/timeline-project-scope.test.ts packages/core/tests/recall/scoring.test.ts packages/core/tests/integration/track-d-memory-reliability.test.ts
+git add packages/core/src/types.ts packages/core/src/recall/engine.ts packages/core/src/recall/candidate-loader.ts packages/core/src/recall/scoring.ts packages/core/src/recall/result-builder.ts packages/core/src/tools/recall.ts packages/core/src/tools/search.ts packages/core/src/tools/timeline.ts packages/core/src/server.ts packages/core/tests/tools/recall.test.ts packages/core/tests/tools/search-project-scope.test.ts packages/core/tests/tools/timeline-project-scope.test.ts packages/core/tests/recall/scoring.test.ts packages/core/tests/integration/track-d-memory-reliability.test.ts
 git commit -m "feat(core): scope recall to current project"
 ```
 
@@ -1651,13 +1965,11 @@ git commit -m "feat(core): scope recall to current project"
 
 **Files:**
 - Modify: `packages/core/src/types.ts`
-- Modify: `packages/core/src/tools/auto-import-codex.ts`
 - Modify: `packages/core/src/tools/codex-diagnostics.ts`
 - Modify: `packages/core/src/tools/status.ts`
 - Modify: `packages/core/src/tools/doctor.ts`
 - Modify: `packages/shared-runtime/detect-client.js`
 - Modify: `packages/shared-runtime/detect-client.d.ts`
-- Test: `packages/core/tests/tools/auto-import-codex.test.ts`
 - Test: `packages/core/tests/tools/codex-diagnostics.test.ts`
 - Test: `packages/core/tests/tools/status.test.ts`
 - Test: `packages/core/tests/tools/doctor.test.ts`
@@ -1744,6 +2056,7 @@ export interface CodexFreshnessSnapshot {
   latestRolloutTimestamp?: number;
   latestImportedTimestamp?: number;
   importedEventCount: number;
+  freshnessThresholdMs: number;
   fresh: boolean;
   lagMs?: number;
   message: string;
@@ -1762,12 +2075,85 @@ npm -w @locus/core run typecheck
 
 Expected: PASS after consumers are updated.
 
-- [ ] **Step D5.4: Build freshness from diagnostics and auto-import snapshot**
+- [ ] **Step D5.4: Build freshness from diagnostics and imported event timestamps**
 
-Modify `packages/core/src/tools/codex-diagnostics.ts` to compute `latestRolloutTimestamp` from the newest rollout file mtime or latest parsed event timestamp. Prefer mtime first for a cheap implementation:
+Modify `packages/core/src/tools/codex-diagnostics.ts` to compute `latestRolloutTimestamp` from the newest rollout file's newest JSONL event timestamp, with file mtime only as a fallback when no parseable timestamp exists.
 
 ```ts
-const latestRolloutTimestamp = latestRolloutPath ? statSync(latestRolloutPath).mtimeMs : undefined;
+import { readFileSync, statSync } from 'node:fs';
+import { parseCodexJsonl } from '@locus/codex';
+
+function timestampFromValue(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
+}
+
+function latestCodexRolloutEventTimestamp(filePath: string): number | undefined {
+  const parsed = parseCodexJsonl(readFileSync(filePath, 'utf8'), filePath);
+  const timestamps = parsed.records
+    .map((record) => timestampFromValue(record.raw.timestamp))
+    .filter((timestamp): timestamp is number => timestamp !== undefined);
+  return timestamps.length > 0 ? Math.max(...timestamps) : undefined;
+}
+
+const latestRolloutTimestamp = latestRolloutPath
+  ? (latestCodexRolloutEventTimestamp(latestRolloutPath) ?? statSync(latestRolloutPath).mtimeMs)
+  : undefined;
+```
+
+Extend `CodexDiagnosticsSnapshot` with `latestRolloutTimestamp?: number`.
+
+Add tests in `packages/core/tests/tools/codex-diagnostics.test.ts`:
+
+```ts
+it('uses the newest rollout event timestamp before file mtime for freshness', () => {
+  const codexHome = join(dir, 'codex-home');
+  const sessionsDir = join(codexHome, 'sessions', '2026', '05');
+  mkdirSync(sessionsDir, { recursive: true });
+  const rolloutPath = join(sessionsDir, 'rollout-track-d-freshness.jsonl');
+  const eventTimestamp = Date.parse('2026-05-30T10:00:00.000Z');
+  writeFileSync(
+    rolloutPath,
+    [
+      JSON.stringify({
+        type: 'session_meta',
+        timestamp: '2026-05-30T10:00:00.000Z',
+        session_id: 'sess-track-d-freshness',
+        cwd: 'C:\\Projects\\Locus',
+        model: 'gpt-5.4',
+      }),
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+  const newerMtime = new Date('2026-05-30T11:00:00.000Z');
+  utimesSync(rolloutPath, newerMtime, newerMtime);
+
+  const diagnostics = collectCodexDiagnostics({
+    db,
+    env: { CODEX_HOME: codexHome },
+  });
+
+  expect(diagnostics?.latestRolloutTimestamp).toBe(eventTimestamp);
+});
+```
+
+Use a configurable threshold in `packages/core/src/tools/status.ts`:
+
+```ts
+const DEFAULT_CODEX_FRESHNESS_THRESHOLD_MS = 5 * 60 * 1000;
+
+function codexFreshnessThresholdMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.LOCUS_CODEX_FRESHNESS_THRESHOLD_MS;
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CODEX_FRESHNESS_THRESHOLD_MS;
+}
 ```
 
 Modify `packages/core/src/tools/status.ts`:
@@ -1776,6 +2162,7 @@ Modify `packages/core/src/tools/status.ts`:
 function buildCodexFreshness(
   diagnostics: CodexDiagnosticsSnapshot | undefined,
   checkedAt: number,
+  freshnessThresholdMs = codexFreshnessThresholdMs(),
 ): CodexFreshnessSnapshot | undefined {
   if (!diagnostics) return undefined;
   const latestRolloutTimestamp = diagnostics.latestRolloutTimestamp;
@@ -1784,7 +2171,8 @@ function buildCodexFreshness(
     latestRolloutTimestamp !== undefined && latestImportedTimestamp !== undefined
       ? Math.max(0, latestRolloutTimestamp - latestImportedTimestamp)
       : undefined;
-  const fresh = lagMs !== undefined ? lagMs <= 60_000 : diagnostics.importedEventCount > 0;
+  const fresh =
+    lagMs !== undefined ? lagMs <= freshnessThresholdMs : diagnostics.importedEventCount > 0;
   return {
     checkedAt,
     client: diagnostics.client,
@@ -1793,6 +2181,7 @@ function buildCodexFreshness(
     latestRolloutTimestamp,
     latestImportedTimestamp,
     importedEventCount: diagnostics.importedEventCount,
+    freshnessThresholdMs,
     fresh,
     lagMs,
     message: fresh ? 'Codex import appears fresh.' : 'Codex import may be stale.',
@@ -1829,7 +2218,7 @@ Expected: PASS.
 Run:
 
 ```bash
-git add packages/core/src/types.ts packages/core/src/tools/auto-import-codex.ts packages/core/src/tools/codex-diagnostics.ts packages/core/src/tools/status.ts packages/core/src/tools/doctor.ts packages/shared-runtime/detect-client.js packages/shared-runtime/detect-client.d.ts packages/core/tests/tools/auto-import-codex.test.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/shared-runtime/detect-client.test.ts
+git add packages/core/src/types.ts packages/core/src/tools/codex-diagnostics.ts packages/core/src/tools/status.ts packages/core/src/tools/doctor.ts packages/shared-runtime/detect-client.js packages/shared-runtime/detect-client.d.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/shared-runtime/detect-client.test.ts
 git commit -m "feat(codex): report freshness and desktop surface"
 ```
 
@@ -2001,24 +2390,32 @@ export interface ProjectStateDeps {
   readGitState?: (cwd: string) => ProjectGitState;
 }
 
+const GIT_STATE_CACHE_MS = 5_000;
+let gitStateCache: { cwd: string; checkedAt: number; state: ProjectGitState } | undefined;
+
+function gitOutput(cwd: string, args: string[]): string {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+    timeout: 750,
+  }).trim();
+}
+
 function readGitState(cwd: string): ProjectGitState {
+  const now = Date.now();
+  if (gitStateCache && gitStateCache.cwd === cwd && now - gitStateCache.checkedAt < GIT_STATE_CACHE_MS) {
+    return gitStateCache.state;
+  }
+
   try {
-    const gitHead = execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-    const gitBranch = execFileSync('git', ['branch', '--show-current'], {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-    const status = execFileSync('git', ['status', '--porcelain'], {
-      cwd,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-    }).trim();
-    return { gitHead, gitBranch, dirty: status.length > 0 };
+    const state = {
+      gitHead: gitOutput(cwd, ['rev-parse', '--short', 'HEAD']),
+      gitBranch: gitOutput(cwd, ['branch', '--show-current']),
+      dirty: gitOutput(cwd, ['status', '--porcelain']).length > 0,
+    };
+    gitStateCache = { cwd, checkedAt: now, state };
+    return state;
   } catch {
     return {};
   }
