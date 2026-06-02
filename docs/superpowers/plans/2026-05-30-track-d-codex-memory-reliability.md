@@ -4,7 +4,7 @@
 
 **Goal:** Make Locus reliable enough for Codex Desktop and CLI agents to use as their default project-memory source by adding strict project isolation, temporal/date-bucket recall, freshness/surface truth, stronger ranking, project-state summaries, and acceptance coverage.
 
-**Architecture:** Keep the existing Track C recall engine shape and extend it instead of replacing it. Add project/date metadata at the storage boundary, feed that metadata into candidate loading and scoring, expose calendar and project-state tools, and make status/doctor tell one consistent freshness story for Codex Desktop and CLI.
+**Architecture:** Keep the existing Track C recall engine shape and extend it instead of replacing it. Add project/date metadata at the storage boundary, feed that metadata into candidate loading and scoring, expose calendar and project-state tools, and make status/doctor tell one consistent freshness story for Codex Desktop and CLI. Canonical project identity is the resolved Locus `projectRoot` (git root when available) plus the existing shared-runtime `projectHash`; raw Codex `cwd` values are normalized before they are compared or stored.
 
 **Tech Stack:** TypeScript, Node.js 22+, Vitest, existing `DatabaseAdapter`, SQLite migrations, existing MCP server registration, existing Codex JSONL importer, no new runtime dependency.
 
@@ -24,6 +24,8 @@
 In scope:
 
 - Project-scoped recall by default for current `projectRoot`.
+- Canonical project scope based on the resolved server root: git root when `resolveProjectRoot` finds one, marker root when it does not, and cwd fallback only as a last resort.
+- Codex JSONL `cwd` values that point at a subdirectory inside the current resolved project are stored under the canonical current project root so monorepos do not fragment memory by package folder.
 - Event-date based temporal recall for day/week/month questions.
 - A calendar-style memory discovery tool.
 - `memory_recall` result metadata showing resolved range and searched date buckets.
@@ -32,6 +34,7 @@ In scope:
 - Project-state summary and verification tool.
 - Acceptance tests proving unrelated project memory is not returned.
 - Docs and skill sync for the new workflow.
+- Project hash visibility in project-state/status output where it helps agents verify they are looking at the same project identity.
 
 Out of scope:
 
@@ -41,6 +44,7 @@ Out of scope:
 - Rewriting Claude Code hooks.
 - HTML dashboard implementation.
 - Secondary IDE passive capture adapters.
+- User-configurable topic namespace filters. Track D keeps topic keys project-scoped by `projectRoot`; a separate topic-namespace filter dimension is a follow-up unless tests prove it is required for isolation.
 
 ## File Structure
 
@@ -65,6 +69,7 @@ Modify:
 
 - `packages/core/src/types.ts`
 - `packages/core/src/storage/migrations.ts`
+- `packages/core/src/ingest/pipeline.ts`
 - `packages/core/src/memory/semantic.ts`
 - `packages/core/src/tools/remember.ts`
 - `packages/core/src/memory/durable.ts`
@@ -72,6 +77,7 @@ Modify:
 - `packages/core/src/memory/durable-merge.ts`
 - `packages/core/src/memory/topic-key-registry.ts`
 - `packages/core/src/recall/index.ts`
+- `packages/core/src/recall/engine.ts`
 - `packages/core/src/recall/temporal-parser.ts`
 - `packages/core/src/recall/query-parser.ts`
 - `packages/core/src/recall/candidate-loader.ts`
@@ -84,8 +90,15 @@ Modify:
 - `packages/core/src/tools/status.ts`
 - `packages/core/src/tools/doctor.ts`
 - `packages/core/src/server.ts`
+- `packages/codex/src/importer.ts`
 - `packages/shared-runtime/detect-client.js`
 - `packages/shared-runtime/detect-client.d.ts`
+- `package.json`
+- `package-lock.json`
+- `packages/core/package.json`
+- `packages/codex/package.json`
+- `packages/cli/package.json`
+- `packages/shared-runtime/package.json`
 - `packages/core/tests/shared-runtime/detect-client.test.ts`
 - `packages/core/tests/tools/recall.test.ts`
 - `packages/core/tests/tools/status.test.ts`
@@ -95,8 +108,10 @@ Modify:
 - `packages/core/tests/ingest/pipeline-store.test.ts`
 - `packages/core/tests/tools/search.test.ts`
 - `packages/core/tests/tools/timeline.test.ts`
+- `packages/core/tests/memory/durable.test.ts`
 - `packages/core/tests/memory/durable-merge.test.ts`
 - `packages/core/tests/memory/durable-runner.test.ts`
+- `packages/core/tests/memory/topic-key-registry.test.ts`
 - `packages/core/tests/recall/temporal-parser.test.ts`
 - `packages/core/tests/recall/query-parser.test.ts`
 - `packages/core/tests/recall/scoring.test.ts`
@@ -384,6 +399,8 @@ function migrationV4(db: DatabaseAdapter): void {
 }
 ```
 
+Performance note: this row-by-row normalization is acceptable for the expected local SQLite/SQL.js database size, but wrap the V4 body in the repository's existing migration transaction pattern if one exists. If an implementation benchmark shows large `conversation_events` tables are slow, switch `normalizeStoredProjectRoots` to batched updates before merging D1.
+
 In `runMigrations`, add:
 
 ```ts
@@ -402,13 +419,54 @@ Expected: PASS.
 
 - [ ] **Step D1.4a: Normalize project root at ingestion**
 
-Modify `packages/core/src/ingest/pipeline.ts` so stored `conversation_events.project_root` always uses `normalizeProjectRootForScope(event.project_root)`:
+Modify `packages/core/src/ingest/pipeline.ts` so stored `conversation_events.project_root` always uses the canonical project identity when the server knows it, and otherwise falls back to `normalizeProjectRootForScope(event.project_root)`.
+
+Extend options:
 
 ```ts
-const projectRoot = normalizeProjectRootForScope(event.project_root);
+export interface ProcessInboxOptions {
+  batchLimit?: number;
+  captureLevel?: CaptureLevel;
+  fts5Available?: boolean;
+  projectRoot?: string;
+}
+```
+
+Add a helper that treats subdirectories under the resolved root as the same project. This prevents Codex sessions started from `packages/core` from being stored under a different scope than a server whose resolved root is the repo git root:
+
+```ts
+function canonicalStoredProjectRoot(eventProjectRoot: string, currentProjectRoot?: string): string {
+  const eventRoot = normalizeProjectRootForScope(eventProjectRoot);
+  if (!currentProjectRoot) {
+    return eventRoot;
+  }
+
+  const currentRoot = normalizeProjectRootForScope(currentProjectRoot);
+  if (eventRoot === currentRoot || eventRoot.startsWith(`${currentRoot}/`)) {
+    return currentRoot;
+  }
+  return eventRoot;
+}
+```
+
+Use it before the insert:
+
+```ts
+const projectRoot = canonicalStoredProjectRoot(event.project_root, options?.projectRoot);
 ```
 
 Use `projectRoot` in the conversation insert instead of `event.project_root`.
+
+Update `packages/core/src/server.ts` so every `processInbox` call passes the resolved server root:
+
+```ts
+processInbox(inboxDir, db, {
+  batchLimit: 50,
+  captureLevel: config.captureLevel,
+  fts5Available: fts5,
+  projectRoot: root,
+});
+```
 
 Add/extend `packages/core/tests/ingest/pipeline-store.test.ts`:
 
@@ -427,6 +485,25 @@ it('normalizes project_root before storing conversation events', async () => {
   );
   expect(row?.project_root).toBe('c:/users/admin/project');
 });
+
+it('stores a subdirectory Codex cwd under the current project root', async () => {
+  const event = makeValidEvent({
+    event_id: 'evt-project-subdir',
+    project_root: 'C:\\Users\\Admin\\Project\\packages\\core',
+  });
+  writeInboxEvent(inboxDir, event);
+  processInbox(inboxDir, adapter, {
+    captureLevel: 'redacted',
+    fts5Available: true,
+    projectRoot: 'C:\\Users\\Admin\\Project',
+  });
+
+  const row = adapter.get<{ project_root: string }>(
+    'SELECT project_root FROM conversation_events WHERE event_id = ?',
+    ['evt-project-subdir'],
+  );
+  expect(row?.project_root).toBe('c:/users/admin/project');
+});
 ```
 
 Run:
@@ -439,19 +516,35 @@ Expected: PASS.
 
 - [ ] **Step D1.4b: Normalize Codex importer project filters**
 
-Codex 0.135 resume and app-server flows can preserve or override `cwd` across resumed threads. The importer must compare equivalent project roots by identity, not raw string form, before it decides to drop events.
+Codex 0.135 resume and app-server flows can preserve or override `cwd` across resumed threads. The importer must compare equivalent project roots by identity, not raw string form, before it decides to drop events. It must also accept events whose raw Codex `cwd` is a subdirectory of the current resolved project root, then canonicalize those imported events to the current root.
 
 Modify `packages/codex/src/importer.ts`:
 
 ```ts
 import { normalizePathForIdentity } from '@locus/shared-runtime';
 
-function sameProjectRoot(left: string, right: string): boolean {
-  return normalizePathForIdentity(left) === normalizePathForIdentity(right);
+function normalizedProjectRoot(value: string): string {
+  return normalizePathForIdentity(value);
+}
+
+function sameOrInsideProjectRoot(eventRootValue: string, requestedRootValue: string): boolean {
+  const eventRoot = normalizedProjectRoot(eventRootValue);
+  const requestedRoot = normalizedProjectRoot(requestedRootValue);
+  return eventRoot === requestedRoot || eventRoot.startsWith(`${requestedRoot}/`);
+}
+
+function canonicalImportProjectRoot(eventRoot: string, requestedRoot?: string): string {
+  if (requestedRoot && sameOrInsideProjectRoot(eventRoot, requestedRoot)) {
+    return normalizedProjectRoot(requestedRoot);
+  }
+  return normalizedProjectRoot(eventRoot);
 }
 
 function matchesFilters(event: CodexNormalizedEvent, options: CodexImportOptions): boolean {
-  if (options.projectRoot !== undefined && !sameProjectRoot(event.projectRoot, options.projectRoot)) {
+  if (
+    options.projectRoot !== undefined &&
+    !sameOrInsideProjectRoot(event.projectRoot, options.projectRoot)
+  ) {
     return false;
   }
 
@@ -465,6 +558,13 @@ function matchesFilters(event: CodexNormalizedEvent, options: CodexImportOptions
 
   return true;
 }
+
+const filteredEvents = normalized.events
+  .filter((event) => matchesFilters(event, options))
+  .map((event) => ({
+    ...event,
+    projectRoot: canonicalImportProjectRoot(event.projectRoot, options.projectRoot),
+  }));
 ```
 
 Extend `packages/codex/tests/importer.test.ts`:
@@ -485,7 +585,26 @@ it('filters projectRoot with normalized path identity', () => {
     projectRoot: 'c:/projects/sampleapp',
   });
 
-  expect(metrics.imported).toBeGreaterThan(0);
+  expect(metrics.written).toBeGreaterThan(0);
+});
+
+it('accepts a Codex cwd inside the requested project root and stores the canonical root', () => {
+  const sessionsDir = join(root, 'sessions');
+  mkdirSync(sessionsDir, { recursive: true });
+  writeRollout(sessionsDir, 'rollout-subdir-project.jsonl', [
+    '{"type":"session_meta","timestamp":"2026-05-30T10:00:00.000Z","session_id":"sess-subdir","cwd":"C:\\\\Projects\\\\SampleApp\\\\packages\\\\core","model":"gpt-5.4"}',
+    '{"type":"event_msg","timestamp":"2026-05-30T10:01:00.000Z","subtype":"user_message","message":"TRACKD-SUBDIR-PROJECT"}',
+  ]);
+
+  const metrics = importCodexSessionsToInbox({
+    sessionsDir,
+    inboxDir,
+    captureMode: 'redacted',
+    projectRoot: 'c:/projects/sampleapp',
+  });
+
+  expect(metrics.written).toBeGreaterThan(0);
+  // Read the written inbox event and assert project_root is c:/projects/sampleapp.
 });
 ```
 
@@ -624,6 +743,25 @@ Expected: PASS after expected fixture updates.
 - [ ] **Step D1.8: Attach durable memory project root from source events**
 
 Modify `packages/core/src/memory/durable-runner.ts` so rows selected from `conversation_events` include `project_root` and pass it into `store.insert`.
+
+Also scope durable merge lookups to the source event project. Do not let a same-topic memory from another project confirm or supersede a current-project candidate.
+
+Modify `DurableMemoryStore` to support project-scoped list helpers:
+
+```ts
+listByTopic(topicKey: string, options?: { projectRoot?: string }): DurableMemoryEntry[]
+listByMemoryType(memoryType: DurableMemoryType, options?: { projectRoot?: string }): DurableMemoryEntry[]
+```
+
+When `options.projectRoot` is present, add `AND project_root = ?` to those queries.
+
+Update runner lookup:
+
+```ts
+const existingEntries = candidate.topicKey
+  ? store.listByTopic(candidate.topicKey, { projectRoot: event.project_root ?? undefined })
+  : store.listByMemoryType(candidate.memoryType, { projectRoot: event.project_root ?? undefined });
+```
 
 Expected insertion shape:
 
@@ -965,6 +1103,8 @@ Implementation rule:
 
 - User-facing MCP tools use local-time boundaries by default because users ask "today", "this month", and named months in their local working context.
 - Unit tests may pass `mode: 'utc'` or a fixed `now` helper for deterministic assertions.
+- Add one explicit non-UTC regression test for month/day boundaries. Prefer a helper that calls the date functions with `mode: 'local'` and a known `TZ=Europe/Moscow` or `TZ=America/New_York` child-process environment; if the current platform cannot honor `TZ`, keep the test deterministic by using `mode: 'utc'` and document why host-local timezone tests are skipped.
+- Any test that mutates `process.env.TZ` or other process-wide env must run sequentially, not `test.concurrent`.
 - `resolvedRange.fromIso` and `toIso` remain ISO timestamps so agents can report exact absolute boundaries.
 
 Modify `packages/core/src/recall/temporal-parser.ts`:
@@ -1293,6 +1433,8 @@ server.tool(
 );
 ```
 
+Behavior note: `memory_calendar` is a read-style tool, but it intentionally runs the same debounced pre-query Codex import/ingest flow as `memory_search` and `memory_recall` so broad period discovery sees the newest session data. This must stay debounced and non-blocking on import/ingest failure.
+
 Run:
 
 ```bash
@@ -1406,6 +1548,7 @@ Modify `packages/core/src/types.ts`:
 export interface MemoryRecallCandidate {
   projectRoot?: string;
   localDate?: string;
+  weekKey?: string;
   monthKey?: string;
   sessionId?: string;
   headline: string;
@@ -1487,6 +1630,9 @@ Modify `packages/core/src/recall/candidate-loader.ts`:
   - `conversation_events.project_root`
   - `durable_memories.project_root`
   - `memories.project_root`
+- Apply `candidateDateFields(row.updated_at)` in `loadDurableCandidates`.
+- Apply `candidateDateFields(row.updated_at)` in `loadSemanticCandidates`.
+- Apply `candidateDateFields(row.timestamp)` in both `loadConversationCandidates` paths: the term-query SQL path and the timeline fallback path.
 - Default strict behavior: if `projectRoot` is present, do not include other projects.
 - Include legacy `NULL` project rows only for semantic memories as a second pass when strict project-scoped semantic search returns zero rows and the query has exact term overlap.
 - Keep `loadSemanticCandidates` private in `candidate-loader.ts`; implement fallback inside `loadRecallCandidates` so no private helper has to be exported.
@@ -1499,6 +1645,68 @@ if (projectRoot) {
   clauses.push(scope.clause);
   params.push(...scope.params);
 }
+```
+
+Expected SQL addition for durable memories:
+
+```ts
+if (projectRoot) {
+  const scope = buildProjectScopeClause('project_root', projectRoot);
+  clauses.push(scope.clause);
+  params.push(...scope.params);
+}
+```
+
+Extend the durable row type and SELECT:
+
+```ts
+interface DurableRecallRow {
+  id: number;
+  topic_key: string | null;
+  memory_type: DurableMemoryType;
+  summary: string;
+  updated_at: number;
+  project_root: string | null;
+}
+
+`SELECT id, topic_key, memory_type, summary, updated_at, project_root
+ FROM durable_memories
+ WHERE ${clauses.join(' AND ')}
+ ORDER BY updated_at DESC, id DESC
+ LIMIT ?`
+```
+
+Expected durable mapping fields:
+
+```ts
+projectRoot: row.project_root ?? undefined,
+...candidateDateFields(row.updated_at),
+```
+
+Extend the conversation row type and SELECTs:
+
+```ts
+interface ConversationRecallRow {
+  event_id: string;
+  kind: string;
+  timestamp: number;
+  payload_json: string | null;
+  session_id: string | null;
+  project_root: string | null;
+}
+
+`SELECT event_id, kind, timestamp, payload_json, session_id, project_root
+ FROM conversation_events
+ WHERE ${clauses.join(' AND ')}
+ ORDER BY timestamp DESC, id DESC
+ LIMIT ?`
+```
+
+Expected conversation mapping fields:
+
+```ts
+projectRoot: row.project_root ?? undefined,
+...candidateDateFields(row.timestamp),
 ```
 
 Add private semantic loader options and exact-overlap helpers:
@@ -1603,7 +1811,11 @@ return [...durableCandidates, ...semanticCandidates, ...conversationCandidates];
 Add date fields when mapping durable, semantic, and conversation candidates:
 
 ```ts
-function candidateDateFields(timestamp: number | undefined): Pick<MemoryRecallCandidate, 'localDate' | 'monthKey'> {
+import { weekBucket } from './calendar.js';
+
+function candidateDateFields(
+  timestamp: number | undefined,
+): Pick<MemoryRecallCandidate, 'localDate' | 'weekKey' | 'monthKey'> {
   if (timestamp === undefined) {
     return {};
   }
@@ -1613,9 +1825,18 @@ function candidateDateFields(timestamp: number | undefined): Pick<MemoryRecallCa
   const day = String(date.getDate()).padStart(2, '0');
   return {
     localDate: `${year}-${month}-${day}`,
+    weekKey: weekBucket(timestamp, { mode: 'local' }).key,
     monthKey: `${year}-${month}`,
   };
 }
+```
+
+Update the helper return type to include `weekKey`:
+
+```ts
+function candidateDateFields(
+  timestamp: number | undefined,
+): Pick<MemoryRecallCandidate, 'localDate' | 'weekKey' | 'monthKey'>
 ```
 
 Add tests:
@@ -1663,6 +1884,8 @@ Apply `buildProjectScopeClause` to:
 - `durable_memories.project_root` in both FTS and LIKE durable paths.
 - `memories.project_root` for semantic and episodic memory rows.
 - `ce.project_root` in conversation FTS and LIKE paths.
+
+Do not keep calling unscoped `semantic.search(query, 10)` when `projectRoot` is present. Either extend `SemanticMemory.search` to accept `{ projectRoot }`, or replace the search-tool semantic path with scoped SQL against `memories` for Track D.
 
 Implementation rule:
 
@@ -1727,6 +1950,27 @@ npm test -- packages/core/tests/tools/search-project-scope.test.ts packages/core
 ```
 
 Expected: PASS.
+
+- [ ] **Step D4.4b: Make topic namespace isolation explicit**
+
+Track D does not add a separate user-facing topic namespace filter. Instead, topic keys are isolated by `projectRoot`: the same `topic_key` may exist in two projects, but recall/search/timeline/project-state queries must only see the row whose `project_root` matches the current project, except for the documented semantic legacy fallback.
+
+Implementation rules:
+
+- Do not use `topicKey` as a substitute for project isolation.
+- Keep `topic_match` as a scoring signal only after project filtering has already happened.
+- Durable merge/review queries that operate by `topic_key` must include `project_root` whenever they are called from project-scoped flows.
+- Add a follow-up note in `docs/roadmap/codex-next.md` for future user-configurable topic namespace filters if Track D acceptance finds a real need.
+
+Add tests:
+
+```ts
+it('keeps same-topic durable memories isolated by project root', () => {
+  // Insert active next_step rows with topic_key='track_d_memory_reliability'
+  // in c:/repo/locus and c:/repo/proxyvpn.
+  // Recall/search from c:/repo/locus must not include the proxyvpn row.
+});
+```
 
 - [ ] **Step D4.5: Add searched date buckets to recall results**
 
@@ -1858,6 +2102,28 @@ Scoring requirements:
 - `durable_active`: +3 for active durable memory
 - `legacy_global`: -4 if `projectRoot` is missing
 
+Final scoring table after Track D:
+
+| Factor | Points | Rule |
+| --- | ---: | --- |
+| `project_match` | +10 | `candidate.projectRoot` is the current project root after normalization. |
+| `time_range_fit` | +5 | `candidate.timestamp` is inside the resolved query range. |
+| `completion_event` | +5 | Existing Track C completion-event signal. |
+| `topic_match` | +4 | Existing topic hint match against `candidate.topicKey`. |
+| `term_overlap` | 0..+4 | Existing bounded term-overlap score. |
+| `exact_entity_match` | +4 | Exact version/env/tool/file token from the query is present in the candidate headline or matched terms. |
+| `intent_match` | +3 | Existing intent match. |
+| `recency` | 0..+3 | Existing bounded recency score. |
+| `durable_active` / `durable_priority` | +3 | Durable active memory, preserving the existing durable priority behavior. |
+| `validation_command_context` | +3 | Existing validation command context signal. |
+| `explicit_memory` | +2 | Existing explicit memory signal. |
+| `capture_reason_match` | +2 | Existing capture reason signal. |
+| `evidence_present` | +1 | Existing evidence signal. |
+| `legacy_global` | -4 | Candidate has no `projectRoot` and survived only through the explicit legacy fallback. |
+| `project_mismatch` | n/a | Exclude before scoring, never keep as a large negative score. |
+
+Do not remove existing Track C factors when adding Track D scoring. The implementation should add the new factors to the current `scoreRecallCandidate` path, not replace it with only the table above.
+
 Extend `RecallScoringOptions`:
 
 ```ts
@@ -1871,6 +2137,52 @@ export function filterProjectCandidates(
   candidates: MemoryRecallCandidate[],
   projectRoot?: string,
 ): MemoryRecallCandidate[]
+```
+
+Add exact entity helpers in `packages/core/src/recall/scoring.ts`:
+
+```ts
+function exactEntityTokens(values: readonly string[]): string[] {
+  return values.filter((value) =>
+    /^(?:v?\d+\.\d+(?:\.\d+)?|[A-Za-z][A-Za-z0-9_]{2,}|memory_[a-z_]+|[@\w.-]+\/[\w.-]+|[\w./-]+\.(?:ts|tsx|js|mjs|md|json))$/.test(
+      value,
+    ),
+  );
+}
+
+function hasExactEntityMatch(candidate: MemoryRecallCandidate, parsedQuery: ParsedRecallQuery): boolean {
+  const rawTokens = parsedQuery.original.split(/\s+/).map((token) => token.replace(/[.,;:!?()[\]{}"']/g, ''));
+  const entities = exactEntityTokens([...rawTokens, ...parsedQuery.terms, ...parsedQuery.normalizedTerms]);
+  if (entities.length === 0) {
+    return false;
+  }
+  const haystack = [
+    candidate.headline,
+    ...(candidate.matchedTerms ?? []),
+    candidate.topicKey ?? '',
+    candidate.captureReason ?? '',
+  ].join(' ').toLowerCase();
+  return entities.some((entity) => haystack.includes(entity.toLowerCase()));
+}
+```
+
+Apply new scoring factors in the single-candidate scoring path:
+
+```ts
+if (options.projectRoot && candidate.projectRoot && isSameProjectRoot(candidate.projectRoot, options.projectRoot)) {
+  score += 10;
+}
+if (options.resolvedRange && candidate.timestamp !== undefined) {
+  if (candidate.timestamp >= options.resolvedRange.from && candidate.timestamp <= options.resolvedRange.to) {
+    score += 5;
+  }
+}
+if (hasExactEntityMatch(candidate, parsedQuery)) {
+  score += 4;
+}
+if (options.projectRoot && !candidate.projectRoot) {
+  score -= 4;
+}
 ```
 
 `filterProjectCandidates` keeps candidates with no `projectRoot` for legacy fallback scoring, keeps current-project matches, and drops explicit other-project candidates before score calculation.
@@ -2032,6 +2344,8 @@ return {
 
 Update `packages/shared-runtime/detect-client.d.ts` only if exported typedef comments need the env key documented.
 
+Documentation rule: `LOCUS_CODEX_SURFACE` is a diagnostic/debug override used to validate Desktop and extension surfaces before upstream exposes stronger surface evidence. It is not a normal user-facing configuration knob. Document that an accidental value can make status/doctor report the overridden surface.
+
 Run:
 
 ```bash
@@ -2078,6 +2392,8 @@ Expected: PASS after consumers are updated.
 - [ ] **Step D5.4: Build freshness from diagnostics and imported event timestamps**
 
 Modify `packages/core/src/tools/codex-diagnostics.ts` to compute `latestRolloutTimestamp` from the newest rollout file's newest JSONL event timestamp, with file mtime only as a fallback when no parseable timestamp exists.
+
+Dependency boundary note: `@locus/core` already depends on `@locus/codex`, and `parseCodexJsonl` is exported from `@locus/codex`, so this import does not create a new workspace cycle. Do not move the parser into `@locus/shared-runtime` in Track D unless an implementation build proves a real cycle or packaging issue.
 
 ```ts
 import { readFileSync, statSync } from 'node:fs';
@@ -2246,6 +2562,7 @@ Modify `packages/core/src/types.ts`:
 ```ts
 export interface MemoryProjectStateResult {
   projectRoot: string;
+  projectHash: string;
   packageName?: string;
   packageVersion?: string;
   gitHead?: string;
@@ -2314,6 +2631,7 @@ describe('handleProjectState', () => {
     const result = handleProjectState({ db, projectRoot: join(dir, 'repo') });
 
     expect(result).toMatchObject({
+      projectHash: expect.stringMatching(/^[a-f0-9]{16}$/),
       packageName: 'locus-memory',
       packageVersion: '3.7.0',
       activeDurableCount: 0,
@@ -2375,6 +2693,7 @@ Create `packages/core/src/tools/project-state.ts`:
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { projectHash } from '@locus/shared-runtime';
 import type { DatabaseAdapter, MemoryProjectStateResult } from '../types.js';
 import { normalizeProjectRootForScope } from '../recall/project-scope.js';
 
@@ -2382,6 +2701,8 @@ export interface ProjectGitState {
   gitHead?: string;
   gitBranch?: string;
   dirty?: boolean;
+  timedOut?: boolean;
+  unavailable?: boolean;
 }
 
 export interface ProjectStateDeps {
@@ -2402,6 +2723,10 @@ function gitOutput(cwd: string, args: string[]): string {
   }).trim();
 }
 
+export function resetProjectStateGitCacheForTests(): void {
+  gitStateCache = undefined;
+}
+
 function readGitState(cwd: string): ProjectGitState {
   const now = Date.now();
   if (gitStateCache && gitStateCache.cwd === cwd && now - gitStateCache.checkedAt < GIT_STATE_CACHE_MS) {
@@ -2412,12 +2737,17 @@ function readGitState(cwd: string): ProjectGitState {
     const state = {
       gitHead: gitOutput(cwd, ['rev-parse', '--short', 'HEAD']),
       gitBranch: gitOutput(cwd, ['branch', '--show-current']),
-      dirty: gitOutput(cwd, ['status', '--porcelain']).length > 0,
+      dirty: gitOutput(cwd, ['status', '--porcelain', '--untracked-files=no']).length > 0,
     };
     gitStateCache = { cwd, checkedAt: now, state };
     return state;
-  } catch {
-    return {};
+  } catch (error) {
+    const state = {
+      timedOut: error instanceof Error && /timeout/i.test(error.message),
+      unavailable: true,
+    };
+    gitStateCache = { cwd, checkedAt: now, state };
+    return state;
   }
 }
 
@@ -2447,9 +2777,15 @@ export function handleProjectState(deps: ProjectStateDeps): MemoryProjectStateRe
     )
     .map((row) => row.summary);
   const git = (deps.readGitState ?? readGitState)(deps.projectRoot);
+  const warnings = [
+    ...(latest ? [] : ['No conversation events found for this project.']),
+    ...(git.timedOut ? ['Git state lookup timed out; repo state may be incomplete.'] : []),
+    ...(!git.timedOut && git.unavailable ? ['Git state lookup failed; repo state may be incomplete.'] : []),
+  ];
 
   return {
     projectRoot,
+    projectHash: projectHash(projectRoot),
     packageName: packageJson.name,
     packageVersion: packageJson.version,
     gitHead: git.gitHead,
@@ -2458,11 +2794,17 @@ export function handleProjectState(deps: ProjectStateDeps): MemoryProjectStateRe
     activeDurableCount,
     latestConversationTimestamp: latest?.timestamp,
     latestConversationIso: latest ? new Date(latest.timestamp).toISOString() : undefined,
-    warnings: latest ? [] : ['No conversation events found for this project.'],
+    warnings,
     nextSteps,
   };
 }
 ```
+
+Test requirements:
+
+- Inject `readGitState` for ordinary project-state tests so they do not depend on the local git binary.
+- Add one narrow cache test for the production `readGitState` path and call `resetProjectStateGitCacheForTests()` in `afterEach`.
+- Assert that timeout/failed git inspection returns a warning instead of blocking the MCP handler.
 
 Run:
 
@@ -2568,16 +2910,60 @@ it('supersedes an active next_step when a same-topic validation_fact resolves it
 });
 ```
 
+Add negative-case tests before implementation:
+
+```ts
+it('does not supersede next_step when validation wording is negative', () => {
+  const decision = mergeDurableCandidate(
+    [
+      {
+        id: 10,
+        topicKey: 'track_d_memory_reliability',
+        memoryType: 'next_step',
+        state: 'active',
+        summary: 'Pass Track D review.',
+        evidence: { source: 'test' },
+        sourceEventId: 'evt-old',
+        source: 'codex',
+        supersededById: undefined,
+        createdAt: 1,
+        updatedAt: 1,
+      },
+    ],
+    {
+      topicKey: 'track_d_memory_reliability',
+      memoryType: 'validation_fact',
+      summary: "This hasn't passed review yet.",
+      evidence: { source: 'test', confidence: 0.9 },
+      sourceEventId: 'evt-new',
+      source: 'codex',
+    },
+  );
+
+  expect(decision.action).not.toBe('supersede_existing');
+});
+```
+
 Modify `packages/core/src/memory/durable-merge.ts` before the existing same-type matching logic:
 
 ```ts
+function isPositiveValidationSummary(summary: string): boolean {
+  const normalized = summary.toLowerCase();
+  if (/\b(?:not|never|failed|failing|blocked|hasn['’]?t|haven['’]?t|isn['’]?t|wasn['’]?t)\b/.test(normalized)) {
+    return false;
+  }
+  return /\b(?:passed|validated|released|published|shipped|done|completed|finished|resolved)\b/.test(
+    normalized,
+  );
+}
+
 const resolvedNextStep = activeEntries.find(
   (entry) =>
     candidate.memoryType === 'validation_fact' &&
     entry.memoryType === 'next_step' &&
     candidate.topicKey &&
     entry.topicKey === candidate.topicKey &&
-    /\b(passed|validated|released|published|shipped)\b/i.test(candidate.summary),
+    isPositiveValidationSummary(candidate.summary),
 );
 if (resolvedNextStep) {
   return { action: 'supersede_existing', existingId: resolvedNextStep.id };
@@ -2680,11 +3066,24 @@ git commit -m "feat(core): add project state memory summary"
 
 Create three fixtures:
 
-- `current-project-may.jsonl`: `cwd` is `C:\Users\Admin\gemini-project\ClaudeMagnificoMem`, contains `TRACKD-LOCUS-MAY-20260530`.
-- `other-project-may.jsonl`: `cwd` is `C:\Users\Admin\gemini-project\APPS\ProxyVpn`, contains `TRACKD-PROXYVPN-NOISE-20260530`.
-- `desktop-marker.jsonl`: `cwd` is `C:\Users\Admin\gemini-project\ClaudeMagnificoMem`, contains `TRACKD-DESKTOP-MARKER-20260530`.
+- `current-project-may.jsonl`: `cwd` is `__TRACKD_CURRENT_PROJECT__`, contains `TRACKD-LOCUS-MAY-20260530`.
+- `other-project-may.jsonl`: `cwd` is `__TRACKD_OTHER_PROJECT__`, contains `TRACKD-PROXYVPN-NOISE-20260530`.
+- `desktop-marker.jsonl`: `cwd` is `__TRACKD_CURRENT_PROJECT__`, contains `TRACKD-DESKTOP-MARKER-20260530`.
 
 The first line in each fixture must be `session_meta` with `cwd`, `session_id`, and `model`. Include at least one `event_msg` user prompt and one `response_item` assistant message.
+
+Do not hardcode this developer machine's absolute paths in fixtures. The integration test should copy the fixture through a helper that replaces placeholders with the temp project paths used by that test:
+
+```ts
+function copyTrackDFixture(source: string, destination: string, replacements: Record<string, string>): void {
+  const raw = readFileSync(source, 'utf8');
+  const rendered = Object.entries(replacements).reduce(
+    (text, [token, value]) => text.replaceAll(token, value.replace(/\\/g, '\\\\')),
+    raw,
+  );
+  writeFileSync(destination, rendered, 'utf8');
+}
+```
 
 Run:
 
@@ -2698,16 +3097,32 @@ Expected: PASS because fixtures do not change code yet.
 
 Add tests to `packages/core/tests/integration/track-d-memory-reliability.test.ts`:
 
+Use sequential execution for this file because these tests mutate `process.env`:
+
+```ts
+describe.sequential('Track D memory reliability acceptance', () => {
+  // tests below
+});
+```
+
 ```ts
 it('recalls current-project month work without other-project noise', async () => {
   const root = makeTempRoot();
   const projectDir = join(root, 'ClaudeMagnificoMem');
   const codexHome = join(root, 'codex-home');
   const sessionsDir = join(codexHome, 'sessions', '2026', '05');
+  const otherProjectDir = join(root, 'ProxyVpn');
   mkdirSync(projectDir, { recursive: true });
+  mkdirSync(otherProjectDir, { recursive: true });
   mkdirSync(sessionsDir, { recursive: true });
-  cpSync(join(trackDFixturesDir, 'current-project-may.jsonl'), join(sessionsDir, 'current-project-may.jsonl'));
-  cpSync(join(trackDFixturesDir, 'other-project-may.jsonl'), join(sessionsDir, 'other-project-may.jsonl'));
+  copyTrackDFixture(join(trackDFixturesDir, 'current-project-may.jsonl'), join(sessionsDir, 'current-project-may.jsonl'), {
+    __TRACKD_CURRENT_PROJECT__: projectDir,
+    __TRACKD_OTHER_PROJECT__: otherProjectDir,
+  });
+  copyTrackDFixture(join(trackDFixturesDir, 'other-project-may.jsonl'), join(sessionsDir, 'other-project-may.jsonl'), {
+    __TRACKD_CURRENT_PROJECT__: projectDir,
+    __TRACKD_OTHER_PROJECT__: otherProjectDir,
+  });
 
   await withEnv(
     { CODEX_HOME: codexHome, LOCUS_CODEX_CAPTURE: 'redacted', LOCUS_CAPTURE_LEVEL: 'redacted' },
@@ -2736,7 +3151,10 @@ it('reports date buckets searched for this month', async () => {
   const sessionsDir = join(codexHome, 'sessions', '2026', '05');
   mkdirSync(projectDir, { recursive: true });
   mkdirSync(sessionsDir, { recursive: true });
-  cpSync(join(trackDFixturesDir, 'current-project-may.jsonl'), join(sessionsDir, 'current-project-may.jsonl'));
+  copyTrackDFixture(join(trackDFixturesDir, 'current-project-may.jsonl'), join(sessionsDir, 'current-project-may.jsonl'), {
+    __TRACKD_CURRENT_PROJECT__: projectDir,
+    __TRACKD_OTHER_PROJECT__: join(root, 'ProxyVpn'),
+  });
 
   await withEnv(
     { CODEX_HOME: codexHome, LOCUS_CODEX_CAPTURE: 'redacted', LOCUS_CAPTURE_LEVEL: 'redacted' },
@@ -2768,7 +3186,10 @@ it('treats explicit desktop surface as observed when LOCUS_CODEX_SURFACE=desktop
   const sessionsDir = join(codexHome, 'sessions', '2026', '05');
   mkdirSync(projectDir, { recursive: true });
   mkdirSync(sessionsDir, { recursive: true });
-  cpSync(join(trackDFixturesDir, 'desktop-marker.jsonl'), join(sessionsDir, 'desktop-marker.jsonl'));
+  copyTrackDFixture(join(trackDFixturesDir, 'desktop-marker.jsonl'), join(sessionsDir, 'desktop-marker.jsonl'), {
+    __TRACKD_CURRENT_PROJECT__: projectDir,
+    __TRACKD_OTHER_PROJECT__: join(root, 'ProxyVpn'),
+  });
 
   await withEnv(
     {
@@ -2798,6 +3219,13 @@ it('treats explicit desktop surface as observed when LOCUS_CODEX_SURFACE=desktop
       }
     },
   );
+});
+
+it('calendar runs the same debounced pre-query import flow before reading buckets', async () => {
+  // Seed a fresh Codex rollout with TRACKD-CALENDAR-AUTOIMPORT.
+  // Call memory_calendar without manual memory_import_codex first.
+  // Expected: the marker's date bucket appears and unrelated project buckets do not.
+  // Also assert the auto-import snapshot moved to imported/debounced rather than remaining untouched.
 });
 ```
 
@@ -2861,10 +3289,13 @@ Modify:
 Required wording:
 
 - Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes.
+- `LOCUS_CODEX_SURFACE` is a diagnostic/debug override. It can intentionally simulate `desktop`, `extension`, or `cli`, but it can also mislead diagnostics if a user leaves it set accidentally.
 - `memory_calendar` is the recommended first tool for broad period questions.
+- `memory_calendar` defaults to `last_30d`; agents should pass `this_month`, `last_month`, or an explicit range for user period questions instead of relying on the default.
 - `memory_recall` should show searched date buckets for date-scoped queries.
 - `memory_project_state` is the recommended current-state summary tool.
-- Update any MCP tool-count wording from the old value to the new count after adding `memory_calendar` and `memory_project_state`.
+- Update MCP tool-count wording from `14` to `16` after adding `memory_calendar` and `memory_project_state`.
+- Record evidence anchors as a follow-up if full evidence formatting is not complete in Track D: candidates should at least expose source event IDs/durable IDs and project/date metadata; richer display formatting can ship after the project-scoped behavior is proven.
 
 Run:
 
@@ -2888,7 +3319,7 @@ git commit -m "docs(codex): validate track d memory workflow"
 ## Task D8: Final Validation Gate
 
 **Files:**
-- Modify only if validation reveals a concrete failing source or doc mismatch.
+- Modify only if validation reveals a concrete failing source or doc mismatch, except for planned release metadata/docs updates in D8.5.
 
 - [ ] **Step D8.1: Run focused Track D test set**
 
@@ -2953,6 +3384,20 @@ Modify `docs/roadmap/codex-next.md` to mark Track D local validation facts once 
 
 If a release note exists for the next release, add a draft under `docs/releases/`.
 
+Prepare the release metadata for the next Codex-first memory reliability release:
+
+- Update root `package.json` from `3.6.1` to `3.7.0`.
+- Update workspace package manifests that ship in the Codex-first path: `packages/core/package.json`, `packages/codex/package.json`, `packages/cli/package.json`, and `packages/shared-runtime/package.json`.
+- Update `package-lock.json` through the normal npm metadata update path.
+- Leave `packages/claude-code/package.json` unchanged unless the release policy explicitly requires all private workspace package versions to move together.
+- Add or update `docs/releases/v3.7.0.md` with the Track D validation evidence and the Desktop/CLI scope boundary.
+
+Roadmap follow-up wording:
+
+- Mark project-scoped recall, date buckets, calendar discovery, freshness, and project-state summary only after their tests pass.
+- If richer evidence-anchor display is not complete, keep it as an explicit follow-up instead of marking the whole evidence-anchor item done.
+- If user-configurable topic namespace filters are not implemented, record them as a follow-up distinct from `projectRoot` isolation.
+
 Run:
 
 ```bash
@@ -3004,7 +3449,8 @@ Minimum final evidence:
 
 Spec coverage:
 
-- Project isolation: Tasks D1 and D4.
+- Project isolation: Tasks D1 and D4, including raw Codex `cwd` normalization into the resolved git-root/marker-root project identity and projectHash visibility.
+- Topic namespace: Track D scopes topic-key behavior by `projectRoot`; separate user-configurable topic namespace filters remain a roadmap follow-up unless implementation tests prove they are required.
 - Temporal/date-bucket recall: Tasks D2, D3, and D4.
 - Calendar discovery: Task D3.
 - Freshness/surface truth: Task D5.
@@ -3012,7 +3458,7 @@ Spec coverage:
 - Ranking v3: Task D4.
 - Project-state summary: Task D6.
 - Decision lifecycle/stale handling: Task D6.4a supersedes same-topic active `next_step` rows when later `validation_fact` evidence resolves them; broader stale cleanup remains review-only.
-- Evidence anchors: D4 candidate fields and D6 project-state output; deeper evidence formatting can extend after D4/D6 pass.
+- Evidence anchors: D4 candidate fields and D6 project-state output; if deeper display formatting is not implemented in Track D, keep it as an explicit roadmap follow-up instead of marking it delivered.
 - Docs and skill workflow: Task D7.
 
 Placeholder scan:
