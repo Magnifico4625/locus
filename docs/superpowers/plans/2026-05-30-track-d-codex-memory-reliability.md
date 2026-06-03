@@ -134,7 +134,7 @@ Do not modify:
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-30-track-d-codex-memory-reliability.md`
 
-- [ ] **Step D0.1: Verify roadmap commit and clean staged state**
+- [x] **Step D0.1: Verify roadmap commit and clean staged state**
 
 Run:
 
@@ -145,10 +145,11 @@ git status --short
 
 Expected:
 
-- `3a4db1c docs(roadmap): prioritize codex memory reliability` appears in recent history.
-- Only this plan file is modified or untracked.
+- Completed 2026-06-03 on branch `codex/track-d-memory-reliability`.
+- `3a4db1c docs(roadmap): prioritize codex memory reliability` is an ancestor of current HEAD. It appears in `git log --oneline -5`; `git log --oneline -3` now shows later Track D plan commits on top.
+- Working tree was clean.
 
-- [ ] **Step D0.2: Run current focused baseline tests**
+- [x] **Step D0.2: Run current focused baseline tests**
 
 Run:
 
@@ -158,7 +159,13 @@ npm test -- packages/core/tests/recall packages/core/tests/tools/recall.test.ts 
 
 Expected: PASS before Track D changes.
 
-- [ ] **Step D0.3: Commit the approved plan**
+Completed 2026-06-03:
+
+- `9` test files passed.
+- `124` tests passed.
+- Node emitted experimental `node:sqlite` warnings only; no test failures.
+
+- [x] **Step D0.3: Commit the approved plan**
 
 Run:
 
@@ -168,6 +175,14 @@ git commit -m "docs(codex): plan track d memory reliability"
 ```
 
 Expected: docs-only plan checkpoint.
+
+Completed before implementation on this branch via the existing docs-only plan commits:
+
+- `78bbbce docs(codex): plan track d memory reliability`
+- `dfdc56f docs(codex): refine track d implementation plan`
+- `cb19333 docs(codex): harden track d memory plan`
+
+No empty D0-only commit was created.
 
 ---
 
@@ -3422,11 +3437,12 @@ Expected: final validation commit. Do not push or tag without explicit user appr
 
 ## Review Gates
 
-- [ ] Review this plan before Task D0 is executed.
+- [x] Review this plan before Task D0 is executed.
 - [ ] Execute one task at a time.
 - [ ] Stop for user review after each commit.
 - [ ] Do not start HTML dashboard work until Track D is passing focused acceptance.
 - [ ] Do not claim Codex Desktop parity beyond the evidence recorded by Track D tests and the live Desktop smoke.
+- [ ] Keep this plan synchronized as implementation progresses: mark completed steps, record verification evidence, and keep docs changes in the same task commit when they describe shipped behavior.
 
 ## Validation Matrix
 
