@@ -72,6 +72,7 @@ Modify:
 - `packages/core/src/ingest/pipeline.ts`
 - `packages/core/src/memory/semantic.ts`
 - `packages/core/src/tools/remember.ts`
+- `packages/core/src/tools/import-codex.ts`
 - `packages/core/src/memory/durable.ts`
 - `packages/core/src/memory/durable-runner.ts`
 - `packages/core/src/memory/durable-merge.ts`
@@ -104,10 +105,13 @@ Modify:
 - `packages/core/tests/tools/status.test.ts`
 - `packages/core/tests/tools/doctor.test.ts`
 - `packages/core/tests/tools/codex-diagnostics.test.ts`
+- `packages/core/tests/tools/import-codex.test.ts`
+- `packages/core/tests/tools/remember.test.ts`
 - `packages/core/tests/storage/migrations.test.ts`
 - `packages/core/tests/ingest/pipeline-store.test.ts`
 - `packages/core/tests/tools/search.test.ts`
 - `packages/core/tests/tools/timeline.test.ts`
+- `packages/core/tests/memory/semantic.test.ts`
 - `packages/core/tests/memory/durable.test.ts`
 - `packages/core/tests/memory/durable-merge.test.ts`
 - `packages/core/tests/memory/durable-runner.test.ts`
@@ -115,7 +119,10 @@ Modify:
 - `packages/core/tests/recall/temporal-parser.test.ts`
 - `packages/core/tests/recall/query-parser.test.ts`
 - `packages/core/tests/recall/scoring.test.ts`
+- `packages/core/tests/integration/server.test.ts`
+- `packages/core/tests/integration/durable-extraction-flow.test.ts`
 - `packages/core/tests/integration/track-c-recall-acceptance.test.ts` only for compatibility assertions if Track D fields affect the result shape.
+- `packages/codex/tests/importer.test.ts`
 - `packages/codex/README.md`
 - `packages/codex/skills/locus-memory/SKILL.md`
 - `README.md`
@@ -196,6 +203,8 @@ No empty D0-only commit was created.
 - Modify: `packages/codex/src/importer.ts`
 - Modify: `packages/core/src/memory/semantic.ts`
 - Modify: `packages/core/src/tools/remember.ts`
+- Modify: `packages/core/src/tools/import-codex.ts`
+- Modify: `packages/core/src/server.ts`
 - Modify: `packages/core/src/memory/durable.ts`
 - Modify: `packages/core/src/memory/durable-runner.ts`
 - Test: `packages/core/tests/recall/project-scope.test.ts`
@@ -204,8 +213,12 @@ No empty D0-only commit was created.
 - Test: `packages/codex/tests/importer.test.ts`
 - Test: `packages/core/tests/memory/semantic.test.ts`
 - Test: `packages/core/tests/memory/durable.test.ts`
+- Test: `packages/core/tests/tools/remember.test.ts`
+- Test: `packages/core/tests/tools/import-codex.test.ts`
+- Test: `packages/core/tests/integration/server.test.ts`
+- Test: `packages/core/tests/integration/durable-extraction-flow.test.ts`
 
-- [ ] **Step D1.1: Write failing project scope helper tests**
+- [x] **Step D1.1: Write failing project scope helper tests**
 
 Create `packages/core/tests/recall/project-scope.test.ts`:
 
@@ -258,7 +271,7 @@ npm test -- packages/core/tests/recall/project-scope.test.ts
 
 Expected: FAIL because `project-scope.ts` does not exist.
 
-- [ ] **Step D1.2: Implement project scope helper**
+- [x] **Step D1.2: Implement project scope helper**
 
 Create `packages/core/src/recall/project-scope.ts`:
 
@@ -316,7 +329,7 @@ npm test -- packages/core/tests/recall/project-scope.test.ts
 
 Expected: PASS.
 
-- [ ] **Step D1.3: Write failing migration tests for project metadata**
+- [x] **Step D1.3: Write failing migration tests for project metadata**
 
 Extend `packages/core/tests/storage/migrations.test.ts`:
 
@@ -353,7 +366,7 @@ npm test -- packages/core/tests/storage/migrations.test.ts
 
 Expected: FAIL because the new columns/indexes do not exist.
 
-- [ ] **Step D1.4: Add migration v4 for project metadata and indexes**
+- [x] **Step D1.4: Add migration v4 for project metadata and indexes**
 
 Current schema facts before this migration:
 
@@ -432,7 +445,7 @@ npm test -- packages/core/tests/storage/migrations.test.ts
 
 Expected: PASS.
 
-- [ ] **Step D1.4a: Normalize project root at ingestion**
+- [x] **Step D1.4a: Normalize project root at ingestion**
 
 Modify `packages/core/src/ingest/pipeline.ts` so stored `conversation_events.project_root` always uses the canonical project identity when the server knows it, and otherwise falls back to `normalizeProjectRootForScope(event.project_root)`.
 
@@ -529,7 +542,7 @@ npm test -- packages/core/tests/ingest/pipeline-store.test.ts
 
 Expected: PASS.
 
-- [ ] **Step D1.4b: Normalize Codex importer project filters**
+- [x] **Step D1.4b: Normalize Codex importer project filters**
 
 Codex 0.135 resume and app-server flows can preserve or override `cwd` across resumed threads. The importer must compare equivalent project roots by identity, not raw string form, before it decides to drop events. It must also accept events whose raw Codex `cwd` is a subdirectory of the current resolved project root, then canonicalize those imported events to the current root.
 
@@ -631,7 +644,7 @@ npm test -- packages/codex/tests/importer.test.ts
 
 Expected: PASS.
 
-- [ ] **Step D1.5: Extend semantic memory to store project root**
+- [x] **Step D1.5: Extend semantic memory to store project root**
 
 Modify `packages/core/src/types.ts`:
 
@@ -684,7 +697,7 @@ npm test -- packages/core/tests/memory/semantic.test.ts packages/core/tests/tool
 
 Expected: tests pass after updates.
 
-- [ ] **Step D1.6: Pass project root through memory_remember**
+- [x] **Step D1.6: Pass project root through memory_remember**
 
 Modify `packages/core/src/tools/remember.ts`:
 
@@ -714,7 +727,7 @@ npm test -- packages/core/tests/tools/remember.test.ts packages/core/tests/integ
 
 Expected: PASS.
 
-- [ ] **Step D1.7: Extend durable memory project root contract**
+- [x] **Step D1.7: Extend durable memory project root contract**
 
 Modify `packages/core/src/types.ts`:
 
@@ -755,7 +768,7 @@ npm test -- packages/core/tests/memory/durable.test.ts packages/core/tests/memor
 
 Expected: PASS after expected fixture updates.
 
-- [ ] **Step D1.8: Attach durable memory project root from source events**
+- [x] **Step D1.8: Attach durable memory project root from source events**
 
 Modify `packages/core/src/memory/durable-runner.ts` so rows selected from `conversation_events` include `project_root` and pass it into `store.insert`.
 
@@ -800,13 +813,26 @@ npm test -- packages/core/tests/memory/durable-extractor.test.ts packages/core/t
 
 Expected: PASS.
 
-- [ ] **Step D1.9: Commit project scope metadata**
+- [x] **Step D1.9: Commit project scope metadata**
 
 Run:
 
 ```bash
-git add packages/core/src/recall/project-scope.ts packages/core/src/types.ts packages/core/src/storage/migrations.ts packages/core/src/ingest/pipeline.ts packages/codex/src/importer.ts packages/core/src/memory/semantic.ts packages/core/src/tools/remember.ts packages/core/src/memory/durable.ts packages/core/src/memory/durable-runner.ts packages/core/tests/recall/project-scope.test.ts packages/core/tests/storage/migrations.test.ts packages/core/tests/ingest/pipeline-store.test.ts packages/codex/tests/importer.test.ts packages/core/tests/memory/semantic.test.ts packages/core/tests/memory/durable.test.ts
+git add packages/core/src/recall/project-scope.ts packages/core/src/types.ts packages/core/src/storage/migrations.ts packages/core/src/ingest/pipeline.ts packages/codex/src/importer.ts packages/core/src/memory/semantic.ts packages/core/src/tools/remember.ts packages/core/src/tools/import-codex.ts packages/core/src/server.ts packages/core/src/memory/durable.ts packages/core/src/memory/durable-runner.ts packages/core/tests/recall/project-scope.test.ts packages/core/tests/storage/migrations.test.ts packages/core/tests/ingest/pipeline-store.test.ts packages/codex/tests/importer.test.ts packages/core/tests/memory/semantic.test.ts packages/core/tests/memory/durable.test.ts packages/core/tests/tools/remember.test.ts packages/core/tests/tools/import-codex.test.ts packages/core/tests/integration/server.test.ts packages/core/tests/integration/durable-extraction-flow.test.ts
 git commit -m "feat(core): add project-scoped memory metadata"
+```
+
+Completion evidence (2026-06-03):
+
+```bash
+npm test -- packages/core/tests/recall/project-scope.test.ts packages/core/tests/storage/migrations.test.ts packages/core/tests/ingest/pipeline-store.test.ts packages/codex/tests/importer.test.ts packages/core/tests/memory/semantic.test.ts packages/core/tests/memory/durable.test.ts packages/core/tests/tools/remember.test.ts packages/core/tests/tools/import-codex.test.ts packages/core/tests/integration/server.test.ts packages/core/tests/integration/durable-extraction-flow.test.ts packages/core/tests/memory/durable-extractor.test.ts packages/core/tests/memory/durable-merge.test.ts packages/core/tests/integration/track-c-recall-acceptance.test.ts
+# PASS: 13 files, 184 tests
+
+npm -w @locus/core run typecheck
+# PASS
+
+npm -w @locus/codex run typecheck
+# PASS
 ```
 
 ---

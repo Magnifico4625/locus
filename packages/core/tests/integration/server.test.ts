@@ -285,6 +285,20 @@ describe('createServer', () => {
     expect(results[0]?.content).toContain('dependency injection');
   });
 
+  it('memory_remember tool stores the current project root', async () => {
+    await callTextTool(ctx, 'memory_remember', {
+      text: 'Track D memory_remember stores project scope',
+      tags: ['track-d'],
+    });
+
+    const row = ctx.db.get<{ project_root: string | null }>(
+      'SELECT project_root FROM memories WHERE content = ? ORDER BY id DESC LIMIT 1',
+      ['Track D memory_remember stores project scope'],
+    );
+
+    expect(row?.project_root).toBe(normalizePathForIdentity(tempDir));
+  });
+
   it('memory_remember then memory_search via handleSearch finds the stored entry', () => {
     // Store a new unique memory using the real tool handler
     const entry = handleRemember(

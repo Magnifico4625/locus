@@ -73,6 +73,7 @@ export interface MemoryEntry {
   layer: 'semantic' | 'episodic';
   content: string;
   tags: string[];
+  projectRoot?: string;
   createdAt: number;
   updatedAt: number;
   sessionId?: string;
@@ -99,6 +100,7 @@ export interface DurableMemoryEntry {
   state: DurableMemoryState;
   summary: string;
   evidence: Record<string, unknown>;
+  projectRoot?: string;
   sourceEventId?: string;
   source: 'codex' | 'claude-code' | 'manual';
   supersededById?: number;

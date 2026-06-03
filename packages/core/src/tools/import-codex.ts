@@ -41,11 +41,13 @@ interface ProcessInboxOptionsLike {
   batchLimit?: number;
   captureLevel?: CaptureLevel;
   fts5Available?: boolean;
+  projectRoot?: string;
 }
 
 export interface ImportCodexDeps {
   db?: DatabaseAdapter;
   inboxDir: string;
+  projectRoot?: string;
   captureLevel: CaptureLevel;
   fts5Available: boolean;
   env?: Record<string, string | undefined>;
@@ -131,6 +133,7 @@ export function handleImportCodex(
         batchLimit: 0,
         captureLevel: deps.captureLevel,
         fts5Available: deps.fts5Available,
+        projectRoot: deps.projectRoot,
       });
       deps.runDurableExtraction?.(deps.db, { source: 'codex' });
       const storedEventIds = loadIngestedCodexEventIds(deps.db);

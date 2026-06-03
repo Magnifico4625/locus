@@ -30,7 +30,7 @@ describe('runMigrations', () => {
     const { runMigrations } = await import('../../src/storage/migrations.js');
     runMigrations(adapter, false);
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(3);
+    expect(row?.version).toBe(4);
   });
 
   it('creates files table', async () => {
@@ -92,7 +92,7 @@ describe('runMigrations', () => {
     runMigrations(adapter, false);
     expect(() => runMigrations(adapter, false)).not.toThrow();
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(3);
+    expect(row?.version).toBe(4);
   });
 
   it('files table has expected columns', async () => {
@@ -125,6 +125,7 @@ describe('runMigrations', () => {
     expect(colNames).toContain('created_at');
     expect(colNames).toContain('updated_at');
     expect(colNames).toContain('session_id');
+    expect(colNames).toContain('project_root');
   });
 
   it('memories table has indexes on layer and session_id', async () => {
@@ -153,11 +154,11 @@ describe('migrationV2', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  it('updates schema_version to 3 on fresh DB', async () => {
+  it('updates schema_version to 4 on fresh DB', async () => {
     const { runMigrations } = await import('../../src/storage/migrations.js');
     runMigrations(adapter, false);
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(3);
+    expect(row?.version).toBe(4);
   });
 
   it('creates conversation_events table', async () => {
@@ -299,7 +300,7 @@ describe('migrationV2', () => {
     runMigrations(adapter, false);
     expect(() => runMigrations(adapter, false)).not.toThrow();
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(3);
+    expect(row?.version).toBe(4);
   });
 
   it('preserves existing v1 data after v2 migration', async () => {
@@ -346,6 +347,57 @@ describe('migrationV2', () => {
     expect(colNames).toContain('superseded_by_id');
     expect(colNames).toContain('created_at');
     expect(colNames).toContain('updated_at');
+    expect(colNames).toContain('project_root');
+  });
+
+  it('creates project metadata indexes for scoped recall', async () => {
+    const { runMigrations } = await import('../../src/storage/migrations.js');
+    runMigrations(adapter, false);
+    const indexes = adapter.all<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='index'",
+    );
+    expect(indexes.map((row) => row.name)).toEqual(
+      expect.arrayContaining([
+        'idx_memories_project_updated',
+        'idx_dm_project_state_topic_updated',
+        'idx_ce_project_timestamp',
+        'idx_ce_project_session_timestamp',
+      ]),
+    );
+  });
+
+  it('normalizes stored project roots during migration v4', async () => {
+    const { runMigrations } = await import('../../src/storage/migrations.js');
+    runMigrations(adapter, false);
+
+    const now = Date.now();
+    adapter.run(
+      `INSERT INTO conversation_events
+       (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        'evt-normalize-project',
+        'codex',
+        null,
+        'C:\\Users\\Admin\\Project\\',
+        'sess-1',
+        now,
+        'session_start',
+        '{}',
+        'medium',
+        null,
+        now,
+      ],
+    );
+
+    adapter.run('UPDATE schema_version SET version = ?', [3]);
+    runMigrations(adapter, false);
+
+    const row = adapter.get<{ project_root: string }>(
+      'SELECT project_root FROM conversation_events WHERE event_id = ?',
+      ['evt-normalize-project'],
+    );
+    expect(row?.project_root).toBe('c:/users/admin/project');
   });
 
   it('creates durable memory indexes on topic_key, state, and source_event_id', async () => {

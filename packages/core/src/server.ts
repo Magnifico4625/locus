@@ -134,6 +134,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       batchLimit: 0,
       captureLevel: config.captureLevel,
       fts5Available: fts5,
+      projectRoot: root,
     });
     runDurableExtraction(db, { source: 'codex' });
     _lastIngestMetrics = startupMetrics;
@@ -204,6 +205,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
             inboxDir,
             captureLevel: config.captureLevel,
             fts5Available: fts5,
+            projectRoot: root,
             env: process.env,
             processInbox,
             runDurableExtraction,
@@ -219,6 +221,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           batchLimit: 50,
           captureLevel: config.captureLevel,
           fts5Available: fts5,
+          projectRoot: root,
         });
         runDurableExtraction(db, { source: 'codex' });
         _lastIngestMetrics = metrics;
@@ -361,7 +364,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     'memory_remember',
     { text: z.string(), tags: z.array(z.string()).optional() },
     async ({ text, tags }) => {
-      const entry = handleRemember(text, tags ?? [], { semantic });
+      const entry = handleRemember(text, tags ?? [], { semantic, projectRoot: root });
       return {
         content: [{ type: 'text' as const, text: `Remembered (id=${entry.id}): ${entry.content}` }],
       };
@@ -388,6 +391,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           inboxDir,
           captureLevel: config.captureLevel,
           fts5Available: fts5,
+          projectRoot: root,
           env: process.env,
           processInbox,
           runDurableExtraction,

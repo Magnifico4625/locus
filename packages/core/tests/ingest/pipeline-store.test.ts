@@ -70,6 +70,44 @@ describe('processInbox — store phase', () => {
     expect(row?.project_root).toBe('/home/user/myapp');
   });
 
+  it('normalizes project_root before storing conversation events', async () => {
+    const { processInbox } = await import('../../src/ingest/pipeline.js');
+    const event = makeEvent({
+      event_id: 'project-normalize-0000-0000-000000000000',
+      project_root: 'C:\\Users\\Admin\\Project',
+    });
+    writeEventFile(inboxDir, event);
+
+    processInbox(inboxDir, adapter, { captureLevel: 'full', fts5Available: false });
+
+    const row = adapter.get<{ project_root: string }>(
+      'SELECT project_root FROM conversation_events WHERE event_id = ?',
+      [event.event_id],
+    );
+    expect(row?.project_root).toBe('c:/users/admin/project');
+  });
+
+  it('stores a subdirectory Codex cwd under the current project root', async () => {
+    const { processInbox } = await import('../../src/ingest/pipeline.js');
+    const event = makeEvent({
+      event_id: 'project-subdir-0000-0000-000000000000',
+      project_root: 'C:\\Users\\Admin\\Project\\packages\\core',
+    });
+    writeEventFile(inboxDir, event);
+
+    processInbox(inboxDir, adapter, {
+      captureLevel: 'full',
+      fts5Available: false,
+      projectRoot: 'C:\\Users\\Admin\\Project',
+    });
+
+    const row = adapter.get<{ project_root: string }>(
+      'SELECT project_root FROM conversation_events WHERE event_id = ?',
+      [event.event_id],
+    );
+    expect(row?.project_root).toBe('c:/users/admin/project');
+  });
+
   it('stores significance in conversation_events', async () => {
     const { processInbox } = await import('../../src/ingest/pipeline.js');
     const event = makeEvent({
