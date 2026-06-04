@@ -138,7 +138,7 @@ export interface ResolvedTimeRange {
   to: number;
 }
 
-type TimeResolutionMode = 'local' | 'utc';
+export type TimeResolutionMode = 'local' | 'utc';
 
 function setStartOfDay(date: Date, mode: TimeResolutionMode): void {
   if (mode === 'utc') {
@@ -147,6 +147,25 @@ function setStartOfDay(date: Date, mode: TimeResolutionMode): void {
   }
 
   date.setHours(0, 0, 0, 0);
+}
+
+function startOfMonth(timestamp: number, mode: TimeResolutionMode): Date {
+  const date = new Date(timestamp);
+  if (mode === 'utc') {
+    return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
+  }
+
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date: Date, months: number, mode: TimeResolutionMode): Date {
+  const next = new Date(date);
+  if (mode === 'utc') {
+    next.setUTCMonth(next.getUTCMonth() + months);
+  } else {
+    next.setMonth(next.getMonth() + months);
+  }
+  return next;
 }
 
 /**
@@ -193,6 +212,16 @@ export function resolveTimeRange(
         return { from: now - 7 * 24 * 3600 * 1000, to: now };
       case 'last_30d':
         return { from: now - 30 * 24 * 3600 * 1000, to: now };
+      case 'this_month': {
+        const start = startOfMonth(now, mode);
+        const end = addMonths(start, 1, mode);
+        return { from: start.getTime(), to: end.getTime() };
+      }
+      case 'last_month': {
+        const thisMonth = startOfMonth(now, mode);
+        const previousMonth = addMonths(thisMonth, -1, mode);
+        return { from: previousMonth.getTime(), to: thisMonth.getTime() };
+      }
     }
   }
 

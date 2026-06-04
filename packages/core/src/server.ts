@@ -241,7 +241,17 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .object({
           from: z.number().optional(),
           to: z.number().optional(),
-          relative: z.enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d']).optional(),
+          relative: z
+            .enum([
+              'today',
+              'yesterday',
+              'this_week',
+              'last_7d',
+              'last_30d',
+              'this_month',
+              'last_month',
+            ])
+            .optional(),
         })
         .optional()
         .describe('Filter by time range (absolute or relative)'),
@@ -298,7 +308,17 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .object({
           from: z.number().optional(),
           to: z.number().optional(),
-          relative: z.enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d']).optional(),
+          relative: z
+            .enum([
+              'today',
+              'yesterday',
+              'this_week',
+              'last_7d',
+              'last_30d',
+              'this_month',
+              'last_month',
+            ])
+            .optional(),
         })
         .optional()
         .describe('Filter recall candidates by time range (absolute or relative)'),
@@ -506,7 +526,17 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .object({
           from: z.number().optional(),
           to: z.number().optional(),
-          relative: z.enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d']).optional(),
+          relative: z
+            .enum([
+              'today',
+              'yesterday',
+              'this_week',
+              'last_7d',
+              'last_30d',
+              'this_month',
+              'last_month',
+            ])
+            .optional(),
         })
         .optional()
         .describe('Filter by time range (absolute or relative)'),

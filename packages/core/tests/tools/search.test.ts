@@ -666,4 +666,24 @@ describe('resolveTimeRange', () => {
     expect(range.from).toBe(monday.getTime());
     expect(range.to).toBeGreaterThanOrEqual(Date.now() - 1000);
   });
+
+  it('resolves "this_month" with UTC month boundaries when requested', () => {
+    const now = Date.parse('2026-05-30T12:00:00.000Z');
+    const range = resolveTimeRange({ relative: 'this_month' }, now, 'utc');
+
+    expect(range).toEqual({
+      from: Date.parse('2026-05-01T00:00:00.000Z'),
+      to: Date.parse('2026-06-01T00:00:00.000Z'),
+    });
+  });
+
+  it('resolves "last_month" with UTC month boundaries when requested', () => {
+    const now = Date.parse('2026-05-30T12:00:00.000Z');
+    const range = resolveTimeRange({ relative: 'last_month' }, now, 'utc');
+
+    expect(range).toEqual({
+      from: Date.parse('2026-04-01T00:00:00.000Z'),
+      to: Date.parse('2026-05-01T00:00:00.000Z'),
+    });
+  });
 });

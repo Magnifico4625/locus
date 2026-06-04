@@ -10,6 +10,7 @@ export interface RecallOptions {
   timeRange?: TimeRange;
   limit?: number;
   now?: number;
+  temporalMode?: 'local' | 'utc';
 }
 
 export function handleRecall(

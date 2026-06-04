@@ -104,10 +104,14 @@ describe('handleRecall', () => {
   });
 
   it('resolves "yesterday" to an absolute date range', () => {
-    const result = handleRecall('What did we do yesterday?', {
-      db: adapter,
-      now,
-    }) as MemoryRecallResult;
+    const result = handleRecall(
+      'What did we do yesterday?',
+      {
+        db: adapter,
+        now,
+      },
+      { temporalMode: 'utc' },
+    ) as MemoryRecallResult;
 
     expect(result.status).toBe('no_memory');
     expect(result.question).toBe('What did we do yesterday?');
@@ -117,7 +121,76 @@ describe('handleRecall', () => {
       to: Date.parse('2026-04-22T00:00:00.000Z'),
       fromIso: '2026-04-21T00:00:00.000Z',
       toIso: '2026-04-22T00:00:00.000Z',
+      granularity: 'day',
     });
+  });
+
+  it('resolves explicit this_month timeRange and filters recall candidates', () => {
+    const mayNow = Date.parse('2026-05-30T12:00:00.000Z');
+    insertConversationEvent(adapter, {
+      eventId: 'evt-track-d-may',
+      timestamp: Date.parse('2026-05-15T12:00:00.000Z'),
+      payloadJson: JSON.stringify({ summary: 'Track D May checkpoint completed.' }),
+      sessionId: 'sess-may',
+    });
+    insertConversationEvent(adapter, {
+      eventId: 'evt-track-d-april',
+      timestamp: Date.parse('2026-04-15T12:00:00.000Z'),
+      payloadJson: JSON.stringify({ summary: 'Track D April checkpoint completed.' }),
+      sessionId: 'sess-april',
+    });
+
+    const result = handleRecall(
+      'What did we do for Track D?',
+      { db: adapter, now: mayNow },
+      { timeRange: { relative: 'this_month' }, temporalMode: 'utc' },
+    ) as MemoryRecallResult;
+
+    expect(result.resolvedRange).toMatchObject({
+      label: 'this_month',
+      fromIso: '2026-05-01T00:00:00.000Z',
+      toIso: '2026-06-01T00:00:00.000Z',
+      granularity: 'month',
+    });
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        eventIds: ['evt-track-d-may'],
+      }),
+    ]);
+  });
+
+  it('resolves explicit last_month timeRange and filters recall candidates', () => {
+    const mayNow = Date.parse('2026-05-30T12:00:00.000Z');
+    insertConversationEvent(adapter, {
+      eventId: 'evt-track-d-may',
+      timestamp: Date.parse('2026-05-15T12:00:00.000Z'),
+      payloadJson: JSON.stringify({ summary: 'Track D May checkpoint completed.' }),
+      sessionId: 'sess-may',
+    });
+    insertConversationEvent(adapter, {
+      eventId: 'evt-track-d-april',
+      timestamp: Date.parse('2026-04-15T12:00:00.000Z'),
+      payloadJson: JSON.stringify({ summary: 'Track D April checkpoint completed.' }),
+      sessionId: 'sess-april',
+    });
+
+    const result = handleRecall(
+      'What did we do for Track D?',
+      { db: adapter, now: mayNow },
+      { timeRange: { relative: 'last_month' }, temporalMode: 'utc' },
+    ) as MemoryRecallResult;
+
+    expect(result.resolvedRange).toMatchObject({
+      label: 'last_month',
+      fromIso: '2026-04-01T00:00:00.000Z',
+      toIso: '2026-05-01T00:00:00.000Z',
+      granularity: 'month',
+    });
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        eventIds: ['evt-track-d-april'],
+      }),
+    ]);
   });
 
   it('includes durable decision memory in the returned summary and candidates', () => {

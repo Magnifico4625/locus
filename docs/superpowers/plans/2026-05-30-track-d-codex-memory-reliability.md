@@ -845,12 +845,17 @@ npm -w @locus/codex run typecheck
 - Modify: `packages/core/src/recall/temporal-parser.ts`
 - Modify: `packages/core/src/recall/query-parser.ts`
 - Modify: `packages/core/src/recall/index.ts`
+- Modify: `packages/core/src/tools/search.ts`
+- Modify: `packages/core/src/tools/recall.ts`
 - Modify: `packages/core/src/server.ts`
 - Test: `packages/core/tests/recall/temporal-parser.test.ts`
 - Test: `packages/core/tests/recall/query-parser.test.ts`
 - Test: `packages/core/tests/recall/calendar.test.ts`
+- Test: `packages/core/tests/tools/search.test.ts`
+- Test: `packages/core/tests/tools/timeline.test.ts`
+- Test: `packages/core/tests/tools/recall.test.ts`
 
-- [ ] **Step D2.1: Write failing parser tests for month/week phrases**
+- [x] **Step D2.1: Write failing parser tests for month/week phrases**
 
 Extend `packages/core/tests/recall/temporal-parser.test.ts` with:
 
@@ -901,7 +906,7 @@ npm test -- packages/core/tests/recall/temporal-parser.test.ts
 
 Expected: FAIL for month phrases.
 
-- [ ] **Step D2.2: Add date bucket types**
+- [x] **Step D2.2: Add date bucket types**
 
 Modify `packages/core/src/types.ts`:
 
@@ -935,7 +940,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS or only failures in code that needs the new optional field imported.
 
-- [ ] **Step D2.3: Implement calendar helper**
+- [x] **Step D2.3: Implement calendar helper**
 
 Create `packages/core/src/recall/calendar.ts`:
 
@@ -1021,7 +1026,7 @@ npm test -- packages/core/tests/recall/calendar.test.ts
 
 Expected: PASS.
 
-- [ ] **Step D2.4: Implement month phrase parsing**
+- [x] **Step D2.4: Implement month phrase parsing**
 
 Modify `packages/core/src/recall/temporal-parser.ts`:
 
@@ -1071,7 +1076,7 @@ npm test -- packages/core/tests/recall/temporal-parser.test.ts packages/core/tes
 
 Expected: PASS.
 
-- [ ] **Step D2.5: Extend MCP timeRange enum safely**
+- [x] **Step D2.5: Extend MCP timeRange enum safely**
 
 Modify `packages/core/src/types.ts`:
 
@@ -1136,7 +1141,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step D2.5a: Unify timezone policy for recall, search, timeline, and calendar**
+- [x] **Step D2.5a: Unify timezone policy for recall, search, timeline, and calendar**
 
 Current code mixes UTC recall parsing with local `resolveTimeRange` defaults. Track D must make this explicit before date-bucket recall ships.
 
@@ -1229,7 +1234,7 @@ export function weekBucket(timestamp: number, options?: DateBucketOptions): Date
 export function monthBucket(timestamp: number, options?: DateBucketOptions): DateBucketRange
 ```
 
-Update `handleCalendar` and `buildBucketsForCandidates` to pass `{ mode: 'local' }` for MCP calls. Unit tests that assert exact UTC boundaries pass `{ mode: 'utc' }`.
+D2 implements the shared calendar bucket helpers with `{ mode: 'local' }` as the default and explicit `{ mode: 'utc' }` for deterministic tests. `handleCalendar` and `buildBucketsForCandidates` do not exist until Task D3; D3 must call these helpers with the MCP default local mode instead of inventing a second timezone policy.
 
 Update `packages/core/tests/recall/query-parser.test.ts`:
 
@@ -1254,7 +1259,7 @@ npm test -- packages/core/tests/recall/temporal-parser.test.ts packages/core/tes
 
 Expected: PASS and no mismatch between recall/search/timeline date boundaries.
 
-- [ ] **Step D2.5b: Update recall barrel exports**
+- [x] **Step D2.5b: Update recall barrel exports**
 
 Modify `packages/core/src/recall/index.ts` so downstream tests and tools can import the new temporal and calendar contracts without reaching into private files:
 
@@ -1273,13 +1278,26 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step D2.6: Commit temporal bucket support**
+- [x] **Step D2.6: Commit temporal bucket support**
 
 Run:
 
 ```bash
-git add packages/core/src/types.ts packages/core/src/recall/calendar.ts packages/core/src/recall/temporal-parser.ts packages/core/src/recall/query-parser.ts packages/core/src/recall/index.ts packages/core/src/tools/search.ts packages/core/src/server.ts packages/core/tests/recall/calendar.test.ts packages/core/tests/recall/temporal-parser.test.ts packages/core/tests/recall/query-parser.test.ts packages/core/tests/tools/search.test.ts packages/core/tests/tools/timeline.test.ts packages/core/tests/tools/recall.test.ts
+git add packages/core/src/types.ts packages/core/src/recall/calendar.ts packages/core/src/recall/temporal-parser.ts packages/core/src/recall/query-parser.ts packages/core/src/recall/index.ts packages/core/src/tools/search.ts packages/core/src/tools/recall.ts packages/core/src/server.ts packages/core/tests/recall/calendar.test.ts packages/core/tests/recall/temporal-parser.test.ts packages/core/tests/recall/query-parser.test.ts packages/core/tests/tools/search.test.ts packages/core/tests/tools/timeline.test.ts packages/core/tests/tools/recall.test.ts
 git commit -m "feat(core): add temporal recall buckets"
+```
+
+Completion evidence (2026-06-04):
+
+```bash
+npm test -- packages/core/tests/recall/temporal-parser.test.ts packages/core/tests/recall/query-parser.test.ts packages/core/tests/recall/calendar.test.ts packages/core/tests/tools/search.test.ts packages/core/tests/tools/timeline.test.ts packages/core/tests/tools/recall.test.ts
+# PASS: 6 files, 100 tests
+
+npm -w @locus/core run typecheck
+# PASS
+
+npm test -- packages/core/tests/integration/track-c-recall-acceptance.test.ts packages/core/tests/integration/server.test.ts
+# PASS: 2 files, 28 tests
 ```
 
 ---

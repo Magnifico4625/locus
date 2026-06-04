@@ -1,13 +1,15 @@
+export type { DateBucketOptions, DateBucketRange } from './calendar.js';
+export { dayBucket, monthBucket, weekBucket } from './calendar.js';
 export type { CandidateLoaderOptions } from './candidate-loader.js';
 export { loadRecallCandidates } from './candidate-loader.js';
 export type { RecallEngineDeps, RecallEngineOptions } from './engine.js';
 export { runRecallEngine } from './engine.js';
 export { groupRecallCandidates } from './grouping.js';
-export type { ParsedRecallQuery } from './query-parser.js';
+export type { ParsedRecallQuery, ParseRecallQueryOptions } from './query-parser.js';
 export { parseRecallQuery } from './query-parser.js';
 export type { BuildRecallResultOptions } from './result-builder.js';
 export { buildRecallResult } from './result-builder.js';
 export type { RecallScoreResult, RecallScoringOptions } from './scoring.js';
 export { scoreRecallCandidate, scoreRecallCandidates } from './scoring.js';
-export type { ParsedRecallRange } from './temporal-parser.js';
+export type { ParsedRecallRange, RecallTemporalParseOptions } from './temporal-parser.js';
 export { parseRecallTemporalRange } from './temporal-parser.js';

@@ -28,10 +28,25 @@ describe('parseRecallQuery', () => {
   });
 
   it('includes temporal range from the temporal parser', () => {
-    expect(parseRecallQuery('что решили вчера?', now).temporalRange).toMatchObject({
+    expect(
+      parseRecallQuery('что решили вчера?', now, { temporalMode: 'utc' }).temporalRange,
+    ).toMatchObject({
       label: 'вчера',
       fromIso: '2026-05-03T00:00:00.000Z',
       toIso: '2026-05-04T00:00:00.000Z',
+    });
+  });
+
+  it('passes UTC temporal mode through query parsing for deterministic tests', () => {
+    expect(
+      parseRecallQuery('what happened this month?', Date.parse('2026-05-30T12:00:00.000Z'), {
+        temporalMode: 'utc',
+      }).temporalRange,
+    ).toMatchObject({
+      label: 'this month',
+      fromIso: '2026-05-01T00:00:00.000Z',
+      toIso: '2026-06-01T00:00:00.000Z',
+      granularity: 'month',
     });
   });
 

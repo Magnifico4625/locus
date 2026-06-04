@@ -40,7 +40,7 @@ describe('parseRecallTemporalRange', () => {
     ],
     ['что делали в пятницу?', 'в пятницу', '2026-05-01T00:00:00.000Z', '2026-05-02T00:00:00.000Z'],
   ])('parses %s', (question, label, fromIso, toIso) => {
-    expect(parseRecallTemporalRange(question, now)).toEqual({
+    expect(parseRecallTemporalRange(question, now, { mode: 'utc' })).toMatchObject({
       label,
       from: Date.parse(fromIso),
       to: Date.parse(toIso),
@@ -49,7 +49,47 @@ describe('parseRecallTemporalRange', () => {
     });
   });
 
+  it.each([
+    [
+      'вспомни работу в этом месяце',
+      'в этом месяце',
+      '2026-05-01T00:00:00.000Z',
+      '2026-06-01T00:00:00.000Z',
+    ],
+    [
+      'what did we do this month?',
+      'this month',
+      '2026-05-01T00:00:00.000Z',
+      '2026-06-01T00:00:00.000Z',
+    ],
+    [
+      'что делали в мае?',
+      'май 2026',
+      '2026-05-01T00:00:00.000Z',
+      '2026-06-01T00:00:00.000Z',
+    ],
+    [
+      'what happened in April?',
+      'april 2026',
+      '2026-04-01T00:00:00.000Z',
+      '2026-05-01T00:00:00.000Z',
+    ],
+  ])('parses period query %s', (question, label, fromIso, toIso) => {
+    const may30 = Date.parse('2026-05-30T12:00:00.000Z');
+
+    expect(parseRecallTemporalRange(question, may30, { mode: 'utc' })).toEqual({
+      label,
+      from: Date.parse(fromIso),
+      to: Date.parse(toIso),
+      fromIso,
+      toIso,
+      granularity: 'month',
+    });
+  });
+
   it('returns undefined when no temporal phrase is present', () => {
-    expect(parseRecallTemporalRange('what did we decide about auth?', now)).toBeUndefined();
+    expect(
+      parseRecallTemporalRange('what did we decide about auth?', now, { mode: 'utc' }),
+    ).toBeUndefined();
   });
 });

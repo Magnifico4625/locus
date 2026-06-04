@@ -142,6 +142,44 @@ describe('handleTimeline', () => {
     expect(entries[0]?.eventId).toBe('evt-today');
   });
 
+  it('filters by timeRange relative=this_month using local month boundaries', () => {
+    const now = new Date(2026, 4, 30, 12, 0, 0, 0).getTime();
+    insertEvent(adapter, {
+      event_id: 'evt-this-month',
+      timestamp: new Date(2026, 4, 15, 9, 0, 0, 0).getTime(),
+    });
+    insertEvent(adapter, {
+      event_id: 'evt-last-month',
+      timestamp: new Date(2026, 3, 20, 9, 0, 0, 0).getTime(),
+    });
+
+    const entries = handleTimeline(
+      { db: adapter },
+      { timeRange: { relative: 'this_month' }, now },
+    );
+
+    expect(entries.map((entry) => entry.eventId)).toEqual(['evt-this-month']);
+  });
+
+  it('filters by timeRange relative=last_month using local month boundaries', () => {
+    const now = new Date(2026, 4, 30, 12, 0, 0, 0).getTime();
+    insertEvent(adapter, {
+      event_id: 'evt-this-month',
+      timestamp: new Date(2026, 4, 15, 9, 0, 0, 0).getTime(),
+    });
+    insertEvent(adapter, {
+      event_id: 'evt-last-month',
+      timestamp: new Date(2026, 3, 20, 9, 0, 0, 0).getTime(),
+    });
+
+    const entries = handleTimeline(
+      { db: adapter },
+      { timeRange: { relative: 'last_month' }, now },
+    );
+
+    expect(entries.map((entry) => entry.eventId)).toEqual(['evt-last-month']);
+  });
+
   // ── 6. Filters by filePath via event_files ─────────────────────────────
 
   it('filters by filePath via event_files JOIN', () => {

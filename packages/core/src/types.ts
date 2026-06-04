@@ -175,6 +175,18 @@ export interface MemoryRecallResolvedRange {
   to: number;
   fromIso: string;
   toIso: string;
+  granularity?: 'day' | 'week' | 'month' | 'custom';
+}
+
+export interface MemoryDateBucket {
+  key: string;
+  label: string;
+  from: number;
+  to: number;
+  eventCount: number;
+  sessionCount: number;
+  durableCount: number;
+  topicKeys: string[];
 }
 
 export interface MemoryRecallCandidate {
@@ -383,7 +395,14 @@ export interface IngestMetrics {
 
 // ─── Time Range (extended search) ───
 
-export type TimeRangeRelative = 'today' | 'yesterday' | 'this_week' | 'last_7d' | 'last_30d';
+export type TimeRangeRelative =
+  | 'today'
+  | 'yesterday'
+  | 'this_week'
+  | 'last_7d'
+  | 'last_30d'
+  | 'this_month'
+  | 'last_month';
 
 export interface TimeRange {
   from?: number;
