@@ -149,6 +149,7 @@ describe('skill sync helpers', () => {
     expect(output).toContain('Installed skill:');
     expect(installedSkill).toContain('# Locus -- Persistent Project Memory');
     expect(installedSkill).toContain('memory_recall');
+    expect(installedSkill).toContain('memory_calendar');
     expect(installedSkill).toContain('Always check Locus before saying you do not remember');
     expect(installedSkill).toContain('candidateGroups');
     expect(installedSkill).toContain('memory_review');

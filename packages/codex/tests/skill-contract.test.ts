@@ -13,6 +13,7 @@ describe('locus-memory skill contract', () => {
     const skill = readSkill();
 
     expect(skill).toContain('memory_recall');
+    expect(skill).toContain('memory_calendar');
     expect(skill).toContain('memory_search');
     expect(skill).toContain('auto-import');
     expect(skill).toContain('memory_status');
@@ -22,6 +23,7 @@ describe('locus-memory skill contract', () => {
     expect(skill).toContain('architecture');
     expect(skill).toContain('memory_scan');
     expect(skill).toContain('memory_timeline');
+    expect(skill).toContain('this month');
   });
 
   it('teaches Codex to check Locus before claiming memory loss', () => {
@@ -29,7 +31,7 @@ describe('locus-memory skill contract', () => {
 
     expect(skill).toMatch(/Always check Locus before saying you do not remember/i);
     expect(skill).toContain('needs_clarification');
-    expect(skill).toContain('fall back to `memory_search` or `memory_timeline`');
+    expect(skill).toContain('fall back to `memory_search`, `memory_calendar`, or `memory_timeline`');
     expect(skill).toContain('after the lookup');
   });
 

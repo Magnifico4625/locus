@@ -79,12 +79,12 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 
 ## What Works
 
-- All 14 MCP tools (including `memory_recall` and `memory_import_codex`)
+- All 15 MCP tools (including `memory_recall`, `memory_calendar`, and `memory_import_codex`)
 - All 3 MCP resources (project-map, decisions, recent)
 - SQLite storage with FTS5 full-text search
 - Client-aware storage: data stored in `$CODEX_HOME/memory/`
-- Auto-import before `memory_search`, plus manual and library JSONL import for Codex session rollout files
-- Canonical Codex skill workflow for `memory_search`, `memory_status`, `memory_remember`, and manual `memory_import_codex`
+- Auto-import before `memory_recall`, `memory_search`, and `memory_calendar`, plus manual and library JSONL import for Codex session rollout files
+- Canonical Codex skill workflow for `memory_recall`, `memory_calendar`, `memory_search`, `memory_status`, `memory_remember`, and manual `memory_import_codex`
 - Codex-aware diagnostics in `memory_status` and `memory_doctor`
 - Summary-first recall through `memory_recall`
 - `codexTruth` status guidance that separates import health from recall usefulness
@@ -103,14 +103,14 @@ Track C raises the bar from "import works" to "recall is useful": `memory_recall
 
 ### Auto-import before search
 
-When Codex is the detected client environment, core auto-imports only the newest rollout file before `memory_search`.
+When Codex is the detected client environment, core auto-imports only the newest rollout file before `memory_recall`, `memory_search`, and `memory_calendar`.
 
 Behavior:
 
 - search-triggered, not a background watcher
 - bounded to the newest discovered rollout session
 - debounced in the server process to avoid repeated re-import during active querying
-- best-effort: if import is disabled or fails, search still runs
+- best-effort: if import is disabled or fails, the memory query still runs
 
 Use `memory_status` to inspect both the last auto-import snapshot and the current Codex diagnostics snapshot.
 
@@ -119,6 +119,7 @@ Use `memory_status` to inspect both the last auto-import snapshot and the curren
 The canonical Locus Codex skill assumes this workflow:
 
 - `memory_recall` first for summary-first questions like "what did we do yesterday?"
+- `memory_calendar` for broad period questions like "what did we work on this month?" before drilling into specific days or topics
 - `memory_search` when exact-term search is still useful after recall
 - `memory_status` when recent history does not appear as expected
 - `memory_import_codex` only for manual catch-up, filtered imports, or older sessions

@@ -15,6 +15,7 @@ import type {
   ConversationEventRow,
   DoctorReport,
   InboxEvent,
+  MemoryCalendarResult,
   MemoryStatus,
   SearchResult,
 } from '../../src/types.js';
@@ -127,6 +128,59 @@ describe('createServer', () => {
       expect(ctx2.server).toBeDefined();
     } finally {
       ctx2.cleanup();
+    }
+  });
+
+  it('registers memory_calendar without breaking startup', async () => {
+    const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'calendar-tool.db') });
+    try {
+      expect(getRegisteredToolNames(ctx2.server)).toContain('memory_calendar');
+      expect(ctx2.db).toBeDefined();
+      expect(ctx2.server).toBeDefined();
+    } finally {
+      ctx2.cleanup();
+    }
+  });
+
+  it('memory_calendar runs pre-query ingest before building buckets', async () => {
+    const calendarDir = mkdtempSync(join(tmpdir(), 'locus-calendar-server-'));
+    const dbPath = join(calendarDir, 'locus.db');
+    const ctx2 = await createServer({ cwd: calendarDir, dbPath });
+    try {
+      mkdirSync(ctx2.inboxDir, { recursive: true });
+      const timestamp = Date.now();
+      const event = createTestInboxEvent({
+        event_id: 'calendar-prequery-001',
+        project_root: calendarDir,
+        session_id: 'calendar-session',
+        timestamp,
+        kind: 'session_end',
+        payload: { summary: 'Calendar pre-query ingest event' },
+      });
+      const filename = `${event.timestamp}-${event.event_id.slice(0, 8)}.json`;
+      writeFileSync(join(ctx2.inboxDir, filename), JSON.stringify(event), 'utf-8');
+
+      const calendarText = await callTextTool(ctx2, 'memory_calendar', {
+        timeRange: { from: timestamp - 1_000, to: timestamp + 1_000 },
+        granularity: 'day',
+      });
+      const calendar = JSON.parse(calendarText) as MemoryCalendarResult;
+      const row = ctx2.db.get<ConversationEventRow>(
+        'SELECT * FROM conversation_events WHERE event_id = ?',
+        ['calendar-prequery-001'],
+      );
+
+      expect(row).toBeDefined();
+      expect(calendar.projectRoot).toBe(normalizePathForIdentity(calendarDir));
+      expect(calendar.buckets).toEqual([
+        expect.objectContaining({
+          eventCount: 1,
+          sessionCount: 1,
+        }),
+      ]);
+    } finally {
+      ctx2.cleanup();
+      rmSync(calendarDir, { recursive: true, force: true });
     }
   });
 

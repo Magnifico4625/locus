@@ -14,9 +14,9 @@ It covers:
 
 When the Codex VS Code extension exposes the same Codex MCP surface as Codex CLI, Locus works through the same MCP server setup:
 
-- all 14 MCP tools
+- all 15 MCP tools
 - all 3 MCP resources
-- Codex auto-import before `memory_search`
+- Codex auto-import before `memory_recall`, `memory_search`, and `memory_calendar`
 - manual import through `memory_import_codex`
 - Codex diagnostics through `memory_status` and `memory_doctor`
 
@@ -110,9 +110,10 @@ Use this order:
 
 1. Ask Codex to run `memory_search` for a recent project topic.
 2. Ask Codex to run `memory_recall` for a summary-first question such as "what did we do yesterday?"
-3. If recent memory does not appear, run `memory_status`.
-4. If the state still looks wrong, run `memory_doctor`.
-5. Use `memory_import_codex({"latestOnly":true})` only if you need explicit manual catch-up.
+3. For broad period checks, ask Codex to run `memory_calendar` for a day/week/month bucket view.
+4. If recent memory does not appear, run `memory_status`.
+5. If the state still looks wrong, run `memory_doctor`.
+6. Use `memory_import_codex({"latestOnly":true})` only if you need explicit manual catch-up.
 
 Text-based success example for `memory_status`:
 

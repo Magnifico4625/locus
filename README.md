@@ -100,11 +100,12 @@ For product claims: `full` is maximum recall and must be treated as explicit opt
 
 ## MCP Tools
 
-Locus exposes 14 MCP tools:
+Locus exposes 15 MCP tools:
 
 | Tool | Purpose |
 | --- | --- |
 | `memory_recall` | Summary-first recall for questions about past work |
+| `memory_calendar` | Discover day/week/month activity buckets for a project and time range |
 | `memory_search` | Full-text search across structure, decisions, and conversation events |
 | `memory_remember` | Save important decisions or preferences |
 | `memory_review` | Inspect durable memories, states, evidence, and topic keys |

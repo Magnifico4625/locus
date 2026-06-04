@@ -1308,10 +1308,16 @@ npm test -- packages/core/tests/integration/track-c-recall-acceptance.test.ts pa
 - Create: `packages/core/src/tools/calendar.ts`
 - Modify: `packages/core/src/types.ts`
 - Modify: `packages/core/src/server.ts`
+- Modify: `README.md`
+- Modify: `packages/codex/README.md`
+- Modify: `packages/codex/skills/locus-memory/SKILL.md`
+- Modify: `docs/codex-vscode-extension.md`
 - Test: `packages/core/tests/tools/calendar.test.ts`
 - Test: `packages/core/tests/integration/server.test.ts`
+- Test: `packages/codex/tests/skill-contract.test.ts`
+- Test: `packages/codex/tests/skill-sync.test.ts`
 
-- [ ] **Step D3.1: Add public result types**
+- [x] **Step D3.1: Add public result types**
 
 Modify `packages/core/src/types.ts`:
 
@@ -1339,7 +1345,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS after imports compile.
 
-- [ ] **Step D3.2: Write failing calendar tool tests**
+- [x] **Step D3.2: Write failing calendar tool tests**
 
 Create `packages/core/tests/tools/calendar.test.ts`:
 
@@ -1409,7 +1415,7 @@ npm test -- packages/core/tests/tools/calendar.test.ts
 
 Expected: FAIL because `tools/calendar.ts` does not exist.
 
-- [ ] **Step D3.3: Implement `handleCalendar`**
+- [x] **Step D3.3: Implement `handleCalendar`**
 
 Create `packages/core/src/tools/calendar.ts` with this public shape:
 
@@ -1444,6 +1450,8 @@ Implementation requirements:
 - Add durable `topic_key` values to each bucket's `topicKeys` array, sorted and de-duplicated.
 - Sort buckets ascending by `from`.
 - Return at most `limit ?? 90` buckets.
+- Query time windows use a half-open interval (`>= from` and `< to`) so adjacent
+  calendar periods do not double-count boundary timestamps.
 
 Run:
 
@@ -1453,7 +1461,7 @@ npm test -- packages/core/tests/tools/calendar.test.ts
 
 Expected: PASS.
 
-- [ ] **Step D3.4: Register `memory_calendar` MCP tool**
+- [x] **Step D3.4: Register `memory_calendar` MCP tool**
 
 Modify `packages/core/src/server.ts`:
 
@@ -1502,13 +1510,32 @@ npm test -- packages/core/tests/integration/server.test.ts packages/core/tests/t
 
 Expected: PASS and registered tools include `memory_calendar`.
 
-- [ ] **Step D3.5: Commit calendar discovery**
+- [x] **Step D3.5: Commit calendar discovery**
 
 Run:
 
 ```bash
 git add packages/core/src/types.ts packages/core/src/tools/calendar.ts packages/core/src/server.ts packages/core/tests/tools/calendar.test.ts packages/core/tests/integration/server.test.ts
 git commit -m "feat(core): expose memory calendar"
+```
+
+Completion evidence (2026-06-04):
+
+```bash
+npm test -- packages/core/tests/tools/calendar.test.ts packages/core/tests/integration/server.test.ts
+# RED before implementation: FAIL because tools/calendar.ts was missing and memory_calendar was not registered
+
+npm test -- packages/core/tests/tools/calendar.test.ts packages/core/tests/integration/server.test.ts
+# PASS: 2 files, 25 tests
+
+npm -w @locus/core run typecheck
+# PASS
+
+npm test -- packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts
+# PASS: 2 files, 11 tests
+
+git diff --check
+# PASS
 ```
 
 ---
@@ -3353,7 +3380,7 @@ Required wording:
 - `memory_calendar` defaults to `last_30d`; agents should pass `this_month`, `last_month`, or an explicit range for user period questions instead of relying on the default.
 - `memory_recall` should show searched date buckets for date-scoped queries.
 - `memory_project_state` is the recommended current-state summary tool.
-- Update MCP tool-count wording from `14` to `16` after adding `memory_calendar` and `memory_project_state`.
+- Keep MCP tool-count wording current: D3 raises the documented count from `14` to `15`; D6 should raise it to `16` after `memory_project_state` is added.
 - Record evidence anchors as a follow-up if full evidence formatting is not complete in Track D: candidates should at least expose source event IDs/durable IDs and project/date metadata; richer display formatting can ship after the project-scoped behavior is proven.
 
 Run:

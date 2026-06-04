@@ -189,6 +189,20 @@ export interface MemoryDateBucket {
   topicKeys: string[];
 }
 
+export interface MemoryCalendarOptions {
+  timeRange?: TimeRange;
+  granularity?: 'day' | 'week' | 'month';
+  projectRoot?: string;
+  limit?: number;
+}
+
+export interface MemoryCalendarResult {
+  projectRoot: string;
+  resolvedRange?: MemoryRecallResolvedRange;
+  granularity: 'day' | 'week' | 'month';
+  buckets: MemoryDateBucket[];
+}
+
 export interface MemoryRecallCandidate {
   sessionId?: string;
   headline: string;

@@ -16,6 +16,7 @@ import { generateProjectMap } from './resources/project-map.js';
 import { generateRecent } from './resources/recent.js';
 import { initStorage } from './storage/init.js';
 import { handleAudit } from './tools/audit.js';
+import { handleCalendar } from './tools/calendar.js';
 import {
   CODEX_AUTO_IMPORT_DEBOUNCE_MS,
   coordinateCodexAutoImport,
@@ -338,6 +339,55 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           timeRange,
           limit,
           now,
+        },
+      );
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(result),
+          },
+        ],
+      };
+    },
+  );
+
+  // 2c. memory_calendar (with the same debounced Codex pre-query flow)
+  server.tool(
+    'memory_calendar',
+    {
+      timeRange: z
+        .object({
+          from: z.number().optional(),
+          to: z.number().optional(),
+          relative: z
+            .enum([
+              'today',
+              'yesterday',
+              'this_week',
+              'last_7d',
+              'last_30d',
+              'this_month',
+              'last_month',
+            ])
+            .optional(),
+        })
+        .optional()
+        .describe('Filter memory buckets by time range'),
+      granularity: z.enum(['day', 'week', 'month']).optional(),
+      limit: z.number().optional(),
+    },
+    async ({ timeRange, granularity, limit }) => {
+      const now = Date.now();
+      runPreQueryCodexFlow(now);
+
+      const result = handleCalendar(
+        { db, projectRoot: root, now },
+        {
+          timeRange,
+          granularity,
+          limit,
         },
       );
 
