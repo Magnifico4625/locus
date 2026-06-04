@@ -1,5 +1,6 @@
 import type { MemoryRecallCandidate, MemoryRecallConfidence } from '../types.js';
 import type { ParsedRecallQuery } from './query-parser.js';
+import { isSameProjectRoot } from './project-scope.js';
 
 export interface RecallScoreResult {
   candidate: MemoryRecallCandidate;
@@ -10,6 +11,8 @@ export interface RecallScoreResult {
 
 export interface RecallScoringOptions {
   now: number;
+  projectRoot?: string;
+  resolvedRange?: { from: number; to: number };
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -51,6 +54,56 @@ function recencyScore(timestamp: number, now: number): number {
   return 0;
 }
 
+function exactEntityTokens(values: readonly string[]): string[] {
+  return values.filter((value) =>
+    /^(?:v?\d+\.\d+(?:\.\d+)?|[A-Za-z][A-Za-z0-9_]{2,}|memory_[a-z_]+|[@\w.-]+\/[\w.-]+|[\w./-]+\.(?:ts|tsx|js|mjs|md|json))$/u.test(
+      value,
+    ),
+  );
+}
+
+function hasExactEntityMatch(
+  candidate: MemoryRecallCandidate,
+  parsedQuery: ParsedRecallQuery,
+): boolean {
+  const rawTokens = parsedQuery.original
+    .split(/\s+/u)
+    .map((token) => token.replace(/^[,;:!?()[\]{}"']+|[,;:!?()[\]{}"']+$/gu, ''))
+    .filter(Boolean);
+  const entities = exactEntityTokens([
+    ...rawTokens,
+    ...parsedQuery.terms,
+    ...parsedQuery.normalizedTerms,
+  ]);
+  if (entities.length === 0) {
+    return false;
+  }
+
+  const haystack = [
+    candidate.headline,
+    ...(candidate.matchedTerms ?? []),
+    candidate.topicKey ?? '',
+    candidate.captureReason ?? '',
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return entities.some((entity) => haystack.includes(entity.toLowerCase()));
+}
+
+export function filterProjectCandidates(
+  candidates: MemoryRecallCandidate[],
+  projectRoot?: string,
+): MemoryRecallCandidate[] {
+  if (!projectRoot) {
+    return candidates;
+  }
+
+  return candidates.filter(
+    (candidate) => !candidate.projectRoot || isSameProjectRoot(candidate.projectRoot, projectRoot),
+  );
+}
+
 export function scoreRecallCandidate(
   candidate: MemoryRecallCandidate,
   parsedQuery: ParsedRecallQuery,
@@ -58,6 +111,15 @@ export function scoreRecallCandidate(
 ): RecallScoreResult {
   let score = 0;
   const reasons: string[] = [];
+
+  if (
+    options.projectRoot &&
+    candidate.projectRoot &&
+    isSameProjectRoot(candidate.projectRoot, options.projectRoot)
+  ) {
+    score += 10;
+    reasons.push('project_match');
+  }
 
   if (candidate.intent === parsedQuery.intent) {
     score += 3;
@@ -75,6 +137,15 @@ export function scoreRecallCandidate(
   }
 
   if (typeof candidate.timestamp === 'number') {
+    if (
+      options.resolvedRange &&
+      candidate.timestamp >= options.resolvedRange.from &&
+      candidate.timestamp < options.resolvedRange.to
+    ) {
+      score += 5;
+      reasons.push('time_range_fit');
+    }
+
     const bonus = recencyScore(candidate.timestamp, options.now);
     if (bonus > 0) {
       score += bonus;
@@ -114,6 +185,11 @@ export function scoreRecallCandidate(
     reasons.push('validation_command_context');
   }
 
+  if (hasExactEntityMatch(candidate, parsedQuery)) {
+    score += 4;
+    reasons.push('exact_entity_match');
+  }
+
   if (
     candidate.eventIds.length > 0 ||
     candidate.durableMemoryIds.length > 0 ||
@@ -121,6 +197,11 @@ export function scoreRecallCandidate(
   ) {
     score += 1;
     reasons.push('evidence_present');
+  }
+
+  if (options.projectRoot && !candidate.projectRoot) {
+    score -= 4;
+    reasons.push('legacy_global');
   }
 
   const confidence = confidenceForScore(score);

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ParsedRecallQuery } from '../../src/recall/query-parser.js';
-import { scoreRecallCandidate } from '../../src/recall/scoring.js';
+import { filterProjectCandidates, scoreRecallCandidate } from '../../src/recall/scoring.js';
 import type { MemoryRecallCandidate } from '../../src/types.js';
 
 function parsedQuery(overrides: Partial<ParsedRecallQuery> = {}): ParsedRecallQuery {
@@ -141,5 +141,98 @@ describe('scoreRecallCandidate', () => {
 
     expect(command.score).toBeGreaterThan(generic.score);
     expect(command.reasons).toContain('validation_command_context');
+  });
+
+  it('drops explicit other-project candidates before scoring', () => {
+    const kept = filterProjectCandidates(
+      [
+        candidate({
+          projectRoot: 'c:/repo/locus',
+          headline: 'Locus memory work',
+          eventIds: ['evt-locus'],
+          durableMemoryIds: [],
+        }),
+        candidate({
+          projectRoot: 'c:/repo/proxyvpn',
+          headline: 'ProxyVpn memory work',
+          eventIds: ['evt-proxy'],
+          durableMemoryIds: [],
+        }),
+        candidate({
+          projectRoot: undefined,
+          headline: 'Legacy memory work',
+          eventIds: [],
+          durableMemoryIds: [],
+          sourceKind: 'semantic',
+        }),
+      ],
+      'C:/repo/locus',
+    );
+
+    expect(kept.map((candidate) => candidate.headline)).toEqual([
+      'Locus memory work',
+      'Legacy memory work',
+    ]);
+  });
+
+  it('adds project, time range, and exact entity scoring factors', () => {
+    const result = scoreRecallCandidate(
+      candidate({
+        projectRoot: 'c:/repo/locus',
+        headline: 'Locus v3.6.1 CODEX_HOME memory_recall work.',
+        matchedTerms: ['v3.6.1', 'CODEX_HOME', 'memory_recall'],
+        timestamp: now - 60_000,
+      }),
+      parsedQuery({
+        original: 'what happened with v3.6.1 CODEX_HOME memory_recall?',
+        terms: ['v3.6.1', 'CODEX_HOME', 'memory_recall'],
+        termVariants: ['v3.6.1', 'CODEX_HOME', 'memory_recall'],
+      }),
+      {
+        now,
+        projectRoot: 'C:/repo/locus',
+        resolvedRange: { from: now - 3_600_000, to: now + 1_000 },
+      },
+    );
+
+    expect(result.reasons).toEqual(
+      expect.arrayContaining(['project_match', 'time_range_fit', 'exact_entity_match']),
+    );
+    expect(result.score).toBeGreaterThanOrEqual(20);
+  });
+
+  it('penalizes legacy global candidates that survive fallback', () => {
+    const result = scoreRecallCandidate(
+      candidate({
+        projectRoot: undefined,
+        headline: 'legacy CODEX_HOME import',
+        matchedTerms: ['CODEX_HOME'],
+        sourceKind: 'semantic',
+      }),
+      parsedQuery({
+        original: 'CODEX_HOME import',
+        terms: ['CODEX_HOME', 'import'],
+        termVariants: ['CODEX_HOME', 'import'],
+      }),
+      { now, projectRoot: 'C:/repo/locus' },
+    );
+
+    expect(result.reasons).toContain('legacy_global');
+    expect(result.score).toBeLessThan(
+      scoreRecallCandidate(
+        candidate({
+          projectRoot: 'c:/repo/locus',
+          headline: 'scoped CODEX_HOME import',
+          matchedTerms: ['CODEX_HOME'],
+          sourceKind: 'semantic',
+        }),
+        parsedQuery({
+          original: 'CODEX_HOME import',
+          terms: ['CODEX_HOME', 'import'],
+          termVariants: ['CODEX_HOME', 'import'],
+        }),
+        { now, projectRoot: 'C:/repo/locus' },
+      ).score,
+    );
   });
 });

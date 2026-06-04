@@ -204,6 +204,10 @@ export interface MemoryCalendarResult {
 }
 
 export interface MemoryRecallCandidate {
+  projectRoot?: string;
+  localDate?: string;
+  weekKey?: string;
+  monthKey?: string;
   sessionId?: string;
   headline: string;
   whyMatched: string;
@@ -235,6 +239,7 @@ export interface MemoryRecallResult {
   status: MemoryRecallStatus;
   question: string;
   resolvedRange?: MemoryRecallResolvedRange;
+  searchedDateBuckets?: MemoryDateBucket[];
   summary: string;
   candidates: MemoryRecallCandidate[];
   matchedIntent?: MemoryRecallIntent;

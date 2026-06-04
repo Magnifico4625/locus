@@ -1,4 +1,8 @@
 import type { SemanticMemory } from '../memory/semantic.js';
+import {
+  buildProjectScopeClause,
+  normalizeProjectRootForScope,
+} from '../recall/project-scope.js';
 import type { DatabaseAdapter, EventKind, ExportEntry, SearchResult, TimeRange } from '../types.js';
 import { sanitizeFtsQuery } from '../utils.js';
 
@@ -15,8 +19,10 @@ export interface SearchOptions {
   filePath?: string;
   kind?: EventKind;
   source?: string;
+  projectRoot?: string;
   limit?: number;
   offset?: number;
+  now?: number;
 }
 
 // ─── Internal row types ───────────────────────────────────────────────────────
@@ -43,12 +49,14 @@ interface EpisodicRow {
   created_at: number;
   updated_at: number;
   session_id: string | null;
+  project_root: string | null;
 }
 
 interface DurableRow {
   id: number;
   summary: string;
   updated_at: number;
+  project_root: string | null;
 }
 
 interface ConversationFtsRow {
@@ -272,11 +280,51 @@ function searchStructural(query: string, db: DatabaseAdapter): SearchResult[] {
 
 // ─── Episodic Search ──────────────────────────────────────────────────────────
 
-function searchEpisodic(query: string, db: DatabaseAdapter): SearchResult[] {
-  const lowerQuery = query.toLowerCase();
+function searchSemanticScoped(
+  query: string,
+  db: DatabaseAdapter,
+  projectRoot: string,
+): SearchResult[] {
+  const scope = buildProjectScopeClause('project_root', projectRoot);
   const rows = db.all<EpisodicRow>(
-    "SELECT * FROM memories WHERE layer='episodic' AND content LIKE ? ORDER BY updated_at DESC",
-    [`%${lowerQuery}%`],
+    `SELECT * FROM memories
+     WHERE layer = 'semantic'
+       AND ${scope.clause}
+       AND content LIKE ?
+     ORDER BY updated_at DESC
+     LIMIT 10`,
+    [...scope.params, `%${query}%`],
+  );
+
+  return rows.map((row) => ({
+    layer: 'semantic' as const,
+    content: row.content,
+    relevance: 0.8,
+    source: `memory:${row.id}`,
+  }));
+}
+
+function searchEpisodic(
+  query: string,
+  db: DatabaseAdapter,
+  projectRoot?: string,
+): SearchResult[] {
+  const lowerQuery = query.toLowerCase();
+  const params: unknown[] = [];
+  const clauses = ["layer='episodic'", 'content LIKE ?'];
+  params.push(`%${lowerQuery}%`);
+
+  if (projectRoot) {
+    const scope = buildProjectScopeClause('project_root', projectRoot);
+    clauses.splice(1, 0, scope.clause);
+    params.splice(0, 0, ...scope.params);
+  }
+
+  const rows = db.all<EpisodicRow>(
+    `SELECT * FROM memories
+     WHERE ${clauses.join(' AND ')}
+     ORDER BY updated_at DESC`,
+    params,
   );
 
   return rows.map((row) => ({
@@ -287,21 +335,29 @@ function searchEpisodic(query: string, db: DatabaseAdapter): SearchResult[] {
   }));
 }
 
-function searchDurable(query: string, db: DatabaseAdapter, fts5: boolean): SearchResult[] {
+function searchDurable(
+  query: string,
+  db: DatabaseAdapter,
+  fts5: boolean,
+  projectRoot?: string,
+): SearchResult[] {
   let rows: DurableRow[] = [];
 
   if (fts5) {
     const sanitized = sanitizeFtsQuery(query);
     if (sanitized) {
       try {
+        const scope = projectRoot ? buildProjectScopeClause('dm.project_root', projectRoot) : undefined;
+        const scopeClause = scope ? `AND ${scope.clause}` : '';
         rows = db.all<DurableRow>(
-          `SELECT dm.id, dm.summary, dm.updated_at
+          `SELECT dm.id, dm.summary, dm.updated_at, dm.project_root
            FROM durable_memories_fts dfts
            JOIN durable_memories dm ON dm.id = dfts.rowid
            WHERE dfts MATCH ? AND dm.state = 'active'
+           ${scopeClause}
            ORDER BY dm.updated_at DESC, dm.id DESC
            LIMIT 10`,
-          [sanitized],
+          [sanitized, ...(scope?.params ?? [])],
         );
       } catch {
         rows = [];
@@ -310,13 +366,23 @@ function searchDurable(query: string, db: DatabaseAdapter, fts5: boolean): Searc
   }
 
   if (rows.length === 0) {
+    const params: unknown[] = ['active'];
+    const clauses = ['state = ?'];
+    if (projectRoot) {
+      const scope = buildProjectScopeClause('project_root', projectRoot);
+      clauses.push(scope.clause);
+      params.push(...scope.params);
+    }
+    clauses.push('summary LIKE ?');
+    params.push(`%${query}%`);
+
     rows = db.all<DurableRow>(
-      `SELECT id, summary, updated_at
+      `SELECT id, summary, updated_at, project_root
        FROM durable_memories
-       WHERE state = 'active' AND summary LIKE ?
+       WHERE ${clauses.join(' AND ')}
        ORDER BY updated_at DESC, id DESC
        LIMIT 10`,
-      [`%${query}%`],
+      params,
     );
   }
 
@@ -335,14 +401,21 @@ function buildWhereClause(
   kind: EventKind | undefined,
   source: string | undefined,
   filePath: string | undefined,
+  projectRoot: string | undefined,
 ): { clauses: string[]; params: unknown[] } {
   const clauses: string[] = [];
   const params: unknown[] = [];
 
+  if (projectRoot) {
+    const scope = buildProjectScopeClause('ce.project_root', projectRoot);
+    clauses.push(scope.clause);
+    params.push(...scope.params);
+  }
+
   if (resolved) {
     clauses.push('ce.timestamp >= ?');
     params.push(resolved.from);
-    clauses.push('ce.timestamp <= ?');
+    clauses.push('ce.timestamp < ?');
     params.push(resolved.to);
   }
 
@@ -368,12 +441,25 @@ function searchConversationFts(
   query: string,
   db: DatabaseAdapter,
   resolved: ResolvedTimeRange | undefined,
-  opts: { kind?: EventKind; source?: string; filePath?: string; limit: number; offset: number },
+  opts: {
+    kind?: EventKind;
+    source?: string;
+    filePath?: string;
+    projectRoot?: string;
+    limit: number;
+    offset: number;
+  },
 ): SearchResult[] {
   const ftsQuery = sanitizeFtsQuery(query);
   if (!ftsQuery) return [];
 
-  const { clauses, params } = buildWhereClause(resolved, opts.kind, opts.source, opts.filePath);
+  const { clauses, params } = buildWhereClause(
+    resolved,
+    opts.kind,
+    opts.source,
+    opts.filePath,
+    opts.projectRoot,
+  );
 
   const whereStr = clauses.length > 0 ? `AND ${clauses.join(' AND ')}` : '';
 
@@ -405,9 +491,22 @@ function searchConversationLike(
   query: string,
   db: DatabaseAdapter,
   resolved: ResolvedTimeRange | undefined,
-  opts: { kind?: EventKind; source?: string; filePath?: string; limit: number; offset: number },
+  opts: {
+    kind?: EventKind;
+    source?: string;
+    filePath?: string;
+    projectRoot?: string;
+    limit: number;
+    offset: number;
+  },
 ): SearchResult[] {
-  const { clauses, params } = buildWhereClause(resolved, opts.kind, opts.source, opts.filePath);
+  const { clauses, params } = buildWhereClause(
+    resolved,
+    opts.kind,
+    opts.source,
+    opts.filePath,
+    opts.projectRoot,
+  );
 
   clauses.push('ce.payload_json LIKE ?');
   params.push(`%${query}%`);
@@ -495,32 +594,37 @@ export function handleSearch(
   const { db, semantic, fts5 } = deps;
   const convLimit = options?.limit ?? 20;
   const convOffset = options?.offset ?? 0;
+  const projectRoot = options?.projectRoot
+    ? normalizeProjectRootForScope(options.projectRoot)
+    : undefined;
 
   // 1. Structural results
   const structural = searchStructural(query, db);
 
   // 2. Semantic results
-  const semanticEntries = semantic.search(query, 10);
-  const semanticResults: SearchResult[] = semanticEntries.map((entry) => ({
-    layer: 'semantic' as const,
-    content: entry.content,
-    relevance: 0.8,
-    source: `memory:${entry.id}`,
-  }));
+  const semanticResults: SearchResult[] = projectRoot
+    ? searchSemanticScoped(query, db, projectRoot)
+    : semantic.search(query, 10).map((entry) => ({
+        layer: 'semantic' as const,
+        content: entry.content,
+        relevance: 0.8,
+        source: `memory:${entry.id}`,
+      }));
 
   // 3. Durable results
-  const durable = searchDurable(query, db, fts5);
+  const durable = searchDurable(query, db, fts5, projectRoot);
 
   // 4. Episodic results
-  const episodic = searchEpisodic(query, db);
+  const episodic = searchEpisodic(query, db, projectRoot);
 
   // 5. Conversation results (new in v3)
   let conversation: SearchResult[] = [];
-  const resolved = options?.timeRange ? resolveTimeRange(options.timeRange) : undefined;
+  const resolved = options?.timeRange ? resolveTimeRange(options.timeRange, options.now) : undefined;
   const convOpts = {
     kind: options?.kind,
     source: options?.source,
     filePath: options?.filePath,
+    projectRoot,
     limit: convLimit,
     offset: convOffset,
   };

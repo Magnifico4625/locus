@@ -1,10 +1,12 @@
 import type { DatabaseAdapter, EventKind, TimeRange } from '../types.js';
+import { buildProjectScopeClause } from '../recall/project-scope.js';
 import { resolveTimeRange, summarizePayload } from './search.js';
 
 // ─── Public interfaces ────────────────────────────────────────────────────────
 
 export interface TimelineDeps {
   db: DatabaseAdapter;
+  projectRoot?: string;
 }
 
 export interface TimelineOptions {
@@ -23,6 +25,7 @@ export interface TimelineEntry {
   timestamp: number;
   significance: string | null;
   sessionId: string | null;
+  projectRoot?: string;
   summary?: string;
   files?: string[];
 }
@@ -35,6 +38,7 @@ interface TimelineRow {
   timestamp: number;
   significance: string | null;
   session_id: string | null;
+  project_root: string | null;
   payload_json: string | null;
 }
 
@@ -54,11 +58,17 @@ export function handleTimeline(deps: TimelineDeps, options?: TimelineOptions): T
   const clauses: string[] = [];
   const params: unknown[] = [];
 
+  if (deps.projectRoot) {
+    const scope = buildProjectScopeClause('ce.project_root', deps.projectRoot);
+    clauses.push(scope.clause);
+    params.push(...scope.params);
+  }
+
   if (options?.timeRange) {
     const resolved = resolveTimeRange(options.timeRange, options.now);
     clauses.push('ce.timestamp >= ?');
     params.push(resolved.from);
-    clauses.push('ce.timestamp <= ?');
+    clauses.push('ce.timestamp < ?');
     params.push(resolved.to);
   }
 
@@ -76,7 +86,7 @@ export function handleTimeline(deps: TimelineDeps, options?: TimelineOptions): T
 
   const sql = `
     SELECT ce.event_id, ce.kind, ce.timestamp, ce.significance,
-           ce.session_id, ce.payload_json
+           ce.session_id, ce.project_root, ce.payload_json
     FROM conversation_events ce
     ${whereStr}
     ORDER BY ce.timestamp DESC
@@ -94,6 +104,7 @@ export function handleTimeline(deps: TimelineDeps, options?: TimelineOptions): T
       timestamp: row.timestamp,
       significance: row.significance,
       sessionId: row.session_id,
+      projectRoot: row.project_root ?? undefined,
     };
 
     if (!isSummary) {

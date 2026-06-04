@@ -4,6 +4,7 @@ import type { DatabaseAdapter, MemoryRecallResult, TimeRange } from '../types.js
 interface RecallDeps {
   db: DatabaseAdapter;
   now?: number;
+  projectRoot?: string;
 }
 
 export interface RecallOptions {

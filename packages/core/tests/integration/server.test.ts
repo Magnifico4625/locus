@@ -382,7 +382,10 @@ describe('createServer', () => {
 
       const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'generic-search.db') });
       try {
-        handleRemember('Generic search path still works', ['generic'], { semantic: ctx2.semantic });
+        await callTextTool(ctx2, 'memory_remember', {
+          text: 'Generic search path still works',
+          tags: ['generic'],
+        });
 
         const searchText = await callTextTool(ctx2, 'memory_search', {
           query: 'Generic search path still works',

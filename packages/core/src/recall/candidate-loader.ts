@@ -6,6 +6,8 @@ import type {
   MemoryRecallCandidate,
   TimeRange,
 } from '../types.js';
+import { weekBucket } from './calendar.js';
+import { buildProjectScopeClause } from './project-scope.js';
 import type { ParsedRecallQuery } from './query-parser.js';
 
 interface DurableRecallRow {
@@ -14,6 +16,7 @@ interface DurableRecallRow {
   memory_type: DurableMemoryType;
   summary: string;
   updated_at: number;
+  project_root: string | null;
 }
 
 interface ConversationRecallRow {
@@ -22,12 +25,14 @@ interface ConversationRecallRow {
   timestamp: number;
   payload_json: string | null;
   session_id: string | null;
+  project_root: string | null;
 }
 
 interface SemanticRecallRow {
   id: number;
   content: string;
   updated_at: number;
+  project_root: string | null;
 }
 
 export interface CandidateLoaderOptions {
@@ -36,6 +41,12 @@ export interface CandidateLoaderOptions {
   timeRange?: TimeRange;
   now: number;
   limit: number;
+  projectRoot?: string;
+}
+
+interface SemanticCandidateLoaderOptions extends CandidateLoaderOptions {
+  includeLegacyGlobal?: boolean;
+  requireExactTermOverlap?: boolean;
 }
 
 const DURABLE_TYPES_BY_INTENT: Partial<Record<ParsedRecallQuery['intent'], DurableMemoryType[]>> = {
@@ -99,6 +110,38 @@ function shouldKeepByTerms(text: string, queryTerms: string[]): boolean {
   return queryTerms.length === 0 || matchingTerms(text, queryTerms).length > 0;
 }
 
+function candidateDateFields(
+  timestamp: number | undefined,
+): Pick<MemoryRecallCandidate, 'localDate' | 'weekKey' | 'monthKey'> {
+  if (timestamp === undefined) {
+    return {};
+  }
+
+  const date = new Date(timestamp);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return {
+    localDate: `${year}-${month}-${day}`,
+    weekKey: weekBucket(timestamp, { mode: 'local' }).key,
+    monthKey: `${year}-${month}`,
+  };
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+}
+
+function hasExactTermOverlap(content: string, terms: readonly string[]): boolean {
+  const normalized = content.toLowerCase();
+  return terms.some((term) => {
+    const escaped = escapeRegExp(term.toLowerCase());
+    return new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}([^\\p{L}\\p{N}_-]|$)`, 'u').test(
+      normalized,
+    );
+  });
+}
+
 function durableTypesForIntent(intent: ParsedRecallQuery['intent']): DurableMemoryType[] {
   return DURABLE_TYPES_BY_INTENT[intent] ?? [];
 }
@@ -123,6 +166,7 @@ function loadDurableCandidates({
   timeRange,
   now,
   limit,
+  projectRoot,
 }: CandidateLoaderOptions): MemoryRecallCandidate[] {
   const memoryTypes = durableTypesForIntent(parsedQuery.intent);
   if (memoryTypes.length === 0) {
@@ -136,16 +180,22 @@ function loadDurableCandidates({
   clauses.push(`memory_type IN (${memoryTypes.map(() => '?').join(', ')})`);
   params.push(...memoryTypes);
 
+  if (projectRoot) {
+    const scope = buildProjectScopeClause('project_root', projectRoot);
+    clauses.push(scope.clause);
+    params.push(...scope.params);
+  }
+
   if (timeRange) {
     const resolved = resolveTimeRange(timeRange, now);
     clauses.push('updated_at >= ?');
     params.push(resolved.from);
-    clauses.push('updated_at <= ?');
+    clauses.push('updated_at < ?');
     params.push(resolved.to);
   }
 
   const rows = db.all<DurableRecallRow>(
-    `SELECT id, topic_key, memory_type, summary, updated_at
+    `SELECT id, topic_key, memory_type, summary, updated_at, project_root
      FROM durable_memories
      WHERE ${clauses.join(' AND ')}
      ORDER BY updated_at DESC, id DESC
@@ -164,6 +214,7 @@ function loadDurableCandidates({
       );
     })
     .map((row) => ({
+      projectRoot: row.project_root ?? undefined,
       headline: row.summary,
       whyMatched: `durable ${row.memory_type} memory`,
       eventIds: [],
@@ -173,6 +224,7 @@ function loadDurableCandidates({
       matchedTerms: matchingTerms(row.summary, parsedQuery.termVariants),
       sourceKind: 'durable',
       timestamp: row.updated_at,
+      ...candidateDateFields(row.updated_at),
     }));
 }
 
@@ -182,31 +234,38 @@ function loadConversationCandidates({
   timeRange,
   now,
   limit,
+  projectRoot,
 }: CandidateLoaderOptions): MemoryRecallCandidate[] {
   if (parsedQuery.termVariants.length > 0) {
     const params: unknown[] = [];
     const clauses: string[] = [];
 
+    if (projectRoot) {
+      const scope = buildProjectScopeClause('ce.project_root', projectRoot);
+      clauses.push(scope.clause);
+      params.push(...scope.params);
+    }
+
     if (timeRange) {
       const resolved = resolveTimeRange(timeRange, now);
-      clauses.push('timestamp >= ?');
+      clauses.push('ce.timestamp >= ?');
       params.push(resolved.from);
-      clauses.push('timestamp <= ?');
+      clauses.push('ce.timestamp < ?');
       params.push(resolved.to);
     }
 
     const termClauses = parsedQuery.termVariants.map(
-      () => 'LOWER(COALESCE(payload_json, ?)) LIKE ?',
+      () => 'LOWER(COALESCE(ce.payload_json, ?)) LIKE ?',
     );
     const termParams = parsedQuery.termVariants.flatMap((term) => ['', `%${term.toLowerCase()}%`]);
     clauses.push(`(${termClauses.join(' OR ')})`);
     params.push(...termParams);
 
     const rows = db.all<ConversationRecallRow>(
-      `SELECT event_id, kind, timestamp, payload_json, session_id
-       FROM conversation_events
+      `SELECT ce.event_id, ce.kind, ce.timestamp, ce.payload_json, ce.session_id, ce.project_root
+       FROM conversation_events ce
        WHERE ${clauses.join(' AND ')}
-       ORDER BY timestamp DESC, id DESC
+       ORDER BY ce.timestamp DESC, ce.id DESC
        LIMIT ?`,
       [...params, limit],
     );
@@ -215,6 +274,7 @@ function loadConversationCandidates({
       .map((row) => {
         const headline = summarizePayload(row.kind, row.payload_json);
         return {
+          projectRoot: row.project_root ?? undefined,
           sessionId: row.session_id ?? undefined,
           headline,
           whyMatched: 'recent conversation context',
@@ -225,13 +285,14 @@ function loadConversationCandidates({
           sourceKind: 'conversation' as const,
           timestamp: row.timestamp,
           captureReason: row.kind,
+          ...candidateDateFields(row.timestamp),
         };
       })
       .filter((candidate) => candidate.matchedTerms.length > 0);
   }
 
   const entries = handleTimeline(
-    { db },
+    { db, projectRoot },
     {
       timeRange,
       summary: false,
@@ -243,6 +304,7 @@ function loadConversationCandidates({
   return entries
     .filter((entry) => typeof entry.summary === 'string')
     .map((entry) => ({
+      projectRoot: entry.projectRoot ?? undefined,
       sessionId: entry.sessionId ?? undefined,
       headline: entry.summary ?? entry.kind,
       whyMatched: 'recent conversation context',
@@ -253,6 +315,7 @@ function loadConversationCandidates({
       sourceKind: 'conversation' as const,
       timestamp: entry.timestamp,
       captureReason: entry.kind,
+      ...candidateDateFields(entry.timestamp),
     }));
 }
 
@@ -262,7 +325,10 @@ function loadSemanticCandidates({
   timeRange,
   now,
   limit,
-}: CandidateLoaderOptions): MemoryRecallCandidate[] {
+  projectRoot,
+  includeLegacyGlobal,
+  requireExactTermOverlap,
+}: SemanticCandidateLoaderOptions): MemoryRecallCandidate[] {
   if (parsedQuery.termVariants.length === 0) {
     return [];
   }
@@ -270,11 +336,19 @@ function loadSemanticCandidates({
   const params: unknown[] = [];
   const clauses = ["layer = 'semantic'"];
 
+  if (projectRoot) {
+    const scope = buildProjectScopeClause('project_root', projectRoot, {
+      includeLegacyGlobal,
+    });
+    clauses.push(scope.clause);
+    params.push(...scope.params);
+  }
+
   if (timeRange) {
     const resolved = resolveTimeRange(timeRange, now);
     clauses.push('updated_at >= ?');
     params.push(resolved.from);
-    clauses.push('updated_at <= ?');
+    clauses.push('updated_at < ?');
     params.push(resolved.to);
   }
 
@@ -283,7 +357,7 @@ function loadSemanticCandidates({
   params.push(...parsedQuery.termVariants.map((term) => `%${term.toLowerCase()}%`));
 
   const rows = db.all<SemanticRecallRow>(
-    `SELECT id, content, updated_at
+    `SELECT id, content, updated_at, project_root
      FROM memories
      WHERE ${clauses.join(' AND ')}
      ORDER BY updated_at DESC, id DESC
@@ -291,24 +365,44 @@ function loadSemanticCandidates({
     [...params, limit],
   );
 
-  return rows
+  const candidates = rows
     .map((row) => ({
+      projectRoot: row.project_root ?? undefined,
       headline: row.content,
-      whyMatched: `explicit semantic memory ${row.id}`,
+      whyMatched: row.project_root
+        ? `explicit semantic memory ${row.id}`
+        : `legacy semantic memory ${row.id}`,
       eventIds: [],
       durableMemoryIds: [],
       intent: parsedQuery.intent,
       matchedTerms: matchingTerms(row.content, parsedQuery.termVariants),
       sourceKind: 'semantic' as const,
       timestamp: row.updated_at,
+      ...candidateDateFields(row.updated_at),
     }))
     .filter((candidate) => candidate.matchedTerms.length > 0);
+
+  return requireExactTermOverlap
+    ? candidates.filter((candidate) => hasExactTermOverlap(candidate.headline, parsedQuery.terms))
+    : candidates;
 }
 
 export function loadRecallCandidates(options: CandidateLoaderOptions): MemoryRecallCandidate[] {
+  const durableCandidates = loadDurableCandidates(options);
+  const strictSemanticCandidates = loadSemanticCandidates(options);
+  const semanticCandidates =
+    options.projectRoot && strictSemanticCandidates.length === 0
+      ? loadSemanticCandidates({
+          ...options,
+          includeLegacyGlobal: true,
+          requireExactTermOverlap: true,
+        })
+      : strictSemanticCandidates;
+  const conversationCandidates = loadConversationCandidates(options);
+
   return [
-    ...loadDurableCandidates(options),
-    ...loadSemanticCandidates(options),
-    ...loadConversationCandidates(options),
+    ...durableCandidates,
+    ...semanticCandidates,
+    ...conversationCandidates,
   ];
 }

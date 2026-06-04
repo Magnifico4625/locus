@@ -284,6 +284,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           filePath,
           kind,
           source,
+          projectRoot: root,
           limit,
           offset,
         },
@@ -334,7 +335,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
       const result = handleRecall(
         question,
-        { db, now },
+        { db, now, projectRoot: root },
         {
           timeRange,
           limit,
@@ -610,7 +611,10 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       offset: z.number().optional().describe('Skip N entries for pagination'),
     },
     async ({ timeRange, kind, filePath, summary, limit, offset }) => {
-      const entries = handleTimeline({ db }, { timeRange, kind, filePath, summary, limit, offset });
+      const entries = handleTimeline(
+        { db, projectRoot: root },
+        { timeRange, kind, filePath, summary, limit, offset },
+      );
       return { content: [{ type: 'text' as const, text: JSON.stringify(entries) }] };
     },
   );

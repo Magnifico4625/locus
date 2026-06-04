@@ -87,6 +87,20 @@ function insertConversationEvent(
   );
 }
 
+function insertSemanticMemory(
+  db: DatabaseAdapter,
+  content: string,
+  opts?: { projectRoot?: string | null; updatedAt?: number },
+): number {
+  const timestamp = opts?.updatedAt ?? Date.now();
+  return db.run(
+    `INSERT INTO memories
+     (layer, content, tags_json, project_root, created_at, updated_at, session_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ['semantic', content, null, opts?.projectRoot ?? null, timestamp, timestamp, null],
+  ).lastInsertRowid;
+}
+
 describe('handleRecall', () => {
   let tempDir: string;
   let adapter: NodeSqliteAdapter;
@@ -155,6 +169,15 @@ describe('handleRecall', () => {
     expect(result.candidates).toEqual([
       expect.objectContaining({
         eventIds: ['evt-track-d-may'],
+        localDate: '2026-05-15',
+        monthKey: '2026-05',
+      }),
+    ]);
+    expect(result.searchedDateBuckets).toEqual([
+      expect.objectContaining({
+        key: '2026-05-15',
+        eventCount: 1,
+        sessionCount: 1,
       }),
     ]);
   });
@@ -516,6 +539,55 @@ describe('handleRecall', () => {
         matchedTerms: expect.arrayContaining(['ошибк', 'npm', 'install']),
       }),
     ]);
+  });
+
+  it('includes legacy semantic memory only when no scoped semantic match exists', () => {
+    const legacyId = insertSemanticMemory(adapter, 'legacy CODEX_HOME import', {
+      projectRoot: null,
+      updatedAt: now - 60_000,
+    });
+
+    const result = handleRecall('CODEX_HOME import', {
+      db: adapter,
+      now,
+      projectRoot: 'C:/Projects/Locus',
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('ok');
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        headline: 'legacy CODEX_HOME import',
+        whyMatched: `legacy semantic memory ${legacyId}`,
+        projectRoot: undefined,
+      }),
+    ]);
+  });
+
+  it('prefers scoped semantic memory over legacy global memory', () => {
+    const scopedId = insertSemanticMemory(adapter, 'scoped CODEX_HOME import for Locus', {
+      projectRoot: 'c:/projects/locus',
+      updatedAt: now - 30_000,
+    });
+    insertSemanticMemory(adapter, 'legacy CODEX_HOME import for another context', {
+      projectRoot: null,
+      updatedAt: now - 60_000,
+    });
+
+    const result = handleRecall('CODEX_HOME import', {
+      db: adapter,
+      now,
+      projectRoot: 'C:/Projects/Locus',
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('ok');
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        headline: 'scoped CODEX_HOME import for Locus',
+        whyMatched: `explicit semantic memory ${scopedId}`,
+        projectRoot: 'c:/projects/locus',
+      }),
+    ]);
+    expect(JSON.stringify(result)).not.toContain('legacy CODEX_HOME');
   });
 
   it('returns no_memory when neither durable nor conversation context matches', () => {

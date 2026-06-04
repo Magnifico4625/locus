@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -59,21 +59,55 @@ async function callJsonTool<T>(
   return JSON.parse(await callTextTool(ctx, name, args)) as T;
 }
 
-function copyFixtureSessions(codexHome: string): void {
+function copyFixtureSession(
+  sourceName: string,
+  targetName: string,
+  sessionsDir: string,
+  projectDir: string,
+): void {
+  const sourcePath = join(fixturesDir, sourceName);
+  const targetPath = join(sessionsDir, targetName);
+  const source = readFileSync(sourcePath, 'utf8');
+  const rewritten = source
+    .split(/\r?\n/)
+    .map((line) => {
+      if (!line.trim()) {
+        return line;
+      }
+
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      if (parsed.type !== 'session_meta') {
+        return line;
+      }
+
+      return JSON.stringify({ ...parsed, cwd: projectDir });
+    })
+    .join('\n');
+
+  writeFileSync(targetPath, rewritten, 'utf8');
+}
+
+function copyFixtureSessions(codexHome: string, projectDir: string): void {
   const sessionsDir = join(codexHome, 'sessions', '2026', '05');
   mkdirSync(sessionsDir, { recursive: true });
 
-  cpSync(
-    join(fixturesDir, 'multi-task-russian.jsonl'),
-    join(sessionsDir, 'rollout-2026-05-08-090000.jsonl'),
+  copyFixtureSession(
+    'multi-task-russian.jsonl',
+    'rollout-2026-05-08-090000.jsonl',
+    sessionsDir,
+    projectDir,
   );
-  cpSync(
-    join(fixturesDir, 'decision-rejected-alternative.jsonl'),
-    join(sessionsDir, 'rollout-2026-05-08-110000.jsonl'),
+  copyFixtureSession(
+    'decision-rejected-alternative.jsonl',
+    'rollout-2026-05-08-110000.jsonl',
+    sessionsDir,
+    projectDir,
   );
-  cpSync(
-    join(fixturesDir, 'style-preference-validation.jsonl'),
-    join(sessionsDir, 'rollout-2026-05-08-130000.jsonl'),
+  copyFixtureSession(
+    'style-preference-validation.jsonl',
+    'rollout-2026-05-08-130000.jsonl',
+    sessionsDir,
+    projectDir,
   );
 }
 
@@ -89,7 +123,7 @@ async function withTrackCServer<T>(fn: (ctx: ServerContext) => Promise<T>): Prom
   const codexHome = join(root, 'codex-home');
   const projectDir = join(root, 'project');
   mkdirSync(projectDir, { recursive: true });
-  copyFixtureSessions(codexHome);
+  copyFixtureSessions(codexHome, projectDir);
 
   process.env.CODEX_HOME = codexHome;
   process.env.LOCUS_CODEX_CAPTURE = 'redacted';

@@ -286,6 +286,10 @@ Make Locus dependable enough for Codex agents to use as their default project-me
   - compare memory summaries with `git status`, package metadata, release notes, and roadmap docs
   - flag stale memories instead of silently mixing them into current answers
 
+Implementation note:
+
+- Track D project-scoped recall isolates durable topic keys by `projectRoot`; the same `topic_key` may exist in two projects without leaking across recall/search/timeline results. A separate user-configurable topic namespace filter remains a follow-up if acceptance testing shows a real need beyond project-root isolation.
+
 ### Key constraints
 
 - do not solve recall quality by storing unlimited transcript text

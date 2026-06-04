@@ -1,5 +1,6 @@
 import type {
   MemoryRecallCandidate,
+  MemoryDateBucket,
   MemoryRecallIntent,
   MemoryRecallResolvedRange,
   MemoryRecallResult,
@@ -10,6 +11,7 @@ export interface BuildRecallResultOptions {
   question: string;
   candidates: MemoryRecallCandidate[];
   resolvedRange?: MemoryRecallResolvedRange;
+  searchedDateBuckets?: MemoryDateBucket[];
   matchedIntent?: MemoryRecallIntent;
   matchedTopics?: string[];
 }
@@ -55,6 +57,7 @@ export function buildRecallResult({
   question,
   candidates,
   resolvedRange,
+  searchedDateBuckets,
   matchedIntent,
   matchedTopics,
 }: BuildRecallResultOptions): MemoryRecallResult {
@@ -62,6 +65,7 @@ export function buildRecallResult({
   const resultMetadata = {
     ...(matchedIntent ? { matchedIntent } : {}),
     ...(matchedTopics && matchedTopics.length > 0 ? { matchedTopics } : {}),
+    ...(searchedDateBuckets ? { searchedDateBuckets } : {}),
   };
 
   if (candidateGroups.length === 0) {

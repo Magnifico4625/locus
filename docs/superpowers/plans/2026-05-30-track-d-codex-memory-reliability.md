@@ -1543,6 +1543,8 @@ git diff --check
 ## Task D4: Project-Scoped Recall And Ranking v3
 
 **Files:**
+- Modify: `docs/roadmap/codex-next.md`
+- Modify: `docs/superpowers/plans/2026-05-30-track-d-codex-memory-reliability.md`
 - Modify: `packages/core/src/types.ts`
 - Modify: `packages/core/src/recall/engine.ts`
 - Modify: `packages/core/src/recall/candidate-loader.ts`
@@ -1556,9 +1558,11 @@ git diff --check
 - Test: `packages/core/tests/tools/search-project-scope.test.ts`
 - Test: `packages/core/tests/tools/timeline-project-scope.test.ts`
 - Test: `packages/core/tests/recall/scoring.test.ts`
+- Test: `packages/core/tests/integration/server.test.ts`
+- Test: `packages/core/tests/integration/track-c-recall-acceptance.test.ts`
 - Test: `packages/core/tests/integration/track-d-memory-reliability.test.ts`
 
-- [ ] **Step D4.1: Write failing cross-project recall test**
+- [x] **Step D4.1: Write failing cross-project recall test**
 
 Create `packages/core/tests/integration/track-d-memory-reliability.test.ts`:
 
@@ -1626,7 +1630,7 @@ npm test -- packages/core/tests/integration/track-d-memory-reliability.test.ts
 
 Expected: FAIL until recall accepts and applies `projectRoot`.
 
-- [ ] **Step D4.2: Add project fields to recall types**
+- [x] **Step D4.2: Add project fields to recall types**
 
 Modify `packages/core/src/types.ts`:
 
@@ -1673,7 +1677,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS after downstream code compiles.
 
-- [ ] **Step D4.3: Pass projectRoot through recall engine**
+- [x] **Step D4.3: Pass projectRoot through recall engine**
 
 Modify `packages/core/src/recall/engine.ts`:
 
@@ -1707,7 +1711,7 @@ npm test -- packages/core/tests/tools/recall.test.ts
 
 Expected: PASS after candidate loader changes in the next step.
 
-- [ ] **Step D4.4: Filter durable, semantic, and conversation candidates by project**
+- [x] **Step D4.4: Filter durable, semantic, and conversation candidates by project**
 
 Modify `packages/core/src/recall/candidate-loader.ts`:
 
@@ -1948,7 +1952,7 @@ npm test -- packages/core/tests/tools/recall.test.ts packages/core/tests/integra
 
 Expected: PASS.
 
-- [ ] **Step D4.4a: Scope `memory_search` and `memory_timeline` to the current project**
+- [x] **Step D4.4a: Scope `memory_search` and `memory_timeline` to the current project**
 
 Modify `packages/core/src/tools/search.ts`:
 
@@ -2037,7 +2041,7 @@ npm test -- packages/core/tests/tools/search-project-scope.test.ts packages/core
 
 Expected: PASS.
 
-- [ ] **Step D4.4b: Make topic namespace isolation explicit**
+- [x] **Step D4.4b: Make topic namespace isolation explicit**
 
 Track D does not add a separate user-facing topic namespace filter. Instead, topic keys are isolated by `projectRoot`: the same `topic_key` may exist in two projects, but recall/search/timeline/project-state queries must only see the row whose `project_root` matches the current project, except for the documented semantic legacy fallback.
 
@@ -2058,7 +2062,7 @@ it('keeps same-topic durable memories isolated by project root', () => {
 });
 ```
 
-- [ ] **Step D4.5: Add searched date buckets to recall results**
+- [x] **Step D4.5: Add searched date buckets to recall results**
 
 Modify `packages/core/src/recall/result-builder.ts` to accept:
 
@@ -2174,7 +2178,7 @@ npm test -- packages/core/tests/tools/recall.test.ts
 
 Expected: PASS and period tests assert `searchedDateBuckets`.
 
-- [ ] **Step D4.6: Strengthen ranking v3**
+- [x] **Step D4.6: Strengthen ranking v3**
 
 Modify `packages/core/src/recall/scoring.ts`:
 
@@ -2348,7 +2352,7 @@ it('drops explicit other-project candidates before scoring', () => {
 });
 ```
 
-- [ ] **Step D4.7: Commit project-scoped recall**
+- [x] **Step D4.7: Commit project-scoped recall**
 
 Run:
 
@@ -2356,6 +2360,14 @@ Run:
 git add packages/core/src/types.ts packages/core/src/recall/engine.ts packages/core/src/recall/candidate-loader.ts packages/core/src/recall/scoring.ts packages/core/src/recall/result-builder.ts packages/core/src/tools/recall.ts packages/core/src/tools/search.ts packages/core/src/tools/timeline.ts packages/core/src/server.ts packages/core/tests/tools/recall.test.ts packages/core/tests/tools/search-project-scope.test.ts packages/core/tests/tools/timeline-project-scope.test.ts packages/core/tests/recall/scoring.test.ts packages/core/tests/integration/track-d-memory-reliability.test.ts
 git commit -m "feat(core): scope recall to current project"
 ```
+
+Completed 2026-06-04:
+
+- `npm test -- packages/core/tests/integration/track-d-memory-reliability.test.ts packages/core/tests/tools/search-project-scope.test.ts packages/core/tests/tools/timeline-project-scope.test.ts packages/core/tests/recall/scoring.test.ts packages/core/tests/tools/recall.test.ts` - PASS, 5 files / 31 tests.
+- `npm test -- packages/core/tests/tools/search.test.ts packages/core/tests/tools/timeline.test.ts packages/core/tests/integration/server.test.ts` - PASS, 3 files / 67 tests.
+- `npm test -- packages/core/tests/integration/track-c-recall-acceptance.test.ts packages/core/tests/integration/codex-import-tool.test.ts` - PASS, 2 files / 10 tests.
+- `npm -w @locus/core run typecheck` - PASS.
+- `git diff --check` - PASS.
 
 ---
 
