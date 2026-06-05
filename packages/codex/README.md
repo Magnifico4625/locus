@@ -79,12 +79,12 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 
 ## What Works
 
-- All 15 MCP tools (including `memory_recall`, `memory_calendar`, and `memory_import_codex`)
+- All 16 MCP tools (including `memory_recall`, `memory_calendar`, `memory_project_state`, and `memory_import_codex`)
 - All 3 MCP resources (project-map, decisions, recent)
 - SQLite storage with FTS5 full-text search
 - Client-aware storage: data stored in `$CODEX_HOME/memory/`
 - Auto-import before `memory_recall`, `memory_search`, and `memory_calendar`, plus manual and library JSONL import for Codex session rollout files
-- Canonical Codex skill workflow for `memory_recall`, `memory_calendar`, `memory_search`, `memory_status`, `memory_remember`, and manual `memory_import_codex`
+- Canonical Codex skill workflow for `memory_recall`, `memory_calendar`, `memory_project_state`, `memory_search`, `memory_status`, `memory_remember`, and manual `memory_import_codex`
 - Codex-aware diagnostics in `memory_status` and `memory_doctor`
 - Summary-first recall through `memory_recall`
 - `codexTruth` status guidance that separates import health from recall usefulness
@@ -122,6 +122,7 @@ The canonical Locus Codex skill assumes this workflow:
 
 - `memory_recall` first for summary-first questions like "what did we do yesterday?"
 - `memory_calendar` for broad period questions like "what did we work on this month?" before drilling into specific days or topics
+- `memory_project_state` when the agent needs the current package/git identity, latest conversation timestamp, active durable count, or active next steps before relying on memory
 - `memory_search` when exact-term search is still useful after recall
 - `memory_status` when recent history does not appear as expected
 - `memory_import_codex` only for manual catch-up, filtered imports, or older sessions

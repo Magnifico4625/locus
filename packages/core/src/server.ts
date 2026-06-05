@@ -30,6 +30,7 @@ import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';
 import { handleImportCodex } from './tools/import-codex.js';
 import { handlePurge } from './tools/purge.js';
+import { handleProjectState } from './tools/project-state.js';
 import { handleRecall } from './tools/recall.js';
 import { handleRemember } from './tools/remember.js';
 import { handleReview } from './tools/review.js';
@@ -488,6 +489,12 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   server.tool('memory_scan', {}, async () => {
     const result = await handleScan({ projectPath: root, db, config });
     return { content: [{ type: 'text' as const, text: JSON.stringify(result.stats) }] };
+  });
+
+  // 6b. memory_project_state
+  server.tool('memory_project_state', {}, async () => {
+    const result = handleProjectState({ db, projectRoot: root });
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
   });
 
   // 7. memory_status

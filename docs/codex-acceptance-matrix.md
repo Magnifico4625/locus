@@ -38,6 +38,7 @@ Track C acceptance considers recall successful when:
 - Multiple plausible matches may return `needs_clarification`; that is valid if the durable or conversation candidate is present, inspectable, and grouped through `candidateGroups`.
 - `memory_status` exposes `codexTruth` so agents can distinguish import health from recall usefulness.
 - `memory_status` exposes `codexFreshness` so agents can compare the newest rollout event timestamp with the newest imported Codex event.
+- `memory_project_state` exposes the current project root/hash, package metadata, git state, latest conversation timestamp, active durable count, and active next steps.
 - `memory_doctor` warns when `metadata` is too weak for strong recall, reports Codex import freshness lag, and keeps desktop/extension parity honest.
 
 `LOCUS_CODEX_SURFACE=desktop|extension|cli` is a diagnostic/debug override for validating non-CLI surfaces before stronger upstream evidence exists. It can intentionally simulate a surface, but it can also mislead `memory_status` and `memory_doctor` if left set accidentally.

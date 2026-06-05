@@ -565,6 +565,21 @@ export interface MemoryStatus {
   codexFreshness?: CodexFreshnessSnapshot;
 }
 
+export interface MemoryProjectStateResult {
+  projectRoot: string;
+  projectHash: string;
+  packageName?: string;
+  packageVersion?: string;
+  gitHead?: string;
+  gitBranch?: string;
+  dirty?: boolean;
+  activeDurableCount: number;
+  latestConversationTimestamp?: number;
+  latestConversationIso?: string;
+  warnings: string[];
+  nextSteps: string[];
+}
+
 // ─── Doctor ───
 
 export interface DoctorCheck {

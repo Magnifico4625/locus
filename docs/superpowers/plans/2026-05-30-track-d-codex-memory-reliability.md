@@ -2669,8 +2669,13 @@ Implementation note:
 - Test: `packages/core/tests/memory/durable-runner.test.ts`
 - Test: `packages/core/tests/memory/topic-key-registry.test.ts`
 - Test: `packages/core/tests/integration/server.test.ts`
+- Docs: `README.md`
+- Docs: `packages/codex/README.md`
+- Docs: `packages/codex/skills/locus-memory/SKILL.md`
+- Docs: `docs/codex-acceptance-matrix.md`
+- Docs: `docs/superpowers/plans/2026-05-30-track-d-codex-memory-reliability.md`
 
-- [ ] **Step D6.1: Add project-state types**
+- [x] **Step D6.1: Add project-state types**
 
 Modify `packages/core/src/types.ts`:
 
@@ -2699,7 +2704,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS after handler exists or imports are not yet added.
 
-- [ ] **Step D6.2: Write failing project-state tests**
+- [x] **Step D6.2: Write failing project-state tests**
 
 Create `packages/core/tests/tools/project-state.test.ts`:
 
@@ -2800,7 +2805,7 @@ npm test -- packages/core/tests/tools/project-state.test.ts
 
 Expected: FAIL because handler does not exist.
 
-- [ ] **Step D6.3: Implement `handleProjectState`**
+- [x] **Step D6.3: Implement `handleProjectState`**
 
 Create `packages/core/src/tools/project-state.ts`:
 
@@ -2929,7 +2934,7 @@ npm test -- packages/core/tests/tools/project-state.test.ts
 
 Expected: PASS.
 
-- [ ] **Step D6.4: Register `memory_project_state`**
+- [x] **Step D6.4: Register `memory_project_state`**
 
 Modify `packages/core/src/server.ts`:
 
@@ -2954,7 +2959,7 @@ npm test -- packages/core/tests/integration/server.test.ts packages/core/tests/t
 
 Expected: PASS.
 
-- [ ] **Step D6.4a: Keep resolved next steps accurate**
+- [x] **Step D6.4a: Keep resolved next steps accurate**
 
 Modify `packages/core/src/memory/topic-key-registry.ts` so Track D next-step and validation facts share a stable topic. Add the new union member:
 
@@ -3153,7 +3158,7 @@ npm test -- packages/core/tests/memory/topic-key-registry.test.ts packages/core/
 
 Expected: PASS. This implements the roadmap requirement that resolved blockers/next steps stop looking active when later validation proves them resolved.
 
-- [ ] **Step D6.5: Commit project-state tool**
+- [x] **Step D6.5: Commit project-state tool**
 
 Run:
 
@@ -3161,6 +3166,22 @@ Run:
 git add packages/core/src/types.ts packages/core/src/tools/project-state.ts packages/core/src/memory/topic-key-registry.ts packages/core/src/memory/durable-merge.ts packages/core/src/memory/durable-runner.ts packages/core/src/server.ts packages/core/tests/tools/project-state.test.ts packages/core/tests/memory/topic-key-registry.test.ts packages/core/tests/memory/durable-merge.test.ts packages/core/tests/memory/durable-runner.test.ts packages/core/tests/integration/server.test.ts
 git commit -m "feat(core): add project state memory summary"
 ```
+
+Completed 2026-06-05:
+
+- RED: `npm test -- packages/core/tests/tools/project-state.test.ts packages/core/tests/memory/topic-key-registry.test.ts packages/core/tests/memory/durable-merge.test.ts packages/core/tests/memory/durable-runner.test.ts` failed on missing `project-state` handler and missing Track D supersession behavior before implementation.
+- `npm test -- packages/core/tests/tools/project-state.test.ts packages/core/tests/memory/topic-key-registry.test.ts packages/core/tests/memory/durable-merge.test.ts packages/core/tests/memory/durable-runner.test.ts packages/core/tests/integration/server.test.ts` - PASS, 5 files / 49 tests.
+- `npm test -- packages/core/tests/memory/durable.test.ts packages/core/tests/memory/durable-merge.test.ts packages/core/tests/memory/durable-runner.test.ts packages/core/tests/integration/durable-extraction-flow.test.ts packages/core/tests/integration/track-c-recall-acceptance.test.ts packages/core/tests/tools/recall.test.ts` - PASS, 6 files / 43 tests.
+- `npm -w @locus/core run typecheck` - PASS.
+- `git diff --check` - PASS.
+
+Implementation note:
+
+- `memory_project_state` is a read-only current-project summary with normalized project root/hash, package metadata, git head/branch/dirty state, latest project conversation timestamp, active durable count, warnings, and active next steps.
+- Git inspection is bounded by a 750ms timeout and a 5-second per-root cache; tests inject `readGitState` for deterministic checks and reset the production cache after the narrow cache test.
+- Track D validation facts now supersede active same-topic `next_step` durable memories when positive validation wording resolves the step. Broader stale or historical lifecycle automation remains deferred to the follow-up lifecycle work.
+- The core runner did not need a production edit: existing durable extraction already routes candidates through `mergeDurableCandidate`, so the D6 runner test covers the integrated supersession path.
+- Documentation now treats `memory_project_state` as the 16th MCP tool and adds it to the Codex skill workflow and acceptance contract.
 
 ---
 

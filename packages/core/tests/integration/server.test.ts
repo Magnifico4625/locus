@@ -16,6 +16,7 @@ import type {
   DoctorReport,
   InboxEvent,
   MemoryCalendarResult,
+  MemoryProjectStateResult,
   MemoryStatus,
   SearchResult,
 } from '../../src/types.js';
@@ -137,6 +138,23 @@ describe('createServer', () => {
       expect(getRegisteredToolNames(ctx2.server)).toContain('memory_calendar');
       expect(ctx2.db).toBeDefined();
       expect(ctx2.server).toBeDefined();
+    } finally {
+      ctx2.cleanup();
+    }
+  });
+
+  it('registers memory_project_state and returns the current project identity', async () => {
+    const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'project-state.db') });
+    try {
+      expect(getRegisteredToolNames(ctx2.server)).toContain('memory_project_state');
+
+      const text = await callTextTool(ctx2, 'memory_project_state', {});
+      const state = JSON.parse(text) as MemoryProjectStateResult;
+
+      expect(state.projectRoot).toBe(normalizePathForIdentity(tempDir));
+      expect(state.projectHash).toMatch(/^[a-f0-9]{16}$/);
+      expect(state.activeDurableCount).toBe(0);
+      expect(state.nextSteps).toEqual([]);
     } finally {
       ctx2.cleanup();
     }

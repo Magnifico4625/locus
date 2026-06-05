@@ -17,13 +17,14 @@ project context across sessions.
 
 1. **memory_recall** -- Summary-first recall for past-work questions
 2. **memory_calendar** -- Discover day/week/month activity buckets by project and time range
-3. **memory_search** -- FTS5 search across all memory layers
-4. **memory_remember** -- Save architecture decisions with auto-redaction
-5. **memory_explore** -- Navigate the project file tree
-6. **memory_timeline** -- View recent conversation history
-7. **memory_status** -- Memory health and storage info
-8. **memory_scan** -- Re-index project structure after file changes
-9. **memory_review** -- Inspect durable memories, states, confidence, and evidence
+3. **memory_project_state** -- Verify current project identity, package/git state, freshness, and active next steps
+4. **memory_search** -- FTS5 search across all memory layers
+5. **memory_remember** -- Save architecture decisions with auto-redaction
+6. **memory_explore** -- Navigate the project file tree
+7. **memory_timeline** -- View recent conversation history
+8. **memory_status** -- Memory health and storage info
+9. **memory_scan** -- Re-index project structure after file changes
+10. **memory_review** -- Inspect durable memories, states, confidence, and evidence
 
 ## Key Behaviors
 
@@ -33,6 +34,7 @@ project context across sessions.
   - "what did we decide about auth?"
   - "what did we just fix?"
 - Use `memory_calendar` for broad period discovery such as "what did we work on this month?" or "show May work" before drilling into specific days, weeks, or topics
+- Use `memory_project_state` before relying on old memories when project identity, package version, git state, latest conversation timestamp, or active next steps matter
 - In Codex, recent dialogue is auto-imported before `memory_recall`, `memory_search`, and `memory_calendar`
 - If `memory_recall` returns `needs_clarification`, inspect `candidateGroups` and ask a focused follow-up question after the lookup instead of guessing or asking before checking Locus
 - If `memory_recall` returns `no_memory`, then fall back to `memory_search`, `memory_calendar`, or `memory_timeline` only when raw search, broad period discovery, or chronology is still useful

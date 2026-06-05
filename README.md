@@ -64,7 +64,7 @@ Codex CLI is the primary validated path. Codex desktop / extension uses the same
 | Low token cost | Writes happen locally; tokens are spent only when the agent recalls memory |
 | Privacy control | `metadata`, `redacted`, and `full` capture modes; `full` is explicit warning territory |
 | Project-aware memory | Structural scan plus durable decisions and conversation events |
-| Inspectability | `memory_status`, `memory_doctor`, `memory_audit`, `memory_review` |
+| Inspectability | `memory_status`, `memory_project_state`, `memory_doctor`, `memory_audit`, `memory_review` |
 | Cross-client base | Any MCP client can use the server; Codex and Claude Code have the strongest adapters today |
 
 ## Competitive Snapshot
@@ -100,12 +100,13 @@ For product claims: `full` is maximum recall and must be treated as explicit opt
 
 ## MCP Tools
 
-Locus exposes 15 MCP tools:
+Locus exposes 16 MCP tools:
 
 | Tool | Purpose |
 | --- | --- |
 | `memory_recall` | Summary-first recall for questions about past work |
 | `memory_calendar` | Discover day/week/month activity buckets for a project and time range |
+| `memory_project_state` | Summarize project identity, package/git state, memory freshness, and active next steps |
 | `memory_search` | Full-text search across structure, decisions, and conversation events |
 | `memory_remember` | Save important decisions or preferences |
 | `memory_review` | Inspect durable memories, states, evidence, and topic keys |

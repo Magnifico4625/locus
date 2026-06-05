@@ -157,6 +157,49 @@ describe('mergeDurableCandidate', () => {
     });
   });
 
+  it('supersedes an active next_step when a same-topic validation_fact resolves it', () => {
+    const existing = makeDurableEntry({
+      id: 10,
+      topicKey: 'track_d_memory_reliability',
+      memoryType: 'next_step',
+      summary: 'Implement Track D project-scoped recall tests.',
+    });
+
+    const candidate = {
+      topicKey: 'track_d_memory_reliability',
+      memoryType: 'validation_fact' as const,
+      summary: 'Validation passed: Track D project-scoped recall tests.',
+      evidence: { source: 'test', confidence: 0.9 },
+      sourceEventId: 'evt-new',
+      source: 'codex' as const,
+    };
+
+    expect(mergeDurableCandidate([existing], candidate)).toEqual({
+      action: 'supersede_existing',
+      existingId: 10,
+    });
+  });
+
+  it('does not supersede next_step when validation wording is negative', () => {
+    const existing = makeDurableEntry({
+      id: 10,
+      topicKey: 'track_d_memory_reliability',
+      memoryType: 'next_step',
+      summary: 'Pass Track D review.',
+    });
+
+    const candidate = {
+      topicKey: 'track_d_memory_reliability',
+      memoryType: 'validation_fact' as const,
+      summary: "This hasn't passed review yet.",
+      evidence: { source: 'test', confidence: 0.9 },
+      sourceEventId: 'evt-new',
+      source: 'codex' as const,
+    };
+
+    expect(mergeDurableCandidate([existing], candidate).action).not.toBe('supersede_existing');
+  });
+
   it('keeps both memories when a topic collision has no mapping confidence', () => {
     const existing = makeDurableEntry({
       id: 13,
