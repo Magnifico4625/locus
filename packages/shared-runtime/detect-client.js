@@ -13,6 +13,9 @@
  * Detects which AI coding client launched the MCP server and returns
  * a structured runtime snapshot for downstream diagnostics.
  *
+ * LOCUS_CODEX_SURFACE is a diagnostic/debug override for validating Codex
+ * desktop and extension paths before stronger upstream surface evidence exists.
+ *
  * @param {Record<string, string | undefined>} [env]
  * @param {readonly string[]} [_argv]
  * @param {string} [_cwd]
@@ -20,11 +23,15 @@
  */
 export function detectClientRuntime(env = process.env, _argv = process.argv, _cwd = process.cwd()) {
   if (hasNonEmptyValue(env.CODEX_HOME)) {
+    const surface = codexSurfaceFromEnv(env);
     return {
       client: 'codex',
-      surface: 'cli',
+      surface,
       detected: true,
-      evidence: ['env:CODEX_HOME'],
+      evidence:
+        surface === 'cli'
+          ? ['env:CODEX_HOME']
+          : ['env:CODEX_HOME', `env:LOCUS_CODEX_SURFACE=${surface}`],
     };
   }
 
@@ -56,4 +63,12 @@ export function detectClientEnv() {
 
 function hasNonEmptyValue(value) {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function codexSurfaceFromEnv(env) {
+  const value = env.LOCUS_CODEX_SURFACE;
+  if (value === 'desktop' || value === 'extension' || value === 'cli') {
+    return value;
+  }
+  return 'cli';
 }

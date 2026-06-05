@@ -8,6 +8,10 @@ export interface ClientRuntime {
   evidence: string[];
 }
 
+/**
+ * Detects the calling client. LOCUS_CODEX_SURFACE is a diagnostic/debug
+ * override for Codex desktop and extension validation, not normal user config.
+ */
 export function detectClientRuntime(
   env?: Record<string, string | undefined>,
   argv?: readonly string[],

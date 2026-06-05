@@ -70,6 +70,27 @@ describe('detectClientEnv', () => {
     });
   });
 
+  it('honors an explicit Locus Codex surface override', () => {
+    const runtime = sharedRuntime.detectClientRuntime({
+      CODEX_HOME: 'C:/Users/Admin/.codex',
+      LOCUS_CODEX_SURFACE: 'desktop',
+    });
+
+    expect(runtime.surface).toBe('desktop');
+    expect(runtime.evidence).toEqual([
+      'env:CODEX_HOME',
+      'env:LOCUS_CODEX_SURFACE=desktop',
+    ]);
+  });
+
+  it('falls back to cli when CODEX_HOME is the only Codex evidence', () => {
+    expect(
+      sharedRuntime.detectClientRuntime({
+        CODEX_HOME: 'C:/Users/Admin/.codex',
+      }).surface,
+    ).toBe('cli');
+  });
+
   it('returns a structured generic runtime snapshot when no client env vars are set', () => {
     delete process.env.CODEX_HOME;
     delete process.env.CLAUDE_PLUGIN_ROOT;

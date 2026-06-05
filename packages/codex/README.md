@@ -93,7 +93,7 @@ Track C adds fixture-backed richer recall validation for Codex CLI: Russian date
 
 Last documented local install validation target: Codex CLI `0.130.0` surface as of May 12, 2026. Track C local smoke covered the one-command installer, `codex mcp list`, `doctor codex`, and raw MCP `memory_remember` -> `memory_recall`. Registry-hosted `locus-memory@3.6.1` validation must run after npm publish.
 
-Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is reported as unverified until checked there.
+Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface. `memory_status` and `memory_doctor` can report an observed desktop MCP path when Codex diagnostics detect a desktop surface with retained Codex events, but full parity should still be claimed only after testing the target surface.
 
 ## Codex JSONL Import
 
@@ -112,7 +112,9 @@ Behavior:
 - debounced in the server process to avoid repeated re-import during active querying
 - best-effort: if import is disabled or fails, the memory query still runs
 
-Use `memory_status` to inspect both the last auto-import snapshot and the current Codex diagnostics snapshot.
+Use `memory_status` to inspect the last auto-import snapshot, the current Codex diagnostics snapshot, and `codexFreshness` import lag.
+
+`LOCUS_CODEX_SURFACE=desktop|extension|cli` is a diagnostic/debug override for validating non-CLI surfaces before stronger upstream evidence exists. Do not treat it as normal user-facing configuration; leaving it set accidentally can make status and doctor report the overridden surface.
 
 ### Skill workflow
 

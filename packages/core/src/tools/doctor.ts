@@ -18,6 +18,7 @@ export interface DoctorDeps {
   logPath: string;
   db: DatabaseAdapter;
   codexDiagnostics?: CodexDiagnosticsSnapshot;
+  codexFreshnessThresholdMs?: number;
   // Override for testing
   checkDbWritable?: () => boolean;
   checkGitAvailable?: () => boolean;
@@ -263,7 +264,7 @@ export function handleDoctor(deps: DoctorDeps): DoctorReport {
     });
   }
 
-  appendCodexChecks(checks, deps.codexDiagnostics);
+  appendCodexChecks(checks, deps.codexDiagnostics, deps.codexFreshnessThresholdMs);
 
   // Summarize
   let passed = 0;
@@ -281,6 +282,7 @@ export function handleDoctor(deps: DoctorDeps): DoctorReport {
 function appendCodexChecks(
   checks: DoctorCheck[],
   codexDiagnostics: CodexDiagnosticsSnapshot | undefined,
+  freshnessThresholdMs = DEFAULT_CODEX_FRESHNESS_THRESHOLD_MS,
 ): void {
   if (!codexDiagnostics) {
     return;
@@ -380,13 +382,21 @@ function appendCodexChecks(
     });
   }
 
-  checks.push({
-    name: 'Codex desktop parity',
-    status: 'warn',
-    message:
-      'Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.',
-    fix: 'Verify memory_status and memory_recall inside the target desktop/extension surface before claiming parity.',
-  });
+  if (codexDiagnostics.clientSurface === 'desktop' && codexDiagnostics.importedEventCount > 0) {
+    checks.push({
+      name: 'Codex desktop parity',
+      status: 'ok',
+      message: 'Codex Desktop MCP path has retained Codex events in this environment.',
+    });
+  } else {
+    checks.push({
+      name: 'Codex desktop parity',
+      status: 'warn',
+      message:
+        'Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.',
+      fix: 'Verify memory_status and memory_recall inside the target desktop/extension surface before claiming parity.',
+    });
+  }
 
   checks.push(
     codexDiagnostics.importedEventCount > 0
@@ -419,4 +429,47 @@ function appendCodexChecks(
       message: details,
     });
   }
+
+  appendCodexFreshnessCheck(checks, codexDiagnostics, freshnessThresholdMs);
+}
+
+const DEFAULT_CODEX_FRESHNESS_THRESHOLD_MS = 5 * 60 * 1000;
+
+function appendCodexFreshnessCheck(
+  checks: DoctorCheck[],
+  codexDiagnostics: CodexDiagnosticsSnapshot,
+  freshnessThresholdMs: number,
+): void {
+  const latestRolloutTimestamp = codexDiagnostics.latestRolloutTimestamp;
+  if (latestRolloutTimestamp === undefined) {
+    return;
+  }
+
+  const latestImportedTimestamp = codexDiagnostics.latestImportedTimestamp;
+  if (latestImportedTimestamp === undefined) {
+    checks.push({
+      name: 'Codex freshness',
+      status: 'warn',
+      message: 'Codex rollout timestamp exists, but no imported Codex event timestamp was found.',
+      fix: 'Use memory_import_codex to catch up Codex session import.',
+    });
+    return;
+  }
+
+  const lagMs = Math.max(0, latestRolloutTimestamp - latestImportedTimestamp);
+  if (lagMs <= freshnessThresholdMs) {
+    checks.push({
+      name: 'Codex freshness',
+      status: 'ok',
+      message: `Codex import appears fresh (lag ${lagMs} ms).`,
+    });
+    return;
+  }
+
+  checks.push({
+    name: 'Codex freshness',
+    status: 'warn',
+    message: `Codex import may be stale (lag ${lagMs} ms).`,
+    fix: 'Use memory_import_codex to catch up Codex session import.',
+  });
 }

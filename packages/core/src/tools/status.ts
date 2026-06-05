@@ -4,6 +4,7 @@ import type {
   CaptureLevel,
   CodexAutoImportSnapshot,
   CodexDiagnosticsSnapshot,
+  CodexFreshnessSnapshot,
   CodexTruthSnapshot,
   DatabaseAdapter,
   LocusConfig,
@@ -24,6 +25,9 @@ export interface StatusDeps {
   inboxDir?: string;
   codexAutoImportSnapshot?: CodexAutoImportSnapshot;
   codexDiagnostics?: CodexDiagnosticsSnapshot;
+  codexFreshnessThresholdMs?: number;
+  env?: Record<string, string | undefined>;
+  now?: number;
 }
 
 interface CountRow {
@@ -48,6 +52,47 @@ function getDefaultCodexAutoImportSnapshot(): CodexAutoImportSnapshot {
   };
 }
 
+const DEFAULT_CODEX_FRESHNESS_THRESHOLD_MS = 5 * 60 * 1000;
+
+function codexFreshnessThresholdMs(env: Record<string, string | undefined> = process.env): number {
+  const raw = env.LOCUS_CODEX_FRESHNESS_THRESHOLD_MS;
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CODEX_FRESHNESS_THRESHOLD_MS;
+}
+
+function buildCodexFreshness(
+  diagnostics: CodexDiagnosticsSnapshot | undefined,
+  checkedAt: number,
+  freshnessThresholdMs: number,
+): CodexFreshnessSnapshot | undefined {
+  if (!diagnostics) {
+    return undefined;
+  }
+
+  const latestRolloutTimestamp = diagnostics.latestRolloutTimestamp;
+  const latestImportedTimestamp = diagnostics.latestImportedTimestamp;
+  const lagMs =
+    latestRolloutTimestamp !== undefined && latestImportedTimestamp !== undefined
+      ? Math.max(0, latestRolloutTimestamp - latestImportedTimestamp)
+      : undefined;
+  const fresh =
+    lagMs !== undefined ? lagMs <= freshnessThresholdMs : diagnostics.importedEventCount > 0;
+
+  return {
+    checkedAt,
+    client: diagnostics.client,
+    clientSurface: diagnostics.clientSurface,
+    latestRolloutPath: diagnostics.latestRolloutPath,
+    latestRolloutTimestamp,
+    latestImportedTimestamp,
+    importedEventCount: diagnostics.importedEventCount,
+    freshnessThresholdMs,
+    fresh,
+    lagMs,
+    message: fresh ? 'Codex import appears fresh.' : 'Codex import may be stale.',
+  };
+}
+
 function buildCodexTruth(
   codexDiagnostics: CodexDiagnosticsSnapshot | undefined,
 ): CodexTruthSnapshot | undefined {
@@ -55,14 +100,18 @@ function buildCodexTruth(
     return undefined;
   }
 
-  const desktopMessage =
-    'Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.';
+  const desktopObserved =
+    codexDiagnostics.clientSurface === 'desktop' && codexDiagnostics.importedEventCount > 0;
+  const desktopParity = desktopObserved ? 'observed_mcp' : 'unverified';
+  const desktopMessage = desktopObserved
+    ? 'Codex Desktop MCP path has retained Codex events in this environment.'
+    : 'Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.';
 
   if (codexDiagnostics.captureMode === 'off') {
     return {
       recallReadiness: 'disabled',
       recommendedCaptureMode: 'redacted',
-      desktopParity: 'unverified',
+      desktopParity,
       recallMessage:
         'Codex capture is off, so Locus cannot import Codex conversation events for recall.',
       desktopMessage,
@@ -73,7 +122,7 @@ function buildCodexTruth(
     return {
       recallReadiness: 'limited',
       recommendedCaptureMode: 'redacted',
-      desktopParity: 'unverified',
+      desktopParity,
       recallMessage:
         'metadata capture imports structural session events and diagnostics, but conversational recall is weak by design.',
       desktopMessage,
@@ -84,7 +133,7 @@ function buildCodexTruth(
     return {
       recallReadiness: 'practical',
       recommendedCaptureMode: 'redacted',
-      desktopParity: 'unverified',
+      desktopParity,
       recallMessage:
         'redacted capture is the recommended rich recall mode: it stores bounded, filtered conversation snippets without full transcripts.',
       desktopMessage,
@@ -94,7 +143,7 @@ function buildCodexTruth(
   return {
     recallReadiness: 'maximum',
     recommendedCaptureMode: 'redacted',
-    desktopParity: 'unverified',
+    desktopParity,
     recallMessage:
       'full capture stores raw conversation content and can provide maximum recall, but it carries privacy risk and is explicit warning territory.',
     desktopMessage,
@@ -108,6 +157,9 @@ function buildCodexTruth(
 export function handleStatus(deps: StatusDeps): MemoryStatus {
   const { db, dbPath, config } = deps;
   const durable = new DurableMemoryStore(db, false);
+  const checkedAt = deps.now ?? Date.now();
+  const freshnessThresholdMs =
+    deps.codexFreshnessThresholdMs ?? codexFreshnessThresholdMs(deps.env);
 
   // ── File counts ─────────────────────────────────────────────────────────────
 
@@ -198,5 +250,10 @@ export function handleStatus(deps: StatusDeps): MemoryStatus {
       : getDefaultCodexAutoImportSnapshot(),
     codexDiagnostics: deps.codexDiagnostics ? { ...deps.codexDiagnostics } : undefined,
     codexTruth: buildCodexTruth(deps.codexDiagnostics),
+    codexFreshness: buildCodexFreshness(
+      deps.codexDiagnostics,
+      checkedAt,
+      freshnessThresholdMs,
+    ),
   };
 }

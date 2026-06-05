@@ -371,6 +371,77 @@ describe('handleStatus', () => {
     });
   });
 
+  it('exposes a fresh Codex freshness snapshot when import lag is within threshold', () => {
+    const status = handleStatus(
+      makeStatusDeps(adapter, tempDir, {
+        now: 20_000,
+        codexFreshnessThresholdMs: 500,
+        codexDiagnostics: {
+          client: 'codex',
+          clientSurface: 'desktop',
+          detectionEvidence: ['env:CODEX_HOME', 'env:LOCUS_CODEX_SURFACE=desktop'],
+          captureMode: 'redacted',
+          sessionsDir: normalizePathForIdentity('/codex/sessions'),
+          sessionsDirExists: true,
+          rolloutFilesFound: 1,
+          latestRolloutPath: normalizePathForIdentity('/codex/sessions/rollout-fresh.jsonl'),
+          latestRolloutReadable: true,
+          latestRolloutTimestamp: 10_000,
+          importedEventCount: 4,
+          latestImportedSessionId: 'session-fresh',
+          latestImportedTimestamp: 9_800,
+        },
+      }),
+    );
+
+    expect(status.codexFreshness).toEqual({
+      checkedAt: 20_000,
+      client: 'codex',
+      clientSurface: 'desktop',
+      latestRolloutPath: normalizePathForIdentity('/codex/sessions/rollout-fresh.jsonl'),
+      latestRolloutTimestamp: 10_000,
+      latestImportedTimestamp: 9_800,
+      importedEventCount: 4,
+      freshnessThresholdMs: 500,
+      fresh: true,
+      lagMs: 200,
+      message: 'Codex import appears fresh.',
+    });
+  });
+
+  it('exposes a stale Codex freshness snapshot when rollout is newer than imported events', () => {
+    const status = handleStatus(
+      makeStatusDeps(adapter, tempDir, {
+        now: 20_000,
+        codexFreshnessThresholdMs: 500,
+        codexDiagnostics: {
+          client: 'codex',
+          clientSurface: 'cli',
+          detectionEvidence: ['env:CODEX_HOME'],
+          captureMode: 'redacted',
+          sessionsDir: normalizePathForIdentity('/codex/sessions'),
+          sessionsDirExists: true,
+          rolloutFilesFound: 1,
+          latestRolloutPath: normalizePathForIdentity('/codex/sessions/rollout-stale.jsonl'),
+          latestRolloutReadable: true,
+          latestRolloutTimestamp: 10_000,
+          importedEventCount: 4,
+          latestImportedSessionId: 'session-stale',
+          latestImportedTimestamp: 1_000,
+        },
+      }),
+    );
+
+    expect(status.codexFreshness).toMatchObject({
+      checkedAt: 20_000,
+      client: 'codex',
+      clientSurface: 'cli',
+      fresh: false,
+      lagMs: 9_000,
+      message: 'Codex import may be stale.',
+    });
+  });
+
   it('exposes codex truth guidance when metadata capture is too weak for strong recall', () => {
     const status = handleStatus({
       ...(makeStatusDeps(adapter, tempDir, {

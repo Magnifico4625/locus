@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizePathForIdentity } from '@locus/shared-runtime';
@@ -67,6 +67,38 @@ describe('collectCodexDiagnostics', () => {
       latestRolloutReadable: true,
       importedEventCount: 0,
     });
+  });
+
+  it('uses the newest rollout event timestamp before file mtime for freshness', () => {
+    const codexHome = join(tempDir, 'codex-home');
+    const sessionsDir = join(codexHome, 'sessions', '2026', '05');
+    mkdirSync(sessionsDir, { recursive: true });
+    const rolloutPath = join(sessionsDir, 'rollout-track-d-freshness.jsonl');
+    const eventTimestamp = Date.parse('2026-05-30T10:00:00.000Z');
+
+    writeFileSync(
+      rolloutPath,
+      [
+        JSON.stringify({
+          type: 'session_meta',
+          timestamp: '2026-05-30T10:00:00.000Z',
+          session_id: 'sess-track-d-freshness',
+          cwd: 'C:\\Projects\\Locus',
+          model: 'gpt-5.4',
+        }),
+        '',
+      ].join('\n'),
+      'utf8',
+    );
+    const newerMtime = new Date('2026-05-30T11:00:00.000Z');
+    utimesSync(rolloutPath, newerMtime, newerMtime);
+
+    const diagnostics = collectCodexDiagnostics({
+      db: adapter,
+      env: { CODEX_HOME: codexHome },
+    });
+
+    expect(diagnostics?.latestRolloutTimestamp).toBe(eventTimestamp);
   });
 
   it('uses persisted Codex rows to report imported event count and latest imported session', () => {

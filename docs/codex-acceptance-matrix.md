@@ -13,7 +13,7 @@ It separates three different claims:
 | Surface | Status | Validated behavior | Known limitation |
 |---------|--------|--------------------|------------------|
 | Codex CLI | Validated primary path | Auto-import before `memory_search`, manual `memory_import_codex`, `memory_status`, `memory_doctor`, `memory_recall`, fixture-backed recent bugfix recall, durable decision candidate recall, live local recall marker `TRACKA-LIVE-20260423` on Codex CLI `0.123.0`, local one-command installer smoke on Codex CLI `0.125.0`, Track C redacted recall fixtures through `track-c-recall-acceptance.test.ts` | Strong conversational recall requires `LOCUS_CODEX_CAPTURE=redacted` or `full`; `metadata` is limited recall; duplicate-heavy recall can return `needs_clarification`; agents must use `candidateGroups` for focused clarification |
-| Codex desktop / extension | Unverified parity | Same MCP config model may expose the same Locus tools when the upstream surface supports MCP | Codex desktop / extension parity remains unverified; extension-side MCP visibility and behavior can differ from CLI; diagnostics must report this honestly |
+| Codex desktop / extension | Diagnostics observed, full parity pending | Same MCP config model may expose the same Locus tools when the upstream surface supports MCP. `memory_status` / `memory_doctor` can report an observed desktop MCP path when diagnostics detect `clientSurface=desktop` with retained Codex events | Full desktop / extension parity still requires target-surface marker import and recall validation; extension-side MCP visibility and behavior can differ from CLI |
 | One-command npm install | Validated for Codex CLI via npm package | `locus-memory install codex`, `doctor codex`, and `uninstall codex` are implemented with skill install, lock handling, idempotency, redacted defaults, package-runtime config generation, and safe MCP `cwd` handling | Codex desktop / extension parity remains unverified until tested in that surface |
 | Manual MCP fallback | Supported fallback | Direct MCP server setup works with all Locus tools/resources where the client exposes MCP | Passive Codex JSONL import still depends on `CODEX_HOME`, readable `sessions/`, and capture mode |
 | Secondary IDE adapters | Future work | Generic MCP tools/resources work where the client supports MCP | Passive conversation capture for Cursor/Windsurf-style clients is not validated in Track A |
@@ -37,7 +37,10 @@ Track C acceptance considers recall successful when:
 - Russian dated questions such as "что мы делали вчера?" can recover relevant redacted context.
 - Multiple plausible matches may return `needs_clarification`; that is valid if the durable or conversation candidate is present, inspectable, and grouped through `candidateGroups`.
 - `memory_status` exposes `codexTruth` so agents can distinguish import health from recall usefulness.
-- `memory_doctor` warns when `metadata` is too weak for strong recall and when desktop/extension parity is unverified.
+- `memory_status` exposes `codexFreshness` so agents can compare the newest rollout event timestamp with the newest imported Codex event.
+- `memory_doctor` warns when `metadata` is too weak for strong recall, reports Codex import freshness lag, and keeps desktop/extension parity honest.
+
+`LOCUS_CODEX_SURFACE=desktop|extension|cli` is a diagnostic/debug override for validating non-CLI surfaces before stronger upstream evidence exists. It can intentionally simulate a surface, but it can also mislead `memory_status` and `memory_doctor` if left set accidentally.
 
 ## Verification Commands
 

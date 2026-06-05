@@ -2374,6 +2374,8 @@ Completed 2026-06-04:
 ## Task D5: Codex Freshness And Surface Truth
 
 **Files:**
+- Modify: `docs/codex-acceptance-matrix.md`
+- Modify: `packages/codex/README.md`
 - Modify: `packages/core/src/types.ts`
 - Modify: `packages/core/src/tools/codex-diagnostics.ts`
 - Modify: `packages/core/src/tools/status.ts`
@@ -2384,8 +2386,12 @@ Completed 2026-06-04:
 - Test: `packages/core/tests/tools/status.test.ts`
 - Test: `packages/core/tests/tools/doctor.test.ts`
 - Test: `packages/core/tests/shared-runtime/detect-client.test.ts`
+- Test: `packages/core/tests/integration/codex-runtime-truth.test.ts`
+- Test: `packages/core/tests/integration/codex-auto-import-search.test.ts`
+- Test: `packages/core/tests/integration/server.test.ts`
+- Test: `packages/core/tests/integration/track-a-recall-acceptance.test.ts`
 
-- [ ] **Step D5.1: Add surface override tests**
+- [x] **Step D5.1: Add surface override tests**
 
 Extend `packages/core/tests/shared-runtime/detect-client.test.ts`:
 
@@ -2414,7 +2420,7 @@ npm test -- packages/core/tests/shared-runtime/detect-client.test.ts
 
 Expected: FAIL until shared runtime supports the override.
 
-- [ ] **Step D5.2: Implement explicit Codex surface override**
+- [x] **Step D5.2: Implement explicit Codex surface override**
 
 Modify `packages/shared-runtime/detect-client.js`:
 
@@ -2453,7 +2459,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS.
 
-- [ ] **Step D5.3: Add freshness snapshot types**
+- [x] **Step D5.3: Add freshness snapshot types**
 
 Modify `packages/core/src/types.ts`:
 
@@ -2487,7 +2493,7 @@ npm -w @locus/core run typecheck
 
 Expected: PASS after consumers are updated.
 
-- [ ] **Step D5.4: Build freshness from diagnostics and imported event timestamps**
+- [x] **Step D5.4: Build freshness from diagnostics and imported event timestamps**
 
 Modify `packages/core/src/tools/codex-diagnostics.ts` to compute `latestRolloutTimestamp` from the newest rollout file's newest JSONL event timestamp, with file mtime only as a fallback when no parseable timestamp exists.
 
@@ -2611,7 +2617,7 @@ npm test -- packages/core/tests/tools/codex-diagnostics.test.ts packages/core/te
 
 Expected: PASS with new assertions.
 
-- [ ] **Step D5.5: Update doctor desktop and freshness checks**
+- [x] **Step D5.5: Update doctor desktop and freshness checks**
 
 Modify `packages/core/src/tools/doctor.ts`:
 
@@ -2627,7 +2633,7 @@ npm test -- packages/core/tests/tools/doctor.test.ts
 
 Expected: PASS.
 
-- [ ] **Step D5.6: Commit freshness and surface truth**
+- [x] **Step D5.6: Commit freshness and surface truth**
 
 Run:
 
@@ -2635,6 +2641,17 @@ Run:
 git add packages/core/src/types.ts packages/core/src/tools/codex-diagnostics.ts packages/core/src/tools/status.ts packages/core/src/tools/doctor.ts packages/shared-runtime/detect-client.js packages/shared-runtime/detect-client.d.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/doctor.test.ts packages/core/tests/shared-runtime/detect-client.test.ts
 git commit -m "feat(codex): report freshness and desktop surface"
 ```
+
+Completed 2026-06-05:
+
+- `npm test -- packages/core/tests/shared-runtime/detect-client.test.ts packages/core/tests/tools/codex-diagnostics.test.ts packages/core/tests/tools/status.test.ts packages/core/tests/tools/doctor.test.ts` - PASS, 4 files / 72 tests.
+- `npm test -- packages/core/tests/integration/codex-runtime-truth.test.ts packages/core/tests/integration/codex-auto-import-search.test.ts packages/core/tests/integration/server.test.ts packages/core/tests/integration/track-a-recall-acceptance.test.ts` - PASS, 4 files / 30 tests.
+- `npm -w @locus/core run typecheck` - PASS.
+- `git diff --check` - PASS.
+
+Implementation note:
+
+- The Track A and Codex auto-import integration fixtures now rewrite `session_meta.cwd` to the temporary test project during copy, matching Track D project-scoped storage. Generic direct `handleRemember` integration tests pass `projectRoot` explicitly so scoped server search can see the semantic row.
 
 ---
 

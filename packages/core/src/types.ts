@@ -508,13 +508,28 @@ export interface CodexDiagnosticsSnapshot {
   rolloutFilesFound: number;
   latestRolloutPath?: string;
   latestRolloutReadable?: boolean;
+  latestRolloutTimestamp?: number;
   importedEventCount: number;
   latestImportedSessionId?: string;
   latestImportedTimestamp?: number;
 }
 
 export type CodexRecallReadiness = 'disabled' | 'limited' | 'practical' | 'maximum';
-export type CodexDesktopParity = 'unverified';
+export type CodexDesktopParity = 'unverified' | 'observed_mcp' | 'validated';
+
+export interface CodexFreshnessSnapshot {
+  checkedAt: number;
+  client: ClientEnv;
+  clientSurface: ClientSurface;
+  latestRolloutPath?: string;
+  latestRolloutTimestamp?: number;
+  latestImportedTimestamp?: number;
+  importedEventCount: number;
+  freshnessThresholdMs: number;
+  fresh: boolean;
+  lagMs?: number;
+  message: string;
+}
 
 export interface CodexTruthSnapshot {
   recallReadiness: CodexRecallReadiness;
@@ -547,6 +562,7 @@ export interface MemoryStatus {
   codexAutoImport?: CodexAutoImportSnapshot;
   codexDiagnostics?: CodexDiagnosticsSnapshot;
   codexTruth?: CodexTruthSnapshot;
+  codexFreshness?: CodexFreshnessSnapshot;
 }
 
 // ─── Doctor ───

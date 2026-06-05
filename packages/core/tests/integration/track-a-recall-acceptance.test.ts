@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -22,6 +22,28 @@ function makeTempRoot(): string {
   const dir = mkdtempSync(join(tmpdir(), 'locus-track-a-recall-'));
   tempRoots.push(dir);
   return dir;
+}
+
+function copyFixtureSession(sourceName: string, targetPath: string, projectDir: string): void {
+  const sourcePath = join(fixturesDir, sourceName);
+  const source = readFileSync(sourcePath, 'utf8');
+  const rewritten = source
+    .split(/\r?\n/)
+    .map((line) => {
+      if (!line.trim()) {
+        return line;
+      }
+
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      if (parsed.type !== 'session_meta') {
+        return line;
+      }
+
+      return JSON.stringify({ ...parsed, cwd: projectDir });
+    })
+    .join('\n');
+
+  writeFileSync(targetPath, rewritten, 'utf8');
 }
 
 function getRegisteredTool(ctx: ServerContext, name: string) {
@@ -64,9 +86,10 @@ describe('Track A recall acceptance', () => {
     const sessionsDir = join(codexHome, 'sessions', '2026', '04');
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(sessionsDir, { recursive: true });
-    cpSync(
-      join(fixturesDir, 'recall-bugfix.jsonl'),
+    copyFixtureSession(
+      'recall-bugfix.jsonl',
       join(sessionsDir, 'rollout-track-a-bugfix.jsonl'),
+      projectDir,
     );
 
     const originalCodexHome = process.env.CODEX_HOME;
@@ -127,9 +150,10 @@ describe('Track A recall acceptance', () => {
     const sessionsDir = join(codexHome, 'sessions', '2026', '04');
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(sessionsDir, { recursive: true });
-    cpSync(
-      join(fixturesDir, 'recall-decisions.jsonl'),
+    copyFixtureSession(
+      'recall-decisions.jsonl',
       join(sessionsDir, 'rollout-track-a-decisions.jsonl'),
+      projectDir,
     );
 
     const originalCodexHome = process.env.CODEX_HOME;
