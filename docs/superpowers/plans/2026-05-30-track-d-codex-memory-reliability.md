@@ -3197,8 +3197,9 @@ Implementation note:
 - Modify: `README.md`
 - Modify: `docs/codex-acceptance-matrix.md`
 - Modify: `docs/roadmap/codex-next.md`
+- Modify: `docs/superpowers/plans/2026-05-30-track-d-codex-memory-reliability.md`
 
-- [ ] **Step D7.1: Add Track D JSONL fixtures**
+- [x] **Step D7.1: Add Track D JSONL fixtures**
 
 Create three fixtures:
 
@@ -3229,7 +3230,7 @@ npm test -- packages/codex/tests/normalize.test.ts packages/codex/tests/importer
 
 Expected: PASS because fixtures do not change code yet.
 
-- [ ] **Step D7.2: Extend Track D integration acceptance**
+- [x] **Step D7.2: Extend Track D integration acceptance**
 
 Add tests to `packages/core/tests/integration/track-d-memory-reliability.test.ts`:
 
@@ -3396,7 +3397,7 @@ npm test -- packages/core/tests/integration/track-d-memory-reliability.test.ts
 
 Expected: PASS after Tasks D1-D6.
 
-- [ ] **Step D7.3: Update Codex skill workflow**
+- [x] **Step D7.3: Update Codex skill workflow**
 
 Modify `packages/codex/skills/locus-memory/SKILL.md`:
 
@@ -3413,7 +3414,7 @@ npm test -- packages/codex/tests/skill-contract.test.ts packages/codex/tests/ski
 
 Expected: PASS after tests are updated to assert the new instructions.
 
-- [ ] **Step D7.4: Update public docs and acceptance matrix**
+- [x] **Step D7.4: Update public docs and acceptance matrix**
 
 Modify:
 
@@ -3441,7 +3442,7 @@ rg -n "memory_calendar|memory_project_state|Codex Desktop|date bucket|project is
 
 Expected: each file contains the relevant new guidance.
 
-- [ ] **Step D7.5: Commit acceptance and docs**
+- [x] **Step D7.5: Commit acceptance and docs**
 
 Run:
 
@@ -3449,6 +3450,25 @@ Run:
 git add packages/codex/tests/fixtures/track-d packages/core/tests/integration/track-d-memory-reliability.test.ts packages/codex/skills/locus-memory/SKILL.md packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts README.md packages/codex/README.md docs/codex-acceptance-matrix.md docs/roadmap/codex-next.md
 git commit -m "docs(codex): validate track d memory workflow"
 ```
+
+Completed 2026-06-08:
+
+- `npm test -- packages/codex/tests/normalize.test.ts packages/codex/tests/importer.test.ts` - PASS, 2 files / 24 tests.
+- `npm test -- packages/core/tests/integration/track-d-memory-reliability.test.ts` - PASS, 1 file / 7 tests.
+- RED: `npm test -- packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts` failed on missing searched date buckets, project isolation, explicit period range, and desktop marker wording in the Codex skill.
+- `npm test -- packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts` - PASS, 2 files / 11 tests.
+- `npm test -- packages/codex/tests/normalize.test.ts packages/codex/tests/importer.test.ts packages/core/tests/integration/track-d-memory-reliability.test.ts packages/codex/tests/skill-contract.test.ts packages/codex/tests/skill-sync.test.ts` - PASS, 5 files / 42 tests.
+- `npm -w @locus/core run typecheck` - PASS.
+- `npm -w @locus/codex run typecheck` - PASS.
+- `git diff --check` - PASS.
+- `rg -n "memory_calendar|memory_project_state|Codex Desktop|date bucket|project isolation|last_30d|LOCUS_CODEX_SURFACE|Evidence anchors" README.md packages/codex/README.md docs/codex-acceptance-matrix.md docs/roadmap/codex-next.md packages/codex/skills/locus-memory/SKILL.md` - PASS.
+
+Implementation note:
+
+- The Track D fixture source files keep the requested names, but integration tests copy them into Codex sessions as `rollout-*.jsonl` because `findCodexRolloutFiles()` intentionally imports only rollout JSONL files.
+- The May period tests fix `Date.now()` to `2026-05-30T12:00:00.000Z`; otherwise `this_month` would correctly resolve to June on the current 2026-06-08 test date and make the May fixtures a false negative.
+- Desktop acceptance uses `memory_recall` to trigger the same debounced pre-query auto-import path, then asserts marker recall, `memory_status` desktop diagnostics, auto-import snapshot surface/import count, and `memory_doctor` desktop parity.
+- Documentation now states the exact proof level: Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; extension parity still requires target-surface validation, and the env override remains diagnostic/debug-only.
 
 ---
 

@@ -232,7 +232,7 @@ Shipped as **`v3.6.0`** with a focused **`v3.6.1`** installer hotfix.
 
 **Target window:** immediate post-`v3.6.1` work
 
-**Current status:** newly prioritized after the May 30, 2026 Codex Desktop review. The current desktop MCP path works in real use, but recall still needs stronger filtering, freshness, and time-aware organization before the agent can rely on Locus as a high-trust project memory.
+**Current status:** implementation is progressing through the Track D task plan. D0-D7 are locally completed: project-scoped temporal recall, `memory_calendar`, freshness/surface diagnostics, `memory_project_state`, same-topic next-step supersession, JSONL fixture acceptance, and docs truth pass are implemented. Final Track D release validation still gates the `v3.7.x` release decision.
 
 **Why it matters:** richer recall is only useful if it returns the right project, the right time period, and the current state without forcing the agent to manually filter unrelated memories. Locus should feel like a reliable project memory, not a broad search over old conversations.
 
@@ -289,6 +289,10 @@ Make Locus dependable enough for Codex agents to use as their default project-me
 Implementation note:
 
 - Track D project-scoped recall isolates durable topic keys by `projectRoot`; the same `topic_key` may exist in two projects without leaking across recall/search/timeline results. A separate user-configurable topic namespace filter remains a follow-up if acceptance testing shows a real need beyond project-root isolation.
+- `memory_calendar` is the recommended first tool for broad period questions. It defaults to `last_30d`, so agents should pass `this_month`, `last_month`, or an explicit range for user period questions instead of relying on the default.
+- Date-scoped `memory_recall` reports searched date buckets, and current-project recall must not mix other project memories unless the user explicitly asks for global recall.
+- Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; `LOCUS_CODEX_SURFACE` remains a diagnostic/debug override that can mislead diagnostics if left set accidentally.
+- Evidence anchors remain a follow-up: candidates expose source event IDs, durable IDs, project roots, and date metadata now; richer display formatting for commits, files, docs, command results, and timestamps can ship after project-scoped behavior is proven.
 
 ### Key constraints
 

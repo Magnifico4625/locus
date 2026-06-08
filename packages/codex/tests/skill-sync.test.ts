@@ -156,6 +156,8 @@ describe('skill sync helpers', () => {
     expect(installedSkill).toContain('`metadata` means ingestion and diagnostics first');
     expect(installedSkill).toContain('`redacted` is the recommended practical rich-recall mode');
     expect(installedSkill).toContain('`full` is maximum local capture');
-    expect(installedSkill).toContain('Do not claim Codex desktop or extension parity');
+    expect(installedSkill).toContain('searched date buckets');
+    expect(installedSkill).toContain('current-project recall must not mix other project memories');
+    expect(installedSkill).toContain('Codex Desktop MCP path is validated');
   });
 });

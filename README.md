@@ -53,7 +53,7 @@ The installer adds the Locus MCP server, installs the Codex skill, sets practica
 
 **New in v3.6 / Track C:** richer Codex recall. `memory_recall` can summarize imported redacted Codex sessions, durable decisions, explicit `memory_remember` entries, rejected alternatives, validation facts, user style, and dated questions such as "what did we do yesterday?". If several matches are plausible, Locus returns `candidateGroups` so the agent can ask a focused clarification instead of guessing.
 
-Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is still treated as unverified until tested there.
+Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and the Track D marker acceptance validates the desktop MCP path when `LOCUS_CODEX_SURFACE=desktop` is set. Extension parity still depends on target-surface testing.
 
 ## Why Choose Locus
 
@@ -121,6 +121,8 @@ Locus exposes 16 MCP tools:
 | `memory_compact` | Prune old episodic entries |
 | `memory_forget` / `memory_purge` | Delete selected or all memory with safety confirmation |
 
+For broad period questions, use `memory_calendar` first. It defaults to `last_30d`, so agents should pass `this_month`, `last_month`, or an explicit range for user period questions. Date-scoped `memory_recall` reports searched date buckets, and current-project recall must not mix other project memories unless the user asks for global recall.
+
 ## Other Clients
 
 Locus is an MCP server, so it can run in Claude Code, Cursor, Windsurf, Cline, Zed, Claude Desktop, and similar clients.
@@ -131,7 +133,7 @@ Current maturity:
 | --- | --- |
 | Codex CLI | Primary validated path |
 | Claude Code | Supported through hooks and shared runtime |
-| Codex desktop / extension | Same config model where MCP is exposed; parity still unverified |
+| Codex desktop / extension | Desktop MCP marker path validated with `LOCUS_CODEX_SURFACE=desktop`; extension still requires target-surface validation |
 | Cursor / Windsurf / Cline / Zed | MCP tools work; passive conversation adapters are future work |
 
 Manual MCP fallback:

@@ -1,0 +1,4 @@
+{"type":"session_meta","timestamp":"2026-05-30T10:00:00.000Z","session_id":"sess_track_d_current_project_may_001","cwd":"__TRACKD_CURRENT_PROJECT__","model":"gpt-5.4"}
+{"type":"event_msg","subtype":"user_message","timestamp":"2026-05-30T10:01:00.000Z","message":"Вспомни работу в этом месяце для Locus: TRACKD-LOCUS-MAY-20260530. Track D memory reliability validated current-project recall and date buckets."}
+{"type":"response_item","timestamp":"2026-05-30T10:02:00.000Z","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Validation passed: TRACKD-LOCUS-MAY-20260530 remains scoped to the Locus project and reports the searched May 30 date bucket."}]}}
+{"type":"event_msg","subtype":"task_complete","timestamp":"2026-05-30T10:03:00.000Z","message":"Track D Locus month-work acceptance completed with marker TRACKD-LOCUS-MAY-20260530."}

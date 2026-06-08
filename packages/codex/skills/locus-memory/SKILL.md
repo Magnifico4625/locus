@@ -34,7 +34,10 @@ project context across sessions.
   - "what did we decide about auth?"
   - "what did we just fix?"
 - Use `memory_calendar` for broad period discovery such as "what did we work on this month?" or "show May work" before drilling into specific days, weeks, or topics
+- For user period questions, pass `this_month`, `last_month`, or an explicit range instead of relying on the default `last_30d`
+- For date-scoped recall, report the searched date buckets from `memory_recall` so the user can see which days/weeks/months were checked
 - Use `memory_project_state` before relying on old memories when project identity, package version, git state, latest conversation timestamp, or active next steps matter
+- current-project recall must not mix other project memories unless the user explicitly asks for global recall
 - In Codex, recent dialogue is auto-imported before `memory_recall`, `memory_search`, and `memory_calendar`
 - If `memory_recall` returns `needs_clarification`, inspect `candidateGroups` and ask a focused follow-up question after the lookup instead of guessing or asking before checking Locus
 - If `memory_recall` returns `no_memory`, then fall back to `memory_search`, `memory_calendar`, or `memory_timeline` only when raw search, broad period discovery, or chronology is still useful
@@ -51,4 +54,4 @@ project context across sessions.
   - `redacted` is the recommended practical rich-recall mode for Codex because it stores high-value snippets with privacy filtering
   - `full` is maximum local capture and must be described with an explicit privacy warning, never as risk-free
 - If the task clearly involves secrets, tokens, passwords, or highly sensitive material, remind the user that `LOCUS_CODEX_CAPTURE=full` / `LOCUS_CAPTURE_LEVEL=full` may store sensitive local memory content
-- Codex CLI is the validated primary path. Do not claim Codex desktop or extension parity unless the current environment has been tested through that surface
+- Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; otherwise do not claim desktop or extension parity without testing the target surface

@@ -93,7 +93,7 @@ Track C adds fixture-backed richer recall validation for Codex CLI: Russian date
 
 Last documented local install validation target: Codex CLI `0.130.0` surface as of May 12, 2026. Track C local smoke covered the one-command installer, `codex mcp list`, `doctor codex`, and raw MCP `memory_remember` -> `memory_recall`. Registry-hosted `locus-memory@3.6.1` validation must run after npm publish.
 
-Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface. `memory_status` and `memory_doctor` can report an observed desktop MCP path when Codex diagnostics detect a desktop surface with retained Codex events, but full parity should still be claimed only after testing the target surface.
+Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and the Track D marker acceptance validates the desktop MCP path when `LOCUS_CODEX_SURFACE=desktop` is set. `memory_status` and `memory_doctor` can report an observed desktop MCP path when Codex diagnostics detect a desktop surface with retained Codex events. Extension parity still requires target-surface testing.
 
 ## Codex JSONL Import
 
@@ -122,7 +122,10 @@ The canonical Locus Codex skill assumes this workflow:
 
 - `memory_recall` first for summary-first questions like "what did we do yesterday?"
 - `memory_calendar` for broad period questions like "what did we work on this month?" before drilling into specific days or topics
+- `memory_calendar` defaults to `last_30d`; pass `this_month`, `last_month`, or an explicit range for user period questions
+- date-scoped `memory_recall` should report searched date buckets
 - `memory_project_state` when the agent needs the current package/git identity, latest conversation timestamp, active durable count, or active next steps before relying on memory
+- current-project recall must not mix other project memories unless the user explicitly asks for global recall
 - `memory_search` when exact-term search is still useful after recall
 - `memory_status` when recent history does not appear as expected
 - `memory_import_codex` only for manual catch-up, filtered imports, or older sessions
@@ -132,7 +135,7 @@ The canonical Locus Codex skill assumes this workflow:
 
 If `memory_recall` returns `needs_clarification`, inspect `candidateGroups` and ask the user a focused follow-up. Do not say "I do not remember" until Locus has been checked.
 
-This workflow is optimized and validated for Codex CLI. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
+This workflow is optimized and validated for Codex CLI. Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
 
 For the extension-specific setup, reload, and troubleshooting flow, use the dedicated guide:
 

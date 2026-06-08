@@ -1,12 +1,33 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { normalizeProjectRootForScope } from '../../src/recall/project-scope.js';
+import type { ServerContext } from '../../src/server.js';
+import { createServer } from '../../src/server.js';
 import { runMigrations } from '../../src/storage/migrations.js';
 import { NodeSqliteAdapter } from '../../src/storage/node-sqlite.js';
 import { handleRecall } from '../../src/tools/recall.js';
-import type { DatabaseAdapter, EventKind, MemoryRecallResult } from '../../src/types.js';
+import type {
+  DatabaseAdapter,
+  DoctorReport,
+  EventKind,
+  MemoryCalendarResult,
+  MemoryRecallResult,
+  MemoryStatus,
+} from '../../src/types.js';
+
+const trackDFixturesDir = join(
+  import.meta.dirname,
+  '..',
+  '..',
+  '..',
+  'codex',
+  'tests',
+  'fixtures',
+  'track-d',
+);
+const fixedMayNow = Date.parse('2026-05-30T12:00:00.000Z');
 
 function createAdapter(dir: string): NodeSqliteAdapter {
   // biome-ignore lint/suspicious/noExplicitAny: node:sqlite dynamic require
@@ -71,7 +92,87 @@ function insertDurableMemory(
   ).lastInsertRowid;
 }
 
-describe('Track D memory reliability', () => {
+function getRegisteredTool(ctx: ServerContext, name: string) {
+  const registry = (
+    ctx.server as {
+      _registeredTools?: Record<
+        string,
+        { handler: (args: unknown) => Promise<{ content: Array<{ text: string }> }> }
+      >;
+    }
+  )._registeredTools;
+  const tool = registry?.[name];
+  if (!tool) {
+    throw new Error(`Tool ${name} is not registered`);
+  }
+  return tool;
+}
+
+async function callTextTool(
+  ctx: ServerContext,
+  name: string,
+  args: Record<string, unknown>,
+): Promise<string> {
+  const tool = getRegisteredTool(ctx, name);
+  const result = await tool.handler(args);
+  return result.content[0]?.text ?? '';
+}
+
+function copyTrackDFixture(
+  source: string,
+  destination: string,
+  replacements: Record<string, string>,
+): void {
+  const raw = readFileSync(source, 'utf8');
+  const rendered = Object.entries(replacements).reduce(
+    (text, [token, value]) => text.replaceAll(token, value.replace(/\\/g, '\\\\')),
+    raw,
+  );
+  writeFileSync(destination, rendered, 'utf8');
+}
+
+function makeServerFixtureDirs(root: string) {
+  const projectDir = join(root, 'ClaudeMagnificoMem');
+  const otherProjectDir = join(root, 'ProxyVpn');
+  const codexHome = join(root, 'codex-home');
+  const sessionsDir = join(codexHome, 'sessions', '2026', '05');
+  mkdirSync(projectDir, { recursive: true });
+  mkdirSync(otherProjectDir, { recursive: true });
+  mkdirSync(sessionsDir, { recursive: true });
+  return { projectDir, otherProjectDir, codexHome, sessionsDir };
+}
+
+async function withEnv<T>(values: Record<string, string>, fn: () => Promise<T>): Promise<T> {
+  const previous = new Map<string, string | undefined>();
+  for (const key of Object.keys(values)) {
+    previous.set(key, process.env[key]);
+    process.env[key] = values[key];
+  }
+
+  try {
+    return await fn();
+  } finally {
+    for (const [key, value] of previous) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+}
+
+async function withNow<T>(now: number, fn: () => Promise<T>): Promise<T> {
+  const previousNow = Date.now;
+  Date.now = () => now;
+  try {
+    return await fn();
+  } finally {
+    Date.now = previousNow;
+  }
+}
+
+describe.sequential('Track D memory reliability', () => {
   let dir: string;
   let db: NodeSqliteAdapter;
   const now = Date.parse('2026-05-30T12:00:00.000Z');
@@ -171,5 +272,215 @@ describe('Track D memory reliability', () => {
       '2026-05-12',
       '2026-05-20',
     ]);
+  });
+
+  it('recalls current-project month work without other-project JSONL noise', async () => {
+    const { projectDir, otherProjectDir, codexHome, sessionsDir } = makeServerFixtureDirs(
+      join(dir, 'server-current-project'),
+    );
+    const replacements = {
+      __TRACKD_CURRENT_PROJECT__: projectDir,
+      __TRACKD_OTHER_PROJECT__: otherProjectDir,
+    };
+    copyTrackDFixture(
+      join(trackDFixturesDir, 'current-project-may.jsonl'),
+      join(sessionsDir, 'rollout-a-current-project-may.jsonl'),
+      replacements,
+    );
+    copyTrackDFixture(
+      join(trackDFixturesDir, 'other-project-may.jsonl'),
+      join(sessionsDir, 'rollout-b-other-project-may.jsonl'),
+      replacements,
+    );
+
+    await withEnv(
+      {
+        CODEX_HOME: codexHome,
+        LOCUS_CODEX_CAPTURE: 'redacted',
+        LOCUS_CAPTURE_LEVEL: 'redacted',
+      },
+      () =>
+        withNow(fixedMayNow, async () => {
+          const ctx = await createServer({ cwd: projectDir, dbPath: join(dir, 'server.db') });
+          try {
+            const importResult = JSON.parse(
+              await callTextTool(ctx, 'memory_import_codex', {}),
+            ) as { imported: number };
+            const recallText = await callTextTool(ctx, 'memory_recall', {
+              question: 'вспомни работу в этом месяце',
+              timeRange: { relative: 'this_month' },
+              limit: 10,
+            });
+
+            expect(importResult.imported).toBeGreaterThan(0);
+            expect(recallText).toContain('TRACKD-LOCUS-MAY-20260530');
+            expect(recallText).not.toContain('TRACKD-PROXYVPN-NOISE-20260530');
+          } finally {
+            ctx.cleanup();
+          }
+        }),
+    );
+  });
+
+  it('reports date buckets searched for this month from imported Codex JSONL', async () => {
+    const { projectDir, otherProjectDir, codexHome, sessionsDir } = makeServerFixtureDirs(
+      join(dir, 'server-date-buckets'),
+    );
+    copyTrackDFixture(
+      join(trackDFixturesDir, 'current-project-may.jsonl'),
+      join(sessionsDir, 'rollout-current-project-may.jsonl'),
+      {
+        __TRACKD_CURRENT_PROJECT__: projectDir,
+        __TRACKD_OTHER_PROJECT__: otherProjectDir,
+      },
+    );
+
+    await withEnv(
+      {
+        CODEX_HOME: codexHome,
+        LOCUS_CODEX_CAPTURE: 'redacted',
+        LOCUS_CAPTURE_LEVEL: 'redacted',
+      },
+      () =>
+        withNow(fixedMayNow, async () => {
+          const ctx = await createServer({ cwd: projectDir, dbPath: join(dir, 'buckets.db') });
+          try {
+            await callTextTool(ctx, 'memory_import_codex', {});
+            const recall = JSON.parse(
+              await callTextTool(ctx, 'memory_recall', {
+                question: 'вспомни работу в этом месяце',
+                timeRange: { relative: 'this_month' },
+                limit: 10,
+              }),
+            ) as MemoryRecallResult;
+
+            expect(recall.searchedDateBuckets).toEqual(
+              expect.arrayContaining([expect.objectContaining({ key: '2026-05-30' })]),
+            );
+          } finally {
+            ctx.cleanup();
+          }
+        }),
+    );
+  });
+
+  it('treats explicit desktop surface as observed after marker auto-import and recall', async () => {
+    const { projectDir, otherProjectDir, codexHome, sessionsDir } = makeServerFixtureDirs(
+      join(dir, 'server-desktop'),
+    );
+    copyTrackDFixture(
+      join(trackDFixturesDir, 'desktop-marker.jsonl'),
+      join(sessionsDir, 'rollout-z-desktop-marker.jsonl'),
+      {
+        __TRACKD_CURRENT_PROJECT__: projectDir,
+        __TRACKD_OTHER_PROJECT__: otherProjectDir,
+      },
+    );
+
+    await withEnv(
+      {
+        CODEX_HOME: codexHome,
+        LOCUS_CODEX_CAPTURE: 'redacted',
+        LOCUS_CAPTURE_LEVEL: 'redacted',
+        LOCUS_CODEX_SURFACE: 'desktop',
+      },
+      () =>
+        withNow(fixedMayNow, async () => {
+          const ctx = await createServer({ cwd: projectDir, dbPath: join(dir, 'desktop.db') });
+          try {
+            const recallText = await callTextTool(ctx, 'memory_recall', {
+              question: 'TRACKD-DESKTOP-MARKER-20260530',
+              timeRange: { relative: 'this_month' },
+              limit: 10,
+            });
+            const status = JSON.parse(await callTextTool(ctx, 'memory_status', {})) as MemoryStatus;
+            const doctor = JSON.parse(await callTextTool(ctx, 'memory_doctor', {})) as DoctorReport;
+
+            expect(recallText).toContain('TRACKD-DESKTOP-MARKER-20260530');
+            expect(status.codexDiagnostics).toMatchObject({ clientSurface: 'desktop' });
+            expect(status.codexAutoImport.clientSurface).toBe('desktop');
+            expect(status.codexAutoImport.lastImported).toBeGreaterThan(0);
+            expect(doctor.checks).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({ name: 'Codex desktop parity', status: 'ok' }),
+              ]),
+            );
+          } finally {
+            ctx.cleanup();
+          }
+        }),
+    );
+  });
+
+  it('calendar runs the same debounced pre-query import flow before reading buckets', async () => {
+    const { projectDir, otherProjectDir, codexHome, sessionsDir } = makeServerFixtureDirs(
+      join(dir, 'server-calendar'),
+    );
+    copyTrackDFixture(
+      join(trackDFixturesDir, 'other-project-may.jsonl'),
+      join(sessionsDir, 'rollout-a-other-project-may.jsonl'),
+      {
+        __TRACKD_CURRENT_PROJECT__: projectDir,
+        __TRACKD_OTHER_PROJECT__: otherProjectDir,
+      },
+    );
+    writeFileSync(
+      join(sessionsDir, 'rollout-z-calendar-autoimport.jsonl'),
+      [
+        JSON.stringify({
+          type: 'session_meta',
+          timestamp: '2026-05-30T12:00:00.000Z',
+          session_id: 'sess_track_d_calendar_autoimport_001',
+          cwd: projectDir,
+          model: 'gpt-5.4',
+        }),
+        JSON.stringify({
+          type: 'event_msg',
+          subtype: 'user_message',
+          timestamp: '2026-05-30T12:01:00.000Z',
+          message:
+            'Calendar auto-import validation for Track D: TRACKD-CALENDAR-AUTOIMPORT.',
+        }),
+        JSON.stringify({
+          type: 'event_msg',
+          subtype: 'task_complete',
+          timestamp: '2026-05-30T12:02:00.000Z',
+          message: 'Track D calendar marker completed: TRACKD-CALENDAR-AUTOIMPORT.',
+        }),
+      ].join('\n') + '\n',
+      'utf8',
+    );
+
+    await withEnv(
+      {
+        CODEX_HOME: codexHome,
+        LOCUS_CODEX_CAPTURE: 'redacted',
+        LOCUS_CAPTURE_LEVEL: 'redacted',
+      },
+      () =>
+        withNow(fixedMayNow, async () => {
+          const ctx = await createServer({ cwd: projectDir, dbPath: join(dir, 'calendar.db') });
+          try {
+            const calendar = JSON.parse(
+              await callTextTool(ctx, 'memory_calendar', {
+                timeRange: { relative: 'this_month' },
+                granularity: 'day',
+              }),
+            ) as MemoryCalendarResult;
+            const status = JSON.parse(await callTextTool(ctx, 'memory_status', {})) as MemoryStatus;
+
+            expect(calendar.buckets).toEqual(
+              expect.arrayContaining([
+                expect.objectContaining({ key: '2026-05-30', eventCount: 3 }),
+              ]),
+            );
+            expect(JSON.stringify(calendar)).not.toContain('TRACKD-PROXYVPN-NOISE-20260530');
+            expect(status.codexAutoImport.lastStatus).toBe('imported');
+            expect(status.codexAutoImport.lastImported).toBeGreaterThan(0);
+          } finally {
+            ctx.cleanup();
+          }
+        }),
+    );
   });
 });
