@@ -35,7 +35,9 @@ describe('locus-memory skill contract', () => {
 
     expect(skill).toMatch(/Always check Locus before saying you do not remember/i);
     expect(skill).toContain('needs_clarification');
-    expect(skill).toContain('fall back to `memory_search`, `memory_calendar`, or `memory_timeline`');
+    expect(skill).toContain(
+      'fall back to `memory_search`, `memory_calendar`, or `memory_timeline`',
+    );
     expect(skill).toContain('after the lookup');
   });
 

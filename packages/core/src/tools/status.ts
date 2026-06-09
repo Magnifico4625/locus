@@ -250,10 +250,6 @@ export function handleStatus(deps: StatusDeps): MemoryStatus {
       : getDefaultCodexAutoImportSnapshot(),
     codexDiagnostics: deps.codexDiagnostics ? { ...deps.codexDiagnostics } : undefined,
     codexTruth: buildCodexTruth(deps.codexDiagnostics),
-    codexFreshness: buildCodexFreshness(
-      deps.codexDiagnostics,
-      checkedAt,
-      freshnessThresholdMs,
-    ),
+    codexFreshness: buildCodexFreshness(deps.codexDiagnostics, checkedAt, freshnessThresholdMs),
   };
 }

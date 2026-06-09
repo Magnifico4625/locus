@@ -49,9 +49,11 @@ npx -y locus-memory@latest uninstall codex --yes
 
 The installer adds the Locus MCP server, installs the Codex skill, sets practical `redacted` capture defaults, and pins the recurring MCP runtime to the installed package version.
 
-## New In v3.6
+## New In v3.7
 
-**New in v3.6 / Track C:** richer Codex recall. `memory_recall` can summarize imported redacted Codex sessions, durable decisions, explicit `memory_remember` entries, rejected alternatives, validation facts, user style, and dated questions such as "what did we do yesterday?". If several matches are plausible, Locus returns `candidateGroups` so the agent can ask a focused clarification instead of guessing.
+**New in v3.7 / Track D:** Codex memory reliability. `memory_recall`, `memory_search`, and `memory_timeline` are scoped to the current project, date-aware recall reports searched buckets, `memory_calendar` gives day/week/month activity discovery, and `memory_project_state` summarizes current package/git/memory state before the agent relies on old context.
+
+Track C richer recall is still carried forward: `memory_recall` can summarize imported redacted Codex sessions, durable decisions, explicit `memory_remember` entries, rejected alternatives, validation facts, user style, and dated questions such as "what did we do yesterday?". If several matches are plausible, Locus returns `candidateGroups` so the agent can ask a focused clarification instead of guessing.
 
 Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and the Track D marker acceptance validates the desktop MCP path when `LOCUS_CODEX_SURFACE=desktop` is set. Extension parity still depends on target-surface testing.
 
@@ -100,7 +102,7 @@ For product claims: `full` is maximum recall and must be treated as explicit opt
 
 ## MCP Tools
 
-Locus exposes 16 MCP tools:
+Locus exposes 17 MCP tools:
 
 | Tool | Purpose |
 | --- | --- |
@@ -147,7 +149,7 @@ codex mcp add locus -- node /path/to/locus/dist/server.js
 - Codex acceptance matrix: [docs/codex-acceptance-matrix.md](docs/codex-acceptance-matrix.md)
 - Codex VS Code extension notes: [docs/codex-vscode-extension.md](docs/codex-vscode-extension.md)
 - Future roadmap: [docs/roadmap/codex-next.md](docs/roadmap/codex-next.md)
-- Release notes: [docs/releases/v3.6.1.md](docs/releases/v3.6.1.md)
+- Release notes: [docs/releases/v3.7.0.md](docs/releases/v3.7.0.md)
 - Full comparison: [docs/comparison.md](docs/comparison.md)
 
 ## Development

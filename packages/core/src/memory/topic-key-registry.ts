@@ -93,7 +93,13 @@ const TOPIC_KEY_RULES: TopicKeyRule[] = [
   {
     key: 'track_d_memory_reliability',
     memoryTypes: ['next_step', 'validation_fact', 'decision'],
-    any: ['track d', 'memory reliability', 'project-scoped recall', 'date buckets', 'memory_calendar'],
+    any: [
+      'track d',
+      'memory reliability',
+      'project-scoped recall',
+      'date buckets',
+      'memory_calendar',
+    ],
     all: [['track d', 'memory', 'recall']],
   },
 ];

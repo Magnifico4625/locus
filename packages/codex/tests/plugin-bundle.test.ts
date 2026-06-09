@@ -61,7 +61,8 @@ describe('codex plugin bundle', () => {
     expect(pluginSkill).toContain('`metadata` means ingestion and diagnostics first');
     expect(pluginSkill).toContain('`redacted` is the recommended practical rich-recall mode');
     expect(pluginSkill).toContain('`full` is maximum local capture');
-    expect(pluginSkill).toContain('Do not claim Codex desktop or extension parity');
+    expect(pluginSkill).toContain('Codex Desktop MCP path is validated');
+    expect(pluginSkill).toContain('do not claim desktop or extension parity');
   });
 
   it('ships an .mcp.json with a locus server definition and safe default env values', () => {

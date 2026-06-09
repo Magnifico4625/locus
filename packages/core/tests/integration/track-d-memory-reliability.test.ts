@@ -303,9 +303,9 @@ describe.sequential('Track D memory reliability', () => {
         withNow(fixedMayNow, async () => {
           const ctx = await createServer({ cwd: projectDir, dbPath: join(dir, 'server.db') });
           try {
-            const importResult = JSON.parse(
-              await callTextTool(ctx, 'memory_import_codex', {}),
-            ) as { imported: number };
+            const importResult = JSON.parse(await callTextTool(ctx, 'memory_import_codex', {})) as {
+              imported: number;
+            };
             const recallText = await callTextTool(ctx, 'memory_recall', {
               question: 'вспомни работу в этом месяце',
               timeRange: { relative: 'this_month' },
@@ -424,30 +424,30 @@ describe.sequential('Track D memory reliability', () => {
         __TRACKD_OTHER_PROJECT__: otherProjectDir,
       },
     );
+    const calendarAutoImportJsonl = `${[
+      JSON.stringify({
+        type: 'session_meta',
+        timestamp: '2026-05-30T12:00:00.000Z',
+        session_id: 'sess_track_d_calendar_autoimport_001',
+        cwd: projectDir,
+        model: 'gpt-5.4',
+      }),
+      JSON.stringify({
+        type: 'event_msg',
+        subtype: 'user_message',
+        timestamp: '2026-05-30T12:01:00.000Z',
+        message: 'Calendar auto-import validation for Track D: TRACKD-CALENDAR-AUTOIMPORT.',
+      }),
+      JSON.stringify({
+        type: 'event_msg',
+        subtype: 'task_complete',
+        timestamp: '2026-05-30T12:02:00.000Z',
+        message: 'Track D calendar marker completed: TRACKD-CALENDAR-AUTOIMPORT.',
+      }),
+    ].join('\n')}\n`;
     writeFileSync(
       join(sessionsDir, 'rollout-z-calendar-autoimport.jsonl'),
-      [
-        JSON.stringify({
-          type: 'session_meta',
-          timestamp: '2026-05-30T12:00:00.000Z',
-          session_id: 'sess_track_d_calendar_autoimport_001',
-          cwd: projectDir,
-          model: 'gpt-5.4',
-        }),
-        JSON.stringify({
-          type: 'event_msg',
-          subtype: 'user_message',
-          timestamp: '2026-05-30T12:01:00.000Z',
-          message:
-            'Calendar auto-import validation for Track D: TRACKD-CALENDAR-AUTOIMPORT.',
-        }),
-        JSON.stringify({
-          type: 'event_msg',
-          subtype: 'task_complete',
-          timestamp: '2026-05-30T12:02:00.000Z',
-          message: 'Track D calendar marker completed: TRACKD-CALENDAR-AUTOIMPORT.',
-        }),
-      ].join('\n') + '\n',
+      calendarAutoImportJsonl,
       'utf8',
     );
 

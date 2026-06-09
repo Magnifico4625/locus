@@ -1,5 +1,5 @@
-import type { DatabaseAdapter } from '../types.js';
 import { normalizeProjectRootForScope } from '../recall/project-scope.js';
+import type { DatabaseAdapter } from '../types.js';
 
 function getCurrentVersion(db: DatabaseAdapter): number {
   try {
@@ -201,7 +201,9 @@ function migrationV4(db: DatabaseAdapter): void {
   normalizeStoredProjectRoots(db, 'memories');
   normalizeStoredProjectRoots(db, 'durable_memories');
 
-  db.exec('CREATE INDEX IF NOT EXISTS idx_memories_project_updated ON memories(project_root, updated_at)');
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_memories_project_updated ON memories(project_root, updated_at)',
+  );
   db.exec(
     'CREATE INDEX IF NOT EXISTS idx_dm_project_state_topic_updated ON durable_memories(project_root, state, topic_key, updated_at)',
   );

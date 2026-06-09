@@ -16,13 +16,15 @@ project context across sessions.
 ## Core Tools
 
 1. **memory_recall** -- Summary-first recall for past-work questions
-2. **memory_search** -- FTS5 search across all memory layers
-3. **memory_remember** -- Save architecture decisions with auto-redaction
-4. **memory_explore** -- Navigate the project file tree
-5. **memory_timeline** -- View recent conversation history
-6. **memory_status** -- Memory health and storage info
-7. **memory_scan** -- Re-index project structure after file changes
-8. **memory_review** -- Inspect durable memories, states, confidence, and evidence
+2. **memory_calendar** -- Discover day/week/month activity buckets by project and time range
+3. **memory_project_state** -- Verify current project identity, package/git state, freshness, and active next steps
+4. **memory_search** -- FTS5 search across all memory layers
+5. **memory_remember** -- Save architecture decisions with auto-redaction
+6. **memory_explore** -- Navigate the project file tree
+7. **memory_timeline** -- View recent conversation history
+8. **memory_status** -- Memory health and storage info
+9. **memory_scan** -- Re-index project structure after file changes
+10. **memory_review** -- Inspect durable memories, states, confidence, and evidence
 
 ## Key Behaviors
 
@@ -31,9 +33,14 @@ project context across sessions.
   - "what did we do yesterday?"
   - "what did we decide about auth?"
   - "what did we just fix?"
-- In Codex, recent dialogue is auto-imported before `memory_recall` and `memory_search`
+- Use `memory_calendar` for broad period discovery such as "what did we work on this month?" or "show May work" before drilling into specific days, weeks, or topics
+- For user period questions, pass `this_month`, `last_month`, or an explicit range instead of relying on the default `last_30d`
+- For date-scoped recall, report the searched date buckets from `memory_recall` so the user can see which days/weeks/months were checked
+- Use `memory_project_state` before relying on old memories when project identity, package version, git state, latest conversation timestamp, or active next steps matter
+- current-project recall must not mix other project memories unless the user explicitly asks for global recall
+- In Codex, recent dialogue is auto-imported before `memory_recall`, `memory_search`, and `memory_calendar`
 - If `memory_recall` returns `needs_clarification`, inspect `candidateGroups` and ask a focused follow-up question after the lookup instead of guessing or asking before checking Locus
-- If `memory_recall` returns `no_memory`, then fall back to `memory_search` or `memory_timeline` only when raw search or chronology is still useful
+- If `memory_recall` returns `no_memory`, then fall back to `memory_search`, `memory_calendar`, or `memory_timeline` only when raw search, broad period discovery, or chronology is still useful
 - If recent Codex history does not appear, inspect `memory_status` before trying manual recovery steps
 - Use `memory_import_codex` only for manual catch-up, older sessions, or filtered imports
 - Use `memory_review` when the user asks what Locus stored, why a memory exists, what can be cleaned up, or which durable facts are active/stale/superseded
@@ -47,4 +54,4 @@ project context across sessions.
   - `redacted` is the recommended practical rich-recall mode for Codex because it stores high-value snippets with privacy filtering
   - `full` is maximum local capture and must be described with an explicit privacy warning, never as risk-free
 - If the task clearly involves secrets, tokens, passwords, or highly sensitive material, remind the user that `LOCUS_CODEX_CAPTURE=full` / `LOCUS_CAPTURE_LEVEL=full` may store sensitive local memory content
-- Codex CLI is the validated primary path. Do not claim Codex desktop or extension parity unless the current environment has been tested through that surface
+- Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; otherwise do not claim desktop or extension parity without testing the target surface

@@ -424,7 +424,7 @@ function stringField(value) {
 
 // packages/cli/src/commands/install-codex.ts
 import { existsSync as existsSync9 } from "node:fs";
-import { join as join11 } from "node:path";
+import { join as join12 } from "node:path";
 
 // packages/cli/src/codex/cleanup.ts
 import { existsSync as existsSync3, readdirSync, rmSync, statSync } from "node:fs";
@@ -560,27 +560,37 @@ import { basename } from "node:path";
 // packages/codex/src/importer.ts
 import { readFileSync as readFileSync5 } from "node:fs";
 
-// packages/codex/src/inbox-writer.ts
-import { existsSync as existsSync5, mkdirSync as mkdirSync4, renameSync as renameSync3, writeFileSync as writeFileSync5 } from "node:fs";
+// packages/shared-runtime/normalize-path.js
+import { normalize } from "node:path";
+
+// packages/shared-runtime/project-hash.js
+import { createHash as createHash2 } from "node:crypto";
+
+// packages/shared-runtime/resolve-storage.js
+import { homedir as homedir2 } from "node:os";
 import { join as join6 } from "node:path";
 
+// packages/codex/src/inbox-writer.ts
+import { existsSync as existsSync5, mkdirSync as mkdirSync4, renameSync as renameSync3, writeFileSync as writeFileSync5 } from "node:fs";
+import { join as join7 } from "node:path";
+
 // packages/codex/src/paths.ts
-import { homedir as homedir2 } from "node:os";
-import { join as join7, resolve as resolve3 } from "node:path";
+import { homedir as homedir3 } from "node:os";
+import { join as join8, resolve as resolve3 } from "node:path";
 
 // packages/codex/src/session-files.ts
 import { readdirSync as readdirSync2 } from "node:fs";
-import { basename as basename2, join as join8, resolve as resolve4 } from "node:path";
+import { basename as basename2, join as join9, resolve as resolve4 } from "node:path";
 
 // packages/codex/src/plugin-sync.ts
 import { copyFileSync as copyFileSync3, existsSync as existsSync6, mkdirSync as mkdirSync5, readFileSync as readFileSync6, rmSync as rmSync3, writeFileSync as writeFileSync6 } from "node:fs";
-import { dirname as dirname3, join as join9, resolve as resolve5 } from "node:path";
+import { dirname as dirname3, join as join10, resolve as resolve5 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/codex/src/skill-sync.ts
 import { copyFileSync as copyFileSync4, existsSync as existsSync7, mkdirSync as mkdirSync6, readFileSync as readFileSync7 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import { dirname as dirname4, join as join10, resolve as resolve6 } from "node:path";
+import { homedir as homedir4 } from "node:os";
+import { dirname as dirname4, join as join11, resolve as resolve6 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 function resolveCanonicalCodexSkillPath() {
   return resolve6(fileURLToPath3(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
@@ -668,7 +678,7 @@ function formatInstallCodexDryRun(options = {}) {
   const codexHome = resolveCodexHome(env);
   const skillPath = resolveCodexSkillPath(env, "locus-memory");
   const runtimeSpecifier = buildRuntimePackageSpecifier(resolvePackageVersion(options.startDir));
-  const lockPath = join11(codexHome, ".locus-install.lock");
+  const lockPath = join12(codexHome, ".locus-install.lock");
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
   return [
     "Locus Codex install dry-run",

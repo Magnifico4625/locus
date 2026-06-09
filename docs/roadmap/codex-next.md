@@ -3,7 +3,7 @@
 **Date:** 2026-04-16  
 **Last updated:** 2026-05-30
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is published to npm through `locus-memory@3.5.3`. Track C richer recall shipped in `v3.6.0`, with `v3.6.1` as a focused Codex installer hotfix that keeps one-command installs on `$CODEX_HOME/memory/`. The next priority is making Codex memory more dependable in real use: project isolation, temporal recall, freshness guarantees, ranking, and project-state summaries before dashboard work.
+**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is published to npm through `locus-memory@3.5.3`. Track C richer recall shipped in `v3.6.0`, with `v3.6.1` as a focused Codex installer hotfix that keeps one-command installs on `$CODEX_HOME/memory/`. Track D is prepared as `v3.7.0`: project isolation, temporal recall, freshness guarantees, ranking, and project-state summaries before dashboard work.
 
 ---
 
@@ -230,9 +230,9 @@ Shipped as **`v3.6.0`** with a focused **`v3.6.1`** installer hotfix.
 
 **Priority:** `P0`
 
-**Target window:** immediate post-`v3.6.1` work
+**Target window:** `v3.7.0` Codex-first memory reliability release
 
-**Current status:** implementation is progressing through the Track D task plan. D0-D7 are locally completed: project-scoped temporal recall, `memory_calendar`, freshness/surface diagnostics, `memory_project_state`, same-topic next-step supersession, JSONL fixture acceptance, and docs truth pass are implemented. Final Track D release validation still gates the `v3.7.x` release decision.
+**Current status:** locally validated for `v3.7.0`. D0-D8 completed with project-scoped temporal recall, `memory_calendar`, freshness/surface diagnostics, `memory_project_state`, same-topic next-step supersession, JSONL fixture acceptance, docs truth pass, full repository `npm run check`, and `npm run build`. Live Desktop smoke confirmed the configured `locus` MCP server points at this repo's `dist/server.js`, while the already-running Desktop session still exposed the previous tool registry until MCP/Desktop reload.
 
 **Why it matters:** richer recall is only useful if it returns the right project, the right time period, and the current state without forcing the agent to manually filter unrelated memories. Locus should feel like a reliable project memory, not a broad search over old conversations.
 
@@ -314,7 +314,7 @@ Implementation note:
 
 ### Release intent
 
-Best treated as the next Codex-first release after `v3.6.1`, before HTML dashboard work. This can ship incrementally as `v3.7.x` if the changes are split into smaller validated slices.
+Best treated as the `v3.7.0` Codex-first release before HTML dashboard work. Follow-up `v3.7.x` slices should focus on richer evidence-anchor display, explicit topic namespace filters only if project-root isolation proves insufficient, and stronger live Desktop reload validation.
 
 ---
 
@@ -477,7 +477,7 @@ This is a planning suggestion, not a hard contract.
 | `v3.5` | shipped one-command install foundations: npm runtime, installer/doctor/uninstall, marketplace bundle generation, install UX cleanup |
 | `v3.6.0` | Track C richer Codex conversational recall (`redacted` / `full`) and stronger capture/privacy UX |
 | `v3.6.1` | Codex one-command install hotfix: generated MCP env includes `CODEX_HOME`, keeping storage under `$CODEX_HOME/memory/` |
-| `v3.7` | Codex memory reliability: project isolation, temporal recall, freshness, ranking, project-state summaries, and Codex Desktop validation evidence |
+| `v3.7.0` | Codex memory reliability: project isolation, temporal recall, freshness, ranking, project-state summaries, and Codex Desktop validation evidence |
 | `v4.0` | HTML dashboard + broader product-grade memory visibility after recall is dependable |
 
 Secondary IDE adapters should be scheduled only when they do not block the Codex-first path above.
@@ -486,15 +486,12 @@ Secondary IDE adapters should be scheduled only when they do not block the Codex
 
 ## Immediate Next Candidates
 
-1. Start Track D with project isolation and temporal recall:
-   - ensure current-project recall does not mix unrelated project memories
-   - add event-date buckets for day/week/month recall
-   - expose which date buckets were searched for period questions
-2. Add freshness and surface truth for Codex Desktop / CLI:
-   - unify auto-import and diagnostics snapshots
-   - validate Codex Desktop with a real marker import/recall test
-   - update docs only to the level proven by evidence
-3. Add current project-state summaries and stale-memory handling:
-   - refresh version, branch/tag, shipped tracks, warnings, and next steps from repo evidence
-   - supersede old blockers when later release validation resolves them
-4. Revisit dashboard scope after the memory reliability track is demonstrably better.
+1. Prepare the `v3.7.0` release path:
+   - run a post-publish `npx -y locus-memory@3.7.0 install codex --yes` smoke
+   - verify `codex mcp get locus` from the intended Codex CLI/Desktop environment
+   - reload Desktop and confirm the live registry exposes `memory_calendar` and `memory_project_state`
+2. Improve Track D follow-ups without broadening the release claim:
+   - richer evidence-anchor display for commits, files, docs, command results, timestamps, and sessions
+   - user-configurable topic namespace filters only if project-root isolation proves insufficient
+   - broader stale or historical lifecycle automation after project-scoped durable state has more mileage
+3. Revisit dashboard scope after the memory reliability track is demonstrably better in a reloaded Desktop session.

@@ -201,12 +201,7 @@ function parseWeekday(
     const currentDay = mode === 'utc' ? today.getUTCDay() : today.getDay();
     const delta = (currentDay - weekday + 7) % 7 || 7;
     const start = todayStart - delta * DAY_MS;
-    return range(
-      question.includes(`в ${word}`) ? `в ${word}` : word,
-      start,
-      start + DAY_MS,
-      'day',
-    );
+    return range(question.includes(`в ${word}`) ? `в ${word}` : word, start, start + DAY_MS, 'day');
   }
 
   return undefined;

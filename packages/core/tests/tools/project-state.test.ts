@@ -143,7 +143,10 @@ describe('handleProjectState', () => {
     }
 
     execFileSync('git', ['init'], { cwd: repo, stdio: 'ignore' });
-    execFileSync('git', ['config', 'user.email', 'test@example.com'], { cwd: repo, stdio: 'ignore' });
+    execFileSync('git', ['config', 'user.email', 'test@example.com'], {
+      cwd: repo,
+      stdio: 'ignore',
+    });
     execFileSync('git', ['config', 'user.name', 'Test User'], { cwd: repo, stdio: 'ignore' });
     execFileSync('git', ['add', 'package.json'], { cwd: repo, stdio: 'ignore' });
     execFileSync('git', ['commit', '-m', 'initial'], { cwd: repo, stdio: 'ignore' });

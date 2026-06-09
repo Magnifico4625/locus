@@ -77,10 +77,7 @@ describe('detectClientEnv', () => {
     });
 
     expect(runtime.surface).toBe('desktop');
-    expect(runtime.evidence).toEqual([
-      'env:CODEX_HOME',
-      'env:LOCUS_CODEX_SURFACE=desktop',
-    ]);
+    expect(runtime.evidence).toEqual(['env:CODEX_HOME', 'env:LOCUS_CODEX_SURFACE=desktop']);
   });
 
   it('falls back to cli when CODEX_HOME is the only Codex evidence', () => {

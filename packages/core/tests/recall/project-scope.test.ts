@@ -10,9 +10,7 @@ describe('project scope helpers', () => {
     expect(normalizeProjectRootForScope('C:\\Users\\Admin\\Project')).toBe(
       'c:/users/admin/project',
     );
-    expect(normalizeProjectRootForScope('C:/Users/Admin//Project/')).toBe(
-      'c:/users/admin/project',
-    );
+    expect(normalizeProjectRootForScope('C:/Users/Admin//Project/')).toBe('c:/users/admin/project');
   });
 
   it('matches equivalent project roots', () => {

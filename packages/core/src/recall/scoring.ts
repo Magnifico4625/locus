@@ -1,6 +1,6 @@
 import type { MemoryRecallCandidate, MemoryRecallConfidence } from '../types.js';
-import type { ParsedRecallQuery } from './query-parser.js';
 import { isSameProjectRoot } from './project-scope.js';
+import type { ParsedRecallQuery } from './query-parser.js';
 
 export interface RecallScoreResult {
   candidate: MemoryRecallCandidate;

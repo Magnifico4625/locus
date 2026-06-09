@@ -1,5 +1,5 @@
-import type { DatabaseAdapter, MemoryEntry } from '../types.js';
 import { normalizeProjectRootForScope } from '../recall/project-scope.js';
+import type { DatabaseAdapter, MemoryEntry } from '../types.js';
 import { sanitizeFtsQuery } from '../utils.js';
 
 interface MemoryRow {
@@ -17,6 +17,10 @@ interface CountRow {
   cnt: number;
 }
 
+interface TableColumnRow {
+  name: string;
+}
+
 export interface SemanticMemoryAddOptions {
   projectRoot?: string;
 }
@@ -24,6 +28,16 @@ export interface SemanticMemoryAddOptions {
 function optionalProjectRoot(projectRoot?: string): string | null {
   const trimmed = projectRoot?.trim();
   return trimmed ? normalizeProjectRootForScope(trimmed) : null;
+}
+
+function hasProjectRootColumn(db: DatabaseAdapter): boolean {
+  try {
+    return db
+      .all<TableColumnRow>('PRAGMA table_info(memories)')
+      .some((column) => column.name === 'project_root');
+  } catch {
+    return false;
+  }
 }
 
 function rowToEntry(row: MemoryRow): MemoryEntry {
@@ -53,10 +67,15 @@ export class SemanticMemory {
     const tagsJson = JSON.stringify(tags);
     const projectRoot = optionalProjectRoot(options?.projectRoot);
 
-    const result = this.db.run(
-      'INSERT INTO memories (layer, content, tags_json, project_root, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ['semantic', content, tagsJson, projectRoot, now, now],
-    );
+    const result = hasProjectRootColumn(this.db)
+      ? this.db.run(
+          'INSERT INTO memories (layer, content, tags_json, project_root, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          ['semantic', content, tagsJson, projectRoot, now, now],
+        )
+      : this.db.run(
+          'INSERT INTO memories (layer, content, tags_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+          ['semantic', content, tagsJson, now, now],
+        );
 
     const id = result.lastInsertRowid;
 

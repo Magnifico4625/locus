@@ -27,7 +27,11 @@ function hasMappingConfidence(candidate: DurableMemoryCandidate): boolean {
 
 function isPositiveValidationSummary(summary: string): boolean {
   const normalized = summary.toLowerCase();
-  if (/\b(?:not|never|failed|failing|blocked|hasn['’]?t|haven['’]?t|isn['’]?t|wasn['’]?t)\b/u.test(normalized)) {
+  if (
+    /\b(?:not|never|failed|failing|blocked|hasn['’]?t|haven['’]?t|isn['’]?t|wasn['’]?t)\b/u.test(
+      normalized,
+    )
+  ) {
     return false;
   }
   return /\b(?:passed|validated|released|published|shipped|done|completed|finished|resolved)\b/u.test(

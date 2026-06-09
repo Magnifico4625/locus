@@ -1,5 +1,5 @@
-import type { DatabaseAdapter, EventKind, TimeRange } from '../types.js';
 import { buildProjectScopeClause } from '../recall/project-scope.js';
+import type { DatabaseAdapter, EventKind, TimeRange } from '../types.js';
 import { resolveTimeRange, summarizePayload } from './search.js';
 
 // ─── Public interfaces ────────────────────────────────────────────────────────

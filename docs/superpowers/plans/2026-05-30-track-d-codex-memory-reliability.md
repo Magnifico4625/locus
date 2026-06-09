@@ -3477,7 +3477,7 @@ Implementation note:
 **Files:**
 - Modify only if validation reveals a concrete failing source or doc mismatch, except for planned release metadata/docs updates in D8.5.
 
-- [ ] **Step D8.1: Run focused Track D test set**
+- [x] **Step D8.1: Run focused Track D test set**
 
 Run:
 
@@ -3487,7 +3487,9 @@ npm test -- packages/core/tests/recall packages/core/tests/tools/recall.test.ts 
 
 Expected: PASS.
 
-- [ ] **Step D8.2: Run full repository gate**
+Result: PASS on 2026-06-09. `32` test files passed, `297` tests passed.
+
+- [x] **Step D8.2: Run full repository gate**
 
 Run:
 
@@ -3497,7 +3499,16 @@ npm run check
 
 Expected: PASS.
 
-- [ ] **Step D8.3: Build generated runtime**
+Result: PASS on 2026-06-09 after fixing validation-discovered issues:
+
+- durable legacy `NULL project_root` fallback now applies when strict scoped durable recall finds no candidates.
+- `SemanticMemory.add` remains compatible with a legacy V1 `memories` table before migration repair.
+- hook subprocess tests use an isolated `LOCUS_STORAGE_ROOT` instead of the user's live Codex storage.
+- recall-tool auto-import fixture rewrites `session_meta.cwd` to the current temp project so Track D scoping does not correctly filter it as another project.
+
+Final full gate: `122` test files passed, `1340` tests passed.
+
+- [x] **Step D8.3: Build generated runtime**
 
 Run:
 
@@ -3507,7 +3518,9 @@ npm run build
 
 Expected: PASS, and `dist/` updates only if the build process writes generated files.
 
-- [ ] **Step D8.4: Run local MCP smoke in Codex Desktop**
+Result: PASS on 2026-06-09. `dist/cli.js` and `dist/server.js` regenerated.
+
+- [x] **Step D8.4: Run local MCP smoke in Codex Desktop**
 
 Before the Desktop smoke, record the Codex runtime version and MCP registration view:
 
@@ -3534,7 +3547,15 @@ Expected:
 - `memory_project_state` returns repo/package state.
 - No ProxyVpn or unrelated project memory appears in current-project recall.
 
-- [ ] **Step D8.5: Record validation in roadmap and release notes draft**
+Result on 2026-06-09:
+
+- PATH `codex --version`: `codex-cli 0.138.0`.
+- Desktop-bundled CLI with explicit `CODEX_HOME=C:\Users\Admin\.codex`: `codex-cli 0.137.0-alpha.4`.
+- `codex mcp list` and `codex mcp get locus` with explicit `CODEX_HOME` confirmed `locus` is enabled and points at `C:\Users\Admin\gemini-project\ClaudeMagnificoMem\dist\server.js`.
+- Active Desktop MCP session responded to `memory_status`, `memory_doctor`, and `memory_recall`.
+- Caveat: the already-running Desktop MCP session still exposed the previous tool registry: `memory_calendar`, `memory_project_state`, and `this_month` / `last_month` schema entries were not available through the live tool surface until MCP/Desktop reload. Do not claim fresh live Desktop tool parity beyond the config smoke and Track D marker acceptance tests.
+
+- [x] **Step D8.5: Record validation in roadmap and release notes draft**
 
 Modify `docs/roadmap/codex-next.md` to mark Track D local validation facts once they pass.
 
@@ -3563,7 +3584,9 @@ git status --short
 
 Expected: no whitespace errors; only intended docs/generated files remain.
 
-- [ ] **Step D8.6: Final commit**
+Result: release metadata moved to `3.7.0` for root, `@locus/core`, `@locus/codex`, `@locus/cli`, and `@locus/shared-runtime`; `packages/claude-code/package.json` remains unchanged. Added `docs/releases/v3.7.0.md`; updated README, Codex README, config examples, acceptance matrix, roadmap, landing page, and translated README summaries.
+
+- [x] **Step D8.6: Final commit**
 
 Run:
 
@@ -3573,6 +3596,8 @@ git commit -m "chore(codex): validate track d memory reliability"
 ```
 
 Expected: final validation commit. Do not push or tag without explicit user approval.
+
+Result: satisfied by commit `chore(codex): validate track d memory reliability`.
 
 ---
 

@@ -153,10 +153,7 @@ describe('handleTimeline', () => {
       timestamp: new Date(2026, 3, 20, 9, 0, 0, 0).getTime(),
     });
 
-    const entries = handleTimeline(
-      { db: adapter },
-      { timeRange: { relative: 'this_month' }, now },
-    );
+    const entries = handleTimeline({ db: adapter }, { timeRange: { relative: 'this_month' }, now });
 
     expect(entries.map((entry) => entry.eventId)).toEqual(['evt-this-month']);
   });
@@ -172,10 +169,7 @@ describe('handleTimeline', () => {
       timestamp: new Date(2026, 3, 20, 9, 0, 0, 0).getTime(),
     });
 
-    const entries = handleTimeline(
-      { db: adapter },
-      { timeRange: { relative: 'last_month' }, now },
-    );
+    const entries = handleTimeline({ db: adapter }, { timeRange: { relative: 'last_month' }, now });
 
     expect(entries.map((entry) => entry.eventId)).toEqual(['evt-last-month']);
   });

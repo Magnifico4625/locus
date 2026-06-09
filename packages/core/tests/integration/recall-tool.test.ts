@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -49,6 +49,21 @@ async function callTextTool(
 function writeInboxEvent(inboxDir: string, event: InboxEvent): void {
   const filename = `${event.timestamp}-${event.event_id.slice(0, 8)}.json`;
   writeFileSync(join(inboxDir, filename), JSON.stringify(event), 'utf8');
+}
+
+function copyFixtureSession(fixtureName: string, destination: string, projectDir: string): void {
+  const source = join(fixturesDir, fixtureName);
+  const lines = readFileSync(source, 'utf8')
+    .split('\n')
+    .map((line) => {
+      if (!line.trim()) {
+        return line;
+      }
+
+      const parsed = JSON.parse(line) as { type?: string; cwd?: string };
+      return parsed.type === 'session_meta' ? JSON.stringify({ ...parsed, cwd: projectDir }) : line;
+    });
+  writeFileSync(destination, lines.join('\n'), 'utf8');
 }
 
 function insertDurableMemory(
@@ -535,7 +550,7 @@ describe('memory_recall integration', () => {
 
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(sessionsDir, { recursive: true });
-    cpSync(join(fixturesDir, 'basic-session.jsonl'), join(sessionsDir, 'rollout-basic.jsonl'));
+    copyFixtureSession('basic-session.jsonl', join(sessionsDir, 'rollout-basic.jsonl'), projectDir);
 
     const originalCodexHome = process.env.CODEX_HOME;
     const originalCodexCapture = process.env.LOCUS_CODEX_CAPTURE;

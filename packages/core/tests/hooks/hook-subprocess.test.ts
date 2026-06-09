@@ -25,6 +25,9 @@ const STOP_HOOK = join(HOOKS_DIR, 'stop.js');
 // ─── Test project directory (temp dir with git init) ─────────────────────────
 
 const TEST_PROJECT_DIR = join(tmpdir(), `locus-subprocess-test-${Date.now()}`);
+const TEST_STORAGE_ROOT = join(TEST_PROJECT_DIR, '.locus-storage');
+const ORIGINAL_LOCUS_STORAGE_ROOT = process.env.LOCUS_STORAGE_ROOT;
+process.env.LOCUS_STORAGE_ROOT = TEST_STORAGE_ROOT;
 
 // Use shared-runtime for consistent path resolution
 import { resolveInboxDir } from '@locus/shared-runtime';
@@ -77,10 +80,10 @@ afterAll(() => {
   // Remove test project dir
   rmSync(TEST_PROJECT_DIR, { recursive: true, force: true });
 
-  // Remove inbox files created during tests
-  const inboxDir = resolveInboxDir(TEST_PROJECT_DIR);
-  if (existsSync(inboxDir)) {
-    rmSync(inboxDir, { recursive: true, force: true });
+  if (ORIGINAL_LOCUS_STORAGE_ROOT === undefined) {
+    delete process.env.LOCUS_STORAGE_ROOT;
+  } else {
+    process.env.LOCUS_STORAGE_ROOT = ORIGINAL_LOCUS_STORAGE_ROOT;
   }
 });
 

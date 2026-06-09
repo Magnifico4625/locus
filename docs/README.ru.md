@@ -39,9 +39,11 @@ npx -y locus-memory@latest uninstall codex --yes
 
 Команда установки добавляет MCP-сервер Locus, устанавливает Codex skill, включает практичный `redacted` режим и закрепляет runtime-команду на установленную версию пакета.
 
-## Что нового в v3.6
+## Что нового в v3.7
 
-`memory_recall` теперь лучше отвечает на вопросы о прошлой работе: "что мы делали вчера?", "почему отказались от варианта X?", "какой у меня стиль?", "что осталось сделать?". Он использует redacted Codex-сессии, durable memories, `memory_remember`, rejected alternatives, validation facts и dated recall.
+Track D добавляет надежность памяти для Codex: project-scoped recall, date buckets, `memory_calendar` для вопросов по периодам и `memory_project_state` для текущего состояния проекта.
+
+`memory_recall` также лучше отвечает на вопросы о прошлой работе: "что мы делали вчера?", "почему отказались от варианта X?", "какой у меня стиль?", "что осталось сделать?". Он использует redacted Codex-сессии, durable memories, `memory_remember`, rejected alternatives, validation facts и dated recall.
 
 Если найдено несколько похожих контекстов, Locus возвращает `candidateGroups`, чтобы агент задал уточняющий вопрос, а не выдумывал ответ.
 
@@ -54,7 +56,7 @@ npx -y locus-memory@latest uninstall codex --yes
 | Низкая цена по токенам | Запись памяти локальная; токены тратятся только при recall |
 | Контроль приватности | `metadata`, `redacted`, `full`; `full` — только осознанный режим |
 | Память проекта | Структурный scan + решения + события диалога |
-| Прозрачность | `memory_status`, `memory_doctor`, `memory_audit`, `memory_review` |
+| Прозрачность | `memory_status`, `memory_project_state`, `memory_doctor`, `memory_audit`, `memory_review` |
 
 ## Режимы capture
 

@@ -1,8 +1,5 @@
 import type { SemanticMemory } from '../memory/semantic.js';
-import {
-  buildProjectScopeClause,
-  normalizeProjectRootForScope,
-} from '../recall/project-scope.js';
+import { buildProjectScopeClause, normalizeProjectRootForScope } from '../recall/project-scope.js';
 import type { DatabaseAdapter, EventKind, ExportEntry, SearchResult, TimeRange } from '../types.js';
 import { sanitizeFtsQuery } from '../utils.js';
 
@@ -304,11 +301,7 @@ function searchSemanticScoped(
   }));
 }
 
-function searchEpisodic(
-  query: string,
-  db: DatabaseAdapter,
-  projectRoot?: string,
-): SearchResult[] {
+function searchEpisodic(query: string, db: DatabaseAdapter, projectRoot?: string): SearchResult[] {
   const lowerQuery = query.toLowerCase();
   const params: unknown[] = [];
   const clauses = ["layer='episodic'", 'content LIKE ?'];
@@ -347,7 +340,9 @@ function searchDurable(
     const sanitized = sanitizeFtsQuery(query);
     if (sanitized) {
       try {
-        const scope = projectRoot ? buildProjectScopeClause('dm.project_root', projectRoot) : undefined;
+        const scope = projectRoot
+          ? buildProjectScopeClause('dm.project_root', projectRoot)
+          : undefined;
         const scopeClause = scope ? `AND ${scope.clause}` : '';
         rows = db.all<DurableRow>(
           `SELECT dm.id, dm.summary, dm.updated_at, dm.project_root
@@ -619,7 +614,9 @@ export function handleSearch(
 
   // 5. Conversation results (new in v3)
   let conversation: SearchResult[] = [];
-  const resolved = options?.timeRange ? resolveTimeRange(options.timeRange, options.now) : undefined;
+  const resolved = options?.timeRange
+    ? resolveTimeRange(options.timeRange, options.now)
+    : undefined;
   const convOpts = {
     kind: options?.kind,
     source: options?.source,

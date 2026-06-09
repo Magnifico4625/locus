@@ -90,9 +90,7 @@ describe('durable extraction flow integration', () => {
         topic_key: string | null;
         summary: string;
         project_root: string | null;
-      }>(
-        'SELECT topic_key, summary, project_root FROM durable_memories ORDER BY id DESC LIMIT 1',
-      );
+      }>('SELECT topic_key, summary, project_root FROM durable_memories ORDER BY id DESC LIMIT 1');
       const watermark = ctx.db.get<{ value: string }>(
         'SELECT value FROM scan_state WHERE key = ?',
         ['durable.codex.last_event_id'],

@@ -1,6 +1,6 @@
 {
   "name": "locus-memory",
-  "version": "3.6.1",
+  "version": "3.7.0",
   "description": "Persistent project-aware memory for AI coding tools. Built on MCP. Knows your project, remembers your decisions, costs almost nothing.",
   "type": "module",
   "private": false,
@@ -63,8 +63,8 @@
     "rollup": ">=4.59.0"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.1.14",
     "@biomejs/biome": "^2.4.2",
+    "@tailwindcss/cli": "^4.1.14",
     "@vitest/coverage-v8": "^4.0.18",
     "tailwindcss": "^4.1.14",
     "vitest": "^4.0.18"

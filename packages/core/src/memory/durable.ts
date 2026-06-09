@@ -1,3 +1,4 @@
+import { normalizeProjectRootForScope } from '../recall/project-scope.js';
 import type {
   DatabaseAdapter,
   DurableMemoryEntry,
@@ -5,7 +6,6 @@ import type {
   DurableMemoryStateCounts,
   DurableMemoryType,
 } from '../types.js';
-import { normalizeProjectRootForScope } from '../recall/project-scope.js';
 import { sanitizeFtsQuery } from '../utils.js';
 
 interface DurableMemoryRow {

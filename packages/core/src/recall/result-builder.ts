@@ -1,6 +1,6 @@
 import type {
-  MemoryRecallCandidate,
   MemoryDateBucket,
+  MemoryRecallCandidate,
   MemoryRecallIntent,
   MemoryRecallResolvedRange,
   MemoryRecallResult,

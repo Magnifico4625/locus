@@ -49,6 +49,10 @@ interface SemanticCandidateLoaderOptions extends CandidateLoaderOptions {
   requireExactTermOverlap?: boolean;
 }
 
+interface DurableCandidateLoaderOptions extends CandidateLoaderOptions {
+  includeLegacyGlobal?: boolean;
+}
+
 const DURABLE_TYPES_BY_INTENT: Partial<Record<ParsedRecallQuery['intent'], DurableMemoryType[]>> = {
   decision: ['decision'],
   preference_style: ['preference', 'style', 'constraint'],
@@ -136,9 +140,7 @@ function hasExactTermOverlap(content: string, terms: readonly string[]): boolean
   const normalized = content.toLowerCase();
   return terms.some((term) => {
     const escaped = escapeRegExp(term.toLowerCase());
-    return new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}([^\\p{L}\\p{N}_-]|$)`, 'u').test(
-      normalized,
-    );
+    return new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}([^\\p{L}\\p{N}_-]|$)`, 'u').test(normalized);
   });
 }
 
@@ -167,7 +169,8 @@ function loadDurableCandidates({
   now,
   limit,
   projectRoot,
-}: CandidateLoaderOptions): MemoryRecallCandidate[] {
+  includeLegacyGlobal,
+}: DurableCandidateLoaderOptions): MemoryRecallCandidate[] {
   const memoryTypes = durableTypesForIntent(parsedQuery.intent);
   if (memoryTypes.length === 0) {
     return [];
@@ -181,7 +184,9 @@ function loadDurableCandidates({
   params.push(...memoryTypes);
 
   if (projectRoot) {
-    const scope = buildProjectScopeClause('project_root', projectRoot);
+    const scope = buildProjectScopeClause('project_root', projectRoot, {
+      includeLegacyGlobal,
+    });
     clauses.push(scope.clause);
     params.push(...scope.params);
   }
@@ -388,7 +393,14 @@ function loadSemanticCandidates({
 }
 
 export function loadRecallCandidates(options: CandidateLoaderOptions): MemoryRecallCandidate[] {
-  const durableCandidates = loadDurableCandidates(options);
+  const strictDurableCandidates = loadDurableCandidates(options);
+  const durableCandidates =
+    options.projectRoot && strictDurableCandidates.length === 0
+      ? loadDurableCandidates({
+          ...options,
+          includeLegacyGlobal: true,
+        })
+      : strictDurableCandidates;
   const strictSemanticCandidates = loadSemanticCandidates(options);
   const semanticCandidates =
     options.projectRoot && strictSemanticCandidates.length === 0
@@ -400,9 +412,5 @@ export function loadRecallCandidates(options: CandidateLoaderOptions): MemoryRec
       : strictSemanticCandidates;
   const conversationCandidates = loadConversationCandidates(options);
 
-  return [
-    ...durableCandidates,
-    ...semanticCandidates,
-    ...conversationCandidates,
-  ];
+  return [...durableCandidates, ...semanticCandidates, ...conversationCandidates];
 }

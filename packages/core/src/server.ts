@@ -16,11 +16,11 @@ import { generateProjectMap } from './resources/project-map.js';
 import { generateRecent } from './resources/recent.js';
 import { initStorage } from './storage/init.js';
 import { handleAudit } from './tools/audit.js';
-import { handleCalendar } from './tools/calendar.js';
 import {
   CODEX_AUTO_IMPORT_DEBOUNCE_MS,
   coordinateCodexAutoImport,
 } from './tools/auto-import-codex.js';
+import { handleCalendar } from './tools/calendar.js';
 import { collectCodexDiagnostics } from './tools/codex-diagnostics.js';
 import { handleCompact } from './tools/compact.js';
 import { handleConfig } from './tools/config.js';
@@ -29,8 +29,8 @@ import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';
 import { handleImportCodex } from './tools/import-codex.js';
-import { handlePurge } from './tools/purge.js';
 import { handleProjectState } from './tools/project-state.js';
+import { handlePurge } from './tools/purge.js';
 import { handleRecall } from './tools/recall.js';
 import { handleRemember } from './tools/remember.js';
 import { handleReview } from './tools/review.js';

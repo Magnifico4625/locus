@@ -14,7 +14,7 @@ It covers:
 
 When the Codex VS Code extension exposes the same Codex MCP surface as Codex CLI, Locus works through the same MCP server setup:
 
-- all 15 MCP tools
+- all 17 MCP tools
 - all 3 MCP resources
 - Codex auto-import before `memory_recall`, `memory_search`, and `memory_calendar`
 - manual import through `memory_import_codex`
@@ -55,7 +55,7 @@ Equivalent package-runtime config in `~/.codex/config.toml`:
 ```toml
 [mcp_servers.locus]
 command = "npx"
-args = ["-y", "locus-memory@3.6.1", "mcp"]
+args = ["-y", "locus-memory@3.7.0", "mcp"]
 cwd = "/home/<you>/.codex"
 
 [mcp_servers.locus.env]
@@ -69,7 +69,7 @@ On Windows, use `npx.cmd`:
 ```toml
 [mcp_servers.locus]
 command = "npx.cmd"
-args = ["-y", "locus-memory@3.6.1", "mcp"]
+args = ["-y", "locus-memory@3.7.0", "mcp"]
 cwd = "C:\\Users\\<you>\\.codex"
 ```
 

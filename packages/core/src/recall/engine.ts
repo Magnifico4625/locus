@@ -7,8 +7,8 @@ import type {
   MemoryRecallResult,
   TimeRange,
 } from '../types.js';
-import { loadRecallCandidates } from './candidate-loader.js';
 import { dayBucket } from './calendar.js';
+import { loadRecallCandidates } from './candidate-loader.js';
 import { parseRecallQuery } from './query-parser.js';
 import { buildRecallResult } from './result-builder.js';
 import { filterProjectCandidates, scoreRecallCandidates } from './scoring.js';

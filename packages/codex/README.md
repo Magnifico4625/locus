@@ -79,7 +79,7 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 
 ## What Works
 
-- All 16 MCP tools (including `memory_recall`, `memory_calendar`, `memory_project_state`, and `memory_import_codex`)
+- All 17 MCP tools (including `memory_recall`, `memory_calendar`, `memory_project_state`, and `memory_import_codex`)
 - All 3 MCP resources (project-map, decisions, recent)
 - SQLite storage with FTS5 full-text search
 - Client-aware storage: data stored in `$CODEX_HOME/memory/`
@@ -91,7 +91,9 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 
 Track C adds fixture-backed richer recall validation for Codex CLI: Russian dated questions, capture-strategy decisions, rejected alternatives, user workflow style, npm install errors, next steps, and validation facts now pass through import, inbox, durable memory, and `memory_recall`.
 
-Last documented local install validation target: Codex CLI `0.130.0` surface as of May 12, 2026. Track C local smoke covered the one-command installer, `codex mcp list`, `doctor codex`, and raw MCP `memory_remember` -> `memory_recall`. Registry-hosted `locus-memory@3.6.1` validation must run after npm publish.
+Track D adds project-scoped and date-aware recall, `memory_calendar`, freshness/surface diagnostics, `memory_project_state`, and same-topic next-step supersession.
+
+Last documented local validation target: Codex CLI `0.138.0` from PATH and Codex Desktop-bundled CLI `0.137.0-alpha.4` with `CODEX_HOME=C:\Users\Admin\.codex` as of June 9, 2026. Track D local smoke confirmed `codex mcp get locus` points at this repo's `dist/server.js`; the active Desktop MCP session still required a reload before new tools such as `memory_calendar` and `memory_project_state` appeared in the live tool registry. Registry-hosted `locus-memory@3.7.0` validation must run after npm publish.
 
 Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and the Track D marker acceptance validates the desktop MCP path when `LOCUS_CODEX_SURFACE=desktop` is set. `memory_status` and `memory_doctor` can report an observed desktop MCP path when Codex diagnostics detect a desktop surface with retained Codex events. Extension parity still requires target-surface testing.
 
