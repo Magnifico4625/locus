@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -58,6 +59,7 @@ describe('publishable package contract', () => {
     const versionedFiles = [
       'packages/core/package.json',
       'packages/codex/package.json',
+      'packages/cli/package.json',
       'packages/shared-runtime/package.json',
       'plugins/locus-memory/.codex-plugin/plugin.json',
     ];
@@ -97,14 +99,26 @@ describe('publishable package contract', () => {
     const npmExecPath = process.env.npm_execpath;
     expect(npmExecPath).toBeTruthy();
 
-    const output = execFileSync(
-      process.execPath,
-      [npmExecPath ?? '', 'pack', '--dry-run', '--json'],
-      {
-        cwd: root,
-        encoding: 'utf8',
-      },
-    );
+    const npmCacheDir = mkdtempSync(join(tmpdir(), 'locus-npm-pack-cache-'));
+    let output: string;
+    try {
+      output = execFileSync(
+        process.execPath,
+        [npmExecPath ?? '', 'pack', '--dry-run', '--json', '--cache', npmCacheDir],
+        {
+          cwd: root,
+          env: {
+            ...process.env,
+            npm_config_cache: npmCacheDir,
+            NPM_CONFIG_CACHE: npmCacheDir,
+          },
+          encoding: 'utf8',
+        },
+      );
+    } finally {
+      rmSync(npmCacheDir, { recursive: true, force: true });
+    }
+
     const [pack] = JSON.parse(output) as Array<{
       files?: Array<{ path?: string }>;
       bin?: Record<string, string>;
@@ -114,6 +128,12 @@ describe('publishable package contract', () => {
     expect(files).toContain('dist/server.js');
     expect(files).toContain('dist/cli.js');
     expect(files).toContain('packages/codex/skills/locus-memory/SKILL.md');
+    expect(files).toContain('packages/codex/README.md');
+    expect(files).toContain('packages/codex/config/config.toml.example');
+    expect(files).toContain('plugins/locus-memory/.codex-plugin/plugin.json');
+    expect(files).toContain('plugins/locus-memory/.mcp.json');
+    expect(files).toContain('plugins/locus-memory/skills/locus-memory/SKILL.md');
+    expect(files).toContain('docs/releases/v3.7.0.md');
     expect(files).toContain('README.md');
     expect(files).toContain('LICENSE');
     expect(files).not.toContain('dist/marketplace/.agents/plugins/marketplace.json');

@@ -15,6 +15,8 @@ import type {
   ConversationEventRow,
   DoctorReport,
   InboxEvent,
+  MemoryCalendarResult,
+  MemoryProjectStateResult,
   MemoryStatus,
   SearchResult,
 } from '../../src/types.js';
@@ -127,6 +129,76 @@ describe('createServer', () => {
       expect(ctx2.server).toBeDefined();
     } finally {
       ctx2.cleanup();
+    }
+  });
+
+  it('registers memory_calendar without breaking startup', async () => {
+    const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'calendar-tool.db') });
+    try {
+      expect(getRegisteredToolNames(ctx2.server)).toContain('memory_calendar');
+      expect(ctx2.db).toBeDefined();
+      expect(ctx2.server).toBeDefined();
+    } finally {
+      ctx2.cleanup();
+    }
+  });
+
+  it('registers memory_project_state and returns the current project identity', async () => {
+    const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'project-state.db') });
+    try {
+      expect(getRegisteredToolNames(ctx2.server)).toContain('memory_project_state');
+
+      const text = await callTextTool(ctx2, 'memory_project_state', {});
+      const state = JSON.parse(text) as MemoryProjectStateResult;
+
+      expect(state.projectRoot).toBe(normalizePathForIdentity(tempDir));
+      expect(state.projectHash).toMatch(/^[a-f0-9]{16}$/);
+      expect(state.activeDurableCount).toBe(0);
+      expect(state.nextSteps).toEqual([]);
+    } finally {
+      ctx2.cleanup();
+    }
+  });
+
+  it('memory_calendar runs pre-query ingest before building buckets', async () => {
+    const calendarDir = mkdtempSync(join(tmpdir(), 'locus-calendar-server-'));
+    const dbPath = join(calendarDir, 'locus.db');
+    const ctx2 = await createServer({ cwd: calendarDir, dbPath });
+    try {
+      mkdirSync(ctx2.inboxDir, { recursive: true });
+      const timestamp = Date.now();
+      const event = createTestInboxEvent({
+        event_id: 'calendar-prequery-001',
+        project_root: calendarDir,
+        session_id: 'calendar-session',
+        timestamp,
+        kind: 'session_end',
+        payload: { summary: 'Calendar pre-query ingest event' },
+      });
+      const filename = `${event.timestamp}-${event.event_id.slice(0, 8)}.json`;
+      writeFileSync(join(ctx2.inboxDir, filename), JSON.stringify(event), 'utf-8');
+
+      const calendarText = await callTextTool(ctx2, 'memory_calendar', {
+        timeRange: { from: timestamp - 1_000, to: timestamp + 1_000 },
+        granularity: 'day',
+      });
+      const calendar = JSON.parse(calendarText) as MemoryCalendarResult;
+      const row = ctx2.db.get<ConversationEventRow>(
+        'SELECT * FROM conversation_events WHERE event_id = ?',
+        ['calendar-prequery-001'],
+      );
+
+      expect(row).toBeDefined();
+      expect(calendar.projectRoot).toBe(normalizePathForIdentity(calendarDir));
+      expect(calendar.buckets).toEqual([
+        expect.objectContaining({
+          eventCount: 1,
+          sessionCount: 1,
+        }),
+      ]);
+    } finally {
+      ctx2.cleanup();
+      rmSync(calendarDir, { recursive: true, force: true });
     }
   });
 
@@ -285,6 +357,20 @@ describe('createServer', () => {
     expect(results[0]?.content).toContain('dependency injection');
   });
 
+  it('memory_remember tool stores the current project root', async () => {
+    await callTextTool(ctx, 'memory_remember', {
+      text: 'Track D memory_remember stores project scope',
+      tags: ['track-d'],
+    });
+
+    const row = ctx.db.get<{ project_root: string | null }>(
+      'SELECT project_root FROM memories WHERE content = ? ORDER BY id DESC LIMIT 1',
+      ['Track D memory_remember stores project scope'],
+    );
+
+    expect(row?.project_root).toBe(normalizePathForIdentity(tempDir));
+  });
+
   it('memory_remember then memory_search via handleSearch finds the stored entry', () => {
     // Store a new unique memory using the real tool handler
     const entry = handleRemember(
@@ -314,7 +400,10 @@ describe('createServer', () => {
 
       const ctx2 = await createServer({ cwd: tempDir, dbPath: join(tempDir, 'generic-search.db') });
       try {
-        handleRemember('Generic search path still works', ['generic'], { semantic: ctx2.semantic });
+        await callTextTool(ctx2, 'memory_remember', {
+          text: 'Generic search path still works',
+          tags: ['generic'],
+        });
 
         const searchText = await callTextTool(ctx2, 'memory_search', {
           query: 'Generic search path still works',

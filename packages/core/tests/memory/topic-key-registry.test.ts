@@ -38,6 +38,15 @@ describe('deriveCanonicalTopicKey', () => {
     ).toBe('user_workflow_style');
   });
 
+  it('maps Track D validation facts to the memory reliability topic', () => {
+    expect(
+      deriveCanonicalTopicKey({
+        memoryType: 'validation_fact',
+        summary: 'Validation passed: Track D memory recall project-scoped tests.',
+      }),
+    ).toBe('track_d_memory_reliability');
+  });
+
   it('returns undefined for low-confidence unknown mappings', () => {
     expect(
       deriveCanonicalTopicKey({

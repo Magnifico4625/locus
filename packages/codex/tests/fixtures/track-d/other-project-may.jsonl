@@ -1,0 +1,4 @@
+{"type":"session_meta","timestamp":"2026-05-30T10:10:00.000Z","session_id":"sess_track_d_other_project_may_001","cwd":"__TRACKD_OTHER_PROJECT__","model":"gpt-5.4"}
+{"type":"event_msg","subtype":"user_message","timestamp":"2026-05-30T10:11:00.000Z","message":"Вспомни работу в этом месяце для ProxyVpn: TRACKD-PROXYVPN-NOISE-20260530. This is unrelated project noise and must not appear in Locus current-project recall."}
+{"type":"response_item","timestamp":"2026-05-30T10:12:00.000Z","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Validation passed: TRACKD-PROXYVPN-NOISE-20260530 belongs to the ProxyVpn project and must remain isolated from Locus recall."}]}}
+{"type":"event_msg","subtype":"task_complete","timestamp":"2026-05-30T10:13:00.000Z","message":"ProxyVpn Track D noise marker completed: TRACKD-PROXYVPN-NOISE-20260530."}

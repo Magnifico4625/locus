@@ -37,12 +37,16 @@ function codexDiagnostics(
   overrides: Partial<CodexDiagnosticsSnapshot> = {},
 ): CodexDiagnosticsSnapshot {
   return {
+    client: 'codex',
+    clientSurface: 'cli',
+    detectionEvidence: ['env:CODEX_HOME'],
     captureMode: 'metadata',
     sessionsDir: '/codex/sessions',
     sessionsDirExists: true,
     rolloutFilesFound: 2,
     latestRolloutPath: '/codex/sessions/rollout-2026-04-14T12-00-00.jsonl',
     latestRolloutReadable: true,
+    latestRolloutTimestamp: 1700000000200,
     importedEventCount: 5,
     latestImportedSessionId: 'session-abc',
     latestImportedTimestamp: 1700000000000,
@@ -484,5 +488,39 @@ describe('handleDoctor', () => {
     expect(parityCheck?.status).toBe('warn');
     expect(parityCheck?.message).toContain('CLI');
     expect(parityCheck?.message).toContain('desktop');
+  });
+
+  it('marks Codex desktop parity ok when desktop surface has retained events', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexDiagnostics: codexDiagnostics({
+        clientSurface: 'desktop',
+        detectionEvidence: ['env:CODEX_HOME', 'env:LOCUS_CODEX_SURFACE=desktop'],
+        importedEventCount: 5,
+      }),
+    } as never);
+
+    const parityCheck = report.checks.find((c) => c.name === 'Codex desktop parity');
+    expect(parityCheck?.status).toBe('ok');
+    expect(parityCheck?.message).toBe(
+      'Codex Desktop MCP path has retained Codex events in this environment.',
+    );
+  });
+
+  it('warns when Codex freshness lag exceeds the configured threshold', () => {
+    const report = handleDoctor({
+      ...(healthyDeps(adapter, tempDir) as object),
+      codexFreshnessThresholdMs: 500,
+      codexDiagnostics: codexDiagnostics({
+        latestRolloutTimestamp: 10_000,
+        latestImportedTimestamp: 1_000,
+      }),
+    } as never);
+
+    const freshnessCheck = report.checks.find((c) => c.name === 'Codex freshness');
+    expect(freshnessCheck?.status).toBe('warn');
+    expect(freshnessCheck?.message).toContain('stale');
+    expect(freshnessCheck?.message).toContain('9000');
+    expect(freshnessCheck?.fix).toContain('memory_import_codex');
   });
 });

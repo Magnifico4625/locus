@@ -39,9 +39,11 @@ npx -y locus-memory@latest uninstall codex --yes
 
 安装器会配置 Locus MCP server，安装 Codex skill，启用实用的 `redacted` capture 默认值，并把运行时命令固定到已安装的包版本。
 
-## v3.6 新功能
+## v3.7 新功能
 
-`memory_recall` 现在可以更好地回答关于过去工作的自然语言问题，例如 “昨天做了什么？”、“为什么放弃这个方案？”、“我的代码风格是什么？”、“下一步是什么？”。
+Track D 增强了 Codex 记忆可靠性：项目级 recall、日期 buckets、用于时间段问题的 `memory_calendar`，以及用于当前项目状态的 `memory_project_state`。
+
+`memory_recall` 现在也可以更好地回答关于过去工作的自然语言问题，例如 “昨天做了什么？”、“为什么放弃这个方案？”、“我的代码风格是什么？”、“下一步是什么？”。
 
 它会结合 redacted Codex 会话、durable memories、`memory_remember`、rejected alternatives、validation facts 和时间范围问题。若存在多个可能答案，Locus 会返回 `candidateGroups`，让代理先向用户澄清，而不是猜测。
 
@@ -54,7 +56,7 @@ npx -y locus-memory@latest uninstall codex --yes
 | 低 token 成本 | 写入在本地完成；只有 recall 时才消耗上下文 |
 | 隐私控制 | `metadata`、`redacted`、`full` 三种 capture 模式 |
 | 项目级记忆 | 结构扫描 + 决策 + 会话事件 |
-| 可检查性 | `memory_status`、`memory_doctor`、`memory_audit`、`memory_review` |
+| 可检查性 | `memory_status`、`memory_project_state`、`memory_doctor`、`memory_audit`、`memory_review` |
 
 ## Capture 模式
 

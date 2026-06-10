@@ -1,3 +1,4 @@
+import { normalizeProjectRootForScope } from '../recall/project-scope.js';
 import type { DatabaseAdapter } from '../types.js';
 
 function getCurrentVersion(db: DatabaseAdapter): number {
@@ -15,6 +16,10 @@ function tableExists(db: DatabaseAdapter, name: string): boolean {
     [name],
   );
   return (row?.cnt ?? 0) > 0;
+}
+
+function columnExists(db: DatabaseAdapter, table: string, column: string): boolean {
+  return db.all<{ name: string }>(`PRAGMA table_info(${table})`).some((row) => row.name === column);
 }
 
 function migrationV1(db: DatabaseAdapter, fts5: boolean): void {
@@ -162,6 +167,56 @@ function migrationV3(db: DatabaseAdapter, fts5: boolean): void {
   db.run('UPDATE schema_version SET version = ?', [3]);
 }
 
+function normalizeStoredProjectRoots(db: DatabaseAdapter, table: string): void {
+  const rows = db.all<{ id: number; project_root: string | null }>(
+    `SELECT id, project_root FROM ${table} WHERE project_root IS NOT NULL`,
+  );
+
+  for (const row of rows) {
+    if (!row.project_root) {
+      continue;
+    }
+
+    const normalized = normalizeProjectRootForScope(row.project_root);
+    if (normalized !== row.project_root) {
+      db.run(`UPDATE ${table} SET project_root = ? WHERE id = ?`, [normalized, row.id]);
+    }
+  }
+}
+
+function migrationV4(db: DatabaseAdapter): void {
+  if (!columnExists(db, 'memories', 'project_root')) {
+    db.exec('ALTER TABLE memories ADD COLUMN project_root TEXT');
+  }
+
+  if (!columnExists(db, 'durable_memories', 'project_root')) {
+    db.exec('ALTER TABLE durable_memories ADD COLUMN project_root TEXT');
+  }
+
+  if (!columnExists(db, 'conversation_events', 'project_root')) {
+    throw new Error('conversation_events.project_root is required before migration v4');
+  }
+
+  normalizeStoredProjectRoots(db, 'conversation_events');
+  normalizeStoredProjectRoots(db, 'memories');
+  normalizeStoredProjectRoots(db, 'durable_memories');
+
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_memories_project_updated ON memories(project_root, updated_at)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_dm_project_state_topic_updated ON durable_memories(project_root, state, topic_key, updated_at)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_ce_project_timestamp ON conversation_events(project_root, timestamp)',
+  );
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_ce_project_session_timestamp ON conversation_events(project_root, session_id, timestamp)',
+  );
+
+  db.run('UPDATE schema_version SET version = ?', [4]);
+}
+
 // ─── FTS repair ──────────────────────────────────────────────────────────────
 
 interface ConversationRow {
@@ -278,6 +333,10 @@ export function runMigrations(db: DatabaseAdapter, fts5: boolean): void {
 
   if (currentVersion < 3) {
     migrationV3(db, fts5);
+  }
+
+  if (currentVersion < 4) {
+    migrationV4(db);
   }
 
   // Always ensure FTS tables exist and are populated (fixes migration gap)

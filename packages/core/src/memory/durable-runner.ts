@@ -91,9 +91,10 @@ export function runDurableExtraction(
     metrics.scanned++;
 
     for (const candidate of candidates) {
+      const projectRoot = event.project_root;
       const existingEntries = candidate.topicKey
-        ? store.listByTopic(candidate.topicKey)
-        : store.listByMemoryType(candidate.memoryType);
+        ? store.listByTopic(candidate.topicKey, { projectRoot })
+        : store.listByMemoryType(candidate.memoryType, { projectRoot });
       const decision = mergeDurableCandidate(existingEntries, candidate);
 
       switch (decision.action) {
@@ -110,6 +111,7 @@ export function runDurableExtraction(
             memoryType: candidate.memoryType,
             summary: candidate.summary,
             evidence: candidate.evidence,
+            projectRoot,
             sourceEventId: candidate.sourceEventId,
             source: candidate.source,
             state: 'active',
@@ -122,6 +124,7 @@ export function runDurableExtraction(
             memoryType: candidate.memoryType,
             summary: candidate.summary,
             evidence: candidate.evidence,
+            projectRoot,
             sourceEventId: candidate.sourceEventId,
             source: candidate.source,
             state: 'active',

@@ -20,6 +20,7 @@ import {
   CODEX_AUTO_IMPORT_DEBOUNCE_MS,
   coordinateCodexAutoImport,
 } from './tools/auto-import-codex.js';
+import { handleCalendar } from './tools/calendar.js';
 import { collectCodexDiagnostics } from './tools/codex-diagnostics.js';
 import { handleCompact } from './tools/compact.js';
 import { handleConfig } from './tools/config.js';
@@ -28,6 +29,7 @@ import { handleDoctor } from './tools/doctor.js';
 import { handleExplore } from './tools/explore.js';
 import { handleForget } from './tools/forget.js';
 import { handleImportCodex } from './tools/import-codex.js';
+import { handleProjectState } from './tools/project-state.js';
 import { handlePurge } from './tools/purge.js';
 import { handleRecall } from './tools/recall.js';
 import { handleRemember } from './tools/remember.js';
@@ -134,6 +136,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       batchLimit: 0,
       captureLevel: config.captureLevel,
       fts5Available: fts5,
+      projectRoot: root,
     });
     runDurableExtraction(db, { source: 'codex' });
     _lastIngestMetrics = startupMetrics;
@@ -204,6 +207,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
             inboxDir,
             captureLevel: config.captureLevel,
             fts5Available: fts5,
+            projectRoot: root,
             env: process.env,
             processInbox,
             runDurableExtraction,
@@ -219,6 +223,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           batchLimit: 50,
           captureLevel: config.captureLevel,
           fts5Available: fts5,
+          projectRoot: root,
         });
         runDurableExtraction(db, { source: 'codex' });
         _lastIngestMetrics = metrics;
@@ -238,7 +243,17 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .object({
           from: z.number().optional(),
           to: z.number().optional(),
-          relative: z.enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d']).optional(),
+          relative: z
+            .enum([
+              'today',
+              'yesterday',
+              'this_week',
+              'last_7d',
+              'last_30d',
+              'this_month',
+              'last_month',
+            ])
+            .optional(),
         })
         .optional()
         .describe('Filter by time range (absolute or relative)'),
@@ -270,6 +285,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           filePath,
           kind,
           source,
+          projectRoot: root,
           limit,
           offset,
         },
@@ -295,7 +311,17 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .object({
           from: z.number().optional(),
           to: z.number().optional(),
-          relative: z.enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d']).optional(),
+          relative: z
+            .enum([
+              'today',
+              'yesterday',
+              'this_week',
+              'last_7d',
+              'last_30d',
+              'this_month',
+              'last_month',
+            ])
+            .optional(),
         })
         .optional()
         .describe('Filter recall candidates by time range (absolute or relative)'),
@@ -310,11 +336,60 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
       const result = handleRecall(
         question,
-        { db, now },
+        { db, now, projectRoot: root },
         {
           timeRange,
           limit,
           now,
+        },
+      );
+
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(result),
+          },
+        ],
+      };
+    },
+  );
+
+  // 2c. memory_calendar (with the same debounced Codex pre-query flow)
+  server.tool(
+    'memory_calendar',
+    {
+      timeRange: z
+        .object({
+          from: z.number().optional(),
+          to: z.number().optional(),
+          relative: z
+            .enum([
+              'today',
+              'yesterday',
+              'this_week',
+              'last_7d',
+              'last_30d',
+              'this_month',
+              'last_month',
+            ])
+            .optional(),
+        })
+        .optional()
+        .describe('Filter memory buckets by time range'),
+      granularity: z.enum(['day', 'week', 'month']).optional(),
+      limit: z.number().optional(),
+    },
+    async ({ timeRange, granularity, limit }) => {
+      const now = Date.now();
+      runPreQueryCodexFlow(now);
+
+      const result = handleCalendar(
+        { db, projectRoot: root, now },
+        {
+          timeRange,
+          granularity,
+          limit,
         },
       );
 
@@ -361,7 +436,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     'memory_remember',
     { text: z.string(), tags: z.array(z.string()).optional() },
     async ({ text, tags }) => {
-      const entry = handleRemember(text, tags ?? [], { semantic });
+      const entry = handleRemember(text, tags ?? [], { semantic, projectRoot: root });
       return {
         content: [{ type: 'text' as const, text: `Remembered (id=${entry.id}): ${entry.content}` }],
       };
@@ -388,6 +463,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           inboxDir,
           captureLevel: config.captureLevel,
           fts5Available: fts5,
+          projectRoot: root,
           env: process.env,
           processInbox,
           runDurableExtraction,
@@ -413,6 +489,12 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   server.tool('memory_scan', {}, async () => {
     const result = await handleScan({ projectPath: root, db, config });
     return { content: [{ type: 'text' as const, text: JSON.stringify(result.stats) }] };
+  });
+
+  // 6b. memory_project_state
+  server.tool('memory_project_state', {}, async () => {
+    const result = handleProjectState({ db, projectRoot: root });
+    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
   });
 
   // 7. memory_status
@@ -502,7 +584,17 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .object({
           from: z.number().optional(),
           to: z.number().optional(),
-          relative: z.enum(['today', 'yesterday', 'this_week', 'last_7d', 'last_30d']).optional(),
+          relative: z
+            .enum([
+              'today',
+              'yesterday',
+              'this_week',
+              'last_7d',
+              'last_30d',
+              'this_month',
+              'last_month',
+            ])
+            .optional(),
         })
         .optional()
         .describe('Filter by time range (absolute or relative)'),
@@ -526,7 +618,10 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       offset: z.number().optional().describe('Skip N entries for pagination'),
     },
     async ({ timeRange, kind, filePath, summary, limit, offset }) => {
-      const entries = handleTimeline({ db }, { timeRange, kind, filePath, summary, limit, offset });
+      const entries = handleTimeline(
+        { db, projectRoot: root },
+        { timeRange, kind, filePath, summary, limit, offset },
+      );
       return { content: [{ type: 'text' as const, text: JSON.stringify(entries) }] };
     },
   );

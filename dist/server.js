@@ -6886,7 +6886,7 @@ var require_dist = __commonJS({
 });
 
 // packages/core/src/server.ts
-import { basename as basename4, dirname as dirname6, join as join12 } from "node:path";
+import { basename as basename4, dirname as dirname6, join as join13 } from "node:path";
 
 // packages/codex/src/bounded-snippets.ts
 var USER_CHAR_LIMIT = 280;
@@ -7374,6 +7374,93 @@ function createCodexEventId(sourceEventId) {
 // packages/codex/src/importer.ts
 import { readFileSync } from "node:fs";
 
+// packages/shared-runtime/detect-client.js
+function detectClientRuntime(env = process.env, _argv = process.argv, _cwd = process.cwd()) {
+  if (hasNonEmptyValue(env.CODEX_HOME)) {
+    const surface = codexSurfaceFromEnv(env);
+    return {
+      client: "codex",
+      surface,
+      detected: true,
+      evidence: surface === "cli" ? ["env:CODEX_HOME"] : ["env:CODEX_HOME", `env:LOCUS_CODEX_SURFACE=${surface}`]
+    };
+  }
+  if (hasNonEmptyValue(env.CLAUDE_PLUGIN_ROOT)) {
+    return {
+      client: "claude-code",
+      surface: "cli",
+      detected: true,
+      evidence: ["env:CLAUDE_PLUGIN_ROOT"]
+    };
+  }
+  return {
+    client: "generic",
+    surface: "generic",
+    detected: false,
+    evidence: ["fallback:generic"]
+  };
+}
+function detectClientEnv() {
+  return detectClientRuntime().client;
+}
+function hasNonEmptyValue(value) {
+  return typeof value === "string" && value.trim().length > 0;
+}
+function codexSurfaceFromEnv(env) {
+  const value = env.LOCUS_CODEX_SURFACE;
+  if (value === "desktop" || value === "extension" || value === "cli") {
+    return value;
+  }
+  return "cli";
+}
+
+// packages/shared-runtime/normalize-path.js
+import { normalize } from "node:path";
+function normalizePathForIdentity(pathValue) {
+  return normalize(pathValue).replace(/\\/g, "/").toLowerCase();
+}
+
+// packages/shared-runtime/project-hash.js
+import { createHash as createHash2 } from "node:crypto";
+function projectHash(projectRoot) {
+  const normalized = normalizePathForIdentity(projectRoot);
+  return createHash2("sha256").update(normalized).digest("hex").slice(0, 16);
+}
+
+// packages/shared-runtime/resolve-storage.js
+import { homedir } from "node:os";
+import { join } from "node:path";
+function expandTilde(p) {
+  if (p === "~") return homedir();
+  if (p.startsWith("~/") || p.startsWith("~\\")) {
+    return join(homedir(), p.slice(2));
+  }
+  return p;
+}
+function resolveStorageRoot() {
+  if (process.env.LOCUS_STORAGE_ROOT) {
+    return expandTilde(process.env.LOCUS_STORAGE_ROOT);
+  }
+  const client = detectClientEnv();
+  const home = homedir();
+  if (client === "codex") {
+    return join(expandTilde(process.env.CODEX_HOME), "memory");
+  }
+  if (client === "claude-code") {
+    return join(home, ".claude", "memory");
+  }
+  return join(home, ".locus", "memory");
+}
+function resolveProjectStorageDir(projectRoot) {
+  return join(resolveStorageRoot(), `locus-${projectHash(projectRoot)}`);
+}
+function resolveDbPath(projectRoot) {
+  return join(resolveProjectStorageDir(projectRoot), "locus.db");
+}
+function resolveLogPath() {
+  return join(resolveStorageRoot(), "locus.log");
+}
+
 // packages/codex/src/inbox-event.ts
 function toInboxEvent(normalizedEvent, captureMode) {
   const captured = captureCodexEvent(normalizedEvent, captureMode);
@@ -7489,11 +7576,11 @@ function arrayPayload(value) {
 
 // packages/codex/src/inbox-writer.ts
 import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { join as join2 } from "node:path";
 function writeCodexInboxEvent(inboxDir, event) {
   mkdirSync(inboxDir, { recursive: true });
   const filename = `${event.timestamp}-${event.event_id.slice(0, 8)}.json`;
-  const finalPath = join(inboxDir, filename);
+  const finalPath = join2(inboxDir, filename);
   if (existsSync(finalPath)) {
     return { status: "duplicate_pending", filename };
   }
@@ -7775,34 +7862,34 @@ function durationMsValue(value) {
 }
 
 // packages/codex/src/paths.ts
-import { homedir } from "node:os";
-import { join as join2, resolve } from "node:path";
+import { homedir as homedir2 } from "node:os";
+import { join as join3, resolve } from "node:path";
 function resolveCodexHome(env = process.env) {
   const configured = env.CODEX_HOME;
   if (configured && configured.trim().length > 0) {
-    return resolve(expandTilde(configured));
+    return resolve(expandTilde2(configured));
   }
-  return join2(homedir(), ".codex");
+  return join3(homedir2(), ".codex");
 }
 function resolveCodexSessionsDir(options = {}) {
   if (options.sessionsDir && options.sessionsDir.trim().length > 0) {
-    return resolve(expandTilde(options.sessionsDir));
+    return resolve(expandTilde2(options.sessionsDir));
   }
-  return join2(resolveCodexHome(options.env), "sessions");
+  return join3(resolveCodexHome(options.env), "sessions");
 }
-function expandTilde(pathValue) {
+function expandTilde2(pathValue) {
   if (pathValue === "~") {
-    return homedir();
+    return homedir2();
   }
   if (pathValue.startsWith("~/") || pathValue.startsWith("~\\")) {
-    return join2(homedir(), pathValue.slice(2));
+    return join3(homedir2(), pathValue.slice(2));
   }
   return pathValue;
 }
 
 // packages/codex/src/session-files.ts
 import { readdirSync } from "node:fs";
-import { basename as basename2, join as join3, resolve as resolve2 } from "node:path";
+import { basename as basename2, join as join4, resolve as resolve2 } from "node:path";
 function findCodexRolloutFiles(sessionsDir) {
   return collectRolloutFiles(resolve2(sessionsDir)).sort();
 }
@@ -7815,7 +7902,7 @@ function collectRolloutFiles(dir) {
   }
   const files = [];
   for (const entry of entries) {
-    const fullPath = join3(dir, entry.name);
+    const fullPath = join4(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...collectRolloutFiles(fullPath));
       continue;
@@ -7854,7 +7941,10 @@ function importCodexSessionsToInbox(options) {
     metrics.parseErrors += parsed.errors.length;
     const normalized = normalizeCodexRecords(parsed.records);
     metrics.skippedUnknown += normalized.skipped;
-    const filteredEvents = normalized.events.filter((event) => matchesFilters(event, options));
+    const filteredEvents = normalized.events.filter((event) => matchesFilters(event, options)).map((event) => ({
+      ...event,
+      projectRoot: canonicalImportProjectRoot(event.projectRoot, options.projectRoot)
+    }));
     metrics.normalized += filteredEvents.length;
     metrics.skippedByFilter += normalized.events.length - filteredEvents.length;
     latestTimestamp = updateLatestSession(metrics, filteredEvents, latestTimestamp);
@@ -7918,7 +8008,7 @@ function selectFiles(files, options) {
   return [...files];
 }
 function matchesFilters(event, options) {
-  if (options.projectRoot !== void 0 && event.projectRoot !== options.projectRoot) {
+  if (options.projectRoot !== void 0 && !sameOrInsideProjectRoot(event.projectRoot, options.projectRoot)) {
     return false;
   }
   if (options.sessionId !== void 0 && event.sessionId !== options.sessionId) {
@@ -7929,96 +8019,41 @@ function matchesFilters(event, options) {
   }
   return true;
 }
+function normalizedProjectRoot(value) {
+  const normalized = normalizePathForIdentity(value);
+  if (normalized === "/" || /^[a-z]:\/$/u.test(normalized)) {
+    return normalized;
+  }
+  return normalized.replace(/\/$/u, "");
+}
+function sameOrInsideProjectRoot(eventRootValue, requestedRootValue) {
+  const eventRoot = normalizedProjectRoot(eventRootValue);
+  const requestedRoot = normalizedProjectRoot(requestedRootValue);
+  return eventRoot === requestedRoot || isInsideProjectRoot(eventRoot, requestedRoot);
+}
+function isInsideProjectRoot(eventRoot, requestedRoot) {
+  if (requestedRoot === "/" || /^[a-z]:\/$/u.test(requestedRoot)) {
+    return eventRoot.startsWith(requestedRoot);
+  }
+  return eventRoot.startsWith(`${requestedRoot}/`);
+}
+function canonicalImportProjectRoot(eventRoot, requestedRoot) {
+  if (requestedRoot && sameOrInsideProjectRoot(eventRoot, requestedRoot)) {
+    return normalizedProjectRoot(requestedRoot);
+  }
+  return normalizedProjectRoot(eventRoot);
+}
 
 // packages/codex/src/plugin-sync.ts
 import { copyFileSync, existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname, join as join4, resolve as resolve3 } from "node:path";
+import { dirname, join as join5, resolve as resolve3 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // packages/codex/src/skill-sync.ts
 import { copyFileSync as copyFileSync2, existsSync as existsSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync3 } from "node:fs";
-import { homedir as homedir2 } from "node:os";
-import { dirname as dirname2, join as join5, resolve as resolve4 } from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
-
-// packages/shared-runtime/detect-client.js
-function detectClientRuntime(env = process.env, _argv = process.argv, _cwd = process.cwd()) {
-  if (hasNonEmptyValue(env.CODEX_HOME)) {
-    return {
-      client: "codex",
-      surface: "cli",
-      detected: true,
-      evidence: ["env:CODEX_HOME"]
-    };
-  }
-  if (hasNonEmptyValue(env.CLAUDE_PLUGIN_ROOT)) {
-    return {
-      client: "claude-code",
-      surface: "cli",
-      detected: true,
-      evidence: ["env:CLAUDE_PLUGIN_ROOT"]
-    };
-  }
-  return {
-    client: "generic",
-    surface: "generic",
-    detected: false,
-    evidence: ["fallback:generic"]
-  };
-}
-function detectClientEnv() {
-  return detectClientRuntime().client;
-}
-function hasNonEmptyValue(value) {
-  return typeof value === "string" && value.trim().length > 0;
-}
-
-// packages/shared-runtime/normalize-path.js
-import { normalize } from "node:path";
-function normalizePathForIdentity(pathValue) {
-  return normalize(pathValue).replace(/\\/g, "/").toLowerCase();
-}
-
-// packages/shared-runtime/project-hash.js
-import { createHash as createHash2 } from "node:crypto";
-function projectHash(projectRoot) {
-  const normalized = normalizePathForIdentity(projectRoot);
-  return createHash2("sha256").update(normalized).digest("hex").slice(0, 16);
-}
-
-// packages/shared-runtime/resolve-storage.js
 import { homedir as homedir3 } from "node:os";
-import { join as join6 } from "node:path";
-function expandTilde2(p) {
-  if (p === "~") return homedir3();
-  if (p.startsWith("~/") || p.startsWith("~\\")) {
-    return join6(homedir3(), p.slice(2));
-  }
-  return p;
-}
-function resolveStorageRoot() {
-  if (process.env.LOCUS_STORAGE_ROOT) {
-    return expandTilde2(process.env.LOCUS_STORAGE_ROOT);
-  }
-  const client = detectClientEnv();
-  const home = homedir3();
-  if (client === "codex") {
-    return join6(expandTilde2(process.env.CODEX_HOME), "memory");
-  }
-  if (client === "claude-code") {
-    return join6(home, ".claude", "memory");
-  }
-  return join6(home, ".locus", "memory");
-}
-function resolveProjectStorageDir(projectRoot) {
-  return join6(resolveStorageRoot(), `locus-${projectHash(projectRoot)}`);
-}
-function resolveDbPath(projectRoot) {
-  return join6(resolveProjectStorageDir(projectRoot), "locus.db");
-}
-function resolveLogPath() {
-  return join6(resolveStorageRoot(), "locus.log");
-}
+import { dirname as dirname2, join as join6, resolve as resolve4 } from "node:path";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // node_modules/zod/v3/helpers/util.js
 var util;
@@ -31314,6 +31349,34 @@ var StdioServerTransport = class {
 import { readdirSync as readdirSync2, readFileSync as readFileSync4, unlinkSync } from "node:fs";
 import { join as join7 } from "node:path";
 
+// packages/core/src/recall/project-scope.ts
+function normalizeProjectRootForScope(projectRoot) {
+  const normalized = normalizePathForIdentity(projectRoot.trim());
+  if (normalized === "/" || /^[a-z]:\/$/u.test(normalized)) {
+    return normalized;
+  }
+  return normalized.replace(/\/$/u, "");
+}
+function isSameProjectRoot(left, right) {
+  if (!left) {
+    return false;
+  }
+  return normalizeProjectRootForScope(left) === normalizeProjectRootForScope(right);
+}
+function buildProjectScopeClause(column, projectRoot, options) {
+  const normalized = normalizeProjectRootForScope(projectRoot);
+  if (options?.includeLegacyGlobal) {
+    return {
+      clause: `(${column} = ? OR ${column} IS NULL)`,
+      params: [normalized]
+    };
+  }
+  return {
+    clause: `${column} = ?`,
+    params: [normalized]
+  };
+}
+
 // packages/core/src/security/file-ignore.ts
 var DENYLIST_FILES = [
   // Environment and config files
@@ -31603,6 +31666,7 @@ function processInbox(inboxDir, db, options) {
     const significance = classifySignificance(event);
     try {
       const payloadJson = redact(JSON.stringify(event.payload));
+      const projectRoot = canonicalStoredProjectRoot(event.project_root, options?.projectRoot);
       const result = db.run(
         `INSERT INTO conversation_events
          (event_id, source, source_event_id, project_root, session_id,
@@ -31612,7 +31676,7 @@ function processInbox(inboxDir, db, options) {
           event.event_id,
           event.source,
           event.source_event_id ?? null,
-          event.project_root,
+          projectRoot,
           event.session_id ?? null,
           event.timestamp,
           event.kind,
@@ -31648,6 +31712,23 @@ function processInbox(inboxDir, db, options) {
   }
   metrics.durationMs = Date.now() - start;
   return metrics;
+}
+function canonicalStoredProjectRoot(eventProjectRoot, currentProjectRoot) {
+  const eventRoot = normalizeProjectRootForScope(eventProjectRoot);
+  if (!currentProjectRoot) {
+    return eventRoot;
+  }
+  const currentRoot = normalizeProjectRootForScope(currentProjectRoot);
+  if (eventRoot === currentRoot || isInsideProjectRoot2(eventRoot, currentRoot)) {
+    return currentRoot;
+  }
+  return eventRoot;
+}
+function isInsideProjectRoot2(eventRoot, currentRoot) {
+  if (currentRoot === "/" || /^[a-z]:\/$/u.test(currentRoot)) {
+    return eventRoot.startsWith(currentRoot);
+  }
+  return eventRoot.startsWith(`${currentRoot}/`);
 }
 function extractFilePaths(event) {
   const payload = event.payload;
@@ -31779,6 +31860,10 @@ var MemoryCompressor = class {
 };
 
 // packages/core/src/memory/durable.ts
+function optionalProjectRoot(projectRoot) {
+  const trimmed = projectRoot?.trim();
+  return trimmed ? normalizeProjectRootForScope(trimmed) : null;
+}
 function rowToEntry(row) {
   return {
     id: row.id,
@@ -31787,6 +31872,7 @@ function rowToEntry(row) {
     state: row.state,
     summary: row.summary,
     evidence: JSON.parse(row.evidence_json),
+    projectRoot: row.project_root ?? void 0,
     sourceEventId: row.source_event_id ?? void 0,
     source: row.source,
     supersededById: row.superseded_by_id ?? void 0,
@@ -31803,6 +31889,7 @@ var DurableMemoryStore = class {
   }
   insert(input) {
     const now = Date.now();
+    const projectRoot = optionalProjectRoot(input.projectRoot);
     const result = this.db.run(
       `INSERT INTO durable_memories (
         topic_key,
@@ -31810,18 +31897,20 @@ var DurableMemoryStore = class {
         state,
         summary,
         evidence_json,
+        project_root,
         source_event_id,
         source,
         superseded_by_id,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         input.topicKey ?? null,
         input.memoryType,
         input.state ?? "active",
         input.summary,
         JSON.stringify(input.evidence),
+        projectRoot,
         input.sourceEventId ?? null,
         input.source,
         input.supersededById ?? null,
@@ -31872,14 +31961,34 @@ var DurableMemoryStore = class {
     const result = this.db.run("DELETE FROM durable_memories WHERE id = ?", [id]);
     return result.changes > 0;
   }
-  listByTopic(topicKey) {
+  listByTopic(topicKey, options) {
+    const projectRoot = optionalProjectRoot(options?.projectRoot);
+    if (projectRoot) {
+      const rows2 = this.db.all(
+        `SELECT * FROM durable_memories
+         WHERE topic_key = ? AND project_root = ?
+         ORDER BY updated_at DESC, id DESC`,
+        [topicKey, projectRoot]
+      );
+      return rows2.map(rowToEntry);
+    }
     const rows = this.db.all(
       "SELECT * FROM durable_memories WHERE topic_key = ? ORDER BY updated_at DESC, id DESC",
       [topicKey]
     );
     return rows.map(rowToEntry);
   }
-  listByMemoryType(memoryType) {
+  listByMemoryType(memoryType, options) {
+    const projectRoot = optionalProjectRoot(options?.projectRoot);
+    if (projectRoot) {
+      const rows2 = this.db.all(
+        `SELECT * FROM durable_memories
+         WHERE memory_type = ? AND project_root = ?
+         ORDER BY updated_at DESC, id DESC`,
+        [memoryType, projectRoot]
+      );
+      return rows2.map(rowToEntry);
+    }
     const rows = this.db.all(
       "SELECT * FROM durable_memories WHERE memory_type = ? ORDER BY updated_at DESC, id DESC",
       [memoryType]
@@ -32115,6 +32224,18 @@ var TOPIC_KEY_RULES = [
       ["acceptance", "track c"],
       ["recall", "fixtures", "docs", "matrix"]
     ]
+  },
+  {
+    key: "track_d_memory_reliability",
+    memoryTypes: ["next_step", "validation_fact", "decision"],
+    any: [
+      "track d",
+      "memory reliability",
+      "project-scoped recall",
+      "date buckets",
+      "memory_calendar"
+    ],
+    all: [["track d", "memory", "recall"]]
   }
 ];
 function deriveCanonicalTopicKey(input) {
@@ -32204,8 +32325,28 @@ function normalizeSummary2(summary) {
 function hasMappingConfidence(candidate) {
   return typeof candidate.evidence.confidence === "number";
 }
+function isPositiveValidationSummary(summary) {
+  const normalized = summary.toLowerCase();
+  if (/\b(?:not|never|failed|failing|blocked|hasn['’]?t|haven['’]?t|isn['’]?t|wasn['’]?t)\b/u.test(
+    normalized
+  )) {
+    return false;
+  }
+  return /\b(?:passed|validated|released|published|shipped|done|completed|finished|resolved)\b/u.test(
+    normalized
+  );
+}
 function mergeDurableCandidate(existingEntries, candidate) {
   const activeEntries = existingEntries.filter((entry) => entry.state === "active");
+  const resolvedNextStep = activeEntries.find(
+    (entry) => candidate.memoryType === "validation_fact" && entry.memoryType === "next_step" && candidate.topicKey && entry.topicKey === candidate.topicKey && isPositiveValidationSummary(candidate.summary)
+  );
+  if (resolvedNextStep) {
+    return {
+      action: "supersede_existing",
+      existingId: resolvedNextStep.id
+    };
+  }
   const matchingEntries = activeEntries.filter((entry) => entry.memoryType === candidate.memoryType).filter((entry) => candidate.topicKey ? entry.topicKey === candidate.topicKey : true);
   const candidateSummary = normalizeSummary2(candidate.summary);
   const duplicate = matchingEntries.find(
@@ -32279,7 +32420,8 @@ function runDurableExtraction(db, options) {
     const candidates = extractDurableCandidatesFromEvent(event);
     metrics.scanned++;
     for (const candidate of candidates) {
-      const existingEntries = candidate.topicKey ? store.listByTopic(candidate.topicKey) : store.listByMemoryType(candidate.memoryType);
+      const projectRoot = event.project_root;
+      const existingEntries = candidate.topicKey ? store.listByTopic(candidate.topicKey, { projectRoot }) : store.listByMemoryType(candidate.memoryType, { projectRoot });
       const decision = mergeDurableCandidate(existingEntries, candidate);
       switch (decision.action) {
         case "ignore":
@@ -32295,6 +32437,7 @@ function runDurableExtraction(db, options) {
             memoryType: candidate.memoryType,
             summary: candidate.summary,
             evidence: candidate.evidence,
+            projectRoot,
             sourceEventId: candidate.sourceEventId,
             source: candidate.source,
             state: "active"
@@ -32307,6 +32450,7 @@ function runDurableExtraction(db, options) {
             memoryType: candidate.memoryType,
             summary: candidate.summary,
             evidence: candidate.evidence,
+            projectRoot,
             sourceEventId: candidate.sourceEventId,
             source: candidate.source,
             state: "active"
@@ -32393,12 +32537,24 @@ var EpisodicMemory = class {
 };
 
 // packages/core/src/memory/semantic.ts
+function optionalProjectRoot2(projectRoot) {
+  const trimmed = projectRoot?.trim();
+  return trimmed ? normalizeProjectRootForScope(trimmed) : null;
+}
+function hasProjectRootColumn(db) {
+  try {
+    return db.all("PRAGMA table_info(memories)").some((column) => column.name === "project_root");
+  } catch {
+    return false;
+  }
+}
 function rowToEntry3(row) {
   return {
     id: row.id,
     layer: row.layer,
     content: row.content,
     tags: row.tags_json ? JSON.parse(row.tags_json) : [],
+    projectRoot: row.project_root ?? void 0,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     sessionId: row.session_id ?? void 0
@@ -32411,10 +32567,14 @@ var SemanticMemory = class {
     this.db = db;
     this.fts5 = fts5Available;
   }
-  add(content, tags) {
+  add(content, tags, options) {
     const now = Date.now();
     const tagsJson = JSON.stringify(tags);
-    const result = this.db.run(
+    const projectRoot = optionalProjectRoot2(options?.projectRoot);
+    const result = hasProjectRootColumn(this.db) ? this.db.run(
+      "INSERT INTO memories (layer, content, tags_json, project_root, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      ["semantic", content, tagsJson, projectRoot, now, now]
+    ) : this.db.run(
       "INSERT INTO memories (layer, content, tags_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
       ["semantic", content, tagsJson, now, now]
     );
@@ -32427,6 +32587,7 @@ var SemanticMemory = class {
       layer: "semantic",
       content,
       tags,
+      projectRoot: projectRoot ?? void 0,
       createdAt: now,
       updatedAt: now,
       sessionId: void 0
@@ -32988,6 +33149,9 @@ function tableExists(db, name) {
   );
   return (row?.cnt ?? 0) > 0;
 }
+function columnExists(db, table, column) {
+  return db.all(`PRAGMA table_info(${table})`).some((row) => row.name === column);
+}
 function migrationV1(db, fts5) {
   db.exec(`CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER NOT NULL
@@ -33112,6 +33276,47 @@ function migrationV3(db, fts5) {
   }
   db.run("UPDATE schema_version SET version = ?", [3]);
 }
+function normalizeStoredProjectRoots(db, table) {
+  const rows = db.all(
+    `SELECT id, project_root FROM ${table} WHERE project_root IS NOT NULL`
+  );
+  for (const row of rows) {
+    if (!row.project_root) {
+      continue;
+    }
+    const normalized = normalizeProjectRootForScope(row.project_root);
+    if (normalized !== row.project_root) {
+      db.run(`UPDATE ${table} SET project_root = ? WHERE id = ?`, [normalized, row.id]);
+    }
+  }
+}
+function migrationV4(db) {
+  if (!columnExists(db, "memories", "project_root")) {
+    db.exec("ALTER TABLE memories ADD COLUMN project_root TEXT");
+  }
+  if (!columnExists(db, "durable_memories", "project_root")) {
+    db.exec("ALTER TABLE durable_memories ADD COLUMN project_root TEXT");
+  }
+  if (!columnExists(db, "conversation_events", "project_root")) {
+    throw new Error("conversation_events.project_root is required before migration v4");
+  }
+  normalizeStoredProjectRoots(db, "conversation_events");
+  normalizeStoredProjectRoots(db, "memories");
+  normalizeStoredProjectRoots(db, "durable_memories");
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_memories_project_updated ON memories(project_root, updated_at)"
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_dm_project_state_topic_updated ON durable_memories(project_root, state, topic_key, updated_at)"
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_ce_project_timestamp ON conversation_events(project_root, timestamp)"
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_ce_project_session_timestamp ON conversation_events(project_root, session_id, timestamp)"
+  );
+  db.run("UPDATE schema_version SET version = ?", [4]);
+}
 function extractFtsFromRow(kind, payloadJson) {
   const parts = [kind];
   if (!payloadJson) return parts.join(" ");
@@ -33183,6 +33388,9 @@ function runMigrations(db, fts5) {
   }
   if (currentVersion < 3) {
     migrationV3(db, fts5);
+  }
+  if (currentVersion < 4) {
+    migrationV4(db);
   }
   ensureFts(db, fts5);
 }
@@ -33676,8 +33884,616 @@ function classifyStatus(result) {
   return "imported";
 }
 
+// packages/core/src/recall/calendar.ts
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+function dateKey(timestamp, mode) {
+  const date5 = new Date(timestamp);
+  const year = mode === "utc" ? date5.getUTCFullYear() : date5.getFullYear();
+  const month = mode === "utc" ? date5.getUTCMonth() + 1 : date5.getMonth() + 1;
+  const day = mode === "utc" ? date5.getUTCDate() : date5.getDate();
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+function monthKey(timestamp, mode) {
+  const date5 = new Date(timestamp);
+  const year = mode === "utc" ? date5.getUTCFullYear() : date5.getFullYear();
+  const month = mode === "utc" ? date5.getUTCMonth() + 1 : date5.getMonth() + 1;
+  return `${year}-${pad2(month)}`;
+}
+function startOfDay(timestamp, options) {
+  const mode = options?.mode ?? "local";
+  const date5 = new Date(timestamp);
+  if (mode === "utc") {
+    return Date.UTC(date5.getUTCFullYear(), date5.getUTCMonth(), date5.getUTCDate());
+  }
+  return new Date(date5.getFullYear(), date5.getMonth(), date5.getDate()).getTime();
+}
+function addDays(timestamp, days, mode) {
+  const date5 = new Date(timestamp);
+  if (mode === "utc") {
+    date5.setUTCDate(date5.getUTCDate() + days);
+  } else {
+    date5.setDate(date5.getDate() + days);
+  }
+  return date5.getTime();
+}
+function startOfMonth(timestamp, mode) {
+  const date5 = new Date(timestamp);
+  if (mode === "utc") {
+    return Date.UTC(date5.getUTCFullYear(), date5.getUTCMonth(), 1);
+  }
+  return new Date(date5.getFullYear(), date5.getMonth(), 1).getTime();
+}
+function addMonths(timestamp, months, mode) {
+  const date5 = new Date(timestamp);
+  if (mode === "utc") {
+    date5.setUTCMonth(date5.getUTCMonth() + months);
+  } else {
+    date5.setMonth(date5.getMonth() + months);
+  }
+  return date5.getTime();
+}
+function dayBucket(timestamp, options) {
+  const mode = options?.mode ?? "local";
+  const from = startOfDay(timestamp, { mode });
+  const to = addDays(from, 1, mode);
+  const key = dateKey(from, mode);
+  return { key, label: key, from, to };
+}
+function weekBucket(timestamp, options) {
+  const mode = options?.mode ?? "local";
+  const dayStart = startOfDay(timestamp, { mode });
+  const date5 = new Date(dayStart);
+  const day = mode === "utc" ? date5.getUTCDay() : date5.getDay();
+  const mondayOffset = day === 0 ? 6 : day - 1;
+  const from = addDays(dayStart, -mondayOffset, mode);
+  const to = addDays(from, 7, mode);
+  const key = `${dateKey(from, mode)}/week`;
+  return { key, label: key, from, to };
+}
+function monthBucket(timestamp, options) {
+  const mode = options?.mode ?? "local";
+  const from = startOfMonth(timestamp, mode);
+  const to = addMonths(from, 1, mode);
+  const key = monthKey(from, mode);
+  return { key, label: key, from, to };
+}
+
+// packages/core/src/tools/search.ts
+function parseExports(json2) {
+  if (!json2) return [];
+  try {
+    return JSON.parse(json2);
+  } catch {
+    return [];
+  }
+}
+function summarizePayload(kind, payloadJson) {
+  if (!payloadJson) return kind;
+  try {
+    const payload = JSON.parse(payloadJson);
+    switch (kind) {
+      case "user_prompt": {
+        const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
+        return prompt.length > 120 ? `${prompt.slice(0, 117)}...` : prompt;
+      }
+      case "ai_response": {
+        const response = typeof payload.response === "string" ? payload.response : "";
+        return response.length > 120 ? `${response.slice(0, 117)}...` : response;
+      }
+      case "tool_use": {
+        const tool = typeof payload.tool === "string" ? payload.tool : "";
+        const files = Array.isArray(payload.files) ? payload.files : [];
+        const status = typeof payload.status === "string" ? payload.status : "";
+        const fileStr = files.length > 0 ? ` [${files.join(", ")}]` : "";
+        return `${tool}${fileStr} (${status})`;
+      }
+      case "file_diff": {
+        const path = typeof payload.path === "string" ? payload.path : "";
+        const added = typeof payload.added === "number" ? payload.added : 0;
+        const removed = typeof payload.removed === "number" ? payload.removed : 0;
+        return `${path} (+${added}/-${removed})`;
+      }
+      case "session_start": {
+        const tool = typeof payload.tool === "string" ? payload.tool : "";
+        return `session_start: ${tool}`;
+      }
+      case "session_end": {
+        const summary = typeof payload.summary === "string" ? payload.summary : "";
+        return summary ? `session_end: ${summary}` : "session_end";
+      }
+      default:
+        return kind;
+    }
+  } catch {
+    return kind;
+  }
+}
+function setStartOfDay(date5, mode) {
+  if (mode === "utc") {
+    date5.setUTCHours(0, 0, 0, 0);
+    return;
+  }
+  date5.setHours(0, 0, 0, 0);
+}
+function startOfMonth2(timestamp, mode) {
+  const date5 = new Date(timestamp);
+  if (mode === "utc") {
+    return new Date(Date.UTC(date5.getUTCFullYear(), date5.getUTCMonth(), 1));
+  }
+  return new Date(date5.getFullYear(), date5.getMonth(), 1);
+}
+function addMonths2(date5, months, mode) {
+  const next = new Date(date5);
+  if (mode === "utc") {
+    next.setUTCMonth(next.getUTCMonth() + months);
+  } else {
+    next.setMonth(next.getMonth() + months);
+  }
+  return next;
+}
+function resolveTimeRange(range2, referenceNow, mode = "local") {
+  const now = referenceNow ?? Date.now();
+  if (range2.relative) {
+    switch (range2.relative) {
+      case "today": {
+        const start = new Date(now);
+        setStartOfDay(start, mode);
+        return { from: start.getTime(), to: now };
+      }
+      case "yesterday": {
+        const startOfToday = new Date(now);
+        setStartOfDay(startOfToday, mode);
+        const startOfYesterday = new Date(startOfToday);
+        if (mode === "utc") {
+          startOfYesterday.setUTCDate(startOfYesterday.getUTCDate() - 1);
+        } else {
+          startOfYesterday.setDate(startOfYesterday.getDate() - 1);
+        }
+        return { from: startOfYesterday.getTime(), to: startOfToday.getTime() };
+      }
+      case "this_week": {
+        const monday = new Date(now);
+        const dayOfWeek = mode === "utc" ? monday.getUTCDay() : monday.getDay();
+        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+        if (mode === "utc") {
+          monday.setUTCDate(monday.getUTCDate() - diff);
+        } else {
+          monday.setDate(monday.getDate() - diff);
+        }
+        setStartOfDay(monday, mode);
+        return { from: monday.getTime(), to: now };
+      }
+      case "last_7d":
+        return { from: now - 7 * 24 * 3600 * 1e3, to: now };
+      case "last_30d":
+        return { from: now - 30 * 24 * 3600 * 1e3, to: now };
+      case "this_month": {
+        const start = startOfMonth2(now, mode);
+        const end = addMonths2(start, 1, mode);
+        return { from: start.getTime(), to: end.getTime() };
+      }
+      case "last_month": {
+        const thisMonth = startOfMonth2(now, mode);
+        const previousMonth = addMonths2(thisMonth, -1, mode);
+        return { from: previousMonth.getTime(), to: thisMonth.getTime() };
+      }
+    }
+  }
+  return {
+    from: range2.from ?? 0,
+    to: range2.to ?? now
+  };
+}
+function searchStructural(query, db) {
+  const results = [];
+  const lowerQuery = query.toLowerCase();
+  const files = db.all("SELECT * FROM files");
+  for (const file2 of files) {
+    const exports = parseExports(file2.exports_json);
+    let exportMatched = false;
+    for (const exp of exports) {
+      if (exp.name.toLowerCase().includes(lowerQuery)) {
+        results.push({
+          layer: "structural",
+          content: `${file2.relative_path} -> ${exp.name}()`,
+          relevance: 1,
+          source: file2.relative_path
+        });
+        exportMatched = true;
+      }
+    }
+    if (!exportMatched && file2.relative_path.toLowerCase().includes(lowerQuery)) {
+      results.push({
+        layer: "structural",
+        content: file2.relative_path,
+        relevance: 0.5,
+        source: file2.relative_path
+      });
+    }
+  }
+  return results;
+}
+function searchSemanticScoped(query, db, projectRoot) {
+  const scope = buildProjectScopeClause("project_root", projectRoot);
+  const rows = db.all(
+    `SELECT * FROM memories
+     WHERE layer = 'semantic'
+       AND ${scope.clause}
+       AND content LIKE ?
+     ORDER BY updated_at DESC
+     LIMIT 10`,
+    [...scope.params, `%${query}%`]
+  );
+  return rows.map((row) => ({
+    layer: "semantic",
+    content: row.content,
+    relevance: 0.8,
+    source: `memory:${row.id}`
+  }));
+}
+function searchEpisodic(query, db, projectRoot) {
+  const lowerQuery = query.toLowerCase();
+  const params = [];
+  const clauses = ["layer='episodic'", "content LIKE ?"];
+  params.push(`%${lowerQuery}%`);
+  if (projectRoot) {
+    const scope = buildProjectScopeClause("project_root", projectRoot);
+    clauses.splice(1, 0, scope.clause);
+    params.splice(0, 0, ...scope.params);
+  }
+  const rows = db.all(
+    `SELECT * FROM memories
+     WHERE ${clauses.join(" AND ")}
+     ORDER BY updated_at DESC`,
+    params
+  );
+  return rows.map((row) => ({
+    layer: "episodic",
+    content: row.content,
+    relevance: 0.6,
+    source: `session:${row.session_id ?? "unknown"}`
+  }));
+}
+function searchDurable(query, db, fts5, projectRoot) {
+  let rows = [];
+  if (fts5) {
+    const sanitized = sanitizeFtsQuery(query);
+    if (sanitized) {
+      try {
+        const scope = projectRoot ? buildProjectScopeClause("dm.project_root", projectRoot) : void 0;
+        const scopeClause = scope ? `AND ${scope.clause}` : "";
+        rows = db.all(
+          `SELECT dm.id, dm.summary, dm.updated_at, dm.project_root
+           FROM durable_memories_fts dfts
+           JOIN durable_memories dm ON dm.id = dfts.rowid
+           WHERE dfts MATCH ? AND dm.state = 'active'
+           ${scopeClause}
+           ORDER BY dm.updated_at DESC, dm.id DESC
+           LIMIT 10`,
+          [sanitized, ...scope?.params ?? []]
+        );
+      } catch {
+        rows = [];
+      }
+    }
+  }
+  if (rows.length === 0) {
+    const params = ["active"];
+    const clauses = ["state = ?"];
+    if (projectRoot) {
+      const scope = buildProjectScopeClause("project_root", projectRoot);
+      clauses.push(scope.clause);
+      params.push(...scope.params);
+    }
+    clauses.push("summary LIKE ?");
+    params.push(`%${query}%`);
+    rows = db.all(
+      `SELECT id, summary, updated_at, project_root
+       FROM durable_memories
+       WHERE ${clauses.join(" AND ")}
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 10`,
+      params
+    );
+  }
+  return rows.map((row) => ({
+    layer: "durable",
+    content: row.summary,
+    relevance: 0.9,
+    source: `durable:${row.id}`
+  }));
+}
+function buildWhereClause(resolved, kind, source, filePath, projectRoot) {
+  const clauses = [];
+  const params = [];
+  if (projectRoot) {
+    const scope = buildProjectScopeClause("ce.project_root", projectRoot);
+    clauses.push(scope.clause);
+    params.push(...scope.params);
+  }
+  if (resolved) {
+    clauses.push("ce.timestamp >= ?");
+    params.push(resolved.from);
+    clauses.push("ce.timestamp < ?");
+    params.push(resolved.to);
+  }
+  if (kind) {
+    clauses.push("ce.kind = ?");
+    params.push(kind);
+  }
+  if (source) {
+    clauses.push("ce.source = ?");
+    params.push(source);
+  }
+  if (filePath) {
+    clauses.push("ce.event_id IN (SELECT event_id FROM event_files WHERE file_path = ?)");
+    params.push(filePath);
+  }
+  return { clauses, params };
+}
+function searchConversationFts(query, db, resolved, opts) {
+  const ftsQuery = sanitizeFtsQuery(query);
+  if (!ftsQuery) return [];
+  const { clauses, params } = buildWhereClause(
+    resolved,
+    opts.kind,
+    opts.source,
+    opts.filePath,
+    opts.projectRoot
+  );
+  const whereStr = clauses.length > 0 ? `AND ${clauses.join(" AND ")}` : "";
+  const sql = `
+    SELECT ce.id, ce.event_id, ce.kind, ce.payload_json, ce.timestamp,
+           ce.significance, ce.session_id,
+           rank AS fts_rank
+    FROM conversation_fts
+    JOIN conversation_events ce ON ce.id = conversation_fts.rowid
+    WHERE conversation_fts MATCH ?
+    ${whereStr}
+    ORDER BY rank
+    LIMIT ? OFFSET ?
+  `;
+  const allParams = [ftsQuery, ...params, opts.limit, opts.offset];
+  let rows;
+  try {
+    rows = db.all(sql, allParams);
+  } catch {
+    return [];
+  }
+  return scoreConversationResults(rows);
+}
+function searchConversationLike(query, db, resolved, opts) {
+  const { clauses, params } = buildWhereClause(
+    resolved,
+    opts.kind,
+    opts.source,
+    opts.filePath,
+    opts.projectRoot
+  );
+  clauses.push("ce.payload_json LIKE ?");
+  params.push(`%${query}%`);
+  const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
+  const sql = `
+    SELECT ce.id, ce.event_id, ce.kind, ce.payload_json, ce.timestamp,
+           ce.significance, ce.session_id
+    FROM conversation_events ce
+    ${whereStr}
+    ORDER BY ce.timestamp DESC
+    LIMIT ? OFFSET ?
+  `;
+  const allParams = [...params, opts.limit, opts.offset];
+  let rows;
+  try {
+    rows = db.all(sql, allParams);
+  } catch {
+    return [];
+  }
+  if (rows.length === 0) return [];
+  const timestamps = rows.map((r) => r.timestamp);
+  const minTs = Math.min(...timestamps);
+  const maxTs = Math.max(...timestamps);
+  const range2 = maxTs - minTs;
+  return rows.map((row) => {
+    const recency = range2 > 0 ? (row.timestamp - minTs) / range2 : 1;
+    const relevance = 0.5 + 0.2 * recency;
+    return {
+      layer: "conversation",
+      content: summarizePayload(row.kind, row.payload_json),
+      relevance: Math.round(relevance * 100) / 100,
+      source: `${row.kind}:${row.event_id}`
+    };
+  });
+}
+function scoreConversationResults(rows) {
+  if (rows.length === 0) return [];
+  const scores = rows.map((r) => -r.fts_rank);
+  const maxScore = Math.max(...scores);
+  const timestamps = rows.map((r) => r.timestamp);
+  const minTs = Math.min(...timestamps);
+  const maxTs = Math.max(...timestamps);
+  const tsRange = maxTs - minTs;
+  return rows.map((row, i) => {
+    const rawScore = scores[i] ?? 0;
+    const ftsNormalized = maxScore > 0 ? rawScore / maxScore : 1;
+    const recency = tsRange > 0 ? (row.timestamp - minTs) / tsRange : 1;
+    const relevance = ftsNormalized + 0.2 * recency;
+    return {
+      layer: "conversation",
+      content: summarizePayload(row.kind, row.payload_json),
+      relevance: Math.round(relevance * 100) / 100,
+      source: `${row.kind}:${row.event_id}`
+    };
+  });
+}
+function handleSearch(query, deps, options) {
+  const { db, semantic, fts5 } = deps;
+  const convLimit = options?.limit ?? 20;
+  const convOffset = options?.offset ?? 0;
+  const projectRoot = options?.projectRoot ? normalizeProjectRootForScope(options.projectRoot) : void 0;
+  const structural = searchStructural(query, db);
+  const semanticResults = projectRoot ? searchSemanticScoped(query, db, projectRoot) : semantic.search(query, 10).map((entry) => ({
+    layer: "semantic",
+    content: entry.content,
+    relevance: 0.8,
+    source: `memory:${entry.id}`
+  }));
+  const durable = searchDurable(query, db, fts5, projectRoot);
+  const episodic = searchEpisodic(query, db, projectRoot);
+  let conversation = [];
+  const resolved = options?.timeRange ? resolveTimeRange(options.timeRange, options.now) : void 0;
+  const convOpts = {
+    kind: options?.kind,
+    source: options?.source,
+    filePath: options?.filePath,
+    projectRoot,
+    limit: convLimit,
+    offset: convOffset
+  };
+  if (fts5) {
+    conversation = searchConversationFts(query, db, resolved, convOpts);
+  } else {
+    conversation = searchConversationLike(query, db, resolved, convOpts);
+  }
+  const combined = [...structural, ...durable, ...semanticResults, ...episodic, ...conversation];
+  combined.sort((a, b) => b.relevance - a.relevance);
+  return combined.slice(0, 20);
+}
+
+// packages/core/src/tools/calendar.ts
+var DEFAULT_RANGE = { relative: "last_30d" };
+var DEFAULT_LIMIT = 90;
+function resolveRangeLabel(timeRange) {
+  return timeRange.relative ?? "custom";
+}
+function resolveRangeGranularity(timeRange) {
+  switch (timeRange.relative) {
+    case "today":
+    case "yesterday":
+      return "day";
+    case "this_week":
+      return "week";
+    case "this_month":
+    case "last_month":
+      return "month";
+    case "last_7d":
+    case "last_30d":
+      return "custom";
+    default:
+      return timeRange.relative ? void 0 : "custom";
+  }
+}
+function buildResolvedRange(timeRange, now) {
+  const resolved = resolveTimeRange(timeRange, now, "local");
+  const granularity = resolveRangeGranularity(timeRange);
+  return {
+    label: resolveRangeLabel(timeRange),
+    from: resolved.from,
+    to: resolved.to,
+    fromIso: new Date(resolved.from).toISOString(),
+    toIso: new Date(resolved.to).toISOString(),
+    ...granularity ? { granularity } : {}
+  };
+}
+function normalizeLimit(limit) {
+  if (limit === void 0 || !Number.isFinite(limit)) {
+    return DEFAULT_LIMIT;
+  }
+  return Math.max(0, Math.trunc(limit));
+}
+function bucketFor(timestamp, granularity) {
+  switch (granularity) {
+    case "day":
+      return dayBucket(timestamp, { mode: "local" });
+    case "week":
+      return weekBucket(timestamp, { mode: "local" });
+    case "month":
+      return monthBucket(timestamp, { mode: "local" });
+  }
+}
+function getOrCreateBucket(buckets, timestamp, granularity) {
+  const range2 = bucketFor(timestamp, granularity);
+  const existing = buckets.get(range2.key);
+  if (existing) {
+    return existing;
+  }
+  const created = {
+    key: range2.key,
+    label: range2.label,
+    from: range2.from,
+    to: range2.to,
+    eventCount: 0,
+    durableCount: 0,
+    sessionIds: /* @__PURE__ */ new Set(),
+    topicKeys: /* @__PURE__ */ new Set()
+  };
+  buckets.set(range2.key, created);
+  return created;
+}
+function finalizeBucket(bucket) {
+  return {
+    key: bucket.key,
+    label: bucket.label,
+    from: bucket.from,
+    to: bucket.to,
+    eventCount: bucket.eventCount,
+    sessionCount: bucket.sessionIds.size,
+    durableCount: bucket.durableCount,
+    topicKeys: Array.from(bucket.topicKeys).sort()
+  };
+}
+function handleCalendar(deps, options) {
+  const { db } = deps;
+  const now = deps.now ?? Date.now();
+  const projectRoot = normalizeProjectRootForScope(options?.projectRoot ?? deps.projectRoot);
+  const timeRange = options?.timeRange ?? DEFAULT_RANGE;
+  const resolvedRange = buildResolvedRange(timeRange, now);
+  const granularity = options?.granularity ?? "day";
+  const limit = normalizeLimit(options?.limit);
+  const eventRows = db.all(
+    `SELECT timestamp, session_id
+     FROM conversation_events
+     WHERE project_root = ?
+       AND timestamp >= ?
+       AND timestamp < ?
+     ORDER BY timestamp ASC`,
+    [projectRoot, resolvedRange.from, resolvedRange.to]
+  );
+  const durableRows = db.all(
+    `SELECT updated_at, topic_key
+     FROM durable_memories
+     WHERE project_root = ?
+       AND updated_at >= ?
+       AND updated_at < ?
+     ORDER BY updated_at ASC`,
+    [projectRoot, resolvedRange.from, resolvedRange.to]
+  );
+  const buckets = /* @__PURE__ */ new Map();
+  for (const row of eventRows) {
+    const bucket = getOrCreateBucket(buckets, row.timestamp, granularity);
+    bucket.eventCount += 1;
+    if (row.session_id) {
+      bucket.sessionIds.add(row.session_id);
+    }
+  }
+  for (const row of durableRows) {
+    const bucket = getOrCreateBucket(buckets, row.updated_at, granularity);
+    bucket.durableCount += 1;
+    if (row.topic_key) {
+      bucket.topicKeys.add(row.topic_key);
+    }
+  }
+  return {
+    projectRoot,
+    resolvedRange,
+    granularity,
+    buckets: Array.from(buckets.values()).sort((left, right) => left.from - right.from).slice(0, limit).map(finalizeBucket)
+  };
+}
+
 // packages/core/src/tools/codex-diagnostics.ts
-import { closeSync, existsSync as existsSync7, openSync } from "node:fs";
+import { closeSync, existsSync as existsSync7, openSync, readFileSync as readFileSync6, statSync as statSync3 } from "node:fs";
 function collectCodexDiagnostics(deps) {
   const env = deps.env ?? process.env;
   const codexHome = env.CODEX_HOME;
@@ -33690,6 +34506,10 @@ function collectCodexDiagnostics(deps) {
   const sessionsDirExists = existsSync7(sessionsDir);
   const rolloutFiles = sessionsDirExists ? findCodexRolloutFiles(sessionsDir) : [];
   const latestRolloutPath = rolloutFiles.at(-1);
+  let latestRolloutTimestamp;
+  if (latestRolloutPath) {
+    latestRolloutTimestamp = latestCodexRolloutEventTimestamp(latestRolloutPath) ?? latestCodexRolloutMtime(latestRolloutPath);
+  }
   const importedEventCount = deps.db.get("SELECT COUNT(*) AS cnt FROM ingest_log WHERE source = ?", ["codex"])?.cnt ?? 0;
   const latestImported = deps.db.get(
     `SELECT session_id, timestamp
@@ -33709,6 +34529,7 @@ function collectCodexDiagnostics(deps) {
     rolloutFilesFound: rolloutFiles.length,
     latestRolloutPath: latestRolloutPath ? normalizePathForIdentity(latestRolloutPath) : void 0,
     latestRolloutReadable: latestRolloutPath ? isReadable(latestRolloutPath) : void 0,
+    latestRolloutTimestamp,
     importedEventCount,
     latestImportedSessionId: latestImported?.session_id ?? void 0,
     latestImportedTimestamp: latestImported?.timestamp
@@ -33721,6 +34542,32 @@ function isReadable(filePath) {
     return true;
   } catch {
     return false;
+  }
+}
+function timestampFromValue(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    return Number.isFinite(parsed) ? parsed : void 0;
+  }
+  return void 0;
+}
+function latestCodexRolloutEventTimestamp(filePath) {
+  try {
+    const parsed = parseCodexJsonl(readFileSync6(filePath, "utf8"), filePath);
+    const timestamps = parsed.records.map((record2) => timestampFromValue(record2.raw.timestamp)).filter((timestamp) => timestamp !== void 0);
+    return timestamps.length > 0 ? Math.max(...timestamps) : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function latestCodexRolloutMtime(filePath) {
+  try {
+    return statSync3(filePath).mtimeMs;
+  } catch {
+    return void 0;
   }
 }
 
@@ -34056,7 +34903,7 @@ function handleDoctor(deps) {
       fix: "Run memory_scan() to index project"
     });
   }
-  appendCodexChecks(checks, deps.codexDiagnostics);
+  appendCodexChecks(checks, deps.codexDiagnostics, deps.codexFreshnessThresholdMs);
   let passed = 0;
   let warnings = 0;
   let failures = 0;
@@ -34067,7 +34914,7 @@ function handleDoctor(deps) {
   }
   return { checks, passed, warnings, failures };
 }
-function appendCodexChecks(checks, codexDiagnostics) {
+function appendCodexChecks(checks, codexDiagnostics, freshnessThresholdMs = DEFAULT_CODEX_FRESHNESS_THRESHOLD_MS) {
   if (!codexDiagnostics) {
     return;
   }
@@ -34153,12 +35000,20 @@ function appendCodexChecks(checks, codexDiagnostics) {
       message: "redacted capture is the recommended rich recall mode and has retained Codex events."
     });
   }
-  checks.push({
-    name: "Codex desktop parity",
-    status: "warn",
-    message: "Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.",
-    fix: "Verify memory_status and memory_recall inside the target desktop/extension surface before claiming parity."
-  });
+  if (codexDiagnostics.clientSurface === "desktop" && codexDiagnostics.importedEventCount > 0) {
+    checks.push({
+      name: "Codex desktop parity",
+      status: "ok",
+      message: "Codex Desktop MCP path has retained Codex events in this environment."
+    });
+  } else {
+    checks.push({
+      name: "Codex desktop parity",
+      status: "warn",
+      message: "Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.",
+      fix: "Verify memory_status and memory_recall inside the target desktop/extension surface before claiming parity."
+    });
+  }
   checks.push(
     codexDiagnostics.importedEventCount > 0 ? {
       name: "Codex imported events",
@@ -34182,6 +35037,39 @@ function appendCodexChecks(checks, codexDiagnostics) {
       message: details
     });
   }
+  appendCodexFreshnessCheck(checks, codexDiagnostics, freshnessThresholdMs);
+}
+var DEFAULT_CODEX_FRESHNESS_THRESHOLD_MS = 5 * 60 * 1e3;
+function appendCodexFreshnessCheck(checks, codexDiagnostics, freshnessThresholdMs) {
+  const latestRolloutTimestamp = codexDiagnostics.latestRolloutTimestamp;
+  if (latestRolloutTimestamp === void 0) {
+    return;
+  }
+  const latestImportedTimestamp = codexDiagnostics.latestImportedTimestamp;
+  if (latestImportedTimestamp === void 0) {
+    checks.push({
+      name: "Codex freshness",
+      status: "warn",
+      message: "Codex rollout timestamp exists, but no imported Codex event timestamp was found.",
+      fix: "Use memory_import_codex to catch up Codex session import."
+    });
+    return;
+  }
+  const lagMs = Math.max(0, latestRolloutTimestamp - latestImportedTimestamp);
+  if (lagMs <= freshnessThresholdMs) {
+    checks.push({
+      name: "Codex freshness",
+      status: "ok",
+      message: `Codex import appears fresh (lag ${lagMs} ms).`
+    });
+    return;
+  }
+  checks.push({
+    name: "Codex freshness",
+    status: "warn",
+    message: `Codex import may be stale (lag ${lagMs} ms).`,
+    fix: "Use memory_import_codex to catch up Codex session import."
+  });
 }
 
 // packages/core/src/tools/explore.ts
@@ -34189,7 +35077,7 @@ function basename3(relativePath) {
   const slash = relativePath.lastIndexOf("/");
   return slash === -1 ? relativePath : relativePath.slice(slash + 1);
 }
-function parseExports(json2) {
+function parseExports2(json2) {
   if (!json2) return [];
   try {
     return JSON.parse(json2);
@@ -34221,7 +35109,7 @@ function formatReExportName(entry) {
 }
 function formatFile(row) {
   const name = basename3(row.relative_path);
-  const exports = parseExports(row.exports_json);
+  const exports = parseExports2(row.exports_json);
   const imports = parseImports(row.imports_json);
   const reExports = parseReExports(row.re_exports_json);
   const confidence = row.confidence_level ?? "unknown";
@@ -34362,7 +35250,7 @@ function handleForget(query, deps, confirmToken) {
 }
 
 // packages/core/src/tools/import-codex.ts
-import { readdirSync as readdirSync4, readFileSync as readFileSync6 } from "node:fs";
+import { readdirSync as readdirSync4, readFileSync as readFileSync7 } from "node:fs";
 import { join as join9 } from "node:path";
 function handleImportCodex(params, deps) {
   const captureMode = resolveCodexCaptureMode(deps.env);
@@ -34420,7 +35308,8 @@ function handleImportCodex(params, deps) {
       ingestMetrics = deps.processInbox(deps.inboxDir, deps.db, {
         batchLimit: 0,
         captureLevel: deps.captureLevel,
-        fts5Available: deps.fts5Available
+        fts5Available: deps.fts5Available,
+        projectRoot: deps.projectRoot
       });
       deps.runDurableExtraction?.(deps.db, { source: "codex" });
       const storedEventIds = loadIngestedCodexEventIds(deps.db);
@@ -34482,7 +35371,7 @@ function collectNewInboxEventIds(inboxDir, before) {
         continue;
       }
       try {
-        const parsed = JSON.parse(readFileSync6(join9(inboxDir, file2), "utf-8"));
+        const parsed = JSON.parse(readFileSync7(join9(inboxDir, file2), "utf-8"));
         if (typeof parsed.event_id === "string" && parsed.event_id.length > 0) {
           eventIds.add(parsed.event_id);
         }
@@ -34495,12 +35384,108 @@ function collectNewInboxEventIds(inboxDir, before) {
   return eventIds;
 }
 
-// packages/core/src/tools/purge.ts
-import { readdirSync as readdirSync5, statSync as statSync3, unlinkSync as unlinkSync3 } from "node:fs";
+// packages/core/src/tools/project-state.ts
+import { execFileSync as execFileSync2 } from "node:child_process";
+import { existsSync as existsSync8, readFileSync as readFileSync8 } from "node:fs";
 import { join as join10 } from "node:path";
+var GIT_STATE_CACHE_MS = 5e3;
+var gitStateCache;
+function gitOutput(cwd, args) {
+  return execFileSync2("git", args, {
+    cwd,
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "ignore"],
+    timeout: 750
+  }).trim();
+}
+function readGitState(cwd) {
+  const now = Date.now();
+  if (gitStateCache && gitStateCache.cwd === cwd && now - gitStateCache.checkedAt < GIT_STATE_CACHE_MS) {
+    return gitStateCache.state;
+  }
+  try {
+    const state = {
+      gitHead: gitOutput(cwd, ["rev-parse", "--short", "HEAD"]),
+      gitBranch: gitOutput(cwd, ["branch", "--show-current"]),
+      dirty: gitOutput(cwd, ["status", "--porcelain", "--untracked-files=no"]).length > 0
+    };
+    gitStateCache = { cwd, checkedAt: now, state };
+    return state;
+  } catch (error48) {
+    const state = {
+      timedOut: error48 instanceof Error && /timeout/i.test(error48.message),
+      unavailable: true
+    };
+    gitStateCache = { cwd, checkedAt: now, state };
+    return state;
+  }
+}
+function readPackageMetadata(projectRoot) {
+  const packagePath = join10(projectRoot, "package.json");
+  if (!existsSync8(packagePath)) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(readFileSync8(packagePath, "utf8"));
+    return {
+      name: typeof parsed.name === "string" ? parsed.name : void 0,
+      version: typeof parsed.version === "string" ? parsed.version : void 0
+    };
+  } catch {
+    return {};
+  }
+}
+function handleProjectState(deps) {
+  const projectRoot = normalizeProjectRootForScope(deps.projectRoot);
+  const packageMetadata = readPackageMetadata(deps.projectRoot);
+  const activeDurableCount = deps.db.get(
+    "SELECT COUNT(*) AS cnt FROM durable_memories WHERE state = ? AND project_root = ?",
+    ["active", projectRoot]
+  )?.cnt ?? 0;
+  const latest = deps.db.get(
+    `SELECT timestamp
+     FROM conversation_events
+     WHERE project_root = ?
+     ORDER BY timestamp DESC, id DESC
+     LIMIT 1`,
+    [projectRoot]
+  );
+  const nextSteps = deps.db.all(
+    `SELECT summary
+       FROM durable_memories
+       WHERE memory_type = ? AND state = ? AND project_root = ?
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 5`,
+    ["next_step", "active", projectRoot]
+  ).map((row) => row.summary);
+  const git = (deps.readGitState ?? readGitState)(deps.projectRoot);
+  const warnings = [
+    ...latest ? [] : ["No conversation events found for this project."],
+    ...git.timedOut ? ["Git state lookup timed out; repo state may be incomplete."] : [],
+    ...!git.timedOut && git.unavailable ? ["Git state lookup failed; repo state may be incomplete."] : []
+  ];
+  return {
+    projectRoot,
+    projectHash: projectHash(projectRoot),
+    packageName: packageMetadata.name,
+    packageVersion: packageMetadata.version,
+    gitHead: git.gitHead,
+    gitBranch: git.gitBranch,
+    dirty: git.dirty,
+    activeDurableCount,
+    latestConversationTimestamp: latest?.timestamp,
+    latestConversationIso: latest ? new Date(latest.timestamp).toISOString() : void 0,
+    warnings,
+    nextSteps
+  };
+}
+
+// packages/core/src/tools/purge.ts
+import { readdirSync as readdirSync5, statSync as statSync4, unlinkSync as unlinkSync3 } from "node:fs";
+import { join as join11 } from "node:path";
 function getDbSizeBytes(dbPath) {
   try {
-    return statSync3(dbPath).size;
+    return statSync4(dbPath).size;
   } catch {
     return 0;
   }
@@ -34548,7 +35533,7 @@ function handlePurge(deps, confirmToken) {
       const inboxFiles = readdirSync5(deps.inboxDir).filter((f) => f.endsWith(".json"));
       for (const f of inboxFiles) {
         try {
-          unlinkSync3(join10(deps.inboxDir, f));
+          unlinkSync3(join11(deps.inboxDir, f));
         } catch {
         }
       }
@@ -34562,323 +35547,6 @@ function handlePurge(deps, confirmToken) {
   };
 }
 
-// packages/core/src/tools/search.ts
-function parseExports2(json2) {
-  if (!json2) return [];
-  try {
-    return JSON.parse(json2);
-  } catch {
-    return [];
-  }
-}
-function summarizePayload(kind, payloadJson) {
-  if (!payloadJson) return kind;
-  try {
-    const payload = JSON.parse(payloadJson);
-    switch (kind) {
-      case "user_prompt": {
-        const prompt = typeof payload.prompt === "string" ? payload.prompt : "";
-        return prompt.length > 120 ? `${prompt.slice(0, 117)}...` : prompt;
-      }
-      case "ai_response": {
-        const response = typeof payload.response === "string" ? payload.response : "";
-        return response.length > 120 ? `${response.slice(0, 117)}...` : response;
-      }
-      case "tool_use": {
-        const tool = typeof payload.tool === "string" ? payload.tool : "";
-        const files = Array.isArray(payload.files) ? payload.files : [];
-        const status = typeof payload.status === "string" ? payload.status : "";
-        const fileStr = files.length > 0 ? ` [${files.join(", ")}]` : "";
-        return `${tool}${fileStr} (${status})`;
-      }
-      case "file_diff": {
-        const path = typeof payload.path === "string" ? payload.path : "";
-        const added = typeof payload.added === "number" ? payload.added : 0;
-        const removed = typeof payload.removed === "number" ? payload.removed : 0;
-        return `${path} (+${added}/-${removed})`;
-      }
-      case "session_start": {
-        const tool = typeof payload.tool === "string" ? payload.tool : "";
-        return `session_start: ${tool}`;
-      }
-      case "session_end": {
-        const summary = typeof payload.summary === "string" ? payload.summary : "";
-        return summary ? `session_end: ${summary}` : "session_end";
-      }
-      default:
-        return kind;
-    }
-  } catch {
-    return kind;
-  }
-}
-function setStartOfDay(date5, mode) {
-  if (mode === "utc") {
-    date5.setUTCHours(0, 0, 0, 0);
-    return;
-  }
-  date5.setHours(0, 0, 0, 0);
-}
-function resolveTimeRange(range2, referenceNow, mode = "local") {
-  const now = referenceNow ?? Date.now();
-  if (range2.relative) {
-    switch (range2.relative) {
-      case "today": {
-        const start = new Date(now);
-        setStartOfDay(start, mode);
-        return { from: start.getTime(), to: now };
-      }
-      case "yesterday": {
-        const startOfToday = new Date(now);
-        setStartOfDay(startOfToday, mode);
-        const startOfYesterday = new Date(startOfToday);
-        if (mode === "utc") {
-          startOfYesterday.setUTCDate(startOfYesterday.getUTCDate() - 1);
-        } else {
-          startOfYesterday.setDate(startOfYesterday.getDate() - 1);
-        }
-        return { from: startOfYesterday.getTime(), to: startOfToday.getTime() };
-      }
-      case "this_week": {
-        const monday = new Date(now);
-        const dayOfWeek = mode === "utc" ? monday.getUTCDay() : monday.getDay();
-        const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
-        if (mode === "utc") {
-          monday.setUTCDate(monday.getUTCDate() - diff);
-        } else {
-          monday.setDate(monday.getDate() - diff);
-        }
-        setStartOfDay(monday, mode);
-        return { from: monday.getTime(), to: now };
-      }
-      case "last_7d":
-        return { from: now - 7 * 24 * 3600 * 1e3, to: now };
-      case "last_30d":
-        return { from: now - 30 * 24 * 3600 * 1e3, to: now };
-    }
-  }
-  return {
-    from: range2.from ?? 0,
-    to: range2.to ?? now
-  };
-}
-function searchStructural(query, db) {
-  const results = [];
-  const lowerQuery = query.toLowerCase();
-  const files = db.all("SELECT * FROM files");
-  for (const file2 of files) {
-    const exports = parseExports2(file2.exports_json);
-    let exportMatched = false;
-    for (const exp of exports) {
-      if (exp.name.toLowerCase().includes(lowerQuery)) {
-        results.push({
-          layer: "structural",
-          content: `${file2.relative_path} -> ${exp.name}()`,
-          relevance: 1,
-          source: file2.relative_path
-        });
-        exportMatched = true;
-      }
-    }
-    if (!exportMatched && file2.relative_path.toLowerCase().includes(lowerQuery)) {
-      results.push({
-        layer: "structural",
-        content: file2.relative_path,
-        relevance: 0.5,
-        source: file2.relative_path
-      });
-    }
-  }
-  return results;
-}
-function searchEpisodic(query, db) {
-  const lowerQuery = query.toLowerCase();
-  const rows = db.all(
-    "SELECT * FROM memories WHERE layer='episodic' AND content LIKE ? ORDER BY updated_at DESC",
-    [`%${lowerQuery}%`]
-  );
-  return rows.map((row) => ({
-    layer: "episodic",
-    content: row.content,
-    relevance: 0.6,
-    source: `session:${row.session_id ?? "unknown"}`
-  }));
-}
-function searchDurable(query, db, fts5) {
-  let rows = [];
-  if (fts5) {
-    const sanitized = sanitizeFtsQuery(query);
-    if (sanitized) {
-      try {
-        rows = db.all(
-          `SELECT dm.id, dm.summary, dm.updated_at
-           FROM durable_memories_fts dfts
-           JOIN durable_memories dm ON dm.id = dfts.rowid
-           WHERE dfts MATCH ? AND dm.state = 'active'
-           ORDER BY dm.updated_at DESC, dm.id DESC
-           LIMIT 10`,
-          [sanitized]
-        );
-      } catch {
-        rows = [];
-      }
-    }
-  }
-  if (rows.length === 0) {
-    rows = db.all(
-      `SELECT id, summary, updated_at
-       FROM durable_memories
-       WHERE state = 'active' AND summary LIKE ?
-       ORDER BY updated_at DESC, id DESC
-       LIMIT 10`,
-      [`%${query}%`]
-    );
-  }
-  return rows.map((row) => ({
-    layer: "durable",
-    content: row.summary,
-    relevance: 0.9,
-    source: `durable:${row.id}`
-  }));
-}
-function buildWhereClause(resolved, kind, source, filePath) {
-  const clauses = [];
-  const params = [];
-  if (resolved) {
-    clauses.push("ce.timestamp >= ?");
-    params.push(resolved.from);
-    clauses.push("ce.timestamp <= ?");
-    params.push(resolved.to);
-  }
-  if (kind) {
-    clauses.push("ce.kind = ?");
-    params.push(kind);
-  }
-  if (source) {
-    clauses.push("ce.source = ?");
-    params.push(source);
-  }
-  if (filePath) {
-    clauses.push("ce.event_id IN (SELECT event_id FROM event_files WHERE file_path = ?)");
-    params.push(filePath);
-  }
-  return { clauses, params };
-}
-function searchConversationFts(query, db, resolved, opts) {
-  const ftsQuery = sanitizeFtsQuery(query);
-  if (!ftsQuery) return [];
-  const { clauses, params } = buildWhereClause(resolved, opts.kind, opts.source, opts.filePath);
-  const whereStr = clauses.length > 0 ? `AND ${clauses.join(" AND ")}` : "";
-  const sql = `
-    SELECT ce.id, ce.event_id, ce.kind, ce.payload_json, ce.timestamp,
-           ce.significance, ce.session_id,
-           rank AS fts_rank
-    FROM conversation_fts
-    JOIN conversation_events ce ON ce.id = conversation_fts.rowid
-    WHERE conversation_fts MATCH ?
-    ${whereStr}
-    ORDER BY rank
-    LIMIT ? OFFSET ?
-  `;
-  const allParams = [ftsQuery, ...params, opts.limit, opts.offset];
-  let rows;
-  try {
-    rows = db.all(sql, allParams);
-  } catch {
-    return [];
-  }
-  return scoreConversationResults(rows);
-}
-function searchConversationLike(query, db, resolved, opts) {
-  const { clauses, params } = buildWhereClause(resolved, opts.kind, opts.source, opts.filePath);
-  clauses.push("ce.payload_json LIKE ?");
-  params.push(`%${query}%`);
-  const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
-  const sql = `
-    SELECT ce.id, ce.event_id, ce.kind, ce.payload_json, ce.timestamp,
-           ce.significance, ce.session_id
-    FROM conversation_events ce
-    ${whereStr}
-    ORDER BY ce.timestamp DESC
-    LIMIT ? OFFSET ?
-  `;
-  const allParams = [...params, opts.limit, opts.offset];
-  let rows;
-  try {
-    rows = db.all(sql, allParams);
-  } catch {
-    return [];
-  }
-  if (rows.length === 0) return [];
-  const timestamps = rows.map((r) => r.timestamp);
-  const minTs = Math.min(...timestamps);
-  const maxTs = Math.max(...timestamps);
-  const range2 = maxTs - minTs;
-  return rows.map((row) => {
-    const recency = range2 > 0 ? (row.timestamp - minTs) / range2 : 1;
-    const relevance = 0.5 + 0.2 * recency;
-    return {
-      layer: "conversation",
-      content: summarizePayload(row.kind, row.payload_json),
-      relevance: Math.round(relevance * 100) / 100,
-      source: `${row.kind}:${row.event_id}`
-    };
-  });
-}
-function scoreConversationResults(rows) {
-  if (rows.length === 0) return [];
-  const scores = rows.map((r) => -r.fts_rank);
-  const maxScore = Math.max(...scores);
-  const timestamps = rows.map((r) => r.timestamp);
-  const minTs = Math.min(...timestamps);
-  const maxTs = Math.max(...timestamps);
-  const tsRange = maxTs - minTs;
-  return rows.map((row, i) => {
-    const rawScore = scores[i] ?? 0;
-    const ftsNormalized = maxScore > 0 ? rawScore / maxScore : 1;
-    const recency = tsRange > 0 ? (row.timestamp - minTs) / tsRange : 1;
-    const relevance = ftsNormalized + 0.2 * recency;
-    return {
-      layer: "conversation",
-      content: summarizePayload(row.kind, row.payload_json),
-      relevance: Math.round(relevance * 100) / 100,
-      source: `${row.kind}:${row.event_id}`
-    };
-  });
-}
-function handleSearch(query, deps, options) {
-  const { db, semantic, fts5 } = deps;
-  const convLimit = options?.limit ?? 20;
-  const convOffset = options?.offset ?? 0;
-  const structural = searchStructural(query, db);
-  const semanticEntries = semantic.search(query, 10);
-  const semanticResults = semanticEntries.map((entry) => ({
-    layer: "semantic",
-    content: entry.content,
-    relevance: 0.8,
-    source: `memory:${entry.id}`
-  }));
-  const durable = searchDurable(query, db, fts5);
-  const episodic = searchEpisodic(query, db);
-  let conversation = [];
-  const resolved = options?.timeRange ? resolveTimeRange(options.timeRange) : void 0;
-  const convOpts = {
-    kind: options?.kind,
-    source: options?.source,
-    filePath: options?.filePath,
-    limit: convLimit,
-    offset: convOffset
-  };
-  if (fts5) {
-    conversation = searchConversationFts(query, db, resolved, convOpts);
-  } else {
-    conversation = searchConversationLike(query, db, resolved, convOpts);
-  }
-  const combined = [...structural, ...durable, ...semanticResults, ...episodic, ...conversation];
-  combined.sort((a, b) => b.relevance - a.relevance);
-  return combined.slice(0, 20);
-}
-
 // packages/core/src/tools/timeline.ts
 function handleTimeline(deps, options) {
   const { db } = deps;
@@ -34887,11 +35555,16 @@ function handleTimeline(deps, options) {
   const isSummary = options?.summary ?? false;
   const clauses = [];
   const params = [];
+  if (deps.projectRoot) {
+    const scope = buildProjectScopeClause("ce.project_root", deps.projectRoot);
+    clauses.push(scope.clause);
+    params.push(...scope.params);
+  }
   if (options?.timeRange) {
     const resolved = resolveTimeRange(options.timeRange, options.now);
     clauses.push("ce.timestamp >= ?");
     params.push(resolved.from);
-    clauses.push("ce.timestamp <= ?");
+    clauses.push("ce.timestamp < ?");
     params.push(resolved.to);
   }
   if (options?.kind) {
@@ -34905,7 +35578,7 @@ function handleTimeline(deps, options) {
   const whereStr = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
   const sql = `
     SELECT ce.event_id, ce.kind, ce.timestamp, ce.significance,
-           ce.session_id, ce.payload_json
+           ce.session_id, ce.project_root, ce.payload_json
     FROM conversation_events ce
     ${whereStr}
     ORDER BY ce.timestamp DESC
@@ -34919,7 +35592,8 @@ function handleTimeline(deps, options) {
       kind: row.kind,
       timestamp: row.timestamp,
       significance: row.significance,
-      sessionId: row.session_id
+      sessionId: row.session_id,
+      projectRoot: row.project_root ?? void 0
     };
     if (!isSummary) {
       entry.summary = summarizePayload(row.kind, row.payload_json);
@@ -34982,6 +35656,30 @@ function matchingTerms(text, queryTerms) {
 function shouldKeepByTerms(text, queryTerms) {
   return queryTerms.length === 0 || matchingTerms(text, queryTerms).length > 0;
 }
+function candidateDateFields(timestamp) {
+  if (timestamp === void 0) {
+    return {};
+  }
+  const mode = "local";
+  const day = dayBucket(timestamp, { mode });
+  const week = weekBucket(timestamp, { mode });
+  const month = monthBucket(timestamp, { mode });
+  return {
+    localDate: day.key,
+    weekKey: week.key,
+    monthKey: month.key
+  };
+}
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+}
+function hasExactTermOverlap(content, terms) {
+  const normalized = content.toLowerCase();
+  return terms.some((term) => {
+    const escaped = escapeRegExp(term.toLowerCase());
+    return new RegExp(`(^|[^\\p{L}\\p{N}_-])${escaped}([^\\p{L}\\p{N}_-]|$)`, "u").test(normalized);
+  });
+}
 function durableTypesForIntent(intent) {
   return DURABLE_TYPES_BY_INTENT[intent] ?? [];
 }
@@ -34993,7 +35691,9 @@ function loadDurableCandidates({
   parsedQuery,
   timeRange,
   now,
-  limit
+  limit,
+  projectRoot,
+  includeLegacyGlobal
 }) {
   const memoryTypes = durableTypesForIntent(parsedQuery.intent);
   if (memoryTypes.length === 0) {
@@ -35004,15 +35704,22 @@ function loadDurableCandidates({
   params.push("active");
   clauses.push(`memory_type IN (${memoryTypes.map(() => "?").join(", ")})`);
   params.push(...memoryTypes);
+  if (projectRoot) {
+    const scope = buildProjectScopeClause("project_root", projectRoot, {
+      includeLegacyGlobal
+    });
+    clauses.push(scope.clause);
+    params.push(...scope.params);
+  }
   if (timeRange) {
     const resolved = resolveTimeRange(timeRange, now);
     clauses.push("updated_at >= ?");
     params.push(resolved.from);
-    clauses.push("updated_at <= ?");
+    clauses.push("updated_at < ?");
     params.push(resolved.to);
   }
   const rows = db.all(
-    `SELECT id, topic_key, memory_type, summary, updated_at
+    `SELECT id, topic_key, memory_type, summary, updated_at, project_root
      FROM durable_memories
      WHERE ${clauses.join(" AND ")}
      ORDER BY updated_at DESC, id DESC
@@ -35025,6 +35732,7 @@ function loadDurableCandidates({
     }
     return parsedQuery.topicHints.includes(row.topic_key ?? "") || shouldKeepByTerms(row.summary, parsedQuery.termVariants);
   }).map((row) => ({
+    projectRoot: row.project_root ?? void 0,
     headline: row.summary,
     whyMatched: `durable ${row.memory_type} memory`,
     eventIds: [],
@@ -35033,7 +35741,8 @@ function loadDurableCandidates({
     topicKey: row.topic_key ?? void 0,
     matchedTerms: matchingTerms(row.summary, parsedQuery.termVariants),
     sourceKind: "durable",
-    timestamp: row.updated_at
+    timestamp: row.updated_at,
+    ...candidateDateFields(row.updated_at)
   }));
 }
 function loadConversationCandidates({
@@ -35041,35 +35750,42 @@ function loadConversationCandidates({
   parsedQuery,
   timeRange,
   now,
-  limit
+  limit,
+  projectRoot
 }) {
   if (parsedQuery.termVariants.length > 0) {
     const params = [];
     const clauses = [];
+    if (projectRoot) {
+      const scope = buildProjectScopeClause("ce.project_root", projectRoot);
+      clauses.push(scope.clause);
+      params.push(...scope.params);
+    }
     if (timeRange) {
       const resolved = resolveTimeRange(timeRange, now);
-      clauses.push("timestamp >= ?");
+      clauses.push("ce.timestamp >= ?");
       params.push(resolved.from);
-      clauses.push("timestamp <= ?");
+      clauses.push("ce.timestamp < ?");
       params.push(resolved.to);
     }
     const termClauses = parsedQuery.termVariants.map(
-      () => "LOWER(COALESCE(payload_json, ?)) LIKE ?"
+      () => "LOWER(COALESCE(ce.payload_json, ?)) LIKE ?"
     );
     const termParams = parsedQuery.termVariants.flatMap((term) => ["", `%${term.toLowerCase()}%`]);
     clauses.push(`(${termClauses.join(" OR ")})`);
     params.push(...termParams);
     const rows = db.all(
-      `SELECT event_id, kind, timestamp, payload_json, session_id
-       FROM conversation_events
+      `SELECT ce.event_id, ce.kind, ce.timestamp, ce.payload_json, ce.session_id, ce.project_root
+       FROM conversation_events ce
        WHERE ${clauses.join(" AND ")}
-       ORDER BY timestamp DESC, id DESC
+       ORDER BY ce.timestamp DESC, ce.id DESC
        LIMIT ?`,
       [...params, limit]
     );
     return rows.map((row) => {
       const headline = summarizePayload(row.kind, row.payload_json);
       return {
+        projectRoot: row.project_root ?? void 0,
         sessionId: row.session_id ?? void 0,
         headline,
         whyMatched: "recent conversation context",
@@ -35079,12 +35795,13 @@ function loadConversationCandidates({
         matchedTerms: matchingTerms(headline, parsedQuery.termVariants),
         sourceKind: "conversation",
         timestamp: row.timestamp,
-        captureReason: row.kind
+        captureReason: row.kind,
+        ...candidateDateFields(row.timestamp)
       };
     }).filter((candidate) => candidate.matchedTerms.length > 0);
   }
   const entries = handleTimeline(
-    { db },
+    { db, projectRoot },
     {
       timeRange,
       summary: false,
@@ -35093,6 +35810,7 @@ function loadConversationCandidates({
     }
   );
   return entries.filter((entry) => typeof entry.summary === "string").map((entry) => ({
+    projectRoot: entry.projectRoot ?? void 0,
     sessionId: entry.sessionId ?? void 0,
     headline: entry.summary ?? entry.kind,
     whyMatched: "recent conversation context",
@@ -35102,7 +35820,8 @@ function loadConversationCandidates({
     matchedTerms: [],
     sourceKind: "conversation",
     timestamp: entry.timestamp,
-    captureReason: entry.kind
+    captureReason: entry.kind,
+    ...candidateDateFields(entry.timestamp)
   }));
 }
 function loadSemanticCandidates({
@@ -35110,52 +35829,129 @@ function loadSemanticCandidates({
   parsedQuery,
   timeRange,
   now,
-  limit
+  limit,
+  projectRoot,
+  includeLegacyGlobal,
+  requireExactTermOverlap
 }) {
   if (parsedQuery.termVariants.length === 0) {
     return [];
   }
   const params = [];
   const clauses = ["layer = 'semantic'"];
+  if (projectRoot) {
+    const scope = buildProjectScopeClause("project_root", projectRoot, {
+      includeLegacyGlobal
+    });
+    clauses.push(scope.clause);
+    params.push(...scope.params);
+  }
   if (timeRange) {
     const resolved = resolveTimeRange(timeRange, now);
     clauses.push("updated_at >= ?");
     params.push(resolved.from);
-    clauses.push("updated_at <= ?");
+    clauses.push("updated_at < ?");
     params.push(resolved.to);
   }
   const termClauses = parsedQuery.termVariants.map(() => "LOWER(content) LIKE ?");
   clauses.push(`(${termClauses.join(" OR ")})`);
   params.push(...parsedQuery.termVariants.map((term) => `%${term.toLowerCase()}%`));
   const rows = db.all(
-    `SELECT id, content, updated_at
+    `SELECT id, content, updated_at, project_root
      FROM memories
      WHERE ${clauses.join(" AND ")}
      ORDER BY updated_at DESC, id DESC
      LIMIT ?`,
     [...params, limit]
   );
-  return rows.map((row) => ({
+  const candidates = rows.map((row) => ({
+    projectRoot: row.project_root ?? void 0,
     headline: row.content,
-    whyMatched: `explicit semantic memory ${row.id}`,
+    whyMatched: row.project_root ? `explicit semantic memory ${row.id}` : `legacy semantic memory ${row.id}`,
     eventIds: [],
     durableMemoryIds: [],
     intent: parsedQuery.intent,
     matchedTerms: matchingTerms(row.content, parsedQuery.termVariants),
     sourceKind: "semantic",
-    timestamp: row.updated_at
+    timestamp: row.updated_at,
+    ...candidateDateFields(row.updated_at)
   })).filter((candidate) => candidate.matchedTerms.length > 0);
+  return requireExactTermOverlap ? candidates.filter((candidate) => hasExactTermOverlap(candidate.headline, parsedQuery.terms)) : candidates;
 }
 function loadRecallCandidates(options) {
-  return [
-    ...loadDurableCandidates(options),
-    ...loadSemanticCandidates(options),
-    ...loadConversationCandidates(options)
-  ];
+  const strictDurableCandidates = loadDurableCandidates(options);
+  const durableCandidates = options.projectRoot && strictDurableCandidates.length === 0 ? loadDurableCandidates({
+    ...options,
+    includeLegacyGlobal: true
+  }) : strictDurableCandidates;
+  const strictSemanticCandidates = loadSemanticCandidates(options);
+  const semanticCandidates = options.projectRoot && strictSemanticCandidates.length === 0 ? loadSemanticCandidates({
+    ...options,
+    includeLegacyGlobal: true,
+    requireExactTermOverlap: true
+  }) : strictSemanticCandidates;
+  const conversationCandidates = loadConversationCandidates(options);
+  return [...durableCandidates, ...semanticCandidates, ...conversationCandidates];
 }
 
 // packages/core/src/recall/temporal-parser.ts
 var DAY_MS = 24 * 60 * 60 * 1e3;
+var MONTH_LABELS_EN = [
+  "january",
+  "february",
+  "march",
+  "april",
+  "may",
+  "june",
+  "july",
+  "august",
+  "september",
+  "october",
+  "november",
+  "december"
+];
+var MONTH_LABELS_RU = [
+  "\u044F\u043D\u0432\u0430\u0440\u044C",
+  "\u0444\u0435\u0432\u0440\u0430\u043B\u044C",
+  "\u043C\u0430\u0440\u0442",
+  "\u0430\u043F\u0440\u0435\u043B\u044C",
+  "\u043C\u0430\u0439",
+  "\u0438\u044E\u043D\u044C",
+  "\u0438\u044E\u043B\u044C",
+  "\u0430\u0432\u0433\u0443\u0441\u0442",
+  "\u0441\u0435\u043D\u0442\u044F\u0431\u0440\u044C",
+  "\u043E\u043A\u0442\u044F\u0431\u0440\u044C",
+  "\u043D\u043E\u044F\u0431\u0440\u044C",
+  "\u0434\u0435\u043A\u0430\u0431\u0440\u044C"
+];
+var MONTH_NAMES = /* @__PURE__ */ new Map([
+  ["january", 0],
+  ["february", 1],
+  ["march", 2],
+  ["april", 3],
+  ["may", 4],
+  ["june", 5],
+  ["july", 6],
+  ["august", 7],
+  ["september", 8],
+  ["october", 9],
+  ["november", 10],
+  ["december", 11],
+  ["\u044F\u043D\u0432\u0430\u0440", 0],
+  ["\u0444\u0435\u0432\u0440\u0430\u043B", 1],
+  ["\u043C\u0430\u0440\u0442", 2],
+  ["\u0430\u043F\u0440\u0435\u043B", 3],
+  ["\u043C\u0430\u0439", 4],
+  ["\u043C\u0430\u0435", 4],
+  ["\u043C\u0430\u044F", 4],
+  ["\u0438\u044E\u043D", 5],
+  ["\u0438\u044E\u043B", 6],
+  ["\u0430\u0432\u0433\u0443\u0441\u0442", 7],
+  ["\u0441\u0435\u043D\u0442\u044F\u0431\u0440", 8],
+  ["\u043E\u043A\u0442\u044F\u0431\u0440", 9],
+  ["\u043D\u043E\u044F\u0431\u0440", 10],
+  ["\u0434\u0435\u043A\u0430\u0431\u0440", 11]
+]);
 var WEEKDAY_TO_UTC_DAY = /* @__PURE__ */ new Map([
   ["sunday", 0],
   ["monday", 1],
@@ -35175,23 +35971,63 @@ var WEEKDAY_TO_UTC_DAY = /* @__PURE__ */ new Map([
   ["\u0441\u0443\u0431\u0431\u043E\u0442\u0443", 6],
   ["\u0441\u0443\u0431\u0431\u043E\u0442\u0430", 6]
 ]);
-function startOfUtcDay(timestamp) {
-  const date5 = new Date(timestamp);
-  return Date.UTC(date5.getUTCFullYear(), date5.getUTCMonth(), date5.getUTCDate());
-}
-function range(label, from, to) {
+function range(label, from, to, granularity) {
   return {
     label,
     from,
     to,
     fromIso: new Date(from).toISOString(),
-    toIso: new Date(to).toISOString()
+    toIso: new Date(to).toISOString(),
+    ...granularity ? { granularity } : {}
   };
 }
 function normalizeQuestion(question) {
   return question.toLowerCase().replace(/\s+/g, " ").trim();
 }
-function parseDaysAgo(question, now) {
+function currentYear(now, mode) {
+  const date5 = new Date(now);
+  return mode === "utc" ? date5.getUTCFullYear() : date5.getFullYear();
+}
+function startOfMonthFor(year, month, mode) {
+  if (mode === "utc") {
+    return {
+      from: Date.UTC(year, month, 1),
+      to: Date.UTC(year, month + 1, 1)
+    };
+  }
+  return {
+    from: new Date(year, month, 1).getTime(),
+    to: new Date(year, month + 1, 1).getTime()
+  };
+}
+function hasMonthWord(question, monthWord) {
+  const escaped = monthWord.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  return new RegExp(`(^|[^\\p{L}])${escaped}\\p{L}*(?=$|[^\\p{L}])`, "u").test(question);
+}
+function parseMonthPhrase(question, now, mode) {
+  if (/\bthis\s+month\b/u.test(question) || question.includes("\u0432 \u044D\u0442\u043E\u043C \u043C\u0435\u0441\u044F\u0446\u0435")) {
+    const bucket = monthBucket(now, { mode });
+    return range(
+      question.includes("\u0432 \u044D\u0442\u043E\u043C \u043C\u0435\u0441\u044F\u0446\u0435") ? "\u0432 \u044D\u0442\u043E\u043C \u043C\u0435\u0441\u044F\u0446\u0435" : "this month",
+      bucket.from,
+      bucket.to,
+      "month"
+    );
+  }
+  const explicitYear = /\b(?<year>19\d{2}|20\d{2})\b/u.exec(question)?.groups?.year;
+  const year = explicitYear ? Number(explicitYear) : currentYear(now, mode);
+  for (const [monthWord, month] of MONTH_NAMES.entries()) {
+    if (!hasMonthWord(question, monthWord)) {
+      continue;
+    }
+    const { from, to } = startOfMonthFor(year, month, mode);
+    const isEnglish = /^[a-z]/u.test(monthWord);
+    const label = `${isEnglish ? MONTH_LABELS_EN[month] : MONTH_LABELS_RU[month]} ${year}`;
+    return range(label, from, to, "month");
+  }
+  return void 0;
+}
+function parseDaysAgo(question, now, mode) {
   const match = /\b(?<days>\d{1,3})\s+days?\s+ago\b/u.exec(question) ?? /(?<days>\d{1,3})\s+дн(?:я|ей|ь)\s+назад/u.exec(question);
   if (!match?.groups?.days) {
     return void 0;
@@ -35200,37 +36036,41 @@ function parseDaysAgo(question, now) {
   if (!Number.isInteger(days) || days < 1) {
     return void 0;
   }
-  const start = startOfUtcDay(now) - days * DAY_MS;
-  return range(match[0], start, start + DAY_MS);
+  const start = dayBucket(now, { mode }).from - days * DAY_MS;
+  return range(match[0], start, start + DAY_MS, "day");
 }
-function parseWeekday(question, now) {
+function parseWeekday(question, now, mode) {
   for (const [word, weekday] of WEEKDAY_TO_UTC_DAY.entries()) {
     if (!question.includes(word)) {
       continue;
     }
-    const todayStart = startOfUtcDay(now);
-    const currentDay = new Date(todayStart).getUTCDay();
+    const todayStart = dayBucket(now, { mode }).from;
+    const today = new Date(todayStart);
+    const currentDay = mode === "utc" ? today.getUTCDay() : today.getDay();
     const delta = (currentDay - weekday + 7) % 7 || 7;
     const start = todayStart - delta * DAY_MS;
-    return range(question.includes(`\u0432 ${word}`) ? `\u0432 ${word}` : word, start, start + DAY_MS);
+    return range(question.includes(`\u0432 ${word}`) ? `\u0432 ${word}` : word, start, start + DAY_MS, "day");
   }
   return void 0;
 }
-function parseRecallTemporalRange(question, now) {
+function parseRecallTemporalRange(question, now, options) {
+  const mode = options?.mode ?? "local";
   const normalized = normalizeQuestion(question);
-  const todayStart = startOfUtcDay(now);
+  const todayStart = dayBucket(now, { mode }).from;
   if (/\btoday\b/u.test(normalized) || normalized.includes("\u0441\u0435\u0433\u043E\u0434\u043D\u044F")) {
     return range(
       normalized.includes("\u0441\u0435\u0433\u043E\u0434\u043D\u044F") ? "\u0441\u0435\u0433\u043E\u0434\u043D\u044F" : "today",
       todayStart,
-      todayStart + DAY_MS
+      todayStart + DAY_MS,
+      "day"
     );
   }
   if (/\byesterday\b/u.test(normalized) || normalized.includes("\u0432\u0447\u0435\u0440\u0430")) {
     return range(
       normalized.includes("\u0432\u0447\u0435\u0440\u0430") ? "\u0432\u0447\u0435\u0440\u0430" : "yesterday",
       todayStart - DAY_MS,
-      todayStart
+      todayStart,
+      "day"
     );
   }
   if (normalized.includes("last week") || normalized.includes("\u043D\u0430 \u043F\u0440\u043E\u0448\u043B\u043E\u0439 \u043D\u0435\u0434\u0435\u043B\u0435")) {
@@ -35240,7 +36080,7 @@ function parseRecallTemporalRange(question, now) {
       now
     );
   }
-  return parseDaysAgo(normalized, now) ?? parseWeekday(normalized, now);
+  return parseMonthPhrase(normalized, now, mode) ?? parseDaysAgo(normalized, now, mode) ?? parseWeekday(normalized, now, mode);
 }
 
 // packages/core/src/recall/query-parser.ts
@@ -35354,12 +36194,14 @@ function detectTopicHints(normalized) {
     ({ patterns }) => patterns.some((pattern) => pattern.test(normalized))
   ).map(({ topic }) => topic);
 }
-function parseRecallQuery(question, now) {
+function parseRecallQuery(question, now, options) {
   const normalized = normalizeQuestion2(question);
   const normalizedTerms = normalized.length > 0 ? normalized.split(" ") : [];
   const terms = normalizedTerms.filter((term) => term.length >= 2 && !STOP_WORDS.has(term));
   const termVariants = unique2(terms.map(stemLite2));
-  const temporalRange = parseRecallTemporalRange(question, now);
+  const temporalRange = parseRecallTemporalRange(question, now, {
+    mode: options?.temporalMode ?? "local"
+  });
   return {
     original: question,
     normalized,
@@ -35465,13 +36307,15 @@ function buildRecallResult({
   question,
   candidates,
   resolvedRange,
+  searchedDateBuckets,
   matchedIntent,
   matchedTopics
 }) {
   const candidateGroups = groupRecallCandidates(candidates);
   const resultMetadata = {
     ...matchedIntent ? { matchedIntent } : {},
-    ...matchedTopics && matchedTopics.length > 0 ? { matchedTopics } : {}
+    ...matchedTopics && matchedTopics.length > 0 ? { matchedTopics } : {},
+    ...searchedDateBuckets ? { searchedDateBuckets } : {}
   };
   if (candidateGroups.length === 0) {
     return {
@@ -35558,9 +36402,46 @@ function recencyScore(timestamp, now) {
   }
   return 0;
 }
+function exactEntityTokens(values) {
+  return values.filter(
+    (value) => /^(?:v?\d+\.\d+(?:\.\d+)?|[A-Za-z][A-Za-z0-9_]{2,}|memory_[a-z_]+|[@\w.-]+\/[\w.-]+|[\w./-]+\.(?:ts|tsx|js|mjs|md|json))$/u.test(
+      value
+    )
+  );
+}
+function hasExactEntityMatch(candidate, parsedQuery) {
+  const rawTokens = parsedQuery.original.split(/\s+/u).map((token) => token.replace(/^[,;:!?()[\]{}"']+|[,;:!?()[\]{}"']+$/gu, "")).filter(Boolean);
+  const entities = exactEntityTokens([
+    ...rawTokens,
+    ...parsedQuery.terms,
+    ...parsedQuery.normalizedTerms
+  ]);
+  if (entities.length === 0) {
+    return false;
+  }
+  const haystack = [
+    candidate.headline,
+    ...candidate.matchedTerms ?? [],
+    candidate.topicKey ?? "",
+    candidate.captureReason ?? ""
+  ].join(" ").toLowerCase();
+  return entities.some((entity) => haystack.includes(entity.toLowerCase()));
+}
+function filterProjectCandidates(candidates, projectRoot) {
+  if (!projectRoot) {
+    return candidates;
+  }
+  return candidates.filter(
+    (candidate) => !candidate.projectRoot || isSameProjectRoot(candidate.projectRoot, projectRoot)
+  );
+}
 function scoreRecallCandidate(candidate, parsedQuery, options) {
   let score = 0;
   const reasons = [];
+  if (options.projectRoot && candidate.projectRoot && isSameProjectRoot(candidate.projectRoot, options.projectRoot)) {
+    score += 10;
+    reasons.push("project_match");
+  }
   if (candidate.intent === parsedQuery.intent) {
     score += 3;
     reasons.push("intent_match");
@@ -35574,6 +36455,10 @@ function scoreRecallCandidate(candidate, parsedQuery, options) {
     reasons.push("term_overlap");
   }
   if (typeof candidate.timestamp === "number") {
+    if (options.resolvedRange && candidate.timestamp >= options.resolvedRange.from && candidate.timestamp < options.resolvedRange.to) {
+      score += 5;
+      reasons.push("time_range_fit");
+    }
     const bonus = recencyScore(candidate.timestamp, options.now);
     if (bonus > 0) {
       score += bonus;
@@ -35600,9 +36485,17 @@ function scoreRecallCandidate(candidate, parsedQuery, options) {
     score += 3;
     reasons.push("validation_command_context");
   }
+  if (hasExactEntityMatch(candidate, parsedQuery)) {
+    score += 4;
+    reasons.push("exact_entity_match");
+  }
   if (candidate.eventIds.length > 0 || candidate.durableMemoryIds.length > 0 || candidate.sourceKind === "semantic") {
     score += 1;
     reasons.push("evidence_present");
+  }
+  if (options.projectRoot && !candidate.projectRoot) {
+    score -= 4;
+    reasons.push("legacy_global");
   }
   const confidence = confidenceForScore(score);
   return {
@@ -35621,14 +36514,32 @@ function scoreRecallCandidates(candidates, parsedQuery, options) {
 }
 
 // packages/core/src/recall/engine.ts
-function resolveRangeLabel(timeRange) {
+function resolveRangeLabel2(timeRange) {
   if (timeRange.relative) {
     return timeRange.relative;
   }
   return "custom";
 }
-function buildResolvedRange(label, timeRange, now) {
-  const resolved = resolveTimeRange(timeRange, now, "utc");
+function resolveRangeGranularity2(timeRange) {
+  switch (timeRange.relative) {
+    case "today":
+    case "yesterday":
+      return "day";
+    case "this_week":
+      return "week";
+    case "this_month":
+    case "last_month":
+      return "month";
+    case "last_7d":
+    case "last_30d":
+      return "custom";
+    default:
+      return timeRange.relative ? void 0 : "custom";
+  }
+}
+function buildResolvedRange2(label, timeRange, now, temporalMode) {
+  const resolved = resolveTimeRange(timeRange, now, temporalMode);
+  const granularity = resolveRangeGranularity2(timeRange);
   return {
     timeRange,
     resolvedRange: {
@@ -35636,29 +36547,81 @@ function buildResolvedRange(label, timeRange, now) {
       from: resolved.from,
       to: resolved.to,
       fromIso: new Date(resolved.from).toISOString(),
-      toIso: new Date(resolved.to).toISOString()
+      toIso: new Date(resolved.to).toISOString(),
+      ...granularity ? { granularity } : {}
     }
   };
+}
+function buildBucketsForCandidates(candidates, resolvedRange) {
+  const buckets = /* @__PURE__ */ new Map();
+  for (const candidate of candidates) {
+    if (candidate.timestamp === void 0) {
+      continue;
+    }
+    if (candidate.timestamp < resolvedRange.from || candidate.timestamp >= resolvedRange.to) {
+      continue;
+    }
+    const day = dayBucket(candidate.timestamp, { mode: "local" });
+    const key = candidate.localDate ?? day.key;
+    const bucket = buckets.get(key) ?? {
+      key,
+      label: key,
+      from: day.from,
+      to: day.to,
+      eventCount: 0,
+      durableCount: 0,
+      sessionIds: /* @__PURE__ */ new Set(),
+      topicKeys: /* @__PURE__ */ new Set()
+    };
+    bucket.eventCount += candidate.eventIds.length;
+    bucket.durableCount += candidate.durableMemoryIds.length;
+    if (candidate.sessionId) {
+      bucket.sessionIds.add(candidate.sessionId);
+    }
+    if (candidate.topicKey) {
+      bucket.topicKeys.add(candidate.topicKey);
+    }
+    buckets.set(key, bucket);
+  }
+  return [...buckets.values()].sort((left, right) => left.from - right.from).map((bucket) => ({
+    key: bucket.key,
+    label: bucket.label,
+    from: bucket.from,
+    to: bucket.to,
+    eventCount: bucket.eventCount,
+    sessionCount: bucket.sessionIds.size,
+    durableCount: bucket.durableCount,
+    topicKeys: [...bucket.topicKeys].sort()
+  }));
 }
 function runRecallEngine(question, deps, options) {
   const now = options?.now ?? deps.now ?? Date.now();
   const limit = Math.max(1, options?.limit ?? 10);
-  const parsedQuery = parseRecallQuery(question, now);
-  const explicitRange = options?.timeRange ? buildResolvedRange(resolveRangeLabel(options.timeRange), options.timeRange, now) : void 0;
+  const temporalMode = options?.temporalMode ?? "local";
+  const parsedQuery = parseRecallQuery(question, now, { temporalMode });
+  const explicitRange = options?.timeRange ? buildResolvedRange2(resolveRangeLabel2(options.timeRange), options.timeRange, now, temporalMode) : void 0;
   const timeRange = explicitRange?.timeRange ?? (parsedQuery.temporalRange ? { from: parsedQuery.temporalRange.from, to: parsedQuery.temporalRange.to } : void 0);
   const resolvedRange = explicitRange?.resolvedRange ?? parsedQuery.temporalRange;
-  const candidates = loadRecallCandidates({
+  const loadedCandidates = loadRecallCandidates({
     db: deps.db,
     parsedQuery,
     timeRange,
     now,
-    limit
+    limit,
+    projectRoot: deps.projectRoot
   });
-  const scoredCandidates = scoreRecallCandidates(candidates, parsedQuery, { now }).slice(0, limit);
+  const candidates = filterProjectCandidates(loadedCandidates, deps.projectRoot);
+  const scoredCandidates = scoreRecallCandidates(candidates, parsedQuery, {
+    now,
+    projectRoot: deps.projectRoot,
+    resolvedRange: resolvedRange ? { from: resolvedRange.from, to: resolvedRange.to } : void 0
+  }).slice(0, limit);
+  const searchedDateBuckets = resolvedRange ? buildBucketsForCandidates(scoredCandidates, resolvedRange) : void 0;
   return buildRecallResult({
     question,
     candidates: scoredCandidates,
     resolvedRange,
+    searchedDateBuckets,
     matchedIntent: parsedQuery.intent,
     matchedTopics: parsedQuery.topicHints
   });
@@ -35672,7 +36635,7 @@ function handleRecall(question, deps, options) {
 // packages/core/src/tools/remember.ts
 function handleRemember(text, tags, deps) {
   const redacted = redact(text);
-  return deps.semantic.add(redacted, tags);
+  return deps.semantic.add(redacted, tags, { projectRoot: deps.projectRoot });
 }
 
 // packages/core/src/memory/evidence.ts
@@ -35827,9 +36790,9 @@ function handleReview(deps, options = {}) {
 }
 
 // packages/core/src/scanner/index.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
-import { existsSync as existsSync8, readdirSync as readdirSync6, readFileSync as readFileSync7, statSync as statSync4 } from "node:fs";
-import { extname, join as join11, relative } from "node:path";
+import { execFileSync as execFileSync3 } from "node:child_process";
+import { existsSync as existsSync9, readdirSync as readdirSync6, readFileSync as readFileSync9, statSync as statSync5 } from "node:fs";
+import { extname, join as join12, relative } from "node:path";
 
 // packages/core/src/scanner/aliases.ts
 function loadPathAliases(rawPaths) {
@@ -36228,7 +37191,7 @@ function stripNonCode(source) {
 // packages/core/src/scanner/index.ts
 var GIT_TIMEOUT = 5e3;
 function gitExec(args, cwd) {
-  return execFileSync2("git", args, {
+  return execFileSync3("git", args, {
     cwd,
     timeout: GIT_TIMEOUT,
     encoding: "utf-8",
@@ -36237,7 +37200,7 @@ function gitExec(args, cwd) {
 }
 var defaultScanDeps = {
   isGitRepo(path) {
-    return existsSync8(join11(path, ".git"));
+    return existsSync9(join12(path, ".git"));
   },
   getHead(path) {
     try {
@@ -36256,7 +37219,7 @@ var defaultScanDeps = {
   },
   isAncestor(older, newer, path) {
     try {
-      execFileSync2("git", ["merge-base", "--is-ancestor", older, newer], {
+      execFileSync3("git", ["merge-base", "--is-ancestor", older, newer], {
         cwd: path,
         timeout: GIT_TIMEOUT,
         stdio: ["pipe", "pipe", "pipe"]
@@ -36277,9 +37240,9 @@ var defaultScanDeps = {
         return;
       }
       for (const entry of entries) {
-        const fullPath = join11(dir, entry);
+        const fullPath = join12(dir, entry);
         try {
-          const stat = statSync4(fullPath);
+          const stat = statSync5(fullPath);
           if (stat.isDirectory()) {
             if (entry === "node_modules" || entry === ".git" || entry === "dist") {
               continue;
@@ -36415,9 +37378,9 @@ function walkDirectory(dir, basePath) {
       return;
     }
     for (const entry of entries) {
-      const fullPath = join11(current, entry);
+      const fullPath = join12(current, entry);
       try {
-        const stat = statSync4(fullPath);
+        const stat = statSync5(fullPath);
         if (stat.isDirectory()) {
           walk(fullPath);
         } else {
@@ -36431,10 +37394,10 @@ function walkDirectory(dir, basePath) {
   return results;
 }
 function loadProjectAliases(projectPath) {
-  const tsconfigPath = join11(projectPath, "tsconfig.json");
-  if (!existsSync8(tsconfigPath)) return {};
+  const tsconfigPath = join12(projectPath, "tsconfig.json");
+  if (!existsSync9(tsconfigPath)) return {};
   try {
-    const content = readFileSync7(tsconfigPath, "utf-8");
+    const content = readFileSync9(tsconfigPath, "utf-8");
     const rawPaths = parseTsConfig(content);
     return loadPathAliases(rawPaths);
   } catch {
@@ -36537,10 +37500,10 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
       skippedFiles++;
       continue;
     }
-    const fullPath = join11(projectPath, relPath);
+    const fullPath = join12(projectPath, relPath);
     let stat;
     try {
-      stat = statSync4(fullPath);
+      stat = statSync5(fullPath);
     } catch {
       storeSkippedEntry(db, relPath, "stat-failed", now);
       skippedFiles++;
@@ -36553,7 +37516,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
     }
     let content;
     try {
-      content = readFileSync7(fullPath, "utf-8");
+      content = readFileSync9(fullPath, "utf-8");
     } catch {
       storeSkippedEntry(db, relPath, "read-failed", now);
       skippedFiles++;
@@ -36670,7 +37633,7 @@ async function handleScan(deps) {
 }
 
 // packages/core/src/tools/status.ts
-import { readdirSync as readdirSync7, statSync as statSync5 } from "node:fs";
+import { readdirSync as readdirSync7, statSync as statSync6 } from "node:fs";
 function getDefaultCodexAutoImportSnapshot() {
   return {
     clientDetected: false,
@@ -36684,16 +37647,46 @@ function getDefaultCodexAutoImportSnapshot() {
     lastErrors: 0
   };
 }
+var DEFAULT_CODEX_FRESHNESS_THRESHOLD_MS2 = 5 * 60 * 1e3;
+function codexFreshnessThresholdMs(env = process.env) {
+  const raw = env.LOCUS_CODEX_FRESHNESS_THRESHOLD_MS;
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_CODEX_FRESHNESS_THRESHOLD_MS2;
+}
+function buildCodexFreshness(diagnostics, checkedAt, freshnessThresholdMs) {
+  if (!diagnostics) {
+    return void 0;
+  }
+  const latestRolloutTimestamp = diagnostics.latestRolloutTimestamp;
+  const latestImportedTimestamp = diagnostics.latestImportedTimestamp;
+  const lagMs = latestRolloutTimestamp !== void 0 && latestImportedTimestamp !== void 0 ? Math.max(0, latestRolloutTimestamp - latestImportedTimestamp) : void 0;
+  const fresh = lagMs !== void 0 ? lagMs <= freshnessThresholdMs : diagnostics.importedEventCount > 0;
+  return {
+    checkedAt,
+    client: diagnostics.client,
+    clientSurface: diagnostics.clientSurface,
+    latestRolloutPath: diagnostics.latestRolloutPath,
+    latestRolloutTimestamp,
+    latestImportedTimestamp,
+    importedEventCount: diagnostics.importedEventCount,
+    freshnessThresholdMs,
+    fresh,
+    lagMs,
+    message: fresh ? "Codex import appears fresh." : "Codex import may be stale."
+  };
+}
 function buildCodexTruth(codexDiagnostics) {
   if (!codexDiagnostics) {
     return void 0;
   }
-  const desktopMessage = "Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.";
+  const desktopObserved = codexDiagnostics.clientSurface === "desktop" && codexDiagnostics.importedEventCount > 0;
+  const desktopParity = desktopObserved ? "observed_mcp" : "unverified";
+  const desktopMessage = desktopObserved ? "Codex Desktop MCP path has retained Codex events in this environment." : "Codex CLI is the validated Track A path; Codex desktop/extension parity is unverified and may differ.";
   if (codexDiagnostics.captureMode === "off") {
     return {
       recallReadiness: "disabled",
       recommendedCaptureMode: "redacted",
-      desktopParity: "unverified",
+      desktopParity,
       recallMessage: "Codex capture is off, so Locus cannot import Codex conversation events for recall.",
       desktopMessage
     };
@@ -36702,7 +37695,7 @@ function buildCodexTruth(codexDiagnostics) {
     return {
       recallReadiness: "limited",
       recommendedCaptureMode: "redacted",
-      desktopParity: "unverified",
+      desktopParity,
       recallMessage: "metadata capture imports structural session events and diagnostics, but conversational recall is weak by design.",
       desktopMessage
     };
@@ -36711,7 +37704,7 @@ function buildCodexTruth(codexDiagnostics) {
     return {
       recallReadiness: "practical",
       recommendedCaptureMode: "redacted",
-      desktopParity: "unverified",
+      desktopParity,
       recallMessage: "redacted capture is the recommended rich recall mode: it stores bounded, filtered conversation snippets without full transcripts.",
       desktopMessage
     };
@@ -36719,7 +37712,7 @@ function buildCodexTruth(codexDiagnostics) {
   return {
     recallReadiness: "maximum",
     recommendedCaptureMode: "redacted",
-    desktopParity: "unverified",
+    desktopParity,
     recallMessage: "full capture stores raw conversation content and can provide maximum recall, but it carries privacy risk and is explicit warning territory.",
     desktopMessage
   };
@@ -36727,6 +37720,8 @@ function buildCodexTruth(codexDiagnostics) {
 function handleStatus(deps) {
   const { db, dbPath, config: config2 } = deps;
   const durable = new DurableMemoryStore(db, false);
+  const checkedAt = deps.now ?? Date.now();
+  const freshnessThresholdMs = deps.codexFreshnessThresholdMs ?? codexFreshnessThresholdMs(deps.env);
   const totalFilesRow = db.get("SELECT COUNT(*) AS cnt FROM files");
   const totalFiles = totalFilesRow?.cnt ?? 0;
   const skippedFilesRow = db.get(
@@ -36766,7 +37761,7 @@ function handleStatus(deps) {
   }
   let dbSizeBytes = 0;
   try {
-    dbSizeBytes = statSync5(dbPath).size;
+    dbSizeBytes = statSync6(dbPath).size;
   } catch {
     dbSizeBytes = 0;
   }
@@ -36792,7 +37787,8 @@ function handleStatus(deps) {
     durableMemoryStates,
     codexAutoImport: deps.codexAutoImportSnapshot ? { ...deps.codexAutoImportSnapshot } : getDefaultCodexAutoImportSnapshot(),
     codexDiagnostics: deps.codexDiagnostics ? { ...deps.codexDiagnostics } : void 0,
-    codexTruth: buildCodexTruth(deps.codexDiagnostics)
+    codexTruth: buildCodexTruth(deps.codexDiagnostics),
+    codexFreshness: buildCodexFreshness(deps.codexDiagnostics, checkedAt, freshnessThresholdMs)
   };
 }
 
@@ -36804,7 +37800,7 @@ async function createServer(options) {
   const dbPath = options?.dbPath ?? resolveDbPath(root);
   const logPath = resolveLogPath();
   const { db, backend, fts5 } = await initStorage(dbPath);
-  const inboxDir = join12(dirname6(dbPath), "inbox");
+  const inboxDir = join13(dirname6(dbPath), "inbox");
   const config2 = { ...LOCUS_DEFAULTS };
   const envCapture = process.env.LOCUS_CAPTURE_LEVEL;
   if (envCapture === "metadata" || envCapture === "redacted" || envCapture === "full") {
@@ -36843,7 +37839,8 @@ async function createServer(options) {
     const startupMetrics = processInbox(inboxDir, db, {
       batchLimit: 0,
       captureLevel: config2.captureLevel,
-      fts5Available: fts5
+      fts5Available: fts5,
+      projectRoot: root
     });
     runDurableExtraction(db, { source: "codex" });
     _lastIngestMetrics = startupMetrics;
@@ -36901,6 +37898,7 @@ async function createServer(options) {
           inboxDir,
           captureLevel: config2.captureLevel,
           fts5Available: fts5,
+          projectRoot: root,
           env: process.env,
           processInbox,
           runDurableExtraction,
@@ -36914,7 +37912,8 @@ async function createServer(options) {
         const metrics = processInbox(inboxDir, db, {
           batchLimit: 50,
           captureLevel: config2.captureLevel,
-          fts5Available: fts5
+          fts5Available: fts5,
+          projectRoot: root
         });
         runDurableExtraction(db, { source: "codex" });
         _lastIngestMetrics = metrics;
@@ -36930,7 +37929,15 @@ async function createServer(options) {
       timeRange: external_exports3.object({
         from: external_exports3.number().optional(),
         to: external_exports3.number().optional(),
-        relative: external_exports3.enum(["today", "yesterday", "this_week", "last_7d", "last_30d"]).optional()
+        relative: external_exports3.enum([
+          "today",
+          "yesterday",
+          "this_week",
+          "last_7d",
+          "last_30d",
+          "this_month",
+          "last_month"
+        ]).optional()
       }).optional().describe("Filter by time range (absolute or relative)"),
       filePath: external_exports3.string().optional().describe("Filter by file path (exact match in event_files)"),
       kind: external_exports3.enum([
@@ -36956,6 +37963,7 @@ async function createServer(options) {
           filePath,
           kind,
           source,
+          projectRoot: root,
           limit,
           offset
         }
@@ -36977,7 +37985,15 @@ async function createServer(options) {
       timeRange: external_exports3.object({
         from: external_exports3.number().optional(),
         to: external_exports3.number().optional(),
-        relative: external_exports3.enum(["today", "yesterday", "this_week", "last_7d", "last_30d"]).optional()
+        relative: external_exports3.enum([
+          "today",
+          "yesterday",
+          "this_week",
+          "last_7d",
+          "last_30d",
+          "this_month",
+          "last_month"
+        ]).optional()
       }).optional().describe("Filter recall candidates by time range (absolute or relative)"),
       limit: external_exports3.number().optional().describe("Max recall candidates to inspect per source (default 10)")
     },
@@ -36986,11 +38002,51 @@ async function createServer(options) {
       runPreQueryCodexFlow(now);
       const result = handleRecall(
         question,
-        { db, now },
+        { db, now, projectRoot: root },
         {
           timeRange,
           limit,
           now
+        }
+      );
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(result)
+          }
+        ]
+      };
+    }
+  );
+  server.tool(
+    "memory_calendar",
+    {
+      timeRange: external_exports3.object({
+        from: external_exports3.number().optional(),
+        to: external_exports3.number().optional(),
+        relative: external_exports3.enum([
+          "today",
+          "yesterday",
+          "this_week",
+          "last_7d",
+          "last_30d",
+          "this_month",
+          "last_month"
+        ]).optional()
+      }).optional().describe("Filter memory buckets by time range"),
+      granularity: external_exports3.enum(["day", "week", "month"]).optional(),
+      limit: external_exports3.number().optional()
+    },
+    async ({ timeRange, granularity, limit }) => {
+      const now = Date.now();
+      runPreQueryCodexFlow(now);
+      const result = handleCalendar(
+        { db, projectRoot: root, now },
+        {
+          timeRange,
+          granularity,
+          limit
         }
       );
       return {
@@ -37027,7 +38083,7 @@ async function createServer(options) {
     "memory_remember",
     { text: external_exports3.string(), tags: external_exports3.array(external_exports3.string()).optional() },
     async ({ text, tags }) => {
-      const entry = handleRemember(text, tags ?? [], { semantic });
+      const entry = handleRemember(text, tags ?? [], { semantic, projectRoot: root });
       return {
         content: [{ type: "text", text: `Remembered (id=${entry.id}): ${entry.content}` }]
       };
@@ -37049,6 +38105,7 @@ async function createServer(options) {
           inboxDir,
           captureLevel: config2.captureLevel,
           fts5Available: fts5,
+          projectRoot: root,
           env: process.env,
           processInbox,
           runDurableExtraction,
@@ -37069,6 +38126,10 @@ async function createServer(options) {
   server.tool("memory_scan", {}, async () => {
     const result = await handleScan({ projectPath: root, db, config: config2 });
     return { content: [{ type: "text", text: JSON.stringify(result.stats) }] };
+  });
+  server.tool("memory_project_state", {}, async () => {
+    const result = handleProjectState({ db, projectRoot: root });
+    return { content: [{ type: "text", text: JSON.stringify(result) }] };
   });
   server.tool("memory_status", {}, async () => {
     const status = handleStatus({
@@ -37140,7 +38201,15 @@ async function createServer(options) {
       timeRange: external_exports3.object({
         from: external_exports3.number().optional(),
         to: external_exports3.number().optional(),
-        relative: external_exports3.enum(["today", "yesterday", "this_week", "last_7d", "last_30d"]).optional()
+        relative: external_exports3.enum([
+          "today",
+          "yesterday",
+          "this_week",
+          "last_7d",
+          "last_30d",
+          "this_month",
+          "last_month"
+        ]).optional()
       }).optional().describe("Filter by time range (absolute or relative)"),
       kind: external_exports3.enum([
         "user_prompt",
@@ -37156,7 +38225,10 @@ async function createServer(options) {
       offset: external_exports3.number().optional().describe("Skip N entries for pagination")
     },
     async ({ timeRange, kind, filePath, summary, limit, offset }) => {
-      const entries = handleTimeline({ db }, { timeRange, kind, filePath, summary, limit, offset });
+      const entries = handleTimeline(
+        { db, projectRoot: root },
+        { timeRange, kind, filePath, summary, limit, offset }
+      );
       return { content: [{ type: "text", text: JSON.stringify(entries) }] };
     }
   );

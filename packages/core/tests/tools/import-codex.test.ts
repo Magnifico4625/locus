@@ -355,4 +355,62 @@ describe('handleImportCodex', () => {
     expect(result.imported).toBe(1);
     expect(durableCalls).toBe(1);
   });
+
+  it('passes importer project filter and storage project root separately', async () => {
+    const { handleImportCodex } = await import('../../src/tools/import-codex.js');
+    const inboxDir = createTempDir();
+    const ingested = new Set<string>();
+    let importerProjectRoot: string | undefined;
+    let processProjectRoot: string | undefined;
+
+    const result = handleImportCodex(
+      { projectRoot: 'C:/Projects/Locus/packages/core' },
+      {
+        db: makeDbWithIngestedIds(ingested),
+        inboxDir,
+        projectRoot: 'C:/Projects/Locus',
+        captureLevel: 'metadata',
+        fts5Available: false,
+        env: {},
+        processInbox: (_inboxDir, _db, options) => {
+          processProjectRoot = options?.projectRoot;
+          ingested.add('run-event-1');
+          return makeIngestMetrics({ processed: 1, remaining: 0 });
+        },
+        runDurableExtraction: () => ({
+          scanned: 1,
+          inserted: 1,
+          confirmed: 0,
+          superseded: 0,
+          ignored: 0,
+          watermarkEventId: 1,
+        }),
+        importCodexSessionsToInbox: (options) => {
+          importerProjectRoot = options.projectRoot;
+          writeFileSync(
+            join(inboxDir, 'run-1.json'),
+            JSON.stringify({ event_id: 'run-event-1' }),
+            'utf-8',
+          );
+          return {
+            filesScanned: 1,
+            recordsParsed: 1,
+            parseErrors: 0,
+            normalized: 1,
+            written: 1,
+            duplicatePending: 0,
+            skippedUnknown: 0,
+            skippedByCapture: 0,
+            skippedByFilter: 0,
+            errors: 0,
+            latestSession: 'sess_project_scope_001',
+          };
+        },
+      },
+    );
+
+    expect(result.status).toBe('ok');
+    expect(importerProjectRoot).toBe('C:/Projects/Locus/packages/core');
+    expect(processProjectRoot).toBe('C:/Projects/Locus');
+  });
 });

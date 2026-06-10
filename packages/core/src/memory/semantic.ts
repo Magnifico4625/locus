@@ -1,3 +1,4 @@
+import { normalizeProjectRootForScope } from '../recall/project-scope.js';
 import type { DatabaseAdapter, MemoryEntry } from '../types.js';
 import { sanitizeFtsQuery } from '../utils.js';
 
@@ -6,6 +7,7 @@ interface MemoryRow {
   layer: string;
   content: string;
   tags_json: string | null;
+  project_root: string | null;
   created_at: number;
   updated_at: number;
   session_id: string | null;
@@ -15,12 +17,36 @@ interface CountRow {
   cnt: number;
 }
 
+interface TableColumnRow {
+  name: string;
+}
+
+export interface SemanticMemoryAddOptions {
+  projectRoot?: string;
+}
+
+function optionalProjectRoot(projectRoot?: string): string | null {
+  const trimmed = projectRoot?.trim();
+  return trimmed ? normalizeProjectRootForScope(trimmed) : null;
+}
+
+function hasProjectRootColumn(db: DatabaseAdapter): boolean {
+  try {
+    return db
+      .all<TableColumnRow>('PRAGMA table_info(memories)')
+      .some((column) => column.name === 'project_root');
+  } catch {
+    return false;
+  }
+}
+
 function rowToEntry(row: MemoryRow): MemoryEntry {
   return {
     id: row.id,
     layer: row.layer as 'semantic' | 'episodic',
     content: row.content,
     tags: row.tags_json ? (JSON.parse(row.tags_json) as string[]) : [],
+    projectRoot: row.project_root ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     sessionId: row.session_id ?? undefined,
@@ -36,14 +62,20 @@ export class SemanticMemory {
     this.fts5 = fts5Available;
   }
 
-  add(content: string, tags: string[]): MemoryEntry {
+  add(content: string, tags: string[], options?: SemanticMemoryAddOptions): MemoryEntry {
     const now = Date.now();
     const tagsJson = JSON.stringify(tags);
+    const projectRoot = optionalProjectRoot(options?.projectRoot);
 
-    const result = this.db.run(
-      'INSERT INTO memories (layer, content, tags_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
-      ['semantic', content, tagsJson, now, now],
-    );
+    const result = hasProjectRootColumn(this.db)
+      ? this.db.run(
+          'INSERT INTO memories (layer, content, tags_json, project_root, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+          ['semantic', content, tagsJson, projectRoot, now, now],
+        )
+      : this.db.run(
+          'INSERT INTO memories (layer, content, tags_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+          ['semantic', content, tagsJson, now, now],
+        );
 
     const id = result.lastInsertRowid;
 
@@ -56,6 +88,7 @@ export class SemanticMemory {
       layer: 'semantic',
       content,
       tags,
+      projectRoot: projectRoot ?? undefined,
       createdAt: now,
       updatedAt: now,
       sessionId: undefined,

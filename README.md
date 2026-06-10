@@ -49,11 +49,13 @@ npx -y locus-memory@latest uninstall codex --yes
 
 The installer adds the Locus MCP server, installs the Codex skill, sets practical `redacted` capture defaults, and pins the recurring MCP runtime to the installed package version.
 
-## New In v3.6
+## New In v3.7
 
-**New in v3.6 / Track C:** richer Codex recall. `memory_recall` can summarize imported redacted Codex sessions, durable decisions, explicit `memory_remember` entries, rejected alternatives, validation facts, user style, and dated questions such as "what did we do yesterday?". If several matches are plausible, Locus returns `candidateGroups` so the agent can ask a focused clarification instead of guessing.
+**New in v3.7 / Track D:** Codex memory reliability. `memory_recall`, `memory_search`, and `memory_timeline` are scoped to the current project, date-aware recall reports searched buckets, `memory_calendar` gives day/week/month activity discovery, and `memory_project_state` summarizes current package/git/memory state before the agent relies on old context.
 
-Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is still treated as unverified until tested there.
+Track C richer recall is still carried forward: `memory_recall` can summarize imported redacted Codex sessions, durable decisions, explicit `memory_remember` entries, rejected alternatives, validation facts, user style, and dated questions such as "what did we do yesterday?". If several matches are plausible, Locus returns `candidateGroups` so the agent can ask a focused clarification instead of guessing.
+
+Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and the Track D marker acceptance validates the desktop MCP path when `LOCUS_CODEX_SURFACE=desktop` is set. Extension parity still depends on target-surface testing.
 
 ## Why Choose Locus
 
@@ -64,7 +66,7 @@ Codex CLI is the primary validated path. Codex desktop / extension uses the same
 | Low token cost | Writes happen locally; tokens are spent only when the agent recalls memory |
 | Privacy control | `metadata`, `redacted`, and `full` capture modes; `full` is explicit warning territory |
 | Project-aware memory | Structural scan plus durable decisions and conversation events |
-| Inspectability | `memory_status`, `memory_doctor`, `memory_audit`, `memory_review` |
+| Inspectability | `memory_status`, `memory_project_state`, `memory_doctor`, `memory_audit`, `memory_review` |
 | Cross-client base | Any MCP client can use the server; Codex and Claude Code have the strongest adapters today |
 
 ## Competitive Snapshot
@@ -100,11 +102,13 @@ For product claims: `full` is maximum recall and must be treated as explicit opt
 
 ## MCP Tools
 
-Locus exposes 14 MCP tools:
+Locus exposes 17 MCP tools:
 
 | Tool | Purpose |
 | --- | --- |
 | `memory_recall` | Summary-first recall for questions about past work |
+| `memory_calendar` | Discover day/week/month activity buckets for a project and time range |
+| `memory_project_state` | Summarize project identity, package/git state, memory freshness, and active next steps |
 | `memory_search` | Full-text search across structure, decisions, and conversation events |
 | `memory_remember` | Save important decisions or preferences |
 | `memory_review` | Inspect durable memories, states, evidence, and topic keys |
@@ -119,6 +123,8 @@ Locus exposes 14 MCP tools:
 | `memory_compact` | Prune old episodic entries |
 | `memory_forget` / `memory_purge` | Delete selected or all memory with safety confirmation |
 
+For broad period questions, use `memory_calendar` first. It defaults to `last_30d`, so agents should pass `this_month`, `last_month`, or an explicit range for user period questions. Date-scoped `memory_recall` reports searched date buckets, and current-project recall must not mix other project memories unless the user asks for global recall.
+
 ## Other Clients
 
 Locus is an MCP server, so it can run in Claude Code, Cursor, Windsurf, Cline, Zed, Claude Desktop, and similar clients.
@@ -129,7 +135,7 @@ Current maturity:
 | --- | --- |
 | Codex CLI | Primary validated path |
 | Claude Code | Supported through hooks and shared runtime |
-| Codex desktop / extension | Same config model where MCP is exposed; parity still unverified |
+| Codex desktop / extension | Desktop MCP marker path validated with `LOCUS_CODEX_SURFACE=desktop`; extension still requires target-surface validation |
 | Cursor / Windsurf / Cline / Zed | MCP tools work; passive conversation adapters are future work |
 
 Manual MCP fallback:
@@ -143,7 +149,7 @@ codex mcp add locus -- node /path/to/locus/dist/server.js
 - Codex acceptance matrix: [docs/codex-acceptance-matrix.md](docs/codex-acceptance-matrix.md)
 - Codex VS Code extension notes: [docs/codex-vscode-extension.md](docs/codex-vscode-extension.md)
 - Future roadmap: [docs/roadmap/codex-next.md](docs/roadmap/codex-next.md)
-- Release notes: [docs/releases/v3.6.1.md](docs/releases/v3.6.1.md)
+- Release notes: [docs/releases/v3.7.0.md](docs/releases/v3.7.0.md)
 - Full comparison: [docs/comparison.md](docs/comparison.md)
 
 ## Development

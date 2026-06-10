@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { normalizeProjectRootForScope } from '../../src/recall/project-scope.js';
 import type { ServerContext } from '../../src/server.js';
 import { createServer } from '../../src/server.js';
 
@@ -71,7 +72,10 @@ describe('durable extraction flow integration', () => {
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(inboxDir, { recursive: true });
 
-    const event = makeCodexInboxEvent({ event_id: 'startup-codex-decision-001' });
+    const event = makeCodexInboxEvent({
+      event_id: 'startup-codex-decision-001',
+      project_root: join(projectDir, 'packages', 'core'),
+    });
     writeFileSync(
       join(inboxDir, `${event.timestamp}-startup.json`),
       JSON.stringify(event),
@@ -82,9 +86,11 @@ describe('durable extraction flow integration', () => {
     try {
       const durableCount =
         ctx.db.get<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM durable_memories')?.cnt ?? 0;
-      const durableRow = ctx.db.get<{ topic_key: string | null; summary: string }>(
-        'SELECT topic_key, summary FROM durable_memories ORDER BY id DESC LIMIT 1',
-      );
+      const durableRow = ctx.db.get<{
+        topic_key: string | null;
+        summary: string;
+        project_root: string | null;
+      }>('SELECT topic_key, summary, project_root FROM durable_memories ORDER BY id DESC LIMIT 1');
       const watermark = ctx.db.get<{ value: string }>(
         'SELECT value FROM scan_state WHERE key = ?',
         ['durable.codex.last_event_id'],
@@ -93,6 +99,7 @@ describe('durable extraction flow integration', () => {
       expect(durableCount).toBe(1);
       expect(durableRow?.topic_key).toBe('database_choice');
       expect(durableRow?.summary).toContain('SQLite');
+      expect(durableRow?.project_root).toBe(normalizeProjectRootForScope(projectDir));
       expect(Number(watermark?.value ?? '0')).toBeGreaterThan(0);
     } finally {
       ctx.cleanup();

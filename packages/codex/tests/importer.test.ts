@@ -66,6 +66,19 @@ function readInboxEvents(inboxDir: string): Array<{
     .map(({ kind, session_id, payload }) => ({ kind, session_id, payload }));
 }
 
+function readInboxProjectRoots(inboxDir: string): string[] {
+  return readdirSync(inboxDir)
+    .filter((name) => name.endsWith('.json'))
+    .map(
+      (name) =>
+        JSON.parse(readFileSync(join(inboxDir, name), 'utf-8')) as {
+          project_root: string;
+        },
+    )
+    .map((event) => event.project_root)
+    .sort();
+}
+
 afterEach(() => {
   for (const dir of tempRoots.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
@@ -288,6 +301,71 @@ describe('importCodexSessionsToInbox', () => {
     expect(metrics.skippedByFilter).toBe(2);
     expect(metrics.latestSession).toBeUndefined();
     expect(existsSync(inboxDir)).toBe(false);
+  });
+
+  it('filters projectRoot with normalized path identity', () => {
+    const root = tempRoot();
+    const sessionsDir = join(root, 'sessions');
+    const inboxDir = join(root, 'inbox');
+    mkdirSync(sessionsDir, { recursive: true });
+
+    writeRollout(sessionsDir, 'rollout-normalized-project.jsonl', [
+      JSON.stringify({
+        type: 'session_meta',
+        timestamp: '2026-05-30T10:00:00.000Z',
+        session_id: 'sess_normalized',
+        cwd: 'C:\\Projects\\SampleApp',
+        model: 'gpt-5.4',
+      }),
+      JSON.stringify({
+        type: 'event_msg',
+        subtype: 'user_message',
+        timestamp: '2026-05-30T10:01:00.000Z',
+        message: 'TRACKD-NORMALIZED-PROJECT',
+      }),
+    ]);
+
+    const metrics = importCodexSessionsToInbox({
+      sessionsDir,
+      inboxDir,
+      captureMode: 'redacted',
+      projectRoot: 'c:/projects/sampleapp',
+    });
+
+    expect(metrics.written).toBeGreaterThan(0);
+  });
+
+  it('accepts a Codex cwd inside the requested project root and stores the canonical root', () => {
+    const root = tempRoot();
+    const sessionsDir = join(root, 'sessions');
+    const inboxDir = join(root, 'inbox');
+    mkdirSync(sessionsDir, { recursive: true });
+
+    writeRollout(sessionsDir, 'rollout-subdir-project.jsonl', [
+      JSON.stringify({
+        type: 'session_meta',
+        timestamp: '2026-05-30T10:00:00.000Z',
+        session_id: 'sess_subdir',
+        cwd: 'C:\\Projects\\SampleApp\\packages\\core',
+        model: 'gpt-5.4',
+      }),
+      JSON.stringify({
+        type: 'event_msg',
+        subtype: 'user_message',
+        timestamp: '2026-05-30T10:01:00.000Z',
+        message: 'TRACKD-SUBDIR-PROJECT',
+      }),
+    ]);
+
+    const metrics = importCodexSessionsToInbox({
+      sessionsDir,
+      inboxDir,
+      captureMode: 'redacted',
+      projectRoot: 'c:/projects/sampleapp',
+    });
+
+    expect(metrics.written).toBeGreaterThan(0);
+    expect(new Set(readInboxProjectRoots(inboxDir))).toEqual(new Set(['c:/projects/sampleapp']));
   });
 
   it('tracks latestSession by max event timestamp across all scanned files', () => {

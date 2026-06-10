@@ -1,6 +1,6 @@
 {
   "name": "locus-memory",
-  "version": "3.6.1",
+  "version": "3.7.0",
   "description": "Persistent project-aware memory for AI coding tools. Built on MCP. Knows your project, remembers your decisions, costs almost nothing.",
   "type": "module",
   "private": false,
@@ -15,6 +15,12 @@
     "dist/server.js",
     "dist/cli.js",
     "packages/codex/skills/locus-memory/SKILL.md",
+    "packages/codex/README.md",
+    "packages/codex/config/config.toml.example",
+    "plugins/locus-memory/.mcp.json",
+    "plugins/locus-memory/.codex-plugin/plugin.json",
+    "plugins/locus-memory/skills/locus-memory/SKILL.md",
+    "docs/releases/v3.7.0.md",
     "LICENSE",
     "README.md"
   ],
@@ -63,8 +69,8 @@
     "rollup": ">=4.59.0"
   },
   "devDependencies": {
-    "@tailwindcss/cli": "^4.1.14",
     "@biomejs/biome": "^2.4.2",
+    "@tailwindcss/cli": "^4.1.14",
     "@vitest/coverage-v8": "^4.0.18",
     "tailwindcss": "^4.1.14",
     "vitest": "^4.0.18"

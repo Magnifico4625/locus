@@ -1,6 +1,10 @@
 import type { MemoryRecallIntent, MemoryRecallResolvedRange } from '../types.js';
 import { parseRecallTemporalRange } from './temporal-parser.js';
 
+export interface ParseRecallQueryOptions {
+  temporalMode?: 'local' | 'utc';
+}
+
 export interface ParsedRecallQuery {
   original: string;
   normalized: string;
@@ -139,12 +143,18 @@ function detectTopicHints(normalized: string): string[] {
   ).map(({ topic }) => topic);
 }
 
-export function parseRecallQuery(question: string, now: number): ParsedRecallQuery {
+export function parseRecallQuery(
+  question: string,
+  now: number,
+  options?: ParseRecallQueryOptions,
+): ParsedRecallQuery {
   const normalized = normalizeQuestion(question);
   const normalizedTerms = normalized.length > 0 ? normalized.split(' ') : [];
   const terms = normalizedTerms.filter((term) => term.length >= 2 && !STOP_WORDS.has(term));
   const termVariants = unique(terms.map(stemLite));
-  const temporalRange = parseRecallTemporalRange(question, now);
+  const temporalRange = parseRecallTemporalRange(question, now, {
+    mode: options?.temporalMode ?? 'local',
+  });
 
   return {
     original: question,

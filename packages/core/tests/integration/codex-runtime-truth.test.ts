@@ -1,4 +1,4 @@
-import { cpSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizePathForIdentity } from '@locus/shared-runtime';
@@ -15,6 +15,28 @@ function makeTempRoot(): string {
   const dir = mkdtempSync(join(tmpdir(), 'locus-codex-runtime-truth-'));
   tempRoots.push(dir);
   return dir;
+}
+
+function copyFixtureSession(sourceName: string, targetPath: string, projectDir: string): void {
+  const sourcePath = join(fixturesDir, sourceName);
+  const source = readFileSync(sourcePath, 'utf8');
+  const rewritten = source
+    .split(/\r?\n/)
+    .map((line) => {
+      if (!line.trim()) {
+        return line;
+      }
+
+      const parsed = JSON.parse(line) as Record<string, unknown>;
+      if (parsed.type !== 'session_meta') {
+        return line;
+      }
+
+      return JSON.stringify({ ...parsed, cwd: projectDir });
+    })
+    .join('\n');
+
+  writeFileSync(targetPath, rewritten, 'utf8');
 }
 
 function getRegisteredTool(ctx: ServerContext, name: string) {
@@ -58,7 +80,7 @@ describe('Codex runtime truth integration', () => {
     const rolloutPath = join(sessionsDir, 'rollout-2026-04-21T09-00-00.jsonl');
     mkdirSync(projectDir, { recursive: true });
     mkdirSync(sessionsDir, { recursive: true });
-    cpSync(join(fixturesDir, 'basic-session.jsonl'), rolloutPath);
+    copyFixtureSession('basic-session.jsonl', rolloutPath, projectDir);
 
     const originalCodexHome = process.env.CODEX_HOME;
     const originalCodexCapture = process.env.LOCUS_CODEX_CAPTURE;
@@ -131,6 +153,7 @@ describe('Codex runtime truth integration', () => {
     try {
       handleRemember('Generic runtime truth still searches', ['generic-runtime'], {
         semantic: ctx.semantic,
+        projectRoot: ctx.projectRoot,
       });
 
       const searchText = await callTextTool(ctx, 'memory_search', {

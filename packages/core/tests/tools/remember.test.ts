@@ -83,4 +83,14 @@ describe('handleRemember', () => {
     const listed = semantic.list();
     expect(listed[0]?.tags).toEqual([]);
   });
+
+  it('passes project root through to semantic memory', () => {
+    const entry = handleRemember('Remember this project-scoped decision', ['scope'], {
+      semantic,
+      projectRoot: 'C:\\Users\\Admin\\Project',
+    });
+
+    expect(entry.projectRoot).toBe('c:/users/admin/project');
+    expect(semantic.list()[0]?.projectRoot).toBe('c:/users/admin/project');
+  });
 });

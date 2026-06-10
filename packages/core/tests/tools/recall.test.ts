@@ -87,6 +87,20 @@ function insertConversationEvent(
   );
 }
 
+function insertSemanticMemory(
+  db: DatabaseAdapter,
+  content: string,
+  opts?: { projectRoot?: string | null; updatedAt?: number },
+): number {
+  const timestamp = opts?.updatedAt ?? Date.now();
+  return db.run(
+    `INSERT INTO memories
+     (layer, content, tags_json, project_root, created_at, updated_at, session_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ['semantic', content, null, opts?.projectRoot ?? null, timestamp, timestamp, null],
+  ).lastInsertRowid;
+}
+
 describe('handleRecall', () => {
   let tempDir: string;
   let adapter: NodeSqliteAdapter;
@@ -104,10 +118,14 @@ describe('handleRecall', () => {
   });
 
   it('resolves "yesterday" to an absolute date range', () => {
-    const result = handleRecall('What did we do yesterday?', {
-      db: adapter,
-      now,
-    }) as MemoryRecallResult;
+    const result = handleRecall(
+      'What did we do yesterday?',
+      {
+        db: adapter,
+        now,
+      },
+      { temporalMode: 'utc' },
+    ) as MemoryRecallResult;
 
     expect(result.status).toBe('no_memory');
     expect(result.question).toBe('What did we do yesterday?');
@@ -117,7 +135,91 @@ describe('handleRecall', () => {
       to: Date.parse('2026-04-22T00:00:00.000Z'),
       fromIso: '2026-04-21T00:00:00.000Z',
       toIso: '2026-04-22T00:00:00.000Z',
+      granularity: 'day',
     });
+  });
+
+  it('resolves explicit this_month timeRange and filters recall candidates', () => {
+    const mayNow = Date.parse('2026-05-30T12:00:00.000Z');
+    insertConversationEvent(adapter, {
+      eventId: 'evt-track-d-may',
+      timestamp: Date.parse('2026-05-15T12:00:00.000Z'),
+      payloadJson: JSON.stringify({ summary: 'Track D May checkpoint completed.' }),
+      sessionId: 'sess-may',
+    });
+    insertConversationEvent(adapter, {
+      eventId: 'evt-track-d-april',
+      timestamp: Date.parse('2026-04-15T12:00:00.000Z'),
+      payloadJson: JSON.stringify({ summary: 'Track D April checkpoint completed.' }),
+      sessionId: 'sess-april',
+    });
+    insertConversationEvent(adapter, {
+      eventId: 'evt-track-d-june-boundary',
+      timestamp: Date.parse('2026-06-01T00:00:00.000Z'),
+      payloadJson: JSON.stringify({ summary: 'Track D June boundary checkpoint completed.' }),
+      sessionId: 'sess-june',
+    });
+
+    const result = handleRecall(
+      'What did we do for Track D?',
+      { db: adapter, now: mayNow },
+      { timeRange: { relative: 'this_month' }, temporalMode: 'utc' },
+    ) as MemoryRecallResult;
+
+    expect(result.resolvedRange).toMatchObject({
+      label: 'this_month',
+      fromIso: '2026-05-01T00:00:00.000Z',
+      toIso: '2026-06-01T00:00:00.000Z',
+      granularity: 'month',
+    });
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        eventIds: ['evt-track-d-may'],
+        localDate: '2026-05-15',
+        monthKey: '2026-05',
+      }),
+    ]);
+    expect(result.searchedDateBuckets).toEqual([
+      expect.objectContaining({
+        key: '2026-05-15',
+        eventCount: 1,
+        sessionCount: 1,
+      }),
+    ]);
+  });
+
+  it('resolves explicit last_month timeRange and filters recall candidates', () => {
+    const mayNow = Date.parse('2026-05-30T12:00:00.000Z');
+    insertConversationEvent(adapter, {
+      eventId: 'evt-track-d-may',
+      timestamp: Date.parse('2026-05-15T12:00:00.000Z'),
+      payloadJson: JSON.stringify({ summary: 'Track D May checkpoint completed.' }),
+      sessionId: 'sess-may',
+    });
+    insertConversationEvent(adapter, {
+      eventId: 'evt-track-d-april',
+      timestamp: Date.parse('2026-04-15T12:00:00.000Z'),
+      payloadJson: JSON.stringify({ summary: 'Track D April checkpoint completed.' }),
+      sessionId: 'sess-april',
+    });
+
+    const result = handleRecall(
+      'What did we do for Track D?',
+      { db: adapter, now: mayNow },
+      { timeRange: { relative: 'last_month' }, temporalMode: 'utc' },
+    ) as MemoryRecallResult;
+
+    expect(result.resolvedRange).toMatchObject({
+      label: 'last_month',
+      fromIso: '2026-04-01T00:00:00.000Z',
+      toIso: '2026-05-01T00:00:00.000Z',
+      granularity: 'month',
+    });
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        eventIds: ['evt-track-d-april'],
+      }),
+    ]);
   });
 
   it('includes durable decision memory in the returned summary and candidates', () => {
@@ -443,6 +545,55 @@ describe('handleRecall', () => {
         matchedTerms: expect.arrayContaining(['ошибк', 'npm', 'install']),
       }),
     ]);
+  });
+
+  it('includes legacy semantic memory only when no scoped semantic match exists', () => {
+    const legacyId = insertSemanticMemory(adapter, 'legacy CODEX_HOME import', {
+      projectRoot: null,
+      updatedAt: now - 60_000,
+    });
+
+    const result = handleRecall('CODEX_HOME import', {
+      db: adapter,
+      now,
+      projectRoot: 'C:/Projects/Locus',
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('ok');
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        headline: 'legacy CODEX_HOME import',
+        whyMatched: `legacy semantic memory ${legacyId}`,
+        projectRoot: undefined,
+      }),
+    ]);
+  });
+
+  it('prefers scoped semantic memory over legacy global memory', () => {
+    const scopedId = insertSemanticMemory(adapter, 'scoped CODEX_HOME import for Locus', {
+      projectRoot: 'c:/projects/locus',
+      updatedAt: now - 30_000,
+    });
+    insertSemanticMemory(adapter, 'legacy CODEX_HOME import for another context', {
+      projectRoot: null,
+      updatedAt: now - 60_000,
+    });
+
+    const result = handleRecall('CODEX_HOME import', {
+      db: adapter,
+      now,
+      projectRoot: 'C:/Projects/Locus',
+    }) as MemoryRecallResult;
+
+    expect(result.status).toBe('ok');
+    expect(result.candidates).toEqual([
+      expect.objectContaining({
+        headline: 'scoped CODEX_HOME import for Locus',
+        whyMatched: `explicit semantic memory ${scopedId}`,
+        projectRoot: 'c:/projects/locus',
+      }),
+    ]);
+    expect(JSON.stringify(result)).not.toContain('legacy CODEX_HOME');
   });
 
   it('returns no_memory when neither durable nor conversation context matches', () => {

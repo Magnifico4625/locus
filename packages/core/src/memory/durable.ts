@@ -1,3 +1,4 @@
+import { normalizeProjectRootForScope } from '../recall/project-scope.js';
 import type {
   DatabaseAdapter,
   DurableMemoryEntry,
@@ -14,6 +15,7 @@ interface DurableMemoryRow {
   state: DurableMemoryState;
   summary: string;
   evidence_json: string;
+  project_root: string | null;
   source_event_id: string | null;
   source: 'codex' | 'claude-code' | 'manual';
   superseded_by_id: number | null;
@@ -27,9 +29,19 @@ export interface CreateDurableMemoryInput {
   state?: DurableMemoryState;
   summary: string;
   evidence: Record<string, unknown>;
+  projectRoot?: string;
   sourceEventId?: string;
   source: 'codex' | 'claude-code' | 'manual';
   supersededById?: number;
+}
+
+export interface ProjectScopedListOptions {
+  projectRoot?: string;
+}
+
+function optionalProjectRoot(projectRoot?: string): string | null {
+  const trimmed = projectRoot?.trim();
+  return trimmed ? normalizeProjectRootForScope(trimmed) : null;
 }
 
 function rowToEntry(row: DurableMemoryRow): DurableMemoryEntry {
@@ -40,6 +52,7 @@ function rowToEntry(row: DurableMemoryRow): DurableMemoryEntry {
     state: row.state,
     summary: row.summary,
     evidence: JSON.parse(row.evidence_json) as Record<string, unknown>,
+    projectRoot: row.project_root ?? undefined,
     sourceEventId: row.source_event_id ?? undefined,
     source: row.source,
     supersededById: row.superseded_by_id ?? undefined,
@@ -59,6 +72,7 @@ export class DurableMemoryStore {
 
   insert(input: CreateDurableMemoryInput): DurableMemoryEntry {
     const now = Date.now();
+    const projectRoot = optionalProjectRoot(input.projectRoot);
     const result = this.db.run(
       `INSERT INTO durable_memories (
         topic_key,
@@ -66,18 +80,20 @@ export class DurableMemoryStore {
         state,
         summary,
         evidence_json,
+        project_root,
         source_event_id,
         source,
         superseded_by_id,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         input.topicKey ?? null,
         input.memoryType,
         input.state ?? 'active',
         input.summary,
         JSON.stringify(input.evidence),
+        projectRoot,
         input.sourceEventId ?? null,
         input.source,
         input.supersededById ?? null,
@@ -137,7 +153,18 @@ export class DurableMemoryStore {
     return result.changes > 0;
   }
 
-  listByTopic(topicKey: string): DurableMemoryEntry[] {
+  listByTopic(topicKey: string, options?: ProjectScopedListOptions): DurableMemoryEntry[] {
+    const projectRoot = optionalProjectRoot(options?.projectRoot);
+    if (projectRoot) {
+      const rows = this.db.all<DurableMemoryRow>(
+        `SELECT * FROM durable_memories
+         WHERE topic_key = ? AND project_root = ?
+         ORDER BY updated_at DESC, id DESC`,
+        [topicKey, projectRoot],
+      );
+      return rows.map(rowToEntry);
+    }
+
     const rows = this.db.all<DurableMemoryRow>(
       'SELECT * FROM durable_memories WHERE topic_key = ? ORDER BY updated_at DESC, id DESC',
       [topicKey],
@@ -145,7 +172,21 @@ export class DurableMemoryStore {
     return rows.map(rowToEntry);
   }
 
-  listByMemoryType(memoryType: DurableMemoryType): DurableMemoryEntry[] {
+  listByMemoryType(
+    memoryType: DurableMemoryType,
+    options?: ProjectScopedListOptions,
+  ): DurableMemoryEntry[] {
+    const projectRoot = optionalProjectRoot(options?.projectRoot);
+    if (projectRoot) {
+      const rows = this.db.all<DurableMemoryRow>(
+        `SELECT * FROM durable_memories
+         WHERE memory_type = ? AND project_root = ?
+         ORDER BY updated_at DESC, id DESC`,
+        [memoryType, projectRoot],
+      );
+      return rows.map(rowToEntry);
+    }
+
     const rows = this.db.all<DurableMemoryRow>(
       'SELECT * FROM durable_memories WHERE memory_type = ? ORDER BY updated_at DESC, id DESC',
       [memoryType],

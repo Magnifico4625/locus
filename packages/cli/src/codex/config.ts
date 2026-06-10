@@ -17,9 +17,19 @@ export const defaultCodexMcpEnv = {
 
 export function buildMcpServerConfig(options: {
   version: string;
+  runtimePackage?: string;
   platform?: NodeJS.Platform;
   cwd?: string;
 }): Required<CodexMcpServerConfig> {
+  if (options.runtimePackage) {
+    return {
+      command: options.platform === 'win32' ? 'npm.cmd' : 'npm',
+      args: ['exec', '--yes', '--package', options.runtimePackage, '--', 'locus-memory', 'mcp'],
+      env: { ...defaultCodexMcpEnv },
+      cwd: options.cwd ?? '',
+    };
+  }
+
   return {
     command: options.platform === 'win32' ? 'npx.cmd' : 'npx',
     args: ['-y', `locus-memory@${options.version}`, 'mcp'],
@@ -41,11 +51,27 @@ export function classifyMcpOwnership(config?: CodexMcpServerConfig): CodexMcpOwn
     return 'package-owned';
   }
 
+  if (
+    /^npm(?:\.cmd)?$/i.test(command) &&
+    args.includes('exec') &&
+    args.includes('--package') &&
+    args.some((arg) => isLocusMemoryPackageSpecifier(arg))
+  ) {
+    return 'package-owned';
+  }
+
   if (command === 'node' && /dist[\\/]+server\.js/i.test(joinedArgs)) {
     return 'manual-locus';
   }
 
   return 'foreign-locus';
+}
+
+function isLocusMemoryPackageSpecifier(value: string): boolean {
+  return (
+    /^locus-memory@/.test(value) ||
+    /(?:^|[\\/])locus-memory-\d+\.\d+\.\d+(?:[-+\w.]*)?\.tgz$/iu.test(value)
+  );
 }
 
 export function parseCodexMcpGetOutput(output: string): CodexMcpServerConfig | undefined {

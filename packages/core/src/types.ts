@@ -73,6 +73,7 @@ export interface MemoryEntry {
   layer: 'semantic' | 'episodic';
   content: string;
   tags: string[];
+  projectRoot?: string;
   createdAt: number;
   updatedAt: number;
   sessionId?: string;
@@ -99,6 +100,7 @@ export interface DurableMemoryEntry {
   state: DurableMemoryState;
   summary: string;
   evidence: Record<string, unknown>;
+  projectRoot?: string;
   sourceEventId?: string;
   source: 'codex' | 'claude-code' | 'manual';
   supersededById?: number;
@@ -173,9 +175,39 @@ export interface MemoryRecallResolvedRange {
   to: number;
   fromIso: string;
   toIso: string;
+  granularity?: 'day' | 'week' | 'month' | 'custom';
+}
+
+export interface MemoryDateBucket {
+  key: string;
+  label: string;
+  from: number;
+  to: number;
+  eventCount: number;
+  sessionCount: number;
+  durableCount: number;
+  topicKeys: string[];
+}
+
+export interface MemoryCalendarOptions {
+  timeRange?: TimeRange;
+  granularity?: 'day' | 'week' | 'month';
+  projectRoot?: string;
+  limit?: number;
+}
+
+export interface MemoryCalendarResult {
+  projectRoot: string;
+  resolvedRange?: MemoryRecallResolvedRange;
+  granularity: 'day' | 'week' | 'month';
+  buckets: MemoryDateBucket[];
 }
 
 export interface MemoryRecallCandidate {
+  projectRoot?: string;
+  localDate?: string;
+  weekKey?: string;
+  monthKey?: string;
   sessionId?: string;
   headline: string;
   whyMatched: string;
@@ -207,6 +239,7 @@ export interface MemoryRecallResult {
   status: MemoryRecallStatus;
   question: string;
   resolvedRange?: MemoryRecallResolvedRange;
+  searchedDateBuckets?: MemoryDateBucket[];
   summary: string;
   candidates: MemoryRecallCandidate[];
   matchedIntent?: MemoryRecallIntent;
@@ -381,7 +414,14 @@ export interface IngestMetrics {
 
 // ─── Time Range (extended search) ───
 
-export type TimeRangeRelative = 'today' | 'yesterday' | 'this_week' | 'last_7d' | 'last_30d';
+export type TimeRangeRelative =
+  | 'today'
+  | 'yesterday'
+  | 'this_week'
+  | 'last_7d'
+  | 'last_30d'
+  | 'this_month'
+  | 'last_month';
 
 export interface TimeRange {
   from?: number;
@@ -468,13 +508,28 @@ export interface CodexDiagnosticsSnapshot {
   rolloutFilesFound: number;
   latestRolloutPath?: string;
   latestRolloutReadable?: boolean;
+  latestRolloutTimestamp?: number;
   importedEventCount: number;
   latestImportedSessionId?: string;
   latestImportedTimestamp?: number;
 }
 
 export type CodexRecallReadiness = 'disabled' | 'limited' | 'practical' | 'maximum';
-export type CodexDesktopParity = 'unverified';
+export type CodexDesktopParity = 'unverified' | 'observed_mcp' | 'validated';
+
+export interface CodexFreshnessSnapshot {
+  checkedAt: number;
+  client: ClientEnv;
+  clientSurface: ClientSurface;
+  latestRolloutPath?: string;
+  latestRolloutTimestamp?: number;
+  latestImportedTimestamp?: number;
+  importedEventCount: number;
+  freshnessThresholdMs: number;
+  fresh: boolean;
+  lagMs?: number;
+  message: string;
+}
 
 export interface CodexTruthSnapshot {
   recallReadiness: CodexRecallReadiness;
@@ -507,6 +562,22 @@ export interface MemoryStatus {
   codexAutoImport?: CodexAutoImportSnapshot;
   codexDiagnostics?: CodexDiagnosticsSnapshot;
   codexTruth?: CodexTruthSnapshot;
+  codexFreshness?: CodexFreshnessSnapshot;
+}
+
+export interface MemoryProjectStateResult {
+  projectRoot: string;
+  projectHash: string;
+  packageName?: string;
+  packageVersion?: string;
+  gitHead?: string;
+  gitBranch?: string;
+  dirty?: boolean;
+  activeDurableCount: number;
+  latestConversationTimestamp?: number;
+  latestConversationIso?: string;
+  warnings: string[];
+  nextSteps: string[];
 }
 
 // ─── Doctor ───

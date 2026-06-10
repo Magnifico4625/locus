@@ -12,7 +12,11 @@ import { installCodexHooks, resolveCodexHooksPath } from '../codex/hooks.js';
 import { acquireInstallLock } from '../codex/lock.js';
 import { resolveCodexConfigPath, resolveCodexHome, resolveCodexSkillPath } from '../codex/paths.js';
 import { installCodexSkill } from '../codex/skill.js';
-import { buildRuntimePackageSpecifier, resolvePackageVersion } from '../package-info.js';
+import {
+  buildRuntimePackageSpecifier,
+  resolvePackageVersion,
+  resolveRuntimePackageOverride,
+} from '../package-info.js';
 import type { CommandRunner } from './runner.js';
 
 export interface InstallCodexDryRunOptions {
@@ -30,6 +34,7 @@ export function formatInstallCodexDryRun(options: InstallCodexDryRunOptions = {}
   const env = options.env ?? process.env;
   const codexHome = resolveCodexHome(env);
   const skillPath = resolveCodexSkillPath(env, 'locus-memory');
+  const runtimePackage = resolveRuntimePackageOverride(env);
   const runtimeSpecifier = buildRuntimePackageSpecifier(resolvePackageVersion(options.startDir));
   const lockPath = join(codexHome, '.locus-install.lock');
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
@@ -38,7 +43,7 @@ export function formatInstallCodexDryRun(options: InstallCodexDryRunOptions = {}
     'Locus Codex install dry-run',
     `Codex home: ${codexHome}`,
     `Skill path: ${skillPath}`,
-    `MCP runtime: npx -y ${runtimeSpecifier} mcp`,
+    `MCP runtime: ${formatRuntimeCommand(runtimeSpecifier, runtimePackage)}`,
     `MCP cwd: ${codexHome}`,
     `Hooks path: ${resolveCodexHooksPath(env)}`,
     `Hooks: ${options.withHooks ? 'requested (would install)' : 'not requested'}`,
@@ -58,6 +63,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
   const mcpEnv = { CODEX_HOME: codexHome, ...defaultCodexMcpEnv };
   const version = resolvePackageVersion(options.startDir);
   const runtimeSpecifier = buildRuntimePackageSpecifier(version);
+  const runtimePackage = resolveRuntimePackageOverride(env);
   const lock = acquireInstallLock(codexHome);
 
   if (!lock.acquired) {
@@ -71,7 +77,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
     const cleanup = cleanupInterruptedInstall(codexHome);
     const cacheResult = await options.commandRunner(
       'npm',
-      ['exec', '-y', runtimeSpecifier, '--', '--help'],
+      buildRuntimeAvailabilityArgs(runtimeSpecifier, runtimePackage),
       { cwd: codexHome, env: { CODEX_HOME: codexHome } },
     );
 
@@ -79,7 +85,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
       return {
         exitCode: 1,
         output: [
-          `Runtime package unavailable: ${runtimeSpecifier}`,
+          `Runtime package unavailable: ${runtimePackage ?? runtimeSpecifier}`,
           'No Codex MCP config was changed.',
           'This is expected before the package is published to npm unless it already exists in the npm cache.',
           cacheResult.stderr.trim(),
@@ -129,6 +135,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
       buildCodexMcpAddArgs({
         name: 'locus',
         version,
+        runtimePackage,
         platform: options.platform,
         env: mcpEnv,
       }),
@@ -140,7 +147,10 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
         exitCode: 1,
         output: [
           'Partial state: no skill was installed because Codex MCP configuration failed.',
-          `Remediation: codex mcp add locus -- npx -y ${runtimeSpecifier} mcp`,
+          `Remediation: codex mcp add locus -- ${formatRuntimeCommand(
+            runtimeSpecifier,
+            runtimePackage,
+          )}`,
           addResult.stderr.trim(),
         ].join('\n'),
       };
@@ -176,4 +186,20 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
   } finally {
     lock.release?.();
   }
+}
+
+function buildRuntimeAvailabilityArgs(runtimeSpecifier: string, runtimePackage?: string): string[] {
+  if (runtimePackage) {
+    return ['exec', '--yes', '--package', runtimePackage, '--', 'locus-memory', '--help'];
+  }
+
+  return ['exec', '-y', runtimeSpecifier, '--', '--help'];
+}
+
+function formatRuntimeCommand(runtimeSpecifier: string, runtimePackage?: string): string {
+  if (runtimePackage) {
+    return `npm exec --yes --package ${runtimePackage} -- locus-memory mcp`;
+  }
+
+  return `npx -y ${runtimeSpecifier} mcp`;
 }

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { normalizePathForIdentity } from '@locus/shared-runtime';
 import { getCodexCaptureMode } from './capture.js';
 import { toInboxEvent } from './inbox-event.js';
 import { writeCodexInboxEvent } from './inbox-writer.js';
@@ -34,7 +35,12 @@ export function importCodexSessionsToInbox(options: CodexImportOptions): CodexIm
 
     const normalized = normalizeCodexRecords(parsed.records);
     metrics.skippedUnknown += normalized.skipped;
-    const filteredEvents = normalized.events.filter((event) => matchesFilters(event, options));
+    const filteredEvents = normalized.events
+      .filter((event) => matchesFilters(event, options))
+      .map((event) => ({
+        ...event,
+        projectRoot: canonicalImportProjectRoot(event.projectRoot, options.projectRoot),
+      }));
     metrics.normalized += filteredEvents.length;
     metrics.skippedByFilter += normalized.events.length - filteredEvents.length;
     latestTimestamp = updateLatestSession(metrics, filteredEvents, latestTimestamp);
@@ -118,7 +124,10 @@ function selectFiles(files: readonly string[], options: CodexImportOptions): str
 }
 
 function matchesFilters(event: CodexNormalizedEvent, options: CodexImportOptions): boolean {
-  if (options.projectRoot !== undefined && event.projectRoot !== options.projectRoot) {
+  if (
+    options.projectRoot !== undefined &&
+    !sameOrInsideProjectRoot(event.projectRoot, options.projectRoot)
+  ) {
     return false;
   }
 
@@ -131,4 +140,32 @@ function matchesFilters(event: CodexNormalizedEvent, options: CodexImportOptions
   }
 
   return true;
+}
+
+function normalizedProjectRoot(value: string): string {
+  const normalized = normalizePathForIdentity(value);
+  if (normalized === '/' || /^[a-z]:\/$/u.test(normalized)) {
+    return normalized;
+  }
+  return normalized.replace(/\/$/u, '');
+}
+
+function sameOrInsideProjectRoot(eventRootValue: string, requestedRootValue: string): boolean {
+  const eventRoot = normalizedProjectRoot(eventRootValue);
+  const requestedRoot = normalizedProjectRoot(requestedRootValue);
+  return eventRoot === requestedRoot || isInsideProjectRoot(eventRoot, requestedRoot);
+}
+
+function isInsideProjectRoot(eventRoot: string, requestedRoot: string): boolean {
+  if (requestedRoot === '/' || /^[a-z]:\/$/u.test(requestedRoot)) {
+    return eventRoot.startsWith(requestedRoot);
+  }
+  return eventRoot.startsWith(`${requestedRoot}/`);
+}
+
+function canonicalImportProjectRoot(eventRoot: string, requestedRoot?: string): string {
+  if (requestedRoot && sameOrInsideProjectRoot(eventRoot, requestedRoot)) {
+    return normalizedProjectRoot(requestedRoot);
+  }
+  return normalizedProjectRoot(eventRoot);
 }

@@ -69,6 +69,13 @@ Command roles:
 - `npm run sync:codex-marketplace` generates the public distribution bundle without committing or pushing another repository
 - `npm run sync:codex-skill` updates the installed skill-only path for manual MCP setups
 
+For pre-publish tarball smoke tests, set `LOCUS_CODEX_RUNTIME_PACKAGE` to the local
+`locus-memory-<version>.tgz` path before running `locus-memory install codex --yes`.
+The installer will use `npm exec --package <tgz> -- locus-memory mcp` for that
+temporary MCP config. Do not use this as normal user-facing setup after the
+version is published; the default pinned `locus-memory@<version>` runtime is the
+release path.
+
 For useful conversational recall, configure Codex with `redacted` capture:
 
 ```toml
@@ -79,21 +86,23 @@ LOCUS_CAPTURE_LEVEL = "redacted"
 
 ## What Works
 
-- All 14 MCP tools (including `memory_recall` and `memory_import_codex`)
+- All 17 MCP tools (including `memory_recall`, `memory_calendar`, `memory_project_state`, and `memory_import_codex`)
 - All 3 MCP resources (project-map, decisions, recent)
 - SQLite storage with FTS5 full-text search
 - Client-aware storage: data stored in `$CODEX_HOME/memory/`
-- Auto-import before `memory_search`, plus manual and library JSONL import for Codex session rollout files
-- Canonical Codex skill workflow for `memory_search`, `memory_status`, `memory_remember`, and manual `memory_import_codex`
+- Auto-import before `memory_recall`, `memory_search`, and `memory_calendar`, plus manual and library JSONL import for Codex session rollout files
+- Canonical Codex skill workflow for `memory_recall`, `memory_calendar`, `memory_project_state`, `memory_search`, `memory_status`, `memory_remember`, and manual `memory_import_codex`
 - Codex-aware diagnostics in `memory_status` and `memory_doctor`
 - Summary-first recall through `memory_recall`
 - `codexTruth` status guidance that separates import health from recall usefulness
 
 Track C adds fixture-backed richer recall validation for Codex CLI: Russian dated questions, capture-strategy decisions, rejected alternatives, user workflow style, npm install errors, next steps, and validation facts now pass through import, inbox, durable memory, and `memory_recall`.
 
-Last documented local install validation target: Codex CLI `0.130.0` surface as of May 12, 2026. Track C local smoke covered the one-command installer, `codex mcp list`, `doctor codex`, and raw MCP `memory_remember` -> `memory_recall`. Registry-hosted `locus-memory@3.6.1` validation must run after npm publish.
+Track D adds project-scoped and date-aware recall, `memory_calendar`, freshness/surface diagnostics, `memory_project_state`, and same-topic next-step supersession.
 
-Codex CLI is the primary validated path. Codex desktop / extension uses the same MCP model where exposed by the upstream surface, but parity is reported as unverified until checked there.
+Last documented local validation target: Codex CLI `0.138.0` from PATH and Codex Desktop-bundled CLI `0.137.0-alpha.4` with `CODEX_HOME=C:\Users\Admin\.codex` as of June 9, 2026. Track D local smoke confirmed `codex mcp get locus` points at this repo's `dist/server.js`; the active Desktop MCP session still required a reload before new tools such as `memory_calendar` and `memory_project_state` appeared in the live tool registry. Registry-hosted `locus-memory@3.7.0` validation must run after npm publish.
+
+Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and Track D validates the desktop marker/config path when `LOCUS_CODEX_SURFACE=desktop` is set. `memory_status` and `memory_doctor` can report an observed desktop MCP path when Codex diagnostics detect a desktop surface with retained Codex events. Fresh live Desktop visibility of newly added tools still requires an MCP/Desktop reload smoke; extension parity still requires target-surface testing.
 
 ## Codex JSONL Import
 
@@ -103,22 +112,29 @@ Track C raises the bar from "import works" to "recall is useful": `memory_recall
 
 ### Auto-import before search
 
-When Codex is the detected client environment, core auto-imports only the newest rollout file before `memory_search`.
+When Codex is the detected client environment, core auto-imports only the newest rollout file before `memory_recall`, `memory_search`, and `memory_calendar`.
 
 Behavior:
 
 - search-triggered, not a background watcher
 - bounded to the newest discovered rollout session
 - debounced in the server process to avoid repeated re-import during active querying
-- best-effort: if import is disabled or fails, search still runs
+- best-effort: if import is disabled or fails, the memory query still runs
 
-Use `memory_status` to inspect both the last auto-import snapshot and the current Codex diagnostics snapshot.
+Use `memory_status` to inspect the last auto-import snapshot, the current Codex diagnostics snapshot, and `codexFreshness` import lag.
+
+`LOCUS_CODEX_SURFACE=desktop|extension|cli` is a diagnostic/debug override for validating non-CLI surfaces before stronger upstream evidence exists. Do not treat it as normal user-facing configuration; leaving it set accidentally can make status and doctor report the overridden surface.
 
 ### Skill workflow
 
 The canonical Locus Codex skill assumes this workflow:
 
 - `memory_recall` first for summary-first questions like "what did we do yesterday?"
+- `memory_calendar` for broad period questions like "what did we work on this month?" before drilling into specific days or topics
+- `memory_calendar` defaults to `last_30d`; pass `this_month`, `last_month`, or an explicit range for user period questions
+- date-scoped `memory_recall` should report searched date buckets
+- `memory_project_state` when the agent needs the current package/git identity, latest conversation timestamp, active durable count, or active next steps before relying on memory
+- current-project recall must not mix other project memories unless the user explicitly asks for global recall
 - `memory_search` when exact-term search is still useful after recall
 - `memory_status` when recent history does not appear as expected
 - `memory_import_codex` only for manual catch-up, filtered imports, or older sessions
@@ -128,7 +144,7 @@ The canonical Locus Codex skill assumes this workflow:
 
 If `memory_recall` returns `needs_clarification`, inspect `candidateGroups` and ask the user a focused follow-up. Do not say "I do not remember" until Locus has been checked.
 
-This workflow is optimized and validated for Codex CLI. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
+This workflow is optimized and validated for Codex CLI. Codex Desktop marker/config behavior is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; newly added live tool registry visibility still needs a fresh Desktop/MCP reload smoke. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
 
 For the extension-specific setup, reload, and troubleshooting flow, use the dedicated guide:
 

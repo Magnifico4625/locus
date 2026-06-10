@@ -20,10 +20,16 @@ function classifyMcpOwnership(config) {
   if (/^npx(?:\.cmd)?$/i.test(command) && args.some((arg) => /^locus-memory@/.test(arg))) {
     return "package-owned";
   }
+  if (/^npm(?:\.cmd)?$/i.test(command) && args.includes("exec") && args.includes("--package") && args.some((arg) => isLocusMemoryPackageSpecifier(arg))) {
+    return "package-owned";
+  }
   if (command === "node" && /dist[\\/]+server\.js/i.test(joinedArgs)) {
     return "manual-locus";
   }
   return "foreign-locus";
+}
+function isLocusMemoryPackageSpecifier(value) {
+  return /^locus-memory@/.test(value) || /(?:^|[\\/])locus-memory-\d+\.\d+\.\d+(?:[-+\w.]*)?\.tgz$/iu.test(value);
 }
 function parseCodexMcpGetOutput(output) {
   if (!output.trim()) {
@@ -126,6 +132,10 @@ function resolvePackageVersion(startDir) {
 }
 function buildRuntimePackageSpecifier(version) {
   return `locus-memory@${version}`;
+}
+function resolveRuntimePackageOverride(env = process.env) {
+  const value = env.LOCUS_CODEX_RUNTIME_PACKAGE?.trim();
+  return value ? value : void 0;
 }
 
 // packages/cli/src/codex/paths.ts
@@ -424,7 +434,7 @@ function stringField(value) {
 
 // packages/cli/src/commands/install-codex.ts
 import { existsSync as existsSync9 } from "node:fs";
-import { join as join11 } from "node:path";
+import { join as join12 } from "node:path";
 
 // packages/cli/src/codex/cleanup.ts
 import { existsSync as existsSync3, readdirSync, rmSync, statSync } from "node:fs";
@@ -461,20 +471,29 @@ function findInterruptedInstallTempFiles(codexHome) {
 function detectNpxCommand(platform = process.platform) {
   return platform === "win32" ? "npx.cmd" : "npx";
 }
+function detectNpmCommand(platform = process.platform) {
+  return platform === "win32" ? "npm.cmd" : "npm";
+}
+function buildCodexMcpRuntimeCommand(options) {
+  if (options.runtimePackage) {
+    return {
+      command: detectNpmCommand(options.platform),
+      args: ["exec", "--yes", "--package", options.runtimePackage, "--", "locus-memory", "mcp"]
+    };
+  }
+  return {
+    command: detectNpxCommand(options.platform),
+    args: ["-y", `locus-memory@${options.version}`, "mcp"]
+  };
+}
 function buildCodexMcpAddArgs(options) {
   const env = options.env ?? defaultCodexMcpEnv;
+  const runtime = buildCodexMcpRuntimeCommand(options);
   const args = ["mcp", "add"];
   for (const [key, value] of Object.entries(env)) {
     args.push("--env", `${key}=${value}`);
   }
-  args.push(
-    options.name,
-    "--",
-    detectNpxCommand(options.platform),
-    "-y",
-    `locus-memory@${options.version}`,
-    "mcp"
-  );
+  args.push(options.name, "--", runtime.command, ...runtime.args);
   return args;
 }
 function buildCodexMcpRemoveArgs(name) {
@@ -560,27 +579,37 @@ import { basename } from "node:path";
 // packages/codex/src/importer.ts
 import { readFileSync as readFileSync5 } from "node:fs";
 
-// packages/codex/src/inbox-writer.ts
-import { existsSync as existsSync5, mkdirSync as mkdirSync4, renameSync as renameSync3, writeFileSync as writeFileSync5 } from "node:fs";
+// packages/shared-runtime/normalize-path.js
+import { normalize } from "node:path";
+
+// packages/shared-runtime/project-hash.js
+import { createHash as createHash2 } from "node:crypto";
+
+// packages/shared-runtime/resolve-storage.js
+import { homedir as homedir2 } from "node:os";
 import { join as join6 } from "node:path";
 
+// packages/codex/src/inbox-writer.ts
+import { existsSync as existsSync5, mkdirSync as mkdirSync4, renameSync as renameSync3, writeFileSync as writeFileSync5 } from "node:fs";
+import { join as join7 } from "node:path";
+
 // packages/codex/src/paths.ts
-import { homedir as homedir2 } from "node:os";
-import { join as join7, resolve as resolve3 } from "node:path";
+import { homedir as homedir3 } from "node:os";
+import { join as join8, resolve as resolve3 } from "node:path";
 
 // packages/codex/src/session-files.ts
 import { readdirSync as readdirSync2 } from "node:fs";
-import { basename as basename2, join as join8, resolve as resolve4 } from "node:path";
+import { basename as basename2, join as join9, resolve as resolve4 } from "node:path";
 
 // packages/codex/src/plugin-sync.ts
 import { copyFileSync as copyFileSync3, existsSync as existsSync6, mkdirSync as mkdirSync5, readFileSync as readFileSync6, rmSync as rmSync3, writeFileSync as writeFileSync6 } from "node:fs";
-import { dirname as dirname3, join as join9, resolve as resolve5 } from "node:path";
+import { dirname as dirname3, join as join10, resolve as resolve5 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/codex/src/skill-sync.ts
 import { copyFileSync as copyFileSync4, existsSync as existsSync7, mkdirSync as mkdirSync6, readFileSync as readFileSync7 } from "node:fs";
-import { homedir as homedir3 } from "node:os";
-import { dirname as dirname4, join as join10, resolve as resolve6 } from "node:path";
+import { homedir as homedir4 } from "node:os";
+import { dirname as dirname4, join as join11, resolve as resolve6 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 function resolveCanonicalCodexSkillPath() {
   return resolve6(fileURLToPath3(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
@@ -667,14 +696,15 @@ function formatInstallCodexDryRun(options = {}) {
   const env = options.env ?? process.env;
   const codexHome = resolveCodexHome(env);
   const skillPath = resolveCodexSkillPath(env, "locus-memory");
+  const runtimePackage = resolveRuntimePackageOverride(env);
   const runtimeSpecifier = buildRuntimePackageSpecifier(resolvePackageVersion(options.startDir));
-  const lockPath = join11(codexHome, ".locus-install.lock");
+  const lockPath = join12(codexHome, ".locus-install.lock");
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
   return [
     "Locus Codex install dry-run",
     `Codex home: ${codexHome}`,
     `Skill path: ${skillPath}`,
-    `MCP runtime: npx -y ${runtimeSpecifier} mcp`,
+    `MCP runtime: ${formatRuntimeCommand(runtimeSpecifier, runtimePackage)}`,
     `MCP cwd: ${codexHome}`,
     `Hooks path: ${resolveCodexHooksPath(env)}`,
     `Hooks: ${options.withHooks ? "requested (would install)" : "not requested"}`,
@@ -690,6 +720,7 @@ async function runInstallCodex(options) {
   const mcpEnv = { CODEX_HOME: codexHome, ...defaultCodexMcpEnv };
   const version = resolvePackageVersion(options.startDir);
   const runtimeSpecifier = buildRuntimePackageSpecifier(version);
+  const runtimePackage = resolveRuntimePackageOverride(env);
   const lock = acquireInstallLock(codexHome);
   if (!lock.acquired) {
     return {
@@ -701,14 +732,14 @@ async function runInstallCodex(options) {
     const cleanup = cleanupInterruptedInstall(codexHome);
     const cacheResult = await options.commandRunner(
       "npm",
-      ["exec", "-y", runtimeSpecifier, "--", "--help"],
+      buildRuntimeAvailabilityArgs(runtimeSpecifier, runtimePackage),
       { cwd: codexHome, env: { CODEX_HOME: codexHome } }
     );
     if (cacheResult.exitCode !== 0) {
       return {
         exitCode: 1,
         output: [
-          `Runtime package unavailable: ${runtimeSpecifier}`,
+          `Runtime package unavailable: ${runtimePackage ?? runtimeSpecifier}`,
           "No Codex MCP config was changed.",
           "This is expected before the package is published to npm unless it already exists in the npm cache.",
           cacheResult.stderr.trim()
@@ -751,6 +782,7 @@ async function runInstallCodex(options) {
       buildCodexMcpAddArgs({
         name: "locus",
         version,
+        runtimePackage,
         platform: options.platform,
         env: mcpEnv
       }),
@@ -761,7 +793,10 @@ async function runInstallCodex(options) {
         exitCode: 1,
         output: [
           "Partial state: no skill was installed because Codex MCP configuration failed.",
-          `Remediation: codex mcp add locus -- npx -y ${runtimeSpecifier} mcp`,
+          `Remediation: codex mcp add locus -- ${formatRuntimeCommand(
+            runtimeSpecifier,
+            runtimePackage
+          )}`,
           addResult.stderr.trim()
         ].join("\n")
       };
@@ -791,6 +826,18 @@ async function runInstallCodex(options) {
   } finally {
     lock.release?.();
   }
+}
+function buildRuntimeAvailabilityArgs(runtimeSpecifier, runtimePackage) {
+  if (runtimePackage) {
+    return ["exec", "--yes", "--package", runtimePackage, "--", "locus-memory", "--help"];
+  }
+  return ["exec", "-y", runtimeSpecifier, "--", "--help"];
+}
+function formatRuntimeCommand(runtimeSpecifier, runtimePackage) {
+  if (runtimePackage) {
+    return `npm exec --yes --package ${runtimePackage} -- locus-memory mcp`;
+  }
+  return `npx -y ${runtimeSpecifier} mcp`;
 }
 
 // packages/cli/src/commands/mcp.ts

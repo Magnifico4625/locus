@@ -62,6 +62,15 @@ describe('SemanticMemory (FTS5 enabled)', () => {
     expect(entry.tags).toEqual([]);
   });
 
+  it('add stores a normalized project root when provided', () => {
+    const entry = mem.add('Track D project-scoped semantic memory', ['track-d'], {
+      projectRoot: 'C:\\Users\\Admin\\Project',
+    });
+
+    expect(entry.projectRoot).toBe('c:/users/admin/project');
+    expect(mem.list()[0]?.projectRoot).toBe('c:/users/admin/project');
+  });
+
   it('add assigns distinct ids to multiple entries', () => {
     const a = mem.add('Decision A', []);
     const b = mem.add('Decision B', []);

@@ -11,6 +11,7 @@ export type CanonicalTopicKey =
   | 'codex_hooks_strategy'
   | 'database_choice'
   | 'track_c_acceptance'
+  | 'track_d_memory_reliability'
   | 'user_workflow_style';
 
 interface TopicKeyRule {
@@ -88,6 +89,18 @@ const TOPIC_KEY_RULES: TopicKeyRule[] = [
       ['acceptance', 'track c'],
       ['recall', 'fixtures', 'docs', 'matrix'],
     ],
+  },
+  {
+    key: 'track_d_memory_reliability',
+    memoryTypes: ['next_step', 'validation_fact', 'decision'],
+    any: [
+      'track d',
+      'memory reliability',
+      'project-scoped recall',
+      'date buckets',
+      'memory_calendar',
+    ],
+    all: [['track d', 'memory', 'recall']],
   },
 ];
 

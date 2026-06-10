@@ -4,6 +4,7 @@ import type { MemoryEntry } from '../types.js';
 
 export interface RememberDeps {
   semantic: SemanticMemory;
+  projectRoot?: string;
 }
 
 /**
@@ -15,5 +16,5 @@ export interface RememberDeps {
  */
 export function handleRemember(text: string, tags: string[], deps: RememberDeps): MemoryEntry {
   const redacted = redact(text);
-  return deps.semantic.add(redacted, tags);
+  return deps.semantic.add(redacted, tags, { projectRoot: deps.projectRoot });
 }

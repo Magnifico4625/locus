@@ -1,5 +1,6 @@
 import { readdirSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
+import { normalizeProjectRootForScope } from '../recall/project-scope.js';
 import { isDenylisted } from '../security/file-ignore.js';
 import { redact } from '../security/redact.js';
 import type { CaptureLevel, DatabaseAdapter, InboxEvent, IngestMetrics } from '../types.js';
@@ -14,6 +15,8 @@ export interface ProcessInboxOptions {
   captureLevel?: CaptureLevel;
   /** Whether FTS5 is available for full-text indexing. Default: false. */
   fts5Available?: boolean;
+  /** Canonical current project root used to collapse subdirectory Codex cwd values. */
+  projectRoot?: string;
 }
 
 /**
@@ -120,6 +123,7 @@ export function processInbox(
     try {
       // Phase 3: TRANSFORM — redact secrets in payload
       const payloadJson = redact(JSON.stringify(event.payload));
+      const projectRoot = canonicalStoredProjectRoot(event.project_root, options?.projectRoot);
 
       // Phase 4: STORE — write to conversation_events
       const result = db.run(
@@ -131,7 +135,7 @@ export function processInbox(
           event.event_id,
           event.source,
           event.source_event_id ?? null,
-          event.project_root,
+          projectRoot,
           event.session_id ?? null,
           event.timestamp,
           event.kind,
@@ -178,6 +182,27 @@ export function processInbox(
 
   metrics.durationMs = Date.now() - start;
   return metrics;
+}
+
+function canonicalStoredProjectRoot(eventProjectRoot: string, currentProjectRoot?: string): string {
+  const eventRoot = normalizeProjectRootForScope(eventProjectRoot);
+  if (!currentProjectRoot) {
+    return eventRoot;
+  }
+
+  const currentRoot = normalizeProjectRootForScope(currentProjectRoot);
+  if (eventRoot === currentRoot || isInsideProjectRoot(eventRoot, currentRoot)) {
+    return currentRoot;
+  }
+
+  return eventRoot;
+}
+
+function isInsideProjectRoot(eventRoot: string, currentRoot: string): boolean {
+  if (currentRoot === '/' || /^[a-z]:\/$/u.test(currentRoot)) {
+    return eventRoot.startsWith(currentRoot);
+  }
+  return eventRoot.startsWith(`${currentRoot}/`);
 }
 
 /**
