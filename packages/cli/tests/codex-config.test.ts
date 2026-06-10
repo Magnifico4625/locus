@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildCodexMcpAddArgs,
   buildCodexMcpRemoveArgs,
+  detectNpmCommand,
   detectNpxCommand,
 } from '../src/codex/commands.js';
 import {
@@ -34,6 +35,8 @@ describe('codex mcp config model', () => {
   it('builds a pinned package MCP server for the current platform', () => {
     expect(detectNpxCommand('linux')).toBe('npx');
     expect(detectNpxCommand('win32')).toBe('npx.cmd');
+    expect(detectNpmCommand('linux')).toBe('npm');
+    expect(detectNpmCommand('win32')).toBe('npm.cmd');
 
     const server = buildMcpServerConfig({
       version: '3.7.0',
@@ -51,12 +54,49 @@ describe('codex mcp config model', () => {
     });
   });
 
+  it('builds a local tarball MCP server for prepublish smoke validation', () => {
+    const runtimePackage = 'C:\\tmp\\locus-memory-3.7.0.tgz';
+    const server = buildMcpServerConfig({
+      version: '3.7.0',
+      runtimePackage,
+      platform: 'win32',
+      cwd: 'C:\\Users\\Admin\\.codex',
+    });
+
+    expect(server.command).toBe('npm.cmd');
+    expect(server.args).toEqual([
+      'exec',
+      '--yes',
+      '--package',
+      runtimePackage,
+      '--',
+      'locus-memory',
+      'mcp',
+    ]);
+    expect(classifyMcpOwnership(server)).toBe('package-owned');
+  });
+
   it('classifies ownership states explicitly', () => {
     expect(classifyMcpOwnership(undefined)).toBe('missing');
     expect(
       classifyMcpOwnership({
         command: 'npx',
         args: ['-y', 'locus-memory@3.7.0', 'mcp'],
+        cwd: 'C:/Users/Admin/.codex',
+      }),
+    ).toBe('package-owned');
+    expect(
+      classifyMcpOwnership({
+        command: 'npm.cmd',
+        args: [
+          'exec',
+          '--yes',
+          '--package',
+          'C:\\tmp\\locus-memory-3.7.0.tgz',
+          '--',
+          'locus-memory',
+          'mcp',
+        ],
         cwd: 'C:/Users/Admin/.codex',
       }),
     ).toBe('package-owned');
@@ -126,6 +166,37 @@ describe('codex mcp config model', () => {
       'mcp',
     ]);
     expect(buildCodexMcpRemoveArgs('locus')).toEqual(['mcp', 'remove', 'locus']);
+  });
+
+  it('builds codex mcp add args for a local runtime package override', () => {
+    const runtimePackage = 'C:\\tmp\\locus-memory-3.7.0.tgz';
+    const addArgs = buildCodexMcpAddArgs({
+      name: 'locus',
+      version: '3.7.0',
+      runtimePackage,
+      platform: 'win32',
+    });
+
+    expect(addArgs).toEqual([
+      'mcp',
+      'add',
+      '--env',
+      'LOCUS_LOG=error',
+      '--env',
+      'LOCUS_CODEX_CAPTURE=redacted',
+      '--env',
+      'LOCUS_CAPTURE_LEVEL=redacted',
+      'locus',
+      '--',
+      'npm.cmd',
+      'exec',
+      '--yes',
+      '--package',
+      runtimePackage,
+      '--',
+      'locus-memory',
+      'mcp',
+    ]);
   });
 
   it('includes CODEX_HOME in MCP env when provided by the installer', () => {

@@ -128,6 +128,12 @@ describe('publishable package contract', () => {
     expect(files).toContain('dist/server.js');
     expect(files).toContain('dist/cli.js');
     expect(files).toContain('packages/codex/skills/locus-memory/SKILL.md');
+    expect(files).toContain('packages/codex/README.md');
+    expect(files).toContain('packages/codex/config/config.toml.example');
+    expect(files).toContain('plugins/locus-memory/.codex-plugin/plugin.json');
+    expect(files).toContain('plugins/locus-memory/.mcp.json');
+    expect(files).toContain('plugins/locus-memory/skills/locus-memory/SKILL.md');
+    expect(files).toContain('docs/releases/v3.7.0.md');
     expect(files).toContain('README.md');
     expect(files).toContain('LICENSE');
     expect(files).not.toContain('dist/marketplace/.agents/plugins/marketplace.json');

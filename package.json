@@ -15,6 +15,12 @@
     "dist/server.js",
     "dist/cli.js",
     "packages/codex/skills/locus-memory/SKILL.md",
+    "packages/codex/README.md",
+    "packages/codex/config/config.toml.example",
+    "plugins/locus-memory/.mcp.json",
+    "plugins/locus-memory/.codex-plugin/plugin.json",
+    "plugins/locus-memory/skills/locus-memory/SKILL.md",
+    "docs/releases/v3.7.0.md",
     "LICENSE",
     "README.md"
   ],

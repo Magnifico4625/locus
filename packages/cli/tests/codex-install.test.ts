@@ -335,6 +335,77 @@ describe('codex install model', () => {
     );
   });
 
+  it('installs Codex MCP config from a local tarball runtime override', async () => {
+    const codexHome = makeTempDir();
+    const runtimePackage = 'C:\\tmp\\locus-memory-3.7.0.tgz';
+    const commands: Array<{
+      command: string;
+      args: string[];
+      cwd?: string;
+      env?: Record<string, string | undefined>;
+    }> = [];
+    const { io, stdout } = createIo();
+
+    const exitCode = await runCli(['install', 'codex', '--yes'], io, {
+      env: { CODEX_HOME: codexHome, LOCUS_CODEX_RUNTIME_PACKAGE: runtimePackage },
+      startDir: repoRoot,
+      platform: 'win32',
+      commandRunner: async (command, args, options) => {
+        commands.push({
+          command,
+          args,
+          ...(options?.cwd ? { cwd: options.cwd } : {}),
+          ...(options?.env ? { env: options.env } : {}),
+        });
+        if (args.includes('add')) {
+          writeFileSync(
+            join(codexHome, 'config.toml'),
+            [
+              '[mcp_servers.locus]',
+              'command = "npm.cmd"',
+              `args = ["exec", "--yes", "--package", "${runtimePackage.replaceAll('\\', '\\\\')}", "--", "locus-memory", "mcp"]`,
+              '',
+            ].join('\n'),
+            'utf8',
+          );
+        }
+        return { exitCode: 0, stdout: '', stderr: '' };
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(commands[0]).toEqual({
+      command: 'npm',
+      args: ['exec', '--yes', '--package', runtimePackage, '--', 'locus-memory', '--help'],
+      cwd: codexHome,
+      env: { CODEX_HOME: codexHome },
+    });
+    expect(commands[2]).toEqual({
+      command: 'codex',
+      args: expect.arrayContaining([
+        'mcp',
+        'add',
+        '--env',
+        `CODEX_HOME=${codexHome}`,
+        'locus',
+        '--',
+        'npm.cmd',
+        'exec',
+        '--yes',
+        '--package',
+        runtimePackage,
+        '--',
+        'locus-memory',
+        'mcp',
+      ]),
+      env: { CODEX_HOME: codexHome },
+    });
+    expect(stdout.join('\n')).toContain('Locus Codex install complete');
+    expect(readFileSync(join(codexHome, 'skills', 'locus-memory', 'SKILL.md'), 'utf8')).toContain(
+      'memory_recall',
+    );
+  });
+
   it('installs Codex hooks only when explicitly requested', async () => {
     const codexHome = makeTempDir();
     const { io, stdout } = createIo();

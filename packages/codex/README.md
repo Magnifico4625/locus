@@ -69,6 +69,13 @@ Command roles:
 - `npm run sync:codex-marketplace` generates the public distribution bundle without committing or pushing another repository
 - `npm run sync:codex-skill` updates the installed skill-only path for manual MCP setups
 
+For pre-publish tarball smoke tests, set `LOCUS_CODEX_RUNTIME_PACKAGE` to the local
+`locus-memory-<version>.tgz` path before running `locus-memory install codex --yes`.
+The installer will use `npm exec --package <tgz> -- locus-memory mcp` for that
+temporary MCP config. Do not use this as normal user-facing setup after the
+version is published; the default pinned `locus-memory@<version>` runtime is the
+release path.
+
 For useful conversational recall, configure Codex with `redacted` capture:
 
 ```toml

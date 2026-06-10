@@ -44,6 +44,13 @@ export function buildRuntimePackageSpecifier(version: string): string {
   return `locus-memory@${version}`;
 }
 
+export function resolveRuntimePackageOverride(
+  env: Record<string, string | undefined> = process.env,
+): string | undefined {
+  const value = env.LOCUS_CODEX_RUNTIME_PACKAGE?.trim();
+  return value ? value : undefined;
+}
+
 export function isLatestSpecifier(specifier: string): boolean {
   return /@latest(?:$|\s)/.test(specifier);
 }
