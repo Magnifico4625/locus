@@ -489,8 +489,8 @@ Secondary IDE adapters should be scheduled only when they do not block the Codex
 1. Prepare the `v3.7.0` release path:
    - local `npm pack` smoke is complete: `locus-memory-3.7.0.tgz` contains the intended runtime files, plugin manifest, skill, config, docs, and `3.7.0` metadata
    - local tarball `install codex --yes` smoke is complete with `LOCUS_CODEX_RUNTIME_PACKAGE=<tgz>` and isolated `CODEX_HOME`
-   - run a post-publish `npx -y locus-memory@3.7.0 install codex --yes` smoke
-   - verify `codex mcp get locus` from the intended Codex CLI/Desktop environment
+   - post-publish registry smoke is complete: `npx --yes locus-memory@3.7.0 --version` returned `3.7.0`, `install codex --yes` completed, and `codex mcp get locus` points at `npx.cmd -y locus-memory@3.7.0 mcp`
+   - verify `codex mcp get locus` from the intended long-lived Codex CLI/Desktop environment after reload
    - reload Desktop and confirm the live registry exposes `memory_calendar` and `memory_project_state`
 2. Improve Track D follow-ups without broadening the release claim:
    - richer evidence-anchor display for commits, files, docs, command results, timestamps, and sessions
