@@ -2110,7 +2110,7 @@ function buildBucketsForCandidates(
     if (candidate.timestamp === undefined) {
       continue;
     }
-    if (candidate.timestamp < resolvedRange.from || candidate.timestamp > resolvedRange.to) {
+    if (candidate.timestamp < resolvedRange.from || candidate.timestamp >= resolvedRange.to) {
       continue;
     }
 
@@ -2263,7 +2263,7 @@ if (options.projectRoot && candidate.projectRoot && isSameProjectRoot(candidate.
   score += 10;
 }
 if (options.resolvedRange && candidate.timestamp !== undefined) {
-  if (candidate.timestamp >= options.resolvedRange.from && candidate.timestamp <= options.resolvedRange.to) {
+  if (candidate.timestamp >= options.resolvedRange.from && candidate.timestamp < options.resolvedRange.to) {
     score += 5;
   }
 }
@@ -3425,7 +3425,7 @@ Modify:
 
 Required wording:
 
-- Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes.
+- Codex Desktop MCP marker/config path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; fresh live visibility of newly added tools still requires a Desktop/MCP reload smoke.
 - `LOCUS_CODEX_SURFACE` is a diagnostic/debug override. It can intentionally simulate `desktop`, `extension`, or `cli`, but it can also mislead diagnostics if a user leaves it set accidentally.
 - `memory_calendar` is the recommended first tool for broad period questions.
 - `memory_calendar` defaults to `last_30d`; agents should pass `this_month`, `last_month`, or an explicit range for user period questions instead of relying on the default.
@@ -3468,7 +3468,7 @@ Implementation note:
 - The Track D fixture source files keep the requested names, but integration tests copy them into Codex sessions as `rollout-*.jsonl` because `findCodexRolloutFiles()` intentionally imports only rollout JSONL files.
 - The May period tests fix `Date.now()` to `2026-05-30T12:00:00.000Z`; otherwise `this_month` would correctly resolve to June on the current 2026-06-08 test date and make the May fixtures a false negative.
 - Desktop acceptance uses `memory_recall` to trigger the same debounced pre-query auto-import path, then asserts marker recall, `memory_status` desktop diagnostics, auto-import snapshot surface/import count, and `memory_doctor` desktop parity.
-- Documentation now states the exact proof level: Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; extension parity still requires target-surface validation, and the env override remains diagnostic/debug-only.
+- Documentation now states the exact proof level: Codex Desktop MCP marker/config path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; fresh live visibility of newly added tools still requires a Desktop/MCP reload smoke, extension parity still requires target-surface validation, and the env override remains diagnostic/debug-only.
 
 ---
 
@@ -3604,28 +3604,28 @@ Result: satisfied by commit `chore(codex): validate track d memory reliability`.
 ## Review Gates
 
 - [x] Review this plan before Task D0 is executed.
-- [ ] Execute one task at a time.
-- [ ] Stop for user review after each commit.
-- [ ] Do not start HTML dashboard work until Track D is passing focused acceptance.
-- [ ] Do not claim Codex Desktop parity beyond the evidence recorded by Track D tests and the live Desktop smoke.
-- [ ] Keep this plan synchronized as implementation progresses: mark completed steps, record verification evidence, and keep docs changes in the same task commit when they describe shipped behavior.
+- [x] Execute one task at a time.
+- [x] Stop for user review after each commit.
+- [x] Do not start HTML dashboard work until Track D is passing focused acceptance.
+- [x] Do not claim Codex Desktop parity beyond the evidence recorded by Track D tests and the live Desktop smoke.
+- [x] Keep this plan synchronized as implementation progresses: mark completed steps, record verification evidence, and keep docs changes in the same task commit when they describe shipped behavior.
 
 ## Validation Matrix
 
 Minimum final evidence:
 
-- [ ] `npm test -- packages/core/tests/recall`
-- [ ] `npm test -- packages/core/tests/tools/recall.test.ts`
-- [ ] `npm test -- packages/core/tests/tools/calendar.test.ts`
-- [ ] `npm test -- packages/core/tests/tools/project-state.test.ts`
-- [ ] `npm test -- packages/core/tests/tools/status.test.ts`
-- [ ] `npm test -- packages/core/tests/tools/doctor.test.ts`
-- [ ] `npm test -- packages/core/tests/tools/codex-diagnostics.test.ts`
-- [ ] `npm test -- packages/core/tests/integration/track-d-memory-reliability.test.ts`
-- [ ] `npm test -- packages/codex/tests`
-- [ ] `npm run check`
-- [ ] `npm run build`
-- [ ] Codex Desktop live MCP smoke
+- [x] `npm test -- packages/core/tests/recall`
+- [x] `npm test -- packages/core/tests/tools/recall.test.ts`
+- [x] `npm test -- packages/core/tests/tools/calendar.test.ts`
+- [x] `npm test -- packages/core/tests/tools/project-state.test.ts`
+- [x] `npm test -- packages/core/tests/tools/status.test.ts`
+- [x] `npm test -- packages/core/tests/tools/doctor.test.ts`
+- [x] `npm test -- packages/core/tests/tools/codex-diagnostics.test.ts`
+- [x] `npm test -- packages/core/tests/integration/track-d-memory-reliability.test.ts`
+- [x] `npm test -- packages/codex/tests`
+- [x] `npm run check`
+- [x] `npm run build`
+- [x] Codex Desktop MCP config smoke plus active-session caveat; fresh Desktop/MCP reload smoke for newly added tool registry remains a post-D8 validation follow-up before broad Desktop parity claims.
 
 ## Self-Review
 

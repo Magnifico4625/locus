@@ -291,7 +291,7 @@ Implementation note:
 - Track D project-scoped recall isolates durable topic keys by `projectRoot`; the same `topic_key` may exist in two projects without leaking across recall/search/timeline results. A separate user-configurable topic namespace filter remains a follow-up if acceptance testing shows a real need beyond project-root isolation.
 - `memory_calendar` is the recommended first tool for broad period questions. It defaults to `last_30d`, so agents should pass `this_month`, `last_month`, or an explicit range for user period questions instead of relying on the default.
 - Date-scoped `memory_recall` reports searched date buckets, and current-project recall must not mix other project memories unless the user explicitly asks for global recall.
-- Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; `LOCUS_CODEX_SURFACE` remains a diagnostic/debug override that can mislead diagnostics if left set accidentally.
+- Codex Desktop marker/config behavior is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; fresh live visibility of newly added tools still requires a Desktop/MCP reload smoke, and `LOCUS_CODEX_SURFACE` remains a diagnostic/debug override that can mislead diagnostics if left set accidentally.
 - Evidence anchors remain a follow-up: candidates expose source event IDs, durable IDs, project roots, and date metadata now; richer display formatting for commits, files, docs, command results, and timestamps can ship after project-scoped behavior is proven.
 
 ### Key constraints

@@ -6,7 +6,7 @@ import type {
   MemoryRecallCandidate,
   TimeRange,
 } from '../types.js';
-import { weekBucket } from './calendar.js';
+import { dayBucket, monthBucket, weekBucket } from './calendar.js';
 import { buildProjectScopeClause } from './project-scope.js';
 import type { ParsedRecallQuery } from './query-parser.js';
 
@@ -121,14 +121,14 @@ function candidateDateFields(
     return {};
   }
 
-  const date = new Date(timestamp);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
+  const mode = 'local';
+  const day = dayBucket(timestamp, { mode });
+  const week = weekBucket(timestamp, { mode });
+  const month = monthBucket(timestamp, { mode });
   return {
-    localDate: `${year}-${month}-${day}`,
-    weekKey: weekBucket(timestamp, { mode: 'local' }).key,
-    monthKey: `${year}-${month}`,
+    localDate: day.key,
+    weekKey: week.key,
+    monthKey: month.key,
   };
 }
 

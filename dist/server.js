@@ -35660,14 +35660,14 @@ function candidateDateFields(timestamp) {
   if (timestamp === void 0) {
     return {};
   }
-  const date5 = new Date(timestamp);
-  const year = date5.getFullYear();
-  const month = String(date5.getMonth() + 1).padStart(2, "0");
-  const day = String(date5.getDate()).padStart(2, "0");
+  const mode = "local";
+  const day = dayBucket(timestamp, { mode });
+  const week = weekBucket(timestamp, { mode });
+  const month = monthBucket(timestamp, { mode });
   return {
-    localDate: `${year}-${month}-${day}`,
-    weekKey: weekBucket(timestamp, { mode: "local" }).key,
-    monthKey: `${year}-${month}`
+    localDate: day.key,
+    weekKey: week.key,
+    monthKey: month.key
   };
 }
 function escapeRegExp(value) {

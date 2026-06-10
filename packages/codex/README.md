@@ -95,7 +95,7 @@ Track D adds project-scoped and date-aware recall, `memory_calendar`, freshness/
 
 Last documented local validation target: Codex CLI `0.138.0` from PATH and Codex Desktop-bundled CLI `0.137.0-alpha.4` with `CODEX_HOME=C:\Users\Admin\.codex` as of June 9, 2026. Track D local smoke confirmed `codex mcp get locus` points at this repo's `dist/server.js`; the active Desktop MCP session still required a reload before new tools such as `memory_calendar` and `memory_project_state` appeared in the live tool registry. Registry-hosted `locus-memory@3.7.0` validation must run after npm publish.
 
-Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and the Track D marker acceptance validates the desktop MCP path when `LOCUS_CODEX_SURFACE=desktop` is set. `memory_status` and `memory_doctor` can report an observed desktop MCP path when Codex diagnostics detect a desktop surface with retained Codex events. Extension parity still requires target-surface testing.
+Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and Track D validates the desktop marker/config path when `LOCUS_CODEX_SURFACE=desktop` is set. `memory_status` and `memory_doctor` can report an observed desktop MCP path when Codex diagnostics detect a desktop surface with retained Codex events. Fresh live Desktop visibility of newly added tools still requires an MCP/Desktop reload smoke; extension parity still requires target-surface testing.
 
 ## Codex JSONL Import
 
@@ -137,7 +137,7 @@ The canonical Locus Codex skill assumes this workflow:
 
 If `memory_recall` returns `needs_clarification`, inspect `candidateGroups` and ask the user a focused follow-up. Do not say "I do not remember" until Locus has been checked.
 
-This workflow is optimized and validated for Codex CLI. Codex Desktop MCP path is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
+This workflow is optimized and validated for Codex CLI. Codex Desktop marker/config behavior is validated when `LOCUS_CODEX_SURFACE=desktop` and Track D marker acceptance passes; newly added live tool registry visibility still needs a fresh Desktop/MCP reload smoke. In the Codex VS Code extension, the same MCP setup may work when the extension exposes MCP tools, but that still depends on upstream preview support.
 
 For the extension-specific setup, reload, and troubleshooting flow, use the dedicated guide:
 

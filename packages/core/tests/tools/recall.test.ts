@@ -153,6 +153,12 @@ describe('handleRecall', () => {
       payloadJson: JSON.stringify({ summary: 'Track D April checkpoint completed.' }),
       sessionId: 'sess-april',
     });
+    insertConversationEvent(adapter, {
+      eventId: 'evt-track-d-june-boundary',
+      timestamp: Date.parse('2026-06-01T00:00:00.000Z'),
+      payloadJson: JSON.stringify({ summary: 'Track D June boundary checkpoint completed.' }),
+      sessionId: 'sess-june',
+    });
 
     const result = handleRecall(
       'What did we do for Track D?',
