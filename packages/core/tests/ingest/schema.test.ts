@@ -129,4 +129,40 @@ describe('validateInboxEvent', () => {
     const input = makeValidEvent({ timestamp: -1 });
     expect(validateInboxEvent(input)).toBeNull();
   });
+
+  it('rejects non-string session_id or source_event_id', () => {
+    expect(validateInboxEvent({ ...makeValidEvent(), session_id: 123 })).toBeNull();
+    expect(validateInboxEvent({ ...makeValidEvent(), source_event_id: 456 })).toBeNull();
+  });
+
+  it('rejects zero, NaN, Infinity timestamps and non-object payload', () => {
+    expect(validateInboxEvent(makeValidEvent({ timestamp: 0 }))).toBeNull();
+    expect(validateInboxEvent(makeValidEvent({ timestamp: Number.NaN }))).toBeNull();
+    expect(validateInboxEvent(makeValidEvent({ timestamp: Number.POSITIVE_INFINITY }))).toBeNull();
+    expect(validateInboxEvent({ ...makeValidEvent(), payload: null })).toBeNull();
+    expect(validateInboxEvent({ ...makeValidEvent(), payload: [] })).toBeNull();
+    expect(validateInboxEvent({ ...makeValidEvent(), payload: 'str' })).toBeNull();
+  });
+
+  it('strips unknown top-level keys while preserving valid fields', () => {
+    const input = {
+      ...makeValidEvent({ session_id: 'sess-9' }),
+      extra_field: 'should-be-stripped',
+      nested_extra: { a: 1 },
+    };
+    const result = validateInboxEvent(input);
+    expect(result).not.toBeNull();
+    expect(result).toEqual({
+      version: 1,
+      event_id: 'a1b2c3d4-5678-9abc-def0-1234567890ab',
+      source: 'claude-code',
+      project_root: '/home/user/myapp',
+      session_id: 'sess-9',
+      timestamp: 1708876543210,
+      kind: 'tool_use',
+      payload: { tool: 'Bash', files: [], status: 'success' },
+    });
+    expect(Object.hasOwn(result as object, 'extra_field')).toBe(false);
+    expect(Object.hasOwn(result as object, 'source_event_id')).toBe(false);
+  });
 });

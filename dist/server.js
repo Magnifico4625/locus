@@ -6886,7 +6886,9 @@ var require_dist = __commonJS({
 });
 
 // packages/core/src/server.ts
-import { basename as basename4, dirname as dirname6, join as join13 } from "node:path";
+import { existsSync as existsSync10, readFileSync as readFileSync10 } from "node:fs";
+import { dirname as dirname7, join as join14 } from "node:path";
+import { fileURLToPath as fileURLToPath5 } from "node:url";
 
 // packages/codex/src/bounded-snippets.ts
 var USER_CHAR_LIMIT = 280;
@@ -7375,14 +7377,58 @@ function createCodexEventId(sourceEventId) {
 import { readFileSync } from "node:fs";
 
 // packages/shared-runtime/detect-client.js
+var EXPLICIT_CLIENTS = /* @__PURE__ */ new Set(["claude-code", "codex", "antigravity", "opencode", "dsh"]);
+var VALID_SURFACES = /* @__PURE__ */ new Set(["cli", "desktop", "extension"]);
 function detectClientRuntime(env = process.env, _argv = process.argv, _cwd = process.cwd()) {
+  const explicitClient = env.LOCUS_CLIENT?.trim();
+  if (explicitClient && EXPLICIT_CLIENTS.has(explicitClient)) {
+    const client = (
+      /** @type {Exclude<ClientEnv, 'generic'>} */
+      explicitClient
+    );
+    const defaultSurface = client === "antigravity" || client === "opencode" || client === "dsh" ? "desktop" : "cli";
+    const { surface, evidenceKey } = resolveSurfaceFromEnv(env, defaultSurface, client === "codex");
+    return {
+      client,
+      surface,
+      detected: true,
+      evidence: [`env:LOCUS_CLIENT=${client}`, ...evidenceKey ? [evidenceKey] : []]
+    };
+  }
+  if (hasNonEmptyValue(env.LOCUS_ANTIGRAVITY)) {
+    const { surface, evidenceKey } = resolveSurfaceFromEnv(env, "desktop", false);
+    return {
+      client: "antigravity",
+      surface,
+      detected: true,
+      evidence: ["env:LOCUS_ANTIGRAVITY", ...evidenceKey ? [evidenceKey] : []]
+    };
+  }
+  if (hasNonEmptyValue(env.LOCUS_OPENCODE)) {
+    const { surface, evidenceKey } = resolveSurfaceFromEnv(env, "desktop", false);
+    return {
+      client: "opencode",
+      surface,
+      detected: true,
+      evidence: ["env:LOCUS_OPENCODE", ...evidenceKey ? [evidenceKey] : []]
+    };
+  }
+  if (hasNonEmptyValue(env.LOCUS_DSH)) {
+    const { surface, evidenceKey } = resolveSurfaceFromEnv(env, "desktop", false);
+    return {
+      client: "dsh",
+      surface,
+      detected: true,
+      evidence: ["env:LOCUS_DSH", ...evidenceKey ? [evidenceKey] : []]
+    };
+  }
   if (hasNonEmptyValue(env.CODEX_HOME)) {
-    const surface = codexSurfaceFromEnv(env);
+    const { surface, evidenceKey } = resolveSurfaceFromEnv(env, "cli", true);
     return {
       client: "codex",
       surface,
       detected: true,
-      evidence: surface === "cli" ? ["env:CODEX_HOME"] : ["env:CODEX_HOME", `env:LOCUS_CODEX_SURFACE=${surface}`]
+      evidence: ["env:CODEX_HOME", ...evidenceKey ? [evidenceKey] : []]
     };
   }
   if (hasNonEmptyValue(env.CLAUDE_PLUGIN_ROOT)) {
@@ -7406,18 +7452,74 @@ function detectClientEnv() {
 function hasNonEmptyValue(value) {
   return typeof value === "string" && value.trim().length > 0;
 }
-function codexSurfaceFromEnv(env) {
-  const value = env.LOCUS_CODEX_SURFACE;
-  if (value === "desktop" || value === "extension" || value === "cli") {
-    return value;
+function resolveSurfaceFromEnv(env, defaultSurface, includeCodexOverride) {
+  const genericSurface = env.LOCUS_CLIENT_SURFACE;
+  if (genericSurface && VALID_SURFACES.has(genericSurface)) {
+    return {
+      surface: (
+        /** @type {ClientSurface} */
+        genericSurface
+      ),
+      evidenceKey: `env:LOCUS_CLIENT_SURFACE=${genericSurface}`
+    };
   }
-  return "cli";
+  if (includeCodexOverride) {
+    const codexSurface = env.LOCUS_CODEX_SURFACE;
+    if (codexSurface && VALID_SURFACES.has(codexSurface)) {
+      return {
+        surface: (
+          /** @type {ClientSurface} */
+          codexSurface
+        ),
+        evidenceKey: `env:LOCUS_CODEX_SURFACE=${codexSurface}`
+      };
+    }
+  }
+  return {
+    surface: (
+      /** @type {ClientSurface} */
+      defaultSurface
+    ),
+    evidenceKey: void 0
+  };
 }
 
 // packages/shared-runtime/normalize-path.js
 import { normalize } from "node:path";
+import { fileURLToPath } from "node:url";
 function normalizePathForIdentity(pathValue) {
-  return normalize(pathValue).replace(/\\/g, "/").toLowerCase();
+  let value = pathValue.trim();
+  if (/^file:\/\//i.test(value)) {
+    try {
+      value = fileURLToPath(value);
+    } catch {
+      value = value.replace(/^file:\/\/(?:localhost)?/i, "");
+      if (/^\/[a-zA-Z]:[\\/]/.test(value)) {
+        value = value.slice(1);
+      }
+    }
+  }
+  let isUnc = false;
+  if (/^(?:\\\\\?\\|\/\/\?\/)UNC[\\/]/i.test(value)) {
+    value = value.replace(/^(?:\\\\\?\\|\/\/\?\/)UNC[\\/]/i, "\\\\");
+    isUnc = true;
+  } else if (/^(?:\\\\\?\\|\/\/\?\/)(?=[a-zA-Z]:[\\/])/u.test(value)) {
+    value = value.replace(/^(?:\\\\\?\\|\/\/\?\/)/u, "");
+  } else if (/^(?:\\\\|\/\/)[^?/\\]/u.test(value)) {
+    isUnc = true;
+  }
+  let normalized = normalize(value).replace(/\\/g, "/");
+  if (isUnc) {
+    const withoutLeading = normalized.replace(/^\/+/u, "");
+    normalized = `//${withoutLeading.replace(/\/+/gu, "/")}`;
+  } else {
+    normalized = normalized.replace(/\/+/gu, "/");
+  }
+  normalized = normalized.toLowerCase();
+  if (normalized !== "/" && !/^[a-z]:\/$/u.test(normalized)) {
+    normalized = normalized.replace(/\/+$/u, "");
+  }
+  return normalized;
 }
 
 // packages/shared-runtime/project-hash.js
@@ -8047,13 +8149,13 @@ function canonicalImportProjectRoot(eventRoot, requestedRoot) {
 // packages/codex/src/plugin-sync.ts
 import { copyFileSync, existsSync as existsSync2, mkdirSync as mkdirSync2, readFileSync as readFileSync2, rmSync, writeFileSync as writeFileSync2 } from "node:fs";
 import { dirname, join as join5, resolve as resolve3 } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // packages/codex/src/skill-sync.ts
 import { copyFileSync as copyFileSync2, existsSync as existsSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync3 } from "node:fs";
 import { homedir as homedir3 } from "node:os";
 import { dirname as dirname2, join as join6, resolve as resolve4 } from "node:path";
-import { fileURLToPath as fileURLToPath2 } from "node:url";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
 
 // node_modules/zod/v3/helpers/util.js
 var util;
@@ -31574,28 +31676,61 @@ function escapeForLike(value) {
 }
 
 // packages/core/src/ingest/schema.ts
-var eventKinds = [
+var VALID_EVENT_KINDS = /* @__PURE__ */ new Set([
   "user_prompt",
   "ai_response",
   "tool_use",
   "file_diff",
   "session_start",
   "session_end"
-];
-var inboxEventSchema = external_exports3.object({
-  version: external_exports3.literal(1),
-  event_id: external_exports3.string().min(1),
-  source: external_exports3.string().min(1),
-  source_event_id: external_exports3.string().optional(),
-  project_root: external_exports3.string().min(1),
-  session_id: external_exports3.string().optional(),
-  timestamp: external_exports3.number().int().positive(),
-  kind: external_exports3.enum(eventKinds),
-  payload: external_exports3.record(external_exports3.string(), external_exports3.unknown())
-});
+]);
+function isPlainRecord(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function isNonEmptyString(value) {
+  return typeof value === "string" && value.length >= 1;
+}
+function isValidEventKind(value) {
+  return typeof value === "string" && VALID_EVENT_KINDS.has(value);
+}
 function validateInboxEvent(json2) {
-  const result = inboxEventSchema.safeParse(json2);
-  return result.success ? result.data : null;
+  if (!isPlainRecord(json2)) {
+    return null;
+  }
+  if (json2.version !== 1) {
+    return null;
+  }
+  if (!isNonEmptyString(json2.event_id) || !isNonEmptyString(json2.source) || !isNonEmptyString(json2.project_root)) {
+    return null;
+  }
+  if (json2.source_event_id !== void 0 && typeof json2.source_event_id !== "string") {
+    return null;
+  }
+  if (json2.session_id !== void 0 && typeof json2.session_id !== "string") {
+    return null;
+  }
+  if (typeof json2.timestamp !== "number" || !Number.isSafeInteger(json2.timestamp) || json2.timestamp <= 0) {
+    return null;
+  }
+  if (!isValidEventKind(json2.kind) || !isPlainRecord(json2.payload)) {
+    return null;
+  }
+  const event = {
+    version: 1,
+    event_id: json2.event_id,
+    source: json2.source,
+    project_root: json2.project_root,
+    timestamp: json2.timestamp,
+    kind: json2.kind,
+    payload: json2.payload
+  };
+  if (json2.source_event_id !== void 0) {
+    event.source_event_id = json2.source_event_id;
+  }
+  if (json2.session_id !== void 0) {
+    event.session_id = json2.session_id;
+  }
+  return event;
 }
 
 // packages/core/src/ingest/pipeline.ts
@@ -31820,44 +31955,6 @@ function sanitizeFtsQuery(query) {
   if (terms.length === 0) return "";
   return terms.map((t) => `"${t.replace(/"/g, "")}"`).join(" ");
 }
-
-// packages/core/src/memory/compressor.ts
-var MemoryCompressor = class {
-  config;
-  constructor(config2) {
-    this.config = config2;
-  }
-  shouldCompress(bufferTokens) {
-    switch (this.config.compressionMode) {
-      case "manual":
-        return false;
-      case "aggressive":
-        return bufferTokens > 0;
-      default:
-        return bufferTokens > this.config.compressionThreshold;
-    }
-  }
-  compress(entries) {
-    if (entries.length === 0) return "";
-    const budget = Math.floor(this.config.compressionThreshold / 2);
-    const kept = [];
-    let usedTokens = 0;
-    for (let i = entries.length - 1; i >= 0; i--) {
-      const entry = entries[i] ?? "";
-      const entryTokens = estimateTokens(entry);
-      if (usedTokens + entryTokens > budget && kept.length > 0) {
-        break;
-      }
-      kept.unshift(entry);
-      usedTokens += entryTokens;
-    }
-    const result = kept.join("\n");
-    if (estimateTokens(result) > budget) {
-      return result.slice(0, budget * 4);
-    }
-    return result;
-  }
-};
 
 // packages/core/src/memory/durable.ts
 function optionalProjectRoot(projectRoot) {
@@ -32369,7 +32466,6 @@ function mergeDurableCandidate(existingEntries, candidate) {
 }
 
 // packages/core/src/memory/durable-runner.ts
-var DEFAULT_SOURCE = "codex";
 var WATERMARK_PREFIX = "durable";
 function getWatermarkKey(source) {
   return `${WATERMARK_PREFIX}.${source}.last_event_id`;
@@ -32396,6 +32492,9 @@ function loadConversationEvents(db, source, lastEventId) {
     [source, lastEventId]
   );
 }
+function listAvailableSources(db) {
+  return db.all("SELECT DISTINCT source FROM conversation_events ORDER BY source ASC").map((row) => row.source).filter((source) => source.length > 0);
+}
 function hasDurableFts(db) {
   const row = db.get(
     "SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -32403,19 +32502,10 @@ function hasDurableFts(db) {
   );
   return (row?.cnt ?? 0) > 0;
 }
-function runDurableExtraction(db, options) {
-  const source = options?.source ?? DEFAULT_SOURCE;
-  const store = new DurableMemoryStore(db, hasDurableFts(db));
+function extractForSingleSource(db, store, source, metrics) {
   const lastEventId = getWatermark(db, source);
   const events = loadConversationEvents(db, source, lastEventId);
-  const metrics = {
-    scanned: 0,
-    inserted: 0,
-    confirmed: 0,
-    superseded: 0,
-    ignored: 0,
-    watermarkEventId: lastEventId
-  };
+  metrics.watermarkEventId = Math.max(metrics.watermarkEventId, lastEventId);
   for (const event of events) {
     const candidates = extractDurableCandidatesFromEvent(event);
     metrics.scanned++;
@@ -32461,276 +32551,25 @@ function runDurableExtraction(db, options) {
         }
       }
     }
-    metrics.watermarkEventId = event.id;
+    metrics.watermarkEventId = Math.max(metrics.watermarkEventId, event.id);
     setWatermark(db, source, event.id);
   }
+}
+function runDurableExtraction(db, options) {
+  const store = new DurableMemoryStore(db, hasDurableFts(db));
+  const sources = options?.source && options.source !== "all" ? [options.source] : listAvailableSources(db);
+  const metrics = {
+    scanned: 0,
+    inserted: 0,
+    confirmed: 0,
+    superseded: 0,
+    ignored: 0,
+    watermarkEventId: 0
+  };
+  for (const source of sources) {
+    extractForSingleSource(db, store, source, metrics);
+  }
   return metrics;
-}
-
-// packages/core/src/memory/episodic.ts
-function rowToEntry2(row) {
-  return {
-    id: row.id,
-    layer: row.layer,
-    content: row.content,
-    tags: row.tags_json ? JSON.parse(row.tags_json) : [],
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    sessionId: row.session_id ?? void 0
-  };
-}
-var EpisodicMemory = class {
-  db;
-  constructor(db) {
-    this.db = db;
-  }
-  addEvent(content, sessionId) {
-    const now = Date.now();
-    const result = this.db.run(
-      "INSERT INTO memories (layer, content, tags_json, created_at, updated_at, session_id) VALUES (?, ?, ?, ?, ?, ?)",
-      ["episodic", content, "[]", now, now, sessionId]
-    );
-    const row = this.db.get(
-      "SELECT id, layer, content, tags_json, created_at, updated_at, session_id FROM memories WHERE id = ?",
-      [result.lastInsertRowid]
-    );
-    return rowToEntry2(row);
-  }
-  getRecent(limit = 50) {
-    const rows = this.db.all(
-      "SELECT id, layer, content, tags_json, created_at, updated_at, session_id FROM memories WHERE layer = ? ORDER BY created_at DESC LIMIT ?",
-      ["episodic", limit]
-    );
-    return rows.map(rowToEntry2);
-  }
-  getBufferTokens() {
-    const rows = this.db.all("SELECT content FROM memories WHERE layer = ?", [
-      "episodic"
-    ]);
-    let total = 0;
-    for (const row of rows) {
-      total += estimateTokens(row.content);
-    }
-    return total;
-  }
-  count() {
-    const row = this.db.get(
-      "SELECT COUNT(*) as cnt FROM memories WHERE layer = ?",
-      ["episodic"]
-    );
-    return row?.cnt ?? 0;
-  }
-  sessionCount() {
-    const row = this.db.get(
-      "SELECT COUNT(DISTINCT session_id) as cnt FROM memories WHERE layer = ?",
-      ["episodic"]
-    );
-    return row?.cnt ?? 0;
-  }
-  getSessionEntries(sessionId) {
-    const rows = this.db.all(
-      "SELECT id, layer, content, tags_json, created_at, updated_at, session_id FROM memories WHERE layer = ? AND session_id = ? ORDER BY created_at ASC",
-      ["episodic", sessionId]
-    );
-    return rows.map(rowToEntry2);
-  }
-};
-
-// packages/core/src/memory/semantic.ts
-function optionalProjectRoot2(projectRoot) {
-  const trimmed = projectRoot?.trim();
-  return trimmed ? normalizeProjectRootForScope(trimmed) : null;
-}
-function hasProjectRootColumn(db) {
-  try {
-    return db.all("PRAGMA table_info(memories)").some((column) => column.name === "project_root");
-  } catch {
-    return false;
-  }
-}
-function rowToEntry3(row) {
-  return {
-    id: row.id,
-    layer: row.layer,
-    content: row.content,
-    tags: row.tags_json ? JSON.parse(row.tags_json) : [],
-    projectRoot: row.project_root ?? void 0,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-    sessionId: row.session_id ?? void 0
-  };
-}
-var SemanticMemory = class {
-  db;
-  fts5;
-  constructor(db, fts5Available) {
-    this.db = db;
-    this.fts5 = fts5Available;
-  }
-  add(content, tags, options) {
-    const now = Date.now();
-    const tagsJson = JSON.stringify(tags);
-    const projectRoot = optionalProjectRoot2(options?.projectRoot);
-    const result = hasProjectRootColumn(this.db) ? this.db.run(
-      "INSERT INTO memories (layer, content, tags_json, project_root, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
-      ["semantic", content, tagsJson, projectRoot, now, now]
-    ) : this.db.run(
-      "INSERT INTO memories (layer, content, tags_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-      ["semantic", content, tagsJson, now, now]
-    );
-    const id = result.lastInsertRowid;
-    if (this.fts5) {
-      this.db.run("INSERT INTO memories_fts(rowid, content) VALUES (?, ?)", [id, content]);
-    }
-    return {
-      id,
-      layer: "semantic",
-      content,
-      tags,
-      projectRoot: projectRoot ?? void 0,
-      createdAt: now,
-      updatedAt: now,
-      sessionId: void 0
-    };
-  }
-  search(query, limit = 20) {
-    if (this.fts5) {
-      const sanitized = sanitizeFtsQuery(query);
-      if (!sanitized) return [];
-      const rows2 = this.db.all(
-        "SELECT * FROM memories WHERE layer='semantic' AND id IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?) ORDER BY updated_at DESC LIMIT ?",
-        [sanitized, limit]
-      );
-      return rows2.map(rowToEntry3);
-    }
-    const rows = this.db.all(
-      "SELECT * FROM memories WHERE layer='semantic' AND content LIKE ? ORDER BY updated_at DESC LIMIT ?",
-      [`%${query}%`, limit]
-    );
-    return rows.map(rowToEntry3);
-  }
-  remove(id) {
-    const existing = this.db.get(
-      "SELECT * FROM memories WHERE id = ? AND layer='semantic'",
-      [id]
-    );
-    if (existing === void 0) {
-      return false;
-    }
-    if (this.fts5) {
-      this.db.run(
-        "INSERT INTO memories_fts(memories_fts, rowid, content) VALUES ('delete', ?, ?)",
-        [id, existing.content]
-      );
-    }
-    const result = this.db.run("DELETE FROM memories WHERE id = ?", [id]);
-    return result.changes > 0;
-  }
-  list(limit = 50) {
-    const rows = this.db.all(
-      "SELECT * FROM memories WHERE layer='semantic' ORDER BY updated_at DESC LIMIT ?",
-      [limit]
-    );
-    return rows.map(rowToEntry3);
-  }
-  count() {
-    const row = this.db.get(
-      "SELECT COUNT(*) as cnt FROM memories WHERE layer='semantic'"
-    );
-    return row?.cnt ?? 0;
-  }
-};
-
-// packages/core/src/project-root.ts
-import { execFileSync } from "node:child_process";
-import { existsSync as existsSync5, readdirSync as readdirSync3 } from "node:fs";
-import { homedir as homedir4 } from "node:os";
-import { dirname as dirname4, join as join8, resolve as resolve5 } from "node:path";
-var PROJECT_MARKERS = [
-  "package.json",
-  "pyproject.toml",
-  "Cargo.toml",
-  "go.mod",
-  "pom.xml",
-  "build.gradle",
-  "build.gradle.kts",
-  "*.sln",
-  "composer.json",
-  "Gemfile",
-  "deno.json",
-  "bun.lockb"
-];
-var defaultProjectRootDeps = {
-  tryGitRoot(cwd) {
-    try {
-      const result = execFileSync("git", ["rev-parse", "--show-toplevel"], {
-        cwd,
-        timeout: 5e3,
-        encoding: "utf-8",
-        stdio: ["pipe", "pipe", "pipe"]
-      }).trim();
-      return result || null;
-    } catch {
-      return null;
-    }
-  },
-  fileExists(path) {
-    return existsSync5(path);
-  },
-  readDir(path) {
-    try {
-      return readdirSync3(path);
-    } catch {
-      return [];
-    }
-  },
-  resolveHomeDir() {
-    try {
-      return homedir4();
-    } catch {
-      return null;
-    }
-  }
-};
-function normalizePath(p) {
-  return resolve5(p).replace(/\\/g, "/");
-}
-function hasAnyMarker(dir, markers, deps) {
-  for (const marker of markers) {
-    if (marker.startsWith("*")) {
-      const ext = marker.slice(1);
-      const entries = deps.readDir(dir);
-      for (const entry of entries) {
-        if (entry.endsWith(ext)) return true;
-      }
-    } else {
-      if (deps.fileExists(join8(dir, marker))) return true;
-    }
-  }
-  return false;
-}
-function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
-  const gitRoot = deps.tryGitRoot(cwd);
-  if (gitRoot) return { root: normalizePath(gitRoot), method: "git-root" };
-  const normalizedCwd = normalizePath(cwd);
-  const homeDir = deps.resolveHomeDir();
-  const normalizedHomeDir = homeDir ? normalizePath(homeDir) : null;
-  let highestMarkerDir = null;
-  let dir = resolve5(cwd);
-  for (; ; ) {
-    const normalizedDir = normalizePath(dir);
-    const isAncestorHomeDir = normalizedHomeDir !== null && normalizedDir === normalizedHomeDir && normalizedDir !== normalizedCwd;
-    if (!isAncestorHomeDir && hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
-      highestMarkerDir = dir;
-    }
-    const parent = dirname4(dir);
-    if (parent === dir) break;
-    dir = parent;
-  }
-  if (highestMarkerDir) {
-    return { root: normalizePath(highestMarkerDir), method: "project-marker" };
-  }
-  return { root: normalizePath(cwd), method: "cwd-fallback" };
 }
 
 // packages/core/src/resources/decisions.ts
@@ -33129,440 +32968,11 @@ function generateRecent(db, captureLevel) {
   return parts.join("\n\n");
 }
 
-// packages/core/src/storage/init.ts
-import { existsSync as existsSync6, mkdirSync as mkdirSync5, readFileSync as readFileSync5 } from "node:fs";
-import { dirname as dirname5 } from "node:path";
-
-// packages/core/src/storage/migrations.ts
-function getCurrentVersion(db) {
-  try {
-    const row = db.get("SELECT version FROM schema_version");
-    return row?.version ?? 0;
-  } catch {
-    return 0;
-  }
-}
-function tableExists(db, name) {
-  const row = db.get(
-    "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
-    [name]
-  );
-  return (row?.cnt ?? 0) > 0;
-}
-function columnExists(db, table, column) {
-  return db.all(`PRAGMA table_info(${table})`).some((row) => row.name === column);
-}
-function migrationV1(db, fts5) {
-  db.exec(`CREATE TABLE IF NOT EXISTS schema_version (
-    version INTEGER NOT NULL
-  )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS files (
-    relative_path TEXT PRIMARY KEY,
-    exports_json TEXT,
-    imports_json TEXT,
-    re_exports_json TEXT,
-    file_type TEXT,
-    language TEXT,
-    lines INTEGER,
-    confidence_level TEXT,
-    confidence_reason TEXT,
-    last_scanned INTEGER,
-    skipped_reason TEXT
-  )`);
-  db.exec(`CREATE TABLE IF NOT EXISTS memories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    layer TEXT NOT NULL,
-    content TEXT NOT NULL,
-    tags_json TEXT,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL,
-    session_id TEXT
-  )`);
-  db.exec("CREATE INDEX IF NOT EXISTS idx_memories_layer ON memories(layer)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_memories_session_id ON memories(session_id)");
-  db.exec(`CREATE TABLE IF NOT EXISTS hook_captures (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tool_name TEXT,
-    file_paths_json TEXT,
-    status TEXT,
-    exit_code INTEGER,
-    timestamp INTEGER,
-    duration_ms INTEGER,
-    diff_added INTEGER,
-    diff_removed INTEGER,
-    error_kind TEXT,
-    bash_command TEXT
-  )`);
-  db.exec("CREATE INDEX IF NOT EXISTS idx_hook_captures_timestamp ON hook_captures(timestamp)");
-  db.exec(`CREATE TABLE IF NOT EXISTS scan_state (
-    key TEXT PRIMARY KEY,
-    value TEXT
-  )`);
-  if (fts5) {
-    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
-      content,
-      content=memories,
-      content_rowid=id
-    )`);
-  }
-  db.run("INSERT INTO schema_version (version) VALUES (?)", [1]);
-}
-function migrationV2(db, fts5) {
-  db.exec(`CREATE TABLE IF NOT EXISTS conversation_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id TEXT NOT NULL,
-    source TEXT NOT NULL,
-    source_event_id TEXT,
-    project_root TEXT NOT NULL,
-    session_id TEXT,
-    timestamp INTEGER NOT NULL,
-    kind TEXT NOT NULL,
-    payload_json TEXT,
-    significance TEXT,
-    tags_json TEXT,
-    created_at INTEGER NOT NULL
-  )`);
-  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_ce_event_id ON conversation_events(event_id)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_ce_timestamp ON conversation_events(timestamp)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_ce_kind ON conversation_events(kind)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_ce_session ON conversation_events(session_id)");
-  db.exec(`CREATE TABLE IF NOT EXISTS event_files (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id TEXT NOT NULL,
-    file_path TEXT NOT NULL,
-    FOREIGN KEY (event_id) REFERENCES conversation_events(event_id)
-  )`);
-  db.exec("CREATE INDEX IF NOT EXISTS idx_ef_file_path ON event_files(file_path)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_ef_event_id ON event_files(event_id)");
-  if (fts5) {
-    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS conversation_fts USING fts5(
-      content
-    )`);
-  }
-  db.exec(`CREATE TABLE IF NOT EXISTS ingest_log (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id TEXT NOT NULL,
-    source TEXT NOT NULL,
-    source_event_id TEXT,
-    processed_at INTEGER NOT NULL
-  )`);
-  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_il_event_id ON ingest_log(event_id)");
-  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_il_source ON ingest_log(source, source_event_id)");
-  db.run("UPDATE schema_version SET version = ?", [2]);
-}
-function migrationV3(db, fts5) {
-  db.exec(`CREATE TABLE IF NOT EXISTS durable_memories (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    topic_key TEXT,
-    memory_type TEXT NOT NULL,
-    state TEXT NOT NULL,
-    summary TEXT NOT NULL,
-    evidence_json TEXT NOT NULL,
-    source_event_id TEXT,
-    source TEXT NOT NULL,
-    superseded_by_id INTEGER,
-    created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
-  )`);
-  db.exec("CREATE INDEX IF NOT EXISTS idx_dm_topic_key ON durable_memories(topic_key)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_dm_state ON durable_memories(state)");
-  db.exec("CREATE INDEX IF NOT EXISTS idx_dm_source_event_id ON durable_memories(source_event_id)");
-  if (fts5) {
-    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS durable_memories_fts USING fts5(
-      summary,
-      content=durable_memories,
-      content_rowid=id
-    )`);
-  }
-  db.run("UPDATE schema_version SET version = ?", [3]);
-}
-function normalizeStoredProjectRoots(db, table) {
-  const rows = db.all(
-    `SELECT id, project_root FROM ${table} WHERE project_root IS NOT NULL`
-  );
-  for (const row of rows) {
-    if (!row.project_root) {
-      continue;
-    }
-    const normalized = normalizeProjectRootForScope(row.project_root);
-    if (normalized !== row.project_root) {
-      db.run(`UPDATE ${table} SET project_root = ? WHERE id = ?`, [normalized, row.id]);
-    }
-  }
-}
-function migrationV4(db) {
-  if (!columnExists(db, "memories", "project_root")) {
-    db.exec("ALTER TABLE memories ADD COLUMN project_root TEXT");
-  }
-  if (!columnExists(db, "durable_memories", "project_root")) {
-    db.exec("ALTER TABLE durable_memories ADD COLUMN project_root TEXT");
-  }
-  if (!columnExists(db, "conversation_events", "project_root")) {
-    throw new Error("conversation_events.project_root is required before migration v4");
-  }
-  normalizeStoredProjectRoots(db, "conversation_events");
-  normalizeStoredProjectRoots(db, "memories");
-  normalizeStoredProjectRoots(db, "durable_memories");
-  db.exec(
-    "CREATE INDEX IF NOT EXISTS idx_memories_project_updated ON memories(project_root, updated_at)"
-  );
-  db.exec(
-    "CREATE INDEX IF NOT EXISTS idx_dm_project_state_topic_updated ON durable_memories(project_root, state, topic_key, updated_at)"
-  );
-  db.exec(
-    "CREATE INDEX IF NOT EXISTS idx_ce_project_timestamp ON conversation_events(project_root, timestamp)"
-  );
-  db.exec(
-    "CREATE INDEX IF NOT EXISTS idx_ce_project_session_timestamp ON conversation_events(project_root, session_id, timestamp)"
-  );
-  db.run("UPDATE schema_version SET version = ?", [4]);
-}
-function extractFtsFromRow(kind, payloadJson) {
-  const parts = [kind];
-  if (!payloadJson) return parts.join(" ");
-  try {
-    const payload = JSON.parse(payloadJson);
-    if (typeof payload.prompt === "string" && payload.prompt) parts.push(payload.prompt);
-    if (typeof payload.response === "string" && payload.response) parts.push(payload.response);
-    if (typeof payload.tool === "string" && payload.tool) parts.push(payload.tool);
-    if (typeof payload.command === "string" && payload.command) parts.push(payload.command);
-    if (typeof payload.path === "string" && payload.path) parts.push(payload.path);
-    if (typeof payload.summary === "string" && payload.summary) parts.push(payload.summary);
-    if (Array.isArray(payload.files)) {
-      for (const f of payload.files) {
-        if (typeof f === "string") parts.push(f);
-      }
-    }
-  } catch {
-  }
-  return parts.join(" ");
-}
-function rebuildConversationFts(db) {
-  const rows = db.all("SELECT id, kind, payload_json FROM conversation_events");
-  for (const row of rows) {
-    const content = extractFtsFromRow(row.kind, row.payload_json);
-    if (content.length > row.kind.length) {
-      try {
-        db.run("INSERT INTO conversation_fts(rowid, content) VALUES (?, ?)", [row.id, content]);
-      } catch {
-      }
-    }
-  }
-}
-function ensureFts(db, fts5) {
-  if (!fts5) return;
-  if (!tableExists(db, "memories_fts")) {
-    db.exec(`CREATE VIRTUAL TABLE memories_fts USING fts5(
-      content,
-      content=memories,
-      content_rowid=id
-    )`);
-  }
-  db.exec("INSERT INTO memories_fts(memories_fts) VALUES ('rebuild')");
-  if (!tableExists(db, "conversation_fts")) {
-    db.exec("CREATE VIRTUAL TABLE conversation_fts USING fts5(content)");
-    rebuildConversationFts(db);
-  } else {
-    const ceCount = db.get("SELECT COUNT(*) as cnt FROM conversation_events")?.cnt ?? 0;
-    const cftsCount = db.get("SELECT COUNT(*) as cnt FROM conversation_fts")?.cnt ?? 0;
-    if (ceCount > 0 && cftsCount === 0) {
-      rebuildConversationFts(db);
-    }
-  }
-  if (!tableExists(db, "durable_memories_fts")) {
-    db.exec(`CREATE VIRTUAL TABLE durable_memories_fts USING fts5(
-      summary,
-      content=durable_memories,
-      content_rowid=id
-    )`);
-  }
-  db.exec("INSERT INTO durable_memories_fts(durable_memories_fts) VALUES ('rebuild')");
-}
-function runMigrations(db, fts5) {
-  const currentVersion = getCurrentVersion(db);
-  if (currentVersion < 1) {
-    migrationV1(db, fts5);
-  }
-  if (currentVersion < 2) {
-    migrationV2(db, fts5);
-  }
-  if (currentVersion < 3) {
-    migrationV3(db, fts5);
-  }
-  if (currentVersion < 4) {
-    migrationV4(db);
-  }
-  ensureFts(db, fts5);
-}
-
-// packages/core/src/storage/node-sqlite.ts
-var NodeSqliteAdapter = class {
-  db;
-  constructor(db) {
-    this.db = db;
-  }
-  exec(sql) {
-    this.db.exec(sql);
-  }
-  run(sql, params) {
-    const stmt = this.db.prepare(sql);
-    const result = params ? stmt.run(...params) : stmt.run();
-    return {
-      changes: result.changes,
-      lastInsertRowid: Number(result.lastInsertRowid)
-    };
-  }
-  get(sql, params) {
-    const stmt = this.db.prepare(sql);
-    const row = params ? stmt.get(...params) : stmt.get();
-    return row;
-  }
-  all(sql, params) {
-    const stmt = this.db.prepare(sql);
-    const rows = params ? stmt.all(...params) : stmt.all();
-    return rows;
-  }
-  close() {
-    this.db.close();
-  }
-};
-
-// packages/core/src/storage/sql-js.ts
-import { writeFileSync as writeFileSync3 } from "node:fs";
-var SAVE_DEBOUNCE_MS = 5e3;
-var SqlJsAdapter = class {
-  db;
-  dbPath;
-  saveTimer = null;
-  closed = false;
-  constructor(db, dbPath) {
-    this.db = db;
-    this.dbPath = dbPath;
-  }
-  exec(sql) {
-    this.db.exec(sql);
-    this.scheduleSave();
-  }
-  run(sql, params) {
-    if (params && params.length > 0) {
-      this.db.run(sql, params);
-    } else {
-      this.db.run(sql);
-    }
-    const changes = this.db.getRowsModified();
-    const lidStmt = this.db.prepare("SELECT last_insert_rowid() AS lid");
-    let lastInsertRowid = 0;
-    if (lidStmt.step()) {
-      const row = lidStmt.getAsObject();
-      lastInsertRowid = Number(row.lid ?? 0);
-    }
-    lidStmt.free();
-    this.scheduleSave();
-    return { changes, lastInsertRowid };
-  }
-  get(sql, params) {
-    const stmt = this.db.prepare(sql);
-    if (params && params.length > 0) {
-      stmt.bind(params);
-    }
-    const hasRow = stmt.step();
-    if (!hasRow) {
-      stmt.free();
-      return void 0;
-    }
-    const row = stmt.getAsObject();
-    stmt.free();
-    return row;
-  }
-  all(sql, params) {
-    const stmt = this.db.prepare(sql);
-    if (params && params.length > 0) {
-      stmt.bind(params);
-    }
-    const rows = [];
-    while (stmt.step()) {
-      rows.push(stmt.getAsObject());
-    }
-    stmt.free();
-    return rows;
-  }
-  close() {
-    if (this.closed) {
-      return;
-    }
-    this.closed = true;
-    if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer);
-      this.saveTimer = null;
-    }
-    this.saveToDisk();
-    this.db.close();
-  }
-  saveToDisk() {
-    const data = this.db.export();
-    writeFileSync3(this.dbPath, Buffer.from(data));
-  }
-  scheduleSave() {
-    if (this.saveTimer !== null) {
-      clearTimeout(this.saveTimer);
-    }
-    this.saveTimer = setTimeout(() => {
-      this.saveToDisk();
-      this.saveTimer = null;
-    }, SAVE_DEBOUNCE_MS);
-  }
-};
-
-// packages/core/src/storage/init.ts
-function detectFts5(db) {
-  try {
-    db.exec("CREATE VIRTUAL TABLE _fts5_test USING fts5(c)");
-    db.exec("DROP TABLE _fts5_test");
-    return true;
-  } catch {
-    return false;
-  }
-}
-function ensureDir(dbPath) {
-  const dir = dirname5(dbPath);
-  if (!existsSync6(dir)) {
-    mkdirSync5(dir, { recursive: true });
-  }
-}
-async function initStorage(dbPath) {
-  ensureDir(dbPath);
-  try {
-    const nodeSqlite = await import("node:sqlite");
-    const raw = new nodeSqlite.DatabaseSync(dbPath);
-    raw.exec("PRAGMA journal_mode = WAL");
-    raw.exec("PRAGMA synchronous = NORMAL");
-    raw.exec("PRAGMA busy_timeout = 5000");
-    const db2 = new NodeSqliteAdapter(raw);
-    const fts52 = detectFts5(db2);
-    runMigrations(db2, fts52);
-    return { db: db2, backend: "node:sqlite", fts5: fts52 };
-  } catch {
-  }
-  const initSqlJs = (await import("sql.js")).default;
-  const SQL = await initSqlJs();
-  let sqlDb;
-  if (existsSync6(dbPath)) {
-    const fileData = readFileSync5(dbPath);
-    sqlDb = new SQL.Database(new Uint8Array(fileData));
-  } else {
-    sqlDb = new SQL.Database();
-  }
-  const db = new SqlJsAdapter(sqlDb, dbPath);
-  const fts5 = detectFts5(db);
-  runMigrations(db, fts5);
-  return { db, backend: "sql.js", fts5 };
-}
-
 // packages/core/src/tools/audit.ts
 import { statSync as statSync2 } from "node:fs";
 var CAPTURE_REASON_AUDIT_LIMIT = 1e3;
 var CAPTURE_REASON_RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1e3;
-function tableExists2(db, name) {
+function tableExists(db, name) {
   const row = db.get(
     "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
     [name]
@@ -33700,8 +33110,8 @@ function handleAudit(deps) {
     ""
   ];
   if (fts5) {
-    const hasMemoFts = tableExists2(db, "memories_fts");
-    const hasConvFts = tableExists2(db, "conversation_fts");
+    const hasMemoFts = tableExists(db, "memories_fts");
+    const hasConvFts = tableExists(db, "conversation_fts");
     if (hasMemoFts) {
       const ftsCount = db.get("SELECT COUNT(*) as cnt FROM memories_fts")?.cnt ?? 0;
       const totalMemories = semanticCount + episodicCount;
@@ -34493,7 +33903,7 @@ function handleCalendar(deps, options) {
 }
 
 // packages/core/src/tools/codex-diagnostics.ts
-import { closeSync, existsSync as existsSync7, openSync, readFileSync as readFileSync6, statSync as statSync3 } from "node:fs";
+import { closeSync, existsSync as existsSync5, openSync, readFileSync as readFileSync5, statSync as statSync3 } from "node:fs";
 function collectCodexDiagnostics(deps) {
   const env = deps.env ?? process.env;
   const codexHome = env.CODEX_HOME;
@@ -34503,7 +33913,7 @@ function collectCodexDiagnostics(deps) {
   const runtime = detectClientRuntime(env);
   const captureMode = getCodexCaptureMode(env);
   const sessionsDir = resolveCodexSessionsDir({ env });
-  const sessionsDirExists = existsSync7(sessionsDir);
+  const sessionsDirExists = existsSync5(sessionsDir);
   const rolloutFiles = sessionsDirExists ? findCodexRolloutFiles(sessionsDir) : [];
   const latestRolloutPath = rolloutFiles.at(-1);
   let latestRolloutTimestamp;
@@ -34556,7 +33966,7 @@ function timestampFromValue(value) {
 }
 function latestCodexRolloutEventTimestamp(filePath) {
   try {
-    const parsed = parseCodexJsonl(readFileSync6(filePath, "utf8"), filePath);
+    const parsed = parseCodexJsonl(readFileSync5(filePath, "utf8"), filePath);
     const timestamps = parsed.records.map((record2) => timestampFromValue(record2.raw.timestamp)).filter((timestamp) => timestamp !== void 0);
     return timestamps.length > 0 ? Math.max(...timestamps) : void 0;
   } catch {
@@ -35250,8 +34660,8 @@ function handleForget(query, deps, confirmToken) {
 }
 
 // packages/core/src/tools/import-codex.ts
-import { readdirSync as readdirSync4, readFileSync as readFileSync7 } from "node:fs";
-import { join as join9 } from "node:path";
+import { readdirSync as readdirSync3, readFileSync as readFileSync6 } from "node:fs";
+import { join as join8 } from "node:path";
 function handleImportCodex(params, deps) {
   const captureMode = resolveCodexCaptureMode(deps.env);
   if (captureMode === "off") {
@@ -35357,7 +34767,7 @@ function loadIngestedCodexEventIds(db) {
 }
 function listJsonFiles(inboxDir) {
   try {
-    return new Set(readdirSync4(inboxDir).filter((entry) => entry.endsWith(".json")));
+    return new Set(readdirSync3(inboxDir).filter((entry) => entry.endsWith(".json")));
   } catch {
     return /* @__PURE__ */ new Set();
   }
@@ -35365,13 +34775,13 @@ function listJsonFiles(inboxDir) {
 function collectNewInboxEventIds(inboxDir, before) {
   const eventIds = /* @__PURE__ */ new Set();
   try {
-    const files = readdirSync4(inboxDir).filter((entry) => entry.endsWith(".json"));
+    const files = readdirSync3(inboxDir).filter((entry) => entry.endsWith(".json"));
     for (const file2 of files) {
       if (before.has(file2)) {
         continue;
       }
       try {
-        const parsed = JSON.parse(readFileSync7(join9(inboxDir, file2), "utf-8"));
+        const parsed = JSON.parse(readFileSync6(join8(inboxDir, file2), "utf-8"));
         if (typeof parsed.event_id === "string" && parsed.event_id.length > 0) {
           eventIds.add(parsed.event_id);
         }
@@ -35385,13 +34795,13 @@ function collectNewInboxEventIds(inboxDir, before) {
 }
 
 // packages/core/src/tools/project-state.ts
-import { execFileSync as execFileSync2 } from "node:child_process";
-import { existsSync as existsSync8, readFileSync as readFileSync8 } from "node:fs";
-import { join as join10 } from "node:path";
+import { execFileSync } from "node:child_process";
+import { existsSync as existsSync6, readFileSync as readFileSync7 } from "node:fs";
+import { join as join9 } from "node:path";
 var GIT_STATE_CACHE_MS = 5e3;
 var gitStateCache;
 function gitOutput(cwd, args) {
-  return execFileSync2("git", args, {
+  return execFileSync("git", args, {
     cwd,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "ignore"],
@@ -35421,12 +34831,12 @@ function readGitState(cwd) {
   }
 }
 function readPackageMetadata(projectRoot) {
-  const packagePath = join10(projectRoot, "package.json");
-  if (!existsSync8(packagePath)) {
+  const packagePath = join9(projectRoot, "package.json");
+  if (!existsSync6(packagePath)) {
     return {};
   }
   try {
-    const parsed = JSON.parse(readFileSync8(packagePath, "utf8"));
+    const parsed = JSON.parse(readFileSync7(packagePath, "utf8"));
     return {
       name: typeof parsed.name === "string" ? parsed.name : void 0,
       version: typeof parsed.version === "string" ? parsed.version : void 0
@@ -35481,8 +34891,8 @@ function handleProjectState(deps) {
 }
 
 // packages/core/src/tools/purge.ts
-import { readdirSync as readdirSync5, statSync as statSync4, unlinkSync as unlinkSync3 } from "node:fs";
-import { join as join11 } from "node:path";
+import { readdirSync as readdirSync4, statSync as statSync4, unlinkSync as unlinkSync3 } from "node:fs";
+import { join as join10 } from "node:path";
 function getDbSizeBytes(dbPath) {
   try {
     return statSync4(dbPath).size;
@@ -35530,10 +34940,10 @@ function handlePurge(deps, confirmToken) {
   }
   if (deps.inboxDir) {
     try {
-      const inboxFiles = readdirSync5(deps.inboxDir).filter((f) => f.endsWith(".json"));
+      const inboxFiles = readdirSync4(deps.inboxDir).filter((f) => f.endsWith(".json"));
       for (const f of inboxFiles) {
         try {
-          unlinkSync3(join11(deps.inboxDir, f));
+          unlinkSync3(join10(deps.inboxDir, f));
         } catch {
         }
       }
@@ -36790,9 +36200,9 @@ function handleReview(deps, options = {}) {
 }
 
 // packages/core/src/scanner/index.ts
-import { execFileSync as execFileSync3 } from "node:child_process";
-import { existsSync as existsSync9, readdirSync as readdirSync6, readFileSync as readFileSync9, statSync as statSync5 } from "node:fs";
-import { extname, join as join12, relative } from "node:path";
+import { execFileSync as execFileSync2 } from "node:child_process";
+import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync8, statSync as statSync5 } from "node:fs";
+import { extname, join as join11, relative } from "node:path";
 
 // packages/core/src/scanner/aliases.ts
 function loadPathAliases(rawPaths) {
@@ -37191,7 +36601,7 @@ function stripNonCode(source) {
 // packages/core/src/scanner/index.ts
 var GIT_TIMEOUT = 5e3;
 function gitExec(args, cwd) {
-  return execFileSync3("git", args, {
+  return execFileSync2("git", args, {
     cwd,
     timeout: GIT_TIMEOUT,
     encoding: "utf-8",
@@ -37200,7 +36610,7 @@ function gitExec(args, cwd) {
 }
 var defaultScanDeps = {
   isGitRepo(path) {
-    return existsSync9(join12(path, ".git"));
+    return existsSync7(join11(path, ".git"));
   },
   getHead(path) {
     try {
@@ -37219,7 +36629,7 @@ var defaultScanDeps = {
   },
   isAncestor(older, newer, path) {
     try {
-      execFileSync3("git", ["merge-base", "--is-ancestor", older, newer], {
+      execFileSync2("git", ["merge-base", "--is-ancestor", older, newer], {
         cwd: path,
         timeout: GIT_TIMEOUT,
         stdio: ["pipe", "pipe", "pipe"]
@@ -37235,12 +36645,12 @@ var defaultScanDeps = {
     function walk(dir) {
       let entries;
       try {
-        entries = readdirSync6(dir);
+        entries = readdirSync5(dir);
       } catch {
         return;
       }
       for (const entry of entries) {
-        const fullPath = join12(dir, entry);
+        const fullPath = join11(dir, entry);
         try {
           const stat = statSync5(fullPath);
           if (stat.isDirectory()) {
@@ -37373,12 +36783,12 @@ function walkDirectory(dir, basePath) {
   function walk(current) {
     let entries;
     try {
-      entries = readdirSync6(current);
+      entries = readdirSync5(current);
     } catch {
       return;
     }
     for (const entry of entries) {
-      const fullPath = join12(current, entry);
+      const fullPath = join11(current, entry);
       try {
         const stat = statSync5(fullPath);
         if (stat.isDirectory()) {
@@ -37394,10 +36804,10 @@ function walkDirectory(dir, basePath) {
   return results;
 }
 function loadProjectAliases(projectPath) {
-  const tsconfigPath = join12(projectPath, "tsconfig.json");
-  if (!existsSync9(tsconfigPath)) return {};
+  const tsconfigPath = join11(projectPath, "tsconfig.json");
+  if (!existsSync7(tsconfigPath)) return {};
   try {
-    const content = readFileSync9(tsconfigPath, "utf-8");
+    const content = readFileSync8(tsconfigPath, "utf-8");
     const rawPaths = parseTsConfig(content);
     return loadPathAliases(rawPaths);
   } catch {
@@ -37500,7 +36910,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
       skippedFiles++;
       continue;
     }
-    const fullPath = join12(projectPath, relPath);
+    const fullPath = join11(projectPath, relPath);
     let stat;
     try {
       stat = statSync5(fullPath);
@@ -37516,7 +36926,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
     }
     let content;
     try {
-      content = readFileSync9(fullPath, "utf-8");
+      content = readFileSync8(fullPath, "utf-8");
     } catch {
       storeSkippedEntry(db, relPath, "read-failed", now);
       skippedFiles++;
@@ -37633,7 +37043,7 @@ async function handleScan(deps) {
 }
 
 // packages/core/src/tools/status.ts
-import { readdirSync as readdirSync7, statSync as statSync6 } from "node:fs";
+import { readdirSync as readdirSync6, statSync as statSync6 } from "node:fs";
 function getDefaultCodexAutoImportSnapshot() {
   return {
     clientDetected: false,
@@ -37753,7 +37163,7 @@ function handleStatus(deps) {
   let inboxPending = 0;
   if (deps.inboxDir) {
     try {
-      const entries = readdirSync7(deps.inboxDir);
+      const entries = readdirSync6(deps.inboxDir);
       inboxPending = entries.filter((f) => f.endsWith(".json")).length;
     } catch {
       inboxPending = 0;
@@ -37792,113 +37202,1073 @@ function handleStatus(deps) {
   };
 }
 
+// packages/core/src/workspace-pool.ts
+import { basename as basename4, dirname as dirname6, join as join13 } from "node:path";
+import { fileURLToPath as fileURLToPath4 } from "node:url";
+
+// packages/core/src/memory/compressor.ts
+var MemoryCompressor = class {
+  config;
+  constructor(config2) {
+    this.config = config2;
+  }
+  shouldCompress(bufferTokens) {
+    switch (this.config.compressionMode) {
+      case "manual":
+        return false;
+      case "aggressive":
+        return bufferTokens > 0;
+      default:
+        return bufferTokens > this.config.compressionThreshold;
+    }
+  }
+  compress(entries) {
+    if (entries.length === 0) return "";
+    const budget = Math.floor(this.config.compressionThreshold / 2);
+    const kept = [];
+    let usedTokens = 0;
+    for (let i = entries.length - 1; i >= 0; i--) {
+      const entry = entries[i] ?? "";
+      const entryTokens = estimateTokens(entry);
+      if (usedTokens + entryTokens > budget && kept.length > 0) {
+        break;
+      }
+      kept.unshift(entry);
+      usedTokens += entryTokens;
+    }
+    const result = kept.join("\n");
+    if (estimateTokens(result) > budget) {
+      return result.slice(0, budget * 4);
+    }
+    return result;
+  }
+};
+
+// packages/core/src/memory/episodic.ts
+function rowToEntry2(row) {
+  return {
+    id: row.id,
+    layer: row.layer,
+    content: row.content,
+    tags: row.tags_json ? JSON.parse(row.tags_json) : [],
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    sessionId: row.session_id ?? void 0
+  };
+}
+var EpisodicMemory = class {
+  db;
+  constructor(db) {
+    this.db = db;
+  }
+  addEvent(content, sessionId) {
+    const now = Date.now();
+    const result = this.db.run(
+      "INSERT INTO memories (layer, content, tags_json, created_at, updated_at, session_id) VALUES (?, ?, ?, ?, ?, ?)",
+      ["episodic", content, "[]", now, now, sessionId]
+    );
+    const row = this.db.get(
+      "SELECT id, layer, content, tags_json, created_at, updated_at, session_id FROM memories WHERE id = ?",
+      [result.lastInsertRowid]
+    );
+    return rowToEntry2(row);
+  }
+  getRecent(limit = 50) {
+    const rows = this.db.all(
+      "SELECT id, layer, content, tags_json, created_at, updated_at, session_id FROM memories WHERE layer = ? ORDER BY created_at DESC LIMIT ?",
+      ["episodic", limit]
+    );
+    return rows.map(rowToEntry2);
+  }
+  getBufferTokens() {
+    const rows = this.db.all("SELECT content FROM memories WHERE layer = ?", [
+      "episodic"
+    ]);
+    let total = 0;
+    for (const row of rows) {
+      total += estimateTokens(row.content);
+    }
+    return total;
+  }
+  count() {
+    const row = this.db.get(
+      "SELECT COUNT(*) as cnt FROM memories WHERE layer = ?",
+      ["episodic"]
+    );
+    return row?.cnt ?? 0;
+  }
+  sessionCount() {
+    const row = this.db.get(
+      "SELECT COUNT(DISTINCT session_id) as cnt FROM memories WHERE layer = ?",
+      ["episodic"]
+    );
+    return row?.cnt ?? 0;
+  }
+  getSessionEntries(sessionId) {
+    const rows = this.db.all(
+      "SELECT id, layer, content, tags_json, created_at, updated_at, session_id FROM memories WHERE layer = ? AND session_id = ? ORDER BY created_at ASC",
+      ["episodic", sessionId]
+    );
+    return rows.map(rowToEntry2);
+  }
+};
+
+// packages/core/src/memory/semantic.ts
+function optionalProjectRoot2(projectRoot) {
+  const trimmed = projectRoot?.trim();
+  return trimmed ? normalizeProjectRootForScope(trimmed) : null;
+}
+function hasProjectRootColumn(db) {
+  try {
+    return db.all("PRAGMA table_info(memories)").some((column) => column.name === "project_root");
+  } catch {
+    return false;
+  }
+}
+function rowToEntry3(row) {
+  return {
+    id: row.id,
+    layer: row.layer,
+    content: row.content,
+    tags: row.tags_json ? JSON.parse(row.tags_json) : [],
+    projectRoot: row.project_root ?? void 0,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    sessionId: row.session_id ?? void 0
+  };
+}
+var SemanticMemory = class {
+  db;
+  fts5;
+  constructor(db, fts5Available) {
+    this.db = db;
+    this.fts5 = fts5Available;
+  }
+  add(content, tags, options) {
+    const now = Date.now();
+    const tagsJson = JSON.stringify(tags);
+    const projectRoot = optionalProjectRoot2(options?.projectRoot);
+    const result = hasProjectRootColumn(this.db) ? this.db.run(
+      "INSERT INTO memories (layer, content, tags_json, project_root, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      ["semantic", content, tagsJson, projectRoot, now, now]
+    ) : this.db.run(
+      "INSERT INTO memories (layer, content, tags_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
+      ["semantic", content, tagsJson, now, now]
+    );
+    const id = result.lastInsertRowid;
+    if (this.fts5) {
+      this.db.run("INSERT INTO memories_fts(rowid, content) VALUES (?, ?)", [id, content]);
+    }
+    return {
+      id,
+      layer: "semantic",
+      content,
+      tags,
+      projectRoot: projectRoot ?? void 0,
+      createdAt: now,
+      updatedAt: now,
+      sessionId: void 0
+    };
+  }
+  search(query, limit = 20) {
+    if (this.fts5) {
+      const sanitized = sanitizeFtsQuery(query);
+      if (!sanitized) return [];
+      const rows2 = this.db.all(
+        "SELECT * FROM memories WHERE layer='semantic' AND id IN (SELECT rowid FROM memories_fts WHERE memories_fts MATCH ?) ORDER BY updated_at DESC LIMIT ?",
+        [sanitized, limit]
+      );
+      return rows2.map(rowToEntry3);
+    }
+    const rows = this.db.all(
+      "SELECT * FROM memories WHERE layer='semantic' AND content LIKE ? ORDER BY updated_at DESC LIMIT ?",
+      [`%${query}%`, limit]
+    );
+    return rows.map(rowToEntry3);
+  }
+  remove(id) {
+    const existing = this.db.get(
+      "SELECT * FROM memories WHERE id = ? AND layer='semantic'",
+      [id]
+    );
+    if (existing === void 0) {
+      return false;
+    }
+    if (this.fts5) {
+      this.db.run(
+        "INSERT INTO memories_fts(memories_fts, rowid, content) VALUES ('delete', ?, ?)",
+        [id, existing.content]
+      );
+    }
+    const result = this.db.run("DELETE FROM memories WHERE id = ?", [id]);
+    return result.changes > 0;
+  }
+  list(limit = 50) {
+    const rows = this.db.all(
+      "SELECT * FROM memories WHERE layer='semantic' ORDER BY updated_at DESC LIMIT ?",
+      [limit]
+    );
+    return rows.map(rowToEntry3);
+  }
+  count() {
+    const row = this.db.get(
+      "SELECT COUNT(*) as cnt FROM memories WHERE layer='semantic'"
+    );
+    return row?.cnt ?? 0;
+  }
+};
+
+// packages/core/src/project-root.ts
+import { execFileSync as execFileSync3 } from "node:child_process";
+import { existsSync as existsSync8, readdirSync as readdirSync7 } from "node:fs";
+import { homedir as homedir4 } from "node:os";
+import { dirname as dirname4, join as join12, resolve as resolve5 } from "node:path";
+var PROJECT_MARKERS = [
+  "package.json",
+  "pyproject.toml",
+  "Cargo.toml",
+  "go.mod",
+  "pom.xml",
+  "build.gradle",
+  "build.gradle.kts",
+  "*.sln",
+  "composer.json",
+  "Gemfile",
+  "deno.json",
+  "bun.lockb"
+];
+var defaultProjectRootDeps = {
+  tryGitRoot(cwd) {
+    try {
+      const result = execFileSync3("git", ["rev-parse", "--show-toplevel"], {
+        cwd,
+        timeout: 5e3,
+        encoding: "utf-8",
+        stdio: ["pipe", "pipe", "pipe"]
+      }).trim();
+      return result || null;
+    } catch {
+      return null;
+    }
+  },
+  fileExists(path) {
+    return existsSync8(path);
+  },
+  readDir(path) {
+    try {
+      return readdirSync7(path);
+    } catch {
+      return [];
+    }
+  },
+  resolveHomeDir() {
+    try {
+      return homedir4();
+    } catch {
+      return null;
+    }
+  }
+};
+function normalizePath(p) {
+  return resolve5(p).replace(/\\/g, "/");
+}
+function hasAnyMarker(dir, markers, deps) {
+  for (const marker of markers) {
+    if (marker.startsWith("*")) {
+      const ext = marker.slice(1);
+      const entries = deps.readDir(dir);
+      for (const entry of entries) {
+        if (entry.endsWith(ext)) return true;
+      }
+    } else {
+      if (deps.fileExists(join12(dir, marker))) return true;
+    }
+  }
+  return false;
+}
+function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
+  const gitRoot = deps.tryGitRoot(cwd);
+  if (gitRoot) return { root: normalizePath(gitRoot), method: "git-root" };
+  const normalizedCwd = normalizePath(cwd);
+  const homeDir = deps.resolveHomeDir();
+  const normalizedHomeDir = homeDir ? normalizePath(homeDir) : null;
+  let highestMarkerDir = null;
+  let dir = resolve5(cwd);
+  for (; ; ) {
+    const normalizedDir = normalizePath(dir);
+    const isAncestorHomeDir = normalizedHomeDir !== null && normalizedDir === normalizedHomeDir && normalizedDir !== normalizedCwd;
+    if (!isAncestorHomeDir && hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
+      highestMarkerDir = dir;
+    }
+    const parent = dirname4(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  if (highestMarkerDir) {
+    return { root: normalizePath(highestMarkerDir), method: "project-marker" };
+  }
+  return { root: normalizePath(cwd), method: "cwd-fallback" };
+}
+
+// packages/core/src/storage/init.ts
+import { existsSync as existsSync9, mkdirSync as mkdirSync5, readFileSync as readFileSync9 } from "node:fs";
+import { dirname as dirname5 } from "node:path";
+
+// packages/core/src/storage/migrations.ts
+function getCurrentVersion(db) {
+  try {
+    const row = db.get("SELECT version FROM schema_version");
+    return row?.version ?? 0;
+  } catch {
+    return 0;
+  }
+}
+function tableExists2(db, name) {
+  const row = db.get(
+    "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
+    [name]
+  );
+  return (row?.cnt ?? 0) > 0;
+}
+function columnExists(db, table, column) {
+  return db.all(`PRAGMA table_info(${table})`).some((row) => row.name === column);
+}
+function migrationV1(db, fts5) {
+  db.exec(`CREATE TABLE IF NOT EXISTS schema_version (
+    version INTEGER NOT NULL
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS files (
+    relative_path TEXT PRIMARY KEY,
+    exports_json TEXT,
+    imports_json TEXT,
+    re_exports_json TEXT,
+    file_type TEXT,
+    language TEXT,
+    lines INTEGER,
+    confidence_level TEXT,
+    confidence_reason TEXT,
+    last_scanned INTEGER,
+    skipped_reason TEXT
+  )`);
+  db.exec(`CREATE TABLE IF NOT EXISTS memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    layer TEXT NOT NULL,
+    content TEXT NOT NULL,
+    tags_json TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    session_id TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_memories_layer ON memories(layer)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_memories_session_id ON memories(session_id)");
+  db.exec(`CREATE TABLE IF NOT EXISTS hook_captures (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tool_name TEXT,
+    file_paths_json TEXT,
+    status TEXT,
+    exit_code INTEGER,
+    timestamp INTEGER,
+    duration_ms INTEGER,
+    diff_added INTEGER,
+    diff_removed INTEGER,
+    error_kind TEXT,
+    bash_command TEXT
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_hook_captures_timestamp ON hook_captures(timestamp)");
+  db.exec(`CREATE TABLE IF NOT EXISTS scan_state (
+    key TEXT PRIMARY KEY,
+    value TEXT
+  )`);
+  if (fts5) {
+    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+      content,
+      content=memories,
+      content_rowid=id
+    )`);
+  }
+  db.run("INSERT INTO schema_version (version) VALUES (?)", [1]);
+}
+function migrationV2(db, fts5) {
+  db.exec(`CREATE TABLE IF NOT EXISTS conversation_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    source_event_id TEXT,
+    project_root TEXT NOT NULL,
+    session_id TEXT,
+    timestamp INTEGER NOT NULL,
+    kind TEXT NOT NULL,
+    payload_json TEXT,
+    significance TEXT,
+    tags_json TEXT,
+    created_at INTEGER NOT NULL
+  )`);
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_ce_event_id ON conversation_events(event_id)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_ce_timestamp ON conversation_events(timestamp)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_ce_kind ON conversation_events(kind)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_ce_session ON conversation_events(session_id)");
+  db.exec(`CREATE TABLE IF NOT EXISTS event_files (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL,
+    file_path TEXT NOT NULL,
+    FOREIGN KEY (event_id) REFERENCES conversation_events(event_id)
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_ef_file_path ON event_files(file_path)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_ef_event_id ON event_files(event_id)");
+  if (fts5) {
+    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS conversation_fts USING fts5(
+      content
+    )`);
+  }
+  db.exec(`CREATE TABLE IF NOT EXISTS ingest_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL,
+    source TEXT NOT NULL,
+    source_event_id TEXT,
+    processed_at INTEGER NOT NULL
+  )`);
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_il_event_id ON ingest_log(event_id)");
+  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_il_source ON ingest_log(source, source_event_id)");
+  db.run("UPDATE schema_version SET version = ?", [2]);
+}
+function migrationV3(db, fts5) {
+  db.exec(`CREATE TABLE IF NOT EXISTS durable_memories (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    topic_key TEXT,
+    memory_type TEXT NOT NULL,
+    state TEXT NOT NULL,
+    summary TEXT NOT NULL,
+    evidence_json TEXT NOT NULL,
+    source_event_id TEXT,
+    source TEXT NOT NULL,
+    superseded_by_id INTEGER,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  )`);
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dm_topic_key ON durable_memories(topic_key)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dm_state ON durable_memories(state)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_dm_source_event_id ON durable_memories(source_event_id)");
+  if (fts5) {
+    db.exec(`CREATE VIRTUAL TABLE IF NOT EXISTS durable_memories_fts USING fts5(
+      summary,
+      content=durable_memories,
+      content_rowid=id
+    )`);
+  }
+  db.run("UPDATE schema_version SET version = ?", [3]);
+}
+function normalizeStoredProjectRoots(db, table) {
+  const rows = db.all(
+    `SELECT id, project_root FROM ${table} WHERE project_root IS NOT NULL`
+  );
+  for (const row of rows) {
+    if (!row.project_root) {
+      continue;
+    }
+    const normalized = normalizeProjectRootForScope(row.project_root);
+    if (normalized !== row.project_root) {
+      db.run(`UPDATE ${table} SET project_root = ? WHERE id = ?`, [normalized, row.id]);
+    }
+  }
+}
+function migrationV4(db) {
+  if (!columnExists(db, "memories", "project_root")) {
+    db.exec("ALTER TABLE memories ADD COLUMN project_root TEXT");
+  }
+  if (!columnExists(db, "durable_memories", "project_root")) {
+    db.exec("ALTER TABLE durable_memories ADD COLUMN project_root TEXT");
+  }
+  if (!columnExists(db, "conversation_events", "project_root")) {
+    throw new Error("conversation_events.project_root is required before migration v4");
+  }
+  normalizeStoredProjectRoots(db, "conversation_events");
+  normalizeStoredProjectRoots(db, "memories");
+  normalizeStoredProjectRoots(db, "durable_memories");
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_memories_project_updated ON memories(project_root, updated_at)"
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_dm_project_state_topic_updated ON durable_memories(project_root, state, topic_key, updated_at)"
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_ce_project_timestamp ON conversation_events(project_root, timestamp)"
+  );
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_ce_project_session_timestamp ON conversation_events(project_root, session_id, timestamp)"
+  );
+  db.run("UPDATE schema_version SET version = ?", [4]);
+}
+function extractFtsFromRow(kind, payloadJson) {
+  const parts = [kind];
+  if (!payloadJson) return parts.join(" ");
+  try {
+    const payload = JSON.parse(payloadJson);
+    if (typeof payload.prompt === "string" && payload.prompt) parts.push(payload.prompt);
+    if (typeof payload.response === "string" && payload.response) parts.push(payload.response);
+    if (typeof payload.tool === "string" && payload.tool) parts.push(payload.tool);
+    if (typeof payload.command === "string" && payload.command) parts.push(payload.command);
+    if (typeof payload.path === "string" && payload.path) parts.push(payload.path);
+    if (typeof payload.summary === "string" && payload.summary) parts.push(payload.summary);
+    if (Array.isArray(payload.files)) {
+      for (const f of payload.files) {
+        if (typeof f === "string") parts.push(f);
+      }
+    }
+  } catch {
+  }
+  return parts.join(" ");
+}
+function rebuildConversationFts(db) {
+  const rows = db.all("SELECT id, kind, payload_json FROM conversation_events");
+  for (const row of rows) {
+    const content = extractFtsFromRow(row.kind, row.payload_json);
+    if (content.length > row.kind.length) {
+      try {
+        db.run("INSERT INTO conversation_fts(rowid, content) VALUES (?, ?)", [row.id, content]);
+      } catch {
+      }
+    }
+  }
+}
+function ensureFts(db, fts5) {
+  if (!fts5) return;
+  if (!tableExists2(db, "memories_fts")) {
+    db.exec(`CREATE VIRTUAL TABLE memories_fts USING fts5(
+      content,
+      content=memories,
+      content_rowid=id
+    )`);
+  }
+  db.exec("INSERT INTO memories_fts(memories_fts) VALUES ('rebuild')");
+  if (!tableExists2(db, "conversation_fts")) {
+    db.exec("CREATE VIRTUAL TABLE conversation_fts USING fts5(content)");
+    rebuildConversationFts(db);
+  } else {
+    const ceCount = db.get("SELECT COUNT(*) as cnt FROM conversation_events")?.cnt ?? 0;
+    const cftsCount = db.get("SELECT COUNT(*) as cnt FROM conversation_fts")?.cnt ?? 0;
+    if (ceCount > 0 && cftsCount === 0) {
+      rebuildConversationFts(db);
+    }
+  }
+  if (!tableExists2(db, "durable_memories_fts")) {
+    db.exec(`CREATE VIRTUAL TABLE durable_memories_fts USING fts5(
+      summary,
+      content=durable_memories,
+      content_rowid=id
+    )`);
+  }
+  db.exec("INSERT INTO durable_memories_fts(durable_memories_fts) VALUES ('rebuild')");
+}
+function runMigrations(db, fts5) {
+  const currentVersion = getCurrentVersion(db);
+  if (currentVersion < 1) {
+    migrationV1(db, fts5);
+  }
+  if (currentVersion < 2) {
+    migrationV2(db, fts5);
+  }
+  if (currentVersion < 3) {
+    migrationV3(db, fts5);
+  }
+  if (currentVersion < 4) {
+    migrationV4(db);
+  }
+  ensureFts(db, fts5);
+}
+
+// packages/core/src/storage/node-sqlite.ts
+var BUSY_RETRY_DELAYS_MS = [25, 50, 100];
+function isBusyError(error48) {
+  const message = error48 instanceof Error ? error48.message : String(error48);
+  return /SQLITE_BUSY|database is locked/i.test(message);
+}
+function sleepSync(delayMs) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, delayMs);
+}
+var NodeSqliteAdapter = class {
+  db;
+  constructor(db) {
+    this.db = db;
+  }
+  withBusyRetry(fn) {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return fn();
+      } catch (error48) {
+        const delayMs = BUSY_RETRY_DELAYS_MS[attempt];
+        if (delayMs === void 0 || !isBusyError(error48)) {
+          throw error48;
+        }
+        sleepSync(delayMs);
+      }
+    }
+  }
+  exec(sql) {
+    this.withBusyRetry(() => this.db.exec(sql));
+  }
+  run(sql, params) {
+    return this.withBusyRetry(() => {
+      const stmt = this.db.prepare(sql);
+      const result = params ? stmt.run(...params) : stmt.run();
+      return {
+        changes: result.changes,
+        lastInsertRowid: Number(result.lastInsertRowid)
+      };
+    });
+  }
+  get(sql, params) {
+    return this.withBusyRetry(() => {
+      const stmt = this.db.prepare(sql);
+      const row = params ? stmt.get(...params) : stmt.get();
+      return row;
+    });
+  }
+  all(sql, params) {
+    return this.withBusyRetry(() => {
+      const stmt = this.db.prepare(sql);
+      const rows = params ? stmt.all(...params) : stmt.all();
+      return rows;
+    });
+  }
+  close() {
+    this.db.close();
+  }
+};
+
+// packages/core/src/storage/sql-js.ts
+import { writeFileSync as writeFileSync3 } from "node:fs";
+var SAVE_DEBOUNCE_MS = 5e3;
+var SqlJsAdapter = class {
+  db;
+  dbPath;
+  saveTimer = null;
+  closed = false;
+  constructor(db, dbPath) {
+    this.db = db;
+    this.dbPath = dbPath;
+  }
+  exec(sql) {
+    this.db.exec(sql);
+    this.scheduleSave();
+  }
+  run(sql, params) {
+    if (params && params.length > 0) {
+      this.db.run(sql, params);
+    } else {
+      this.db.run(sql);
+    }
+    const changes = this.db.getRowsModified();
+    const lidStmt = this.db.prepare("SELECT last_insert_rowid() AS lid");
+    let lastInsertRowid = 0;
+    if (lidStmt.step()) {
+      const row = lidStmt.getAsObject();
+      lastInsertRowid = Number(row.lid ?? 0);
+    }
+    lidStmt.free();
+    this.scheduleSave();
+    return { changes, lastInsertRowid };
+  }
+  get(sql, params) {
+    const stmt = this.db.prepare(sql);
+    if (params && params.length > 0) {
+      stmt.bind(params);
+    }
+    const hasRow = stmt.step();
+    if (!hasRow) {
+      stmt.free();
+      return void 0;
+    }
+    const row = stmt.getAsObject();
+    stmt.free();
+    return row;
+  }
+  all(sql, params) {
+    const stmt = this.db.prepare(sql);
+    if (params && params.length > 0) {
+      stmt.bind(params);
+    }
+    const rows = [];
+    while (stmt.step()) {
+      rows.push(stmt.getAsObject());
+    }
+    stmt.free();
+    return rows;
+  }
+  close() {
+    if (this.closed) {
+      return;
+    }
+    this.closed = true;
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+      this.saveTimer = null;
+    }
+    this.saveToDisk();
+    this.db.close();
+  }
+  saveToDisk() {
+    const data = this.db.export();
+    writeFileSync3(this.dbPath, Buffer.from(data));
+  }
+  scheduleSave() {
+    if (this.saveTimer !== null) {
+      clearTimeout(this.saveTimer);
+    }
+    this.saveTimer = setTimeout(() => {
+      this.saveToDisk();
+      this.saveTimer = null;
+    }, SAVE_DEBOUNCE_MS);
+  }
+};
+
+// packages/core/src/storage/init.ts
+function detectFts5(db) {
+  try {
+    db.exec("CREATE VIRTUAL TABLE _fts5_test USING fts5(c)");
+    db.exec("DROP TABLE _fts5_test");
+    return true;
+  } catch {
+    return false;
+  }
+}
+function ensureDir(dbPath) {
+  const dir = dirname5(dbPath);
+  if (!existsSync9(dir)) {
+    mkdirSync5(dir, { recursive: true });
+  }
+}
+async function initStorage(dbPath) {
+  ensureDir(dbPath);
+  try {
+    const nodeSqlite = await import("node:sqlite");
+    const raw = new nodeSqlite.DatabaseSync(dbPath);
+    raw.exec("PRAGMA journal_mode = WAL");
+    raw.exec("PRAGMA synchronous = NORMAL");
+    raw.exec("PRAGMA busy_timeout = 5000");
+    const db2 = new NodeSqliteAdapter(raw);
+    const fts52 = detectFts5(db2);
+    runMigrations(db2, fts52);
+    return { db: db2, backend: "node:sqlite", fts5: fts52 };
+  } catch {
+  }
+  const initSqlJs = (await import("sql.js")).default;
+  const SQL = await initSqlJs();
+  let sqlDb;
+  if (existsSync9(dbPath)) {
+    const fileData = readFileSync9(dbPath);
+    sqlDb = new SQL.Database(new Uint8Array(fileData));
+  } else {
+    sqlDb = new SQL.Database();
+  }
+  const db = new SqlJsAdapter(sqlDb, dbPath);
+  const fts5 = detectFts5(db);
+  runMigrations(db, fts5);
+  return { db, backend: "sql.js", fts5 };
+}
+
+// packages/core/src/workspace-pool.ts
+function rootUriToLocalPath(uri) {
+  const trimmed = uri.trim();
+  if (!/^file:\/\//i.test(trimmed)) {
+    return void 0;
+  }
+  try {
+    return fileURLToPath4(trimmed);
+  } catch {
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== "file:" || parsed.hostname && parsed.hostname !== "localhost") {
+        return void 0;
+      }
+      const decoded = decodeURIComponent(parsed.pathname);
+      if (/^\/[a-zA-Z]:[\\/]/u.test(decoded)) {
+        return decoded.slice(1);
+      }
+      return decoded || void 0;
+    } catch {
+      return void 0;
+    }
+  }
+}
+var WorkspacePool = class {
+  initialCwd;
+  fixedDbPath;
+  config;
+  entries = /* @__PURE__ */ new Map();
+  pending = /* @__PURE__ */ new Map();
+  activeEntry;
+  constructor(options) {
+    this.initialCwd = options.initialCwd;
+    this.fixedDbPath = options.fixedDbPath;
+    this.config = options.config;
+  }
+  async getOrOpenInitial() {
+    if (this.activeEntry) {
+      return this.activeEntry;
+    }
+    const { root, method } = resolveProjectRoot(this.initialCwd);
+    const dbPath = this.fixedDbPath ?? resolveDbPath(root);
+    const entry = await this.openWorkspace(this.initialCwd, root, method, dbPath);
+    this.activeEntry = entry;
+    return entry;
+  }
+  getActive() {
+    if (!this.activeEntry) {
+      throw new Error("WorkspacePool has not been initialized");
+    }
+    return this.activeEntry;
+  }
+  async resolveForPath(targetCwd) {
+    if (!this.activeEntry) {
+      await this.getOrOpenInitial();
+    }
+    const trimmed = targetCwd?.trim();
+    if (this.fixedDbPath || !trimmed) {
+      return this.getActive();
+    }
+    const { root, method } = resolveProjectRoot(trimmed);
+    return this.openWorkspace(trimmed, root, method, resolveDbPath(root));
+  }
+  async setActiveFromRootUris(uris) {
+    if (!this.activeEntry) {
+      await this.getOrOpenInitial();
+    }
+    if (this.fixedDbPath) {
+      return this.activeEntry;
+    }
+    for (const uri of uris) {
+      const localPath = rootUriToLocalPath(uri);
+      if (!localPath) {
+        continue;
+      }
+      const entry = await this.resolveForPath(localPath);
+      this.activeEntry = entry;
+      return entry;
+    }
+    return void 0;
+  }
+  listEntries() {
+    return [...this.entries.values()];
+  }
+  cleanupAll() {
+    for (const entry of this.entries.values()) {
+      try {
+        entry.db.close();
+      } catch {
+      }
+    }
+    this.entries.clear();
+    this.pending.clear();
+    this.activeEntry = void 0;
+  }
+  async openWorkspace(cwd, projectRoot, projectRootMethod, dbPath) {
+    const key = normalizeProjectRootForScope(projectRoot);
+    const cached2 = this.entries.get(key);
+    if (cached2) {
+      return cached2;
+    }
+    const inflight = this.pending.get(key);
+    if (inflight) {
+      return inflight;
+    }
+    const opening = this.createEntry(cwd, projectRoot, projectRootMethod, dbPath).then(
+      (entry) => {
+        this.entries.set(key, entry);
+        return entry;
+      },
+      (error48) => {
+        throw error48;
+      }
+    );
+    this.pending.set(key, opening);
+    try {
+      return await opening;
+    } finally {
+      this.pending.delete(key);
+    }
+  }
+  async createEntry(cwd, projectRoot, projectRootMethod, dbPath) {
+    const { db, backend, fts5 } = await initStorage(dbPath);
+    const inboxDir = join13(dirname6(dbPath), "inbox");
+    const semantic = new SemanticMemory(db, fts5);
+    const episodic = new EpisodicMemory(db);
+    const _compressor = new MemoryCompressor(this.config);
+    void _compressor;
+    const fileCountRow = db.get("SELECT COUNT(*) AS cnt FROM files");
+    const fileCount = fileCountRow?.cnt ?? 0;
+    log("info", `Locus started: backend=${backend} fts5=${fts5} db=${dbPath} files=${fileCount}`);
+    let lastIngestMetrics = null;
+    let lastIngestTime = 0;
+    try {
+      const startupMetrics = processInbox(inboxDir, db, {
+        batchLimit: 0,
+        captureLevel: this.config.captureLevel,
+        fts5Available: fts5,
+        projectRoot
+      });
+      runDurableExtraction(db);
+      lastIngestMetrics = startupMetrics;
+      if (startupMetrics.processed > 0) {
+        lastIngestTime = Date.now();
+        log(
+          "info",
+          `Inbox startup: processed=${startupMetrics.processed} errors=${startupMetrics.errors}`
+        );
+      }
+    } catch (err) {
+      log("error", `Inbox startup error: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    return {
+      cwd,
+      projectRoot,
+      projectRootMethod,
+      projectName: basename4(projectRoot),
+      dbPath,
+      inboxDir,
+      db,
+      backend,
+      fts5,
+      semantic,
+      episodic,
+      lastIngestTime,
+      lastIngestMetrics,
+      codexAutoImportSnapshot: {
+        clientDetected: false,
+        client: "generic",
+        clientSurface: "generic",
+        detectionEvidence: [],
+        debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
+        lastStatus: "idle",
+        lastImported: 0,
+        lastDuplicates: 0,
+        lastErrors: 0
+      }
+    };
+  }
+};
+
 // packages/core/src/server.ts
+var INGEST_DEBOUNCE_MS = 3e4;
+function resolveServerVersion() {
+  try {
+    let dir = dirname7(fileURLToPath5(import.meta.url));
+    for (let i = 0; i < 4; i++) {
+      const runtimeJson = join14(dir, "runtime.json");
+      if (existsSync10(runtimeJson)) {
+        const parsed = JSON.parse(readFileSync10(runtimeJson, "utf8"));
+        if (typeof parsed.version === "string" && parsed.version.length > 0) {
+          return parsed.version;
+        }
+      }
+      const pkgJson = join14(dir, "package.json");
+      if (existsSync10(pkgJson)) {
+        const parsed = JSON.parse(readFileSync10(pkgJson, "utf8"));
+        if ((parsed.name === "locus-memory" || parsed.name === "@locus/core") && typeof parsed.version === "string" && parsed.version.length > 0) {
+          return parsed.version;
+        }
+      }
+      const parent = dirname7(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+  }
+  return "3.7.0";
+}
 async function createServer(options) {
   const cwd = options?.cwd ?? process.cwd();
-  const { root, method } = resolveProjectRoot(cwd);
-  const projectName = basename4(root);
-  const dbPath = options?.dbPath ?? resolveDbPath(root);
   const logPath = resolveLogPath();
-  const { db, backend, fts5 } = await initStorage(dbPath);
-  const inboxDir = join13(dirname6(dbPath), "inbox");
   const config2 = { ...LOCUS_DEFAULTS };
   const envCapture = process.env.LOCUS_CAPTURE_LEVEL;
   if (envCapture === "metadata" || envCapture === "redacted" || envCapture === "full") {
     config2.captureLevel = envCapture;
   }
-  const semantic = new SemanticMemory(db, fts5);
-  const episodic = new EpisodicMemory(db);
-  const _compressor = new MemoryCompressor(config2);
-  void _compressor;
-  const purgeTokenStore = new ConfirmationTokenStore("purge");
-  const forgetTokenStore = new ConfirmationTokenStore("forget");
-  const fileCountRow = db.get("SELECT COUNT(*) AS cnt FROM files");
-  const fileCount = fileCountRow?.cnt ?? 0;
-  log("info", `Locus started: backend=${backend} fts5=${fts5} db=${dbPath} files=${fileCount}`);
   if (config2.captureLevel !== "metadata") {
     log(
       "info",
       `WARNING: captureLevel is '${config2.captureLevel}' (not 'metadata') \u2014 content may be stored`
     );
   }
-  let _lastIngestMetrics = null;
-  let lastIngestTime = 0;
-  const INGEST_DEBOUNCE_MS = 3e4;
-  let codexAutoImportSnapshot = {
-    clientDetected: false,
-    client: "generic",
-    clientSurface: "generic",
-    detectionEvidence: [],
-    debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
-    lastStatus: "idle",
-    lastImported: 0,
-    lastDuplicates: 0,
-    lastErrors: 0
-  };
-  try {
-    const startupMetrics = processInbox(inboxDir, db, {
-      batchLimit: 0,
-      captureLevel: config2.captureLevel,
-      fts5Available: fts5,
-      projectRoot: root
+  const pool = new WorkspacePool({
+    initialCwd: cwd,
+    fixedDbPath: options?.dbPath,
+    config: config2
+  });
+  const initialWorkspace = await pool.getOrOpenInitial();
+  const purgeTokenStore = new ConfirmationTokenStore("purge");
+  const forgetTokenStore = new ConfirmationTokenStore("forget");
+  const server = new McpServer({ name: "locus", version: resolveServerVersion() });
+  if (!options?.dbPath) {
+    const refreshActiveWorkspaceFromRoots = async () => {
+      try {
+        const capabilities = server.server.getClientCapabilities();
+        if (!capabilities?.roots) {
+          return;
+        }
+        const response = await server.server.listRoots();
+        await pool.setActiveFromRootUris(response.roots.map((rootItem) => rootItem.uri));
+      } catch (err) {
+        log(
+          "error",
+          `MCP roots refresh failed: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    };
+    server.server.oninitialized = () => {
+      void refreshActiveWorkspaceFromRoots();
+    };
+    server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+      await refreshActiveWorkspaceFromRoots();
     });
-    runDurableExtraction(db, { source: "codex" });
-    _lastIngestMetrics = startupMetrics;
-    if (startupMetrics.processed > 0) {
-      lastIngestTime = Date.now();
-    }
-    if (startupMetrics.processed > 0) {
-      log(
-        "info",
-        `Inbox startup: processed=${startupMetrics.processed} errors=${startupMetrics.errors}`
-      );
-    }
-  } catch (err) {
-    log("error", `Inbox startup error: ${err instanceof Error ? err.message : String(err)}`);
   }
-  const server = new McpServer({ name: "locus", version: "0.2.0" });
-  server.resource("project-map", "memory://project-map", async () => ({
-    contents: [
-      {
-        uri: "memory://project-map",
-        mimeType: "text/plain",
-        text: generateProjectMap(db, projectName)
-      }
-    ]
-  }));
-  server.resource("decisions", "memory://decisions", async () => ({
-    contents: [
-      {
-        uri: "memory://decisions",
-        mimeType: "text/plain",
-        text: generateDecisions(db)
-      }
-    ]
-  }));
-  server.resource("recent", "memory://recent", async () => ({
-    contents: [
-      {
-        uri: "memory://recent",
-        mimeType: "text/plain",
-        text: generateRecent(db, config2.captureLevel)
-      }
-    ]
-  }));
-  server.tool("memory_explore", { path: external_exports3.string() }, async ({ path }) => ({
-    content: [{ type: "text", text: handleExplore(path, { db }) }]
-  }));
-  function runPreQueryCodexFlow(now) {
+  server.resource("project-map", "memory://project-map", async () => {
+    const active = pool.getActive();
+    return {
+      contents: [
+        {
+          uri: "memory://project-map",
+          mimeType: "text/plain",
+          text: generateProjectMap(active.db, active.projectName)
+        }
+      ]
+    };
+  });
+  server.resource("decisions", "memory://decisions", async () => {
+    const active = pool.getActive();
+    return {
+      contents: [
+        {
+          uri: "memory://decisions",
+          mimeType: "text/plain",
+          text: generateDecisions(active.db)
+        }
+      ]
+    };
+  });
+  server.resource("recent", "memory://recent", async () => {
+    const active = pool.getActive();
+    return {
+      contents: [
+        {
+          uri: "memory://recent",
+          mimeType: "text/plain",
+          text: generateRecent(active.db, config2.captureLevel)
+        }
+      ]
+    };
+  });
+  function runPreQuerySyncFlow(workspace, now) {
     const autoImport = coordinateCodexAutoImport({
       now,
-      snapshot: codexAutoImportSnapshot,
+      snapshot: workspace.codexAutoImportSnapshot,
       runImport: () => handleImportCodex(
         { latestOnly: true },
         {
-          db,
-          inboxDir,
+          db: workspace.db,
+          inboxDir: workspace.inboxDir,
           captureLevel: config2.captureLevel,
-          fts5Available: fts5,
-          projectRoot: root,
+          fts5Available: workspace.fts5,
+          projectRoot: workspace.projectRoot,
           env: process.env,
           processInbox,
           runDurableExtraction,
@@ -37906,39 +38276,47 @@ async function createServer(options) {
         }
       )
     });
-    codexAutoImportSnapshot = autoImport.snapshot;
-    if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
+    workspace.codexAutoImportSnapshot = autoImport.snapshot;
+    if (!autoImport.processedInbox && now - workspace.lastIngestTime > INGEST_DEBOUNCE_MS) {
       try {
-        const metrics = processInbox(inboxDir, db, {
+        const metrics = processInbox(workspace.inboxDir, workspace.db, {
           batchLimit: 50,
           captureLevel: config2.captureLevel,
-          fts5Available: fts5,
-          projectRoot: root
+          fts5Available: workspace.fts5,
+          projectRoot: workspace.projectRoot
         });
-        runDurableExtraction(db, { source: "codex" });
-        _lastIngestMetrics = metrics;
-        lastIngestTime = now;
+        runDurableExtraction(workspace.db);
+        workspace.lastIngestMetrics = metrics;
+        workspace.lastIngestTime = now;
       } catch {
       }
     }
   }
+  const timeRangeSchema = external_exports3.object({
+    from: external_exports3.number().optional(),
+    to: external_exports3.number().optional(),
+    relative: external_exports3.enum([
+      "today",
+      "yesterday",
+      "this_week",
+      "last_7d",
+      "last_30d",
+      "this_month",
+      "last_month"
+    ]).optional()
+  }).optional();
+  const optionalProjectRootSchema = external_exports3.string().optional().describe("Optional project root path to target a specific workspace");
+  server.tool("memory_explore", { path: external_exports3.string() }, async ({ path }) => {
+    const active = pool.getActive();
+    return {
+      content: [{ type: "text", text: handleExplore(path, { db: active.db }) }]
+    };
+  });
   server.tool(
     "memory_search",
     {
       query: external_exports3.string(),
-      timeRange: external_exports3.object({
-        from: external_exports3.number().optional(),
-        to: external_exports3.number().optional(),
-        relative: external_exports3.enum([
-          "today",
-          "yesterday",
-          "this_week",
-          "last_7d",
-          "last_30d",
-          "this_month",
-          "last_month"
-        ]).optional()
-      }).optional().describe("Filter by time range (absolute or relative)"),
+      timeRange: timeRangeSchema.describe("Filter by time range (absolute or relative)"),
       filePath: external_exports3.string().optional().describe("Filter by file path (exact match in event_files)"),
       kind: external_exports3.enum([
         "user_prompt",
@@ -37950,20 +38328,21 @@ async function createServer(options) {
       ]).optional().describe("Filter by event kind"),
       source: external_exports3.string().optional().describe("Filter by event source"),
       limit: external_exports3.number().optional().describe("Max conversation results (default 20)"),
-      offset: external_exports3.number().optional().describe("Skip N conversation results")
+      offset: external_exports3.number().optional().describe("Skip N conversation results"),
+      projectRoot: optionalProjectRootSchema
     },
-    async ({ query, timeRange, filePath, kind, source, limit, offset }) => {
-      const now = Date.now();
-      runPreQueryCodexFlow(now);
+    async ({ query, timeRange, filePath, kind, source, limit, offset, projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
+      runPreQuerySyncFlow(workspace, Date.now());
       const results = handleSearch(
         query,
-        { db, semantic, fts5 },
+        { db: workspace.db, semantic: workspace.semantic, fts5: workspace.fts5 },
         {
           timeRange,
           filePath,
           kind,
           source,
-          projectRoot: root,
+          projectRoot: workspace.projectRoot,
           limit,
           offset
         }
@@ -37982,27 +38361,19 @@ async function createServer(options) {
     "memory_recall",
     {
       question: external_exports3.string(),
-      timeRange: external_exports3.object({
-        from: external_exports3.number().optional(),
-        to: external_exports3.number().optional(),
-        relative: external_exports3.enum([
-          "today",
-          "yesterday",
-          "this_week",
-          "last_7d",
-          "last_30d",
-          "this_month",
-          "last_month"
-        ]).optional()
-      }).optional().describe("Filter recall candidates by time range (absolute or relative)"),
-      limit: external_exports3.number().optional().describe("Max recall candidates to inspect per source (default 10)")
+      timeRange: timeRangeSchema.describe(
+        "Filter recall candidates by time range (absolute or relative)"
+      ),
+      limit: external_exports3.number().optional().describe("Max recall candidates to inspect per source (default 10)"),
+      projectRoot: optionalProjectRootSchema
     },
-    async ({ question, timeRange, limit }) => {
+    async ({ question, timeRange, limit, projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
       const now = Date.now();
-      runPreQueryCodexFlow(now);
+      runPreQuerySyncFlow(workspace, now);
       const result = handleRecall(
         question,
-        { db, now, projectRoot: root },
+        { db: workspace.db, now, projectRoot: workspace.projectRoot },
         {
           timeRange,
           limit,
@@ -38022,27 +38393,17 @@ async function createServer(options) {
   server.tool(
     "memory_calendar",
     {
-      timeRange: external_exports3.object({
-        from: external_exports3.number().optional(),
-        to: external_exports3.number().optional(),
-        relative: external_exports3.enum([
-          "today",
-          "yesterday",
-          "this_week",
-          "last_7d",
-          "last_30d",
-          "this_month",
-          "last_month"
-        ]).optional()
-      }).optional().describe("Filter memory buckets by time range"),
+      timeRange: timeRangeSchema.describe("Filter memory buckets by time range"),
       granularity: external_exports3.enum(["day", "week", "month"]).optional(),
-      limit: external_exports3.number().optional()
+      limit: external_exports3.number().optional(),
+      projectRoot: optionalProjectRootSchema
     },
-    async ({ timeRange, granularity, limit }) => {
+    async ({ timeRange, granularity, limit, projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
       const now = Date.now();
-      runPreQueryCodexFlow(now);
+      runPreQuerySyncFlow(workspace, now);
       const result = handleCalendar(
-        { db, projectRoot: root, now },
+        { db: workspace.db, projectRoot: workspace.projectRoot, now },
         {
           timeRange,
           granularity,
@@ -38068,22 +38429,33 @@ async function createServer(options) {
       confidence: external_exports3.number().min(0).max(1).optional().describe("Minimum durable evidence confidence to include (0-1)"),
       limit: external_exports3.number().optional().describe("Max review candidates to return (default 20)")
     },
-    async ({ state, topicKey, memoryType, confidence, limit }) => ({
-      content: [
-        {
-          type: "text",
-          text: JSON.stringify(
-            handleReview({ db }, { state, topicKey, memoryType, confidence, limit })
-          )
-        }
-      ]
-    })
+    async ({ state, topicKey, memoryType, confidence, limit }) => {
+      const active = pool.getActive();
+      return {
+        content: [
+          {
+            type: "text",
+            text: JSON.stringify(
+              handleReview({ db: active.db }, { state, topicKey, memoryType, confidence, limit })
+            )
+          }
+        ]
+      };
+    }
   );
   server.tool(
     "memory_remember",
-    { text: external_exports3.string(), tags: external_exports3.array(external_exports3.string()).optional() },
-    async ({ text, tags }) => {
-      const entry = handleRemember(text, tags ?? [], { semantic, projectRoot: root });
+    {
+      text: external_exports3.string(),
+      tags: external_exports3.array(external_exports3.string()).optional(),
+      projectRoot: optionalProjectRootSchema
+    },
+    async ({ text, tags, projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
+      const entry = handleRemember(text, tags ?? [], {
+        semantic: workspace.semantic,
+        projectRoot: workspace.projectRoot
+      });
       return {
         content: [{ type: "text", text: `Remembered (id=${entry.id}): ${entry.content}` }]
       };
@@ -38098,14 +38470,15 @@ async function createServer(options) {
       since: external_exports3.number().optional().describe("Import only events at or after this Unix timestamp in milliseconds")
     },
     async ({ latestOnly, projectRoot, sessionId, since }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
       const result = handleImportCodex(
         { latestOnly, projectRoot, sessionId, since },
         {
-          db,
-          inboxDir,
+          db: workspace.db,
+          inboxDir: workspace.inboxDir,
           captureLevel: config2.captureLevel,
-          fts5Available: fts5,
-          projectRoot: root,
+          fts5Available: workspace.fts5,
+          projectRoot: workspace.projectRoot,
           env: process.env,
           processInbox,
           runDurableExtraction,
@@ -38119,69 +38492,99 @@ async function createServer(options) {
     "memory_forget",
     { query: external_exports3.string(), confirmToken: external_exports3.string().optional() },
     async ({ query, confirmToken }) => {
-      const result = handleForget(query, { semantic, tokenStore: forgetTokenStore }, confirmToken);
+      const active = pool.getActive();
+      const result = handleForget(
+        query,
+        { semantic: active.semantic, tokenStore: forgetTokenStore },
+        confirmToken
+      );
       return { content: [{ type: "text", text: JSON.stringify(result) }] };
     }
   );
   server.tool("memory_scan", {}, async () => {
-    const result = await handleScan({ projectPath: root, db, config: config2 });
+    const active = pool.getActive();
+    const result = await handleScan({ projectPath: active.projectRoot, db: active.db, config: config2 });
     return { content: [{ type: "text", text: JSON.stringify(result.stats) }] };
   });
-  server.tool("memory_project_state", {}, async () => {
-    const result = handleProjectState({ db, projectRoot: root });
-    return { content: [{ type: "text", text: JSON.stringify(result) }] };
-  });
-  server.tool("memory_status", {}, async () => {
-    const status = handleStatus({
-      projectPath: cwd,
-      projectRoot: root,
-      projectRootMethod: method,
-      dbPath,
-      db,
-      config: config2,
-      backend,
-      fts5,
-      inboxDir,
-      codexAutoImportSnapshot,
-      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env })
-    });
-    return { content: [{ type: "text", text: JSON.stringify(status) }] };
-  });
+  server.tool(
+    "memory_project_state",
+    {
+      projectRoot: optionalProjectRootSchema
+    },
+    async ({ projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
+      runPreQuerySyncFlow(workspace, Date.now());
+      const result = handleProjectState({ db: workspace.db, projectRoot: workspace.projectRoot });
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    }
+  );
+  server.tool(
+    "memory_status",
+    {
+      projectRoot: optionalProjectRootSchema
+    },
+    async ({ projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
+      const status = handleStatus({
+        projectPath: workspace.cwd,
+        projectRoot: workspace.projectRoot,
+        projectRootMethod: workspace.projectRootMethod,
+        dbPath: workspace.dbPath,
+        db: workspace.db,
+        config: config2,
+        backend: workspace.backend,
+        fts5: workspace.fts5,
+        inboxDir: workspace.inboxDir,
+        codexAutoImportSnapshot: workspace.codexAutoImportSnapshot,
+        codexDiagnostics: collectCodexDiagnostics({ db: workspace.db, env: process.env })
+      });
+      return { content: [{ type: "text", text: JSON.stringify(status) }] };
+    }
+  );
   server.tool("memory_doctor", {}, async () => {
+    const active = pool.getActive();
     const report = handleDoctor({
       nodeVersion: process.version,
-      backend,
-      fts5,
-      dbPath,
-      projectRoot: root,
-      projectRootMethod: method,
+      backend: active.backend,
+      fts5: active.fts5,
+      dbPath: active.dbPath,
+      projectRoot: active.projectRoot,
+      projectRootMethod: active.projectRootMethod,
       captureLevel: config2.captureLevel,
       logPath,
-      db,
-      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env })
+      db: active.db,
+      codexDiagnostics: collectCodexDiagnostics({ db: active.db, env: process.env })
     });
     return { content: [{ type: "text", text: JSON.stringify(report) }] };
   });
   server.tool("memory_audit", {}, async () => {
+    const active = pool.getActive();
     const report = handleAudit({
-      db,
-      projectPath: cwd,
-      dbPath,
+      db: active.db,
+      projectPath: active.cwd,
+      dbPath: active.dbPath,
       logPath,
       captureLevel: config2.captureLevel,
-      fts5
+      fts5: active.fts5
     });
     return { content: [{ type: "text", text: report }] };
   });
   server.tool("memory_purge", { confirmToken: external_exports3.string().optional() }, async ({ confirmToken }) => {
+    const active = pool.getActive();
     const result = handlePurge(
-      { db, dbPath, projectPath: cwd, tokenStore: purgeTokenStore, inboxDir },
+      {
+        db: active.db,
+        dbPath: active.dbPath,
+        projectPath: active.cwd,
+        tokenStore: purgeTokenStore,
+        inboxDir: active.inboxDir
+      },
       confirmToken
     );
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   });
   server.tool("memory_config", {}, async () => {
-    const result = handleConfig(config2, process.env, fts5);
+    const result = handleConfig(config2, process.env, initialWorkspace.fts5);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   });
   server.tool(
@@ -38191,26 +38594,15 @@ async function createServer(options) {
       keepSessions: external_exports3.number().optional().describe("Always keep this many recent sessions (default: 5)")
     },
     async (params) => {
-      const result = handleCompact(db, params);
+      const active = pool.getActive();
+      const result = handleCompact(active.db, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }
   );
   server.tool(
     "memory_timeline",
     {
-      timeRange: external_exports3.object({
-        from: external_exports3.number().optional(),
-        to: external_exports3.number().optional(),
-        relative: external_exports3.enum([
-          "today",
-          "yesterday",
-          "this_week",
-          "last_7d",
-          "last_30d",
-          "this_month",
-          "last_month"
-        ]).optional()
-      }).optional().describe("Filter by time range (absolute or relative)"),
+      timeRange: timeRangeSchema.describe("Filter by time range (absolute or relative)"),
       kind: external_exports3.enum([
         "user_prompt",
         "ai_response",
@@ -38222,11 +38614,14 @@ async function createServer(options) {
       filePath: external_exports3.string().optional().describe("Filter by file path (exact match in event_files)"),
       summary: external_exports3.boolean().optional().describe("When true, returns headers only (kind + timestamp, no payload)"),
       limit: external_exports3.number().optional().describe("Max entries (default 20)"),
-      offset: external_exports3.number().optional().describe("Skip N entries for pagination")
+      offset: external_exports3.number().optional().describe("Skip N entries for pagination"),
+      projectRoot: optionalProjectRootSchema
     },
-    async ({ timeRange, kind, filePath, summary, limit, offset }) => {
+    async ({ timeRange, kind, filePath, summary, limit, offset, projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
+      runPreQuerySyncFlow(workspace, Date.now());
       const entries = handleTimeline(
-        { db, projectRoot: root },
+        { db: workspace.db, projectRoot: workspace.projectRoot },
         { timeRange, kind, filePath, summary, limit, offset }
       );
       return { content: [{ type: "text", text: JSON.stringify(entries) }] };
@@ -38234,16 +38629,16 @@ async function createServer(options) {
   );
   return {
     server,
-    db,
+    db: initialWorkspace.db,
     config: config2,
-    backend,
-    fts5,
-    projectRoot: root,
-    projectRootMethod: method,
-    inboxDir,
-    semantic,
-    episodic,
-    cleanup: () => db.close()
+    backend: initialWorkspace.backend,
+    fts5: initialWorkspace.fts5,
+    projectRoot: initialWorkspace.projectRoot,
+    projectRootMethod: initialWorkspace.projectRootMethod,
+    inboxDir: initialWorkspace.inboxDir,
+    semantic: initialWorkspace.semantic,
+    episodic: initialWorkspace.episodic,
+    cleanup: () => pool.cleanupAll()
   };
 }
 var logLevel = process.env.LOCUS_LOG ?? "error";
@@ -38254,10 +38649,12 @@ async function main() {
   await ctx.server.connect(transport);
   log("info", `Locus MCP server started (log level: ${logLevel})`);
 }
-main().catch((error48) => {
-  log("error", `Fatal: ${error48 instanceof Error ? error48.message : String(error48)}`);
-  process.exit(1);
-});
+if (!process.env.VITEST) {
+  main().catch((error48) => {
+    log("error", `Fatal: ${error48 instanceof Error ? error48.message : String(error48)}`);
+    process.exit(1);
+  });
+}
 export {
   createServer
 };

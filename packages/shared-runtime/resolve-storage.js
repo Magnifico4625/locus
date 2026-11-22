@@ -19,6 +19,28 @@ function expandTilde(p) {
 }
 
 /**
+ * Resolves the Locus home directory (~/.locus or LOCUS_HOME override).
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {string}
+ */
+export function resolveLocusHome(env = process.env) {
+  const override = env.LOCUS_HOME?.trim();
+  if (override && override.length > 0) {
+    return expandTilde(override);
+  }
+  return join(homedir(), '.locus');
+}
+
+/**
+ * Resolves the local runtime bin directory (~/.locus/bin or $LOCUS_HOME/bin).
+ * @param {Record<string, string | undefined>} [env]
+ * @returns {string}
+ */
+export function resolveRuntimeBinDir(env = process.env) {
+  return join(resolveLocusHome(env), 'bin');
+}
+
+/**
  * Resolves the base storage directory for Locus databases.
  * Priority: LOCUS_STORAGE_ROOT > CODEX_HOME/memory > ~/.claude/memory > ~/.locus/memory
  * @returns {string}

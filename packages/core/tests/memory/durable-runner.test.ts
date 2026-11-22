@@ -86,4 +86,84 @@ describe('runDurableExtraction', () => {
     ]);
     expect(rows[0]?.superseded_by_id).toBeGreaterThan(0);
   });
+
+  it('extracts durable memories across codex, antigravity, opencode, dsh, and claude-code idempotently', () => {
+    const ts = Date.parse('2026-06-15T10:00:00.000Z');
+    const sources = [
+      {
+        eventId: 'evt-codex',
+        source: 'codex',
+        summary: 'Decision: use SQLite for local memory persistence.',
+      },
+      {
+        eventId: 'evt-agy',
+        source: 'antigravity',
+        summary: 'Decision: prefer pre-invocation context injection without MCP calls.',
+      },
+      {
+        eventId: 'evt-oc',
+        source: 'opencode',
+        summary: 'Next step: wire OpenCode messages.transform plugin hook.',
+      },
+      {
+        eventId: 'evt-dsh',
+        source: 'dsh',
+        summary: 'Constraint: must not break Cordis dynamic prompt assembly.',
+      },
+      {
+        eventId: 'evt-claude',
+        source: 'claude-code',
+        summary: 'Preference: prefer one task at a time with explicit verification.',
+      },
+    ] as const;
+
+    sources.forEach((item, index) => {
+      db.run(
+        `INSERT INTO conversation_events
+         (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          item.eventId,
+          item.source,
+          null,
+          'c:/repo/multi',
+          `sess-${item.source}`,
+          ts + index * 1000,
+          'session_end',
+          JSON.stringify({ summary: item.summary }),
+          'high',
+          null,
+          ts + index * 1000,
+        ],
+      );
+    });
+
+    const first = runDurableExtraction(db);
+    expect(first.scanned).toBe(5);
+    expect(first.inserted).toBe(5);
+
+    const storedSources = db
+      .all<{ source: string; state: string }>(
+        'SELECT source, state FROM durable_memories ORDER BY id ASC',
+      )
+      .map((row) => `${row.source}:${row.state}`);
+    expect(storedSources).toEqual([
+      'antigravity:active',
+      'claude-code:active',
+      'codex:active',
+      'dsh:active',
+      'opencode:active',
+    ]);
+
+    for (const item of sources) {
+      const wm = db.get<{ value: string }>('SELECT value FROM scan_state WHERE key = ?', [
+        `durable.${item.source}.last_event_id`,
+      ]);
+      expect(Number(wm?.value ?? '0')).toBeGreaterThan(0);
+    }
+
+    const second = runDurableExtraction(db);
+    expect(second.scanned).toBe(0);
+    expect(second.inserted).toBe(0);
+  });
 });

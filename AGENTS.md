@@ -142,6 +142,18 @@ See [docs/roadmap/codex-next.md](C:/Users/Admin/gemini-project/ClaudeMagnificoMe
 
 ---
 
+## Active v4 Multi-Platform Plugin Worktree Rules
+
+When working on the v4 multi-platform plugins initiative (`feat/v4-multi-platform-plugins`), always follow [docs/roadmap/v4-multi-platform-plugins.md](docs/roadmap/v4-multi-platform-plugins.md):
+
+- **Worktree only:** Edit, test, and run `npm run build` strictly inside `C:\Users\Admin\gemini-project\ClaudeMagnificoMem-v4-plugins`. Never modify or rebuild inside `C:\Users\Admin\gemini-project\ClaudeMagnificoMem`, because live Codex Desktop points at its `dist/server.js`.
+- **Sandbox isolation:** During development and smoke tests, always use isolated `LOCUS_STORAGE_ROOT` and `LOCUS_HOME` directories. Never touch live DBs (`~/.codex/memory/`, `~/.claude/memory/`, `~/.locus/memory/`), `~/.locus/bin/`, or desktop app configs (`~/.codex/config.toml`, `~/.gemini/config/*`, `~/.config/opencode/*`, `~/.dsh/*`) without explicit approval and prior backups.
+- **Stage-by-stage approval gates:** Advance one stage at a time (`v4-step0-core` → `v4-step1-antigravity` → `v4-step2-codex-hooks` → `v4-step3-opencode` → `v4-step4-dsh`). Run `npm run check` and `npm run build`, tag the checkpoint, and stop for user review before the next stage.
+- **Preserve legacy stability:** Leave `packages/claude-code/**` untouched and keep SQLite migrations strictly additive.
+- **Safe final merge:** Never use `git reset --hard` or blindly ff into the diverged local `main`. Archive local `main` first (`archive/local-main-before-v4-...`), sync `main` with `origin/main`, then cleanly merge/ff after user verification.
+
+---
+
 ## Agent Heuristic
 
 When in doubt:

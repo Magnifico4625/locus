@@ -113,4 +113,57 @@ describe('detectClientEnv', () => {
       evidence: ['fallback:generic'],
     });
   });
+
+  it('detects LOCUS_CLIENT and LOCUS_CLIENT_SURFACE overrides', () => {
+    expect(
+      sharedRuntime.detectClientRuntime({
+        LOCUS_CLIENT: 'antigravity',
+      }),
+    ).toEqual({
+      client: 'antigravity',
+      surface: 'desktop',
+      detected: true,
+      evidence: ['env:LOCUS_CLIENT=antigravity'],
+    });
+
+    expect(
+      sharedRuntime.detectClientRuntime({
+        LOCUS_CLIENT: 'opencode',
+        LOCUS_CLIENT_SURFACE: 'cli',
+      }),
+    ).toEqual({
+      client: 'opencode',
+      surface: 'cli',
+      detected: true,
+      evidence: ['env:LOCUS_CLIENT=opencode', 'env:LOCUS_CLIENT_SURFACE=cli'],
+    });
+  });
+
+  it('detects LOCUS_ANTIGRAVITY, LOCUS_OPENCODE, and LOCUS_DSH', () => {
+    expect(sharedRuntime.detectClientRuntime({ LOCUS_ANTIGRAVITY: '1' })).toEqual({
+      client: 'antigravity',
+      surface: 'desktop',
+      detected: true,
+      evidence: ['env:LOCUS_ANTIGRAVITY'],
+    });
+
+    expect(
+      sharedRuntime.detectClientRuntime({
+        LOCUS_OPENCODE: '1',
+        LOCUS_CLIENT_SURFACE: 'desktop',
+      }),
+    ).toEqual({
+      client: 'opencode',
+      surface: 'desktop',
+      detected: true,
+      evidence: ['env:LOCUS_OPENCODE', 'env:LOCUS_CLIENT_SURFACE=desktop'],
+    });
+
+    expect(sharedRuntime.detectClientRuntime({ LOCUS_DSH: '1' })).toEqual({
+      client: 'dsh',
+      surface: 'desktop',
+      detected: true,
+      evidence: ['env:LOCUS_DSH'],
+    });
+  });
 });

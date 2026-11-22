@@ -1,5 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import type { CodexMcpServerConfig } from './codex/config.js';
+import { runContextCommand } from './commands/context.js';
 import { formatDoctorCodex } from './commands/doctor-codex.js';
 import { runCodexHook } from './commands/hook-codex.js';
 import { formatInstallCodexDryRun, runInstallCodex } from './commands/install-codex.js';
@@ -7,6 +8,7 @@ import { runMcp } from './commands/mcp.js';
 import { type CommandRunner, defaultCommandRunner } from './commands/runner.js';
 import { runUninstallCodex } from './commands/uninstall-codex.js';
 import { resolvePackageVersion } from './package-info.js';
+import { installLocalCliRuntime } from './runtime-install.js';
 
 export interface CliIo {
   stdout: (message: string) => void;
@@ -20,12 +22,15 @@ export interface CliOptions {
   readMcpServer?: () => CodexMcpServerConfig | undefined;
   platform?: NodeJS.Platform;
   stdin?: string;
+  sourceDistDir?: string;
 }
 
 const usage = `Usage: locus-memory <command>
 
 Commands:
   locus-memory mcp              Start the Locus MCP server
+  locus-memory context          Print zero-call session/prompt memory brief
+  locus-memory sync-runtime     Install local runtime binaries to ~/.locus/bin
   locus-memory install codex    Install Locus for Codex
   locus-memory doctor codex     Diagnose the Codex installation
   locus-memory hook codex       Run a Codex lifecycle hook
@@ -34,6 +39,14 @@ Commands:
 Options:
   --help, help     Show this help
   --version        Show package version`;
+
+const contextUsage = `Usage: locus-memory context [--mode session-start|prompt] [--prompt <text>] [--cwd <path>] [--max-tokens <n>] [--json]
+
+Outputs a bounded zero-call project memory brief for session start or prompt recall.`;
+
+const syncRuntimeUsage = `Usage: locus-memory sync-runtime [--json]
+
+Installs local cli.js and server.js runtime binaries into ~/.locus/bin (or $LOCUS_HOME/bin).`;
 
 const installCodexUsage = `Usage: locus-memory install codex [--dry-run] [--with-hooks]
 
@@ -50,6 +63,20 @@ Removes the package-owned Codex MCP entry while preserving skills and memory dat
 
 Options:
   --yes            Confirm removal`;
+
+function readFlagValue(args: readonly string[], flagName: string): string | undefined {
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (!arg) continue;
+    if (arg === flagName) {
+      return args[i + 1];
+    }
+    if (arg.startsWith(`${flagName}=`)) {
+      return arg.slice(flagName.length + 1);
+    }
+  }
+  return undefined;
+}
 
 export async function runCli(
   argv = process.argv.slice(2),
@@ -73,6 +100,64 @@ export async function runCli(
 
   if (command === 'mcp') {
     return runMcp();
+  }
+
+  if (command === 'context') {
+    if (argv.includes('--help')) {
+      io.stdout(contextUsage);
+      return 0;
+    }
+
+    const rawMaxTokens = readFlagValue(argv, '--max-tokens');
+    let maxTokens: number | undefined;
+    if (rawMaxTokens !== undefined) {
+      const parsed = Number(rawMaxTokens);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        io.stderr('Option --max-tokens must be a positive integer.');
+        return 1;
+      }
+      maxTokens = parsed;
+    }
+
+    const result = await runContextCommand({
+      mode: readFlagValue(argv, '--mode'),
+      prompt: readFlagValue(argv, '--prompt'),
+      cwd: readFlagValue(argv, '--cwd'),
+      json: argv.includes('--json'),
+      maxTokens,
+      env: options.env,
+    });
+    if (result.stdout) {
+      io.stdout(result.stdout);
+    }
+    if (result.stderr) {
+      io.stderr(result.stderr);
+    }
+    return result.exitCode;
+  }
+
+  if (command === 'sync-runtime') {
+    if (argv.includes('--help')) {
+      io.stdout(syncRuntimeUsage);
+      return 0;
+    }
+
+    try {
+      const result = installLocalCliRuntime({
+        env: options.env,
+        startDir: options.startDir,
+        sourceDistDir: options.sourceDistDir,
+      });
+      if (argv.includes('--json')) {
+        io.stdout(JSON.stringify(result));
+      } else {
+        io.stdout(`Locus local runtime ${result.action} (${result.version}) at ${result.binDir}`);
+      }
+      return 0;
+    } catch (error) {
+      io.stderr(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
   }
 
   if (command === 'hook' && subcommand === 'codex') {

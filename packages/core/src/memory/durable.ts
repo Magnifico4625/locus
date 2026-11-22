@@ -2,6 +2,7 @@ import { normalizeProjectRootForScope } from '../recall/project-scope.js';
 import type {
   DatabaseAdapter,
   DurableMemoryEntry,
+  DurableMemorySource,
   DurableMemoryState,
   DurableMemoryStateCounts,
   DurableMemoryType,
@@ -17,7 +18,7 @@ interface DurableMemoryRow {
   evidence_json: string;
   project_root: string | null;
   source_event_id: string | null;
-  source: 'codex' | 'claude-code' | 'manual';
+  source: DurableMemorySource;
   superseded_by_id: number | null;
   created_at: number;
   updated_at: number;
@@ -31,7 +32,7 @@ export interface CreateDurableMemoryInput {
   evidence: Record<string, unknown>;
   projectRoot?: string;
   sourceEventId?: string;
-  source: 'codex' | 'claude-code' | 'manual';
+  source: DurableMemorySource;
   supersededById?: number;
 }
 

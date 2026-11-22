@@ -3,7 +3,6 @@ import { DurableMemoryStore } from './durable.js';
 import { extractDurableCandidatesFromEvent } from './durable-extractor.js';
 import { mergeDurableCandidate } from './durable-merge.js';
 
-const DEFAULT_SOURCE = 'codex';
 const WATERMARK_PREFIX = 'durable';
 
 interface WatermarkRow {
@@ -12,6 +11,10 @@ interface WatermarkRow {
 
 interface CountRow {
   cnt: number;
+}
+
+interface SourceRow {
+  source: string;
 }
 
 interface RunnerOptions {
@@ -60,6 +63,13 @@ function loadConversationEvents(
   );
 }
 
+function listAvailableSources(db: DatabaseAdapter): string[] {
+  return db
+    .all<SourceRow>('SELECT DISTINCT source FROM conversation_events ORDER BY source ASC')
+    .map((row) => row.source)
+    .filter((source) => source.length > 0);
+}
+
 function hasDurableFts(db: DatabaseAdapter): boolean {
   const row = db.get<CountRow>(
     "SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type = 'table' AND name = ?",
@@ -68,23 +78,15 @@ function hasDurableFts(db: DatabaseAdapter): boolean {
   return (row?.cnt ?? 0) > 0;
 }
 
-export function runDurableExtraction(
+function extractForSingleSource(
   db: DatabaseAdapter,
-  options?: RunnerOptions,
-): DurableExtractionMetrics {
-  const source = options?.source ?? DEFAULT_SOURCE;
-  const store = new DurableMemoryStore(db, hasDurableFts(db));
+  store: DurableMemoryStore,
+  source: string,
+  metrics: DurableExtractionMetrics,
+): void {
   const lastEventId = getWatermark(db, source);
   const events = loadConversationEvents(db, source, lastEventId);
-
-  const metrics: DurableExtractionMetrics = {
-    scanned: 0,
-    inserted: 0,
-    confirmed: 0,
-    superseded: 0,
-    ignored: 0,
-    watermarkEventId: lastEventId,
-  };
+  metrics.watermarkEventId = Math.max(metrics.watermarkEventId, lastEventId);
 
   for (const event of events) {
     const candidates = extractDurableCandidatesFromEvent(event);
@@ -136,8 +138,30 @@ export function runDurableExtraction(
       }
     }
 
-    metrics.watermarkEventId = event.id;
+    metrics.watermarkEventId = Math.max(metrics.watermarkEventId, event.id);
     setWatermark(db, source, event.id);
+  }
+}
+
+export function runDurableExtraction(
+  db: DatabaseAdapter,
+  options?: RunnerOptions,
+): DurableExtractionMetrics {
+  const store = new DurableMemoryStore(db, hasDurableFts(db));
+  const sources =
+    options?.source && options.source !== 'all' ? [options.source] : listAvailableSources(db);
+
+  const metrics: DurableExtractionMetrics = {
+    scanned: 0,
+    inserted: 0,
+    confirmed: 0,
+    superseded: 0,
+    ignored: 0,
+    watermarkEventId: 0,
+  };
+
+  for (const source of sources) {
+    extractForSingleSource(db, store, source, metrics);
   }
 
   return metrics;

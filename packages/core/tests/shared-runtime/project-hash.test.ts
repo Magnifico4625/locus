@@ -25,4 +25,11 @@ describe('projectHash (shared-runtime)', () => {
   it('normalizes duplicate separators before hashing', () => {
     expect(projectHash('C:/Users//Test///Project')).toBe(projectHash('c:\\users\\test\\project'));
   });
+
+  it('produces the same hash for \\\\?\\, file://, and trailing-slash variants', () => {
+    const expected = projectHash('C:/Users/Admin/repo');
+    expect(projectHash('\\\\?\\C:\\Users\\Admin\\repo')).toBe(expected);
+    expect(projectHash('file:///C:/Users/Admin/repo')).toBe(expected);
+    expect(projectHash('C:\\Users\\Admin\\repo\\')).toBe(expected);
+  });
 });

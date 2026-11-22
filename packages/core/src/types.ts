@@ -93,6 +93,17 @@ export type DurableMemoryType = (typeof DURABLE_MEMORY_TYPES)[number];
 
 export type DurableMemoryState = 'active' | 'stale' | 'superseded' | 'archivable';
 
+export type KnownMemorySource =
+  | 'codex'
+  | 'claude-code'
+  | 'antigravity'
+  | 'opencode'
+  | 'dsh'
+  | 'git'
+  | 'manual';
+
+export type DurableMemorySource = KnownMemorySource | (string & {});
+
 export interface DurableMemoryEntry {
   id: number;
   topicKey?: string;
@@ -102,7 +113,7 @@ export interface DurableMemoryEntry {
   evidence: Record<string, unknown>;
   projectRoot?: string;
   sourceEventId?: string;
-  source: 'codex' | 'claude-code' | 'manual';
+  source: DurableMemorySource;
   supersededById?: number;
   createdAt: number;
   updatedAt: number;
@@ -695,3 +706,24 @@ export type MemoryImportCodexResponse =
   | MemoryImportCodexResponseOk
   | MemoryImportCodexResponseDisabled
   | MemoryImportCodexResponseError;
+
+// ─── Zero-Call Auto Context Brief ───
+
+export type AutoContextMode = 'session_start' | 'prompt_recall';
+
+export type AutoContextReason =
+  | 'ok'
+  | 'empty_memory'
+  | 'noise_filtered'
+  | 'low_confidence'
+  | 'already_injected';
+
+export interface AutoContextBrief {
+  mode: AutoContextMode;
+  injected: boolean;
+  reason: AutoContextReason;
+  text: string;
+  estimatedTokens: number;
+  includedDurableIds: number[];
+  includedEventIds: string[];
+}

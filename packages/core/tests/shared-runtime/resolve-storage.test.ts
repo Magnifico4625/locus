@@ -3,8 +3,10 @@ import { join } from 'node:path';
 import {
   resolveDbPath,
   resolveInboxDir,
+  resolveLocusHome,
   resolveLogPath,
   resolveProjectStorageDir,
+  resolveRuntimeBinDir,
   resolveStorageRoot,
 } from '@locus/shared-runtime';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -136,5 +138,38 @@ describe('resolveLogPath', () => {
     delete process.env.CODEX_HOME;
     process.env.CLAUDE_PLUGIN_ROOT = '/some/plugin';
     expect(resolveLogPath()).toBe(join(homedir(), '.claude', 'memory', 'locus.log'));
+  });
+});
+
+describe('multi-platform shared ~/.locus/memory and runtime bin helpers', () => {
+  it('maps antigravity, opencode, and dsh to ~/.locus/memory by default', () => {
+    delete process.env.LOCUS_STORAGE_ROOT;
+    delete process.env.CODEX_HOME;
+    delete process.env.CLAUDE_PLUGIN_ROOT;
+
+    for (const key of ['LOCUS_ANTIGRAVITY', 'LOCUS_OPENCODE', 'LOCUS_DSH'] as const) {
+      delete process.env.LOCUS_ANTIGRAVITY;
+      delete process.env.LOCUS_OPENCODE;
+      delete process.env.LOCUS_DSH;
+      process.env[key] = '1';
+      expect(resolveStorageRoot()).toBe(join(homedir(), '.locus', 'memory'));
+    }
+  });
+
+  it('LOCUS_STORAGE_ROOT overrides antigravity/opencode/dsh storage root', () => {
+    process.env.LOCUS_STORAGE_ROOT = '/custom/sandbox-memory';
+    process.env.LOCUS_ANTIGRAVITY = '1';
+    expect(resolveStorageRoot()).toBe('/custom/sandbox-memory');
+  });
+
+  it('resolveLocusHome and resolveRuntimeBinDir respect LOCUS_HOME', () => {
+    expect(resolveLocusHome({})).toBe(join(homedir(), '.locus'));
+    expect(resolveRuntimeBinDir({})).toBe(join(homedir(), '.locus', 'bin'));
+    expect(resolveLocusHome({ LOCUS_HOME: '~/custom-locus' })).toBe(
+      join(homedir(), 'custom-locus'),
+    );
+    expect(resolveRuntimeBinDir({ LOCUS_HOME: '/sandbox/locus-home' })).toBe(
+      join('/sandbox/locus-home', 'bin'),
+    );
   });
 });

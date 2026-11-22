@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@locus/codex": "*",
+    "@locus/core": "*",
     "@locus/shared-runtime": "*"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-export type ClientEnv = 'claude-code' | 'codex' | 'generic';
+export type ClientEnv = 'claude-code' | 'codex' | 'antigravity' | 'opencode' | 'dsh' | 'generic';
 export type ClientSurface = 'cli' | 'desktop' | 'extension' | 'generic';
 
 export interface ClientRuntime {

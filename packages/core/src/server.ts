@@ -1,25 +1,22 @@
-import { basename, dirname, join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { importCodexSessionsToInbox } from '@locus/codex';
-import { resolveDbPath, resolveLogPath } from '@locus/shared-runtime';
+import { resolveLogPath } from '@locus/shared-runtime';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { RootsListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { processInbox } from './ingest/pipeline.js';
 import { log, setLogLevel } from './logger.js';
-import { MemoryCompressor } from './memory/compressor.js';
 import { runDurableExtraction } from './memory/durable-runner.js';
-import { EpisodicMemory } from './memory/episodic.js';
-import { SemanticMemory } from './memory/semantic.js';
-import { resolveProjectRoot } from './project-root.js';
+import type { EpisodicMemory } from './memory/episodic.js';
+import type { SemanticMemory } from './memory/semantic.js';
 import { generateDecisions } from './resources/decisions.js';
 import { generateProjectMap } from './resources/project-map.js';
 import { generateRecent } from './resources/recent.js';
-import { initStorage } from './storage/init.js';
 import { handleAudit } from './tools/audit.js';
-import {
-  CODEX_AUTO_IMPORT_DEBOUNCE_MS,
-  coordinateCodexAutoImport,
-} from './tools/auto-import-codex.js';
+import { coordinateCodexAutoImport } from './tools/auto-import-codex.js';
 import { handleCalendar } from './tools/calendar.js';
 import { collectCodexDiagnostics } from './tools/codex-diagnostics.js';
 import { handleCompact } from './tools/compact.js';
@@ -38,14 +35,10 @@ import { handleScan } from './tools/scan.js';
 import { handleSearch } from './tools/search.js';
 import { handleStatus } from './tools/status.js';
 import { handleTimeline } from './tools/timeline.js';
-import type {
-  CodexAutoImportSnapshot,
-  DatabaseAdapter,
-  IngestMetrics,
-  LocusConfig,
-  ProjectRootMethod,
-} from './types.js';
+import type { DatabaseAdapter, LocusConfig, ProjectRootMethod } from './types.js';
 import { DURABLE_MEMORY_TYPES, LOCUS_DEFAULTS } from './types.js';
+import { type WorkspaceEntry, WorkspacePool } from './workspace-pool.js';
+
 // ─── Public interfaces ────────────────────────────────────────────────────────
 
 export interface CreateServerOptions {
@@ -67,47 +60,58 @@ export interface ServerContext {
   cleanup: () => void;
 }
 
+const INGEST_DEBOUNCE_MS = 30_000;
+
+function resolveServerVersion(): string {
+  try {
+    let dir = dirname(fileURLToPath(import.meta.url));
+    for (let i = 0; i < 4; i++) {
+      const runtimeJson = join(dir, 'runtime.json');
+      if (existsSync(runtimeJson)) {
+        const parsed = JSON.parse(readFileSync(runtimeJson, 'utf8')) as { version?: unknown };
+        if (typeof parsed.version === 'string' && parsed.version.length > 0) {
+          return parsed.version;
+        }
+      }
+
+      const pkgJson = join(dir, 'package.json');
+      if (existsSync(pkgJson)) {
+        const parsed = JSON.parse(readFileSync(pkgJson, 'utf8')) as {
+          name?: unknown;
+          version?: unknown;
+        };
+        if (
+          (parsed.name === 'locus-memory' || parsed.name === '@locus/core') &&
+          typeof parsed.version === 'string' &&
+          parsed.version.length > 0
+        ) {
+          return parsed.version;
+        }
+      }
+
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+  } catch {
+    // Fall through to default version
+  }
+  return '3.7.0';
+}
+
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
 export async function createServer(options?: CreateServerOptions): Promise<ServerContext> {
   const cwd = options?.cwd ?? process.cwd();
-
-  // 1. Resolve project root
-  const { root, method } = resolveProjectRoot(cwd);
-  const projectName = basename(root);
-
-  // 2. Compute DB path (skip hash when caller supplies explicit path)
-  const dbPath = options?.dbPath ?? resolveDbPath(root);
   const logPath = resolveLogPath();
 
-  // 3. Initialise storage
-  const { db, backend, fts5 } = await initStorage(dbPath);
-
-  // 3b. Compute inbox directory (sibling to DB file)
-  const inboxDir = join(dirname(dbPath), 'inbox');
-
-  // 4. Config (defaults + env overrides)
+  // 1. Config (defaults + env overrides)
   const config: LocusConfig = { ...LOCUS_DEFAULTS };
   const envCapture = process.env.LOCUS_CAPTURE_LEVEL;
   if (envCapture === 'metadata' || envCapture === 'redacted' || envCapture === 'full') {
     config.captureLevel = envCapture;
   }
 
-  // 5. Memory layers
-  const semantic = new SemanticMemory(db, fts5);
-  const episodic = new EpisodicMemory(db);
-  // MemoryCompressor is used internally (not exposed via ServerContext)
-  const _compressor = new MemoryCompressor(config);
-  void _compressor;
-
-  // 6. Confirmation token stores (separate prefix per operation)
-  const purgeTokenStore = new ConfirmationTokenStore('purge');
-  const forgetTokenStore = new ConfirmationTokenStore('forget');
-
-  // 7. Log startup info
-  const fileCountRow = db.get<{ cnt: number }>('SELECT COUNT(*) AS cnt FROM files');
-  const fileCount = fileCountRow?.cnt ?? 0;
-  log('info', `Locus started: backend=${backend} fts5=${fts5} db=${dbPath} files=${fileCount}`);
   if (config.captureLevel !== 'metadata') {
     log(
       'info',
@@ -115,99 +119,104 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     );
   }
 
-  // 8. Process inbox at startup (all events, no batch limit)
-  let _lastIngestMetrics: IngestMetrics | null = null;
-  let lastIngestTime = 0;
-  const INGEST_DEBOUNCE_MS = 30_000;
-  let codexAutoImportSnapshot: CodexAutoImportSnapshot = {
-    clientDetected: false,
-    client: 'generic',
-    clientSurface: 'generic',
-    detectionEvidence: [],
-    debounceMs: CODEX_AUTO_IMPORT_DEBOUNCE_MS,
-    lastStatus: 'idle',
-    lastImported: 0,
-    lastDuplicates: 0,
-    lastErrors: 0,
-  };
+  // 2. Workspace pool + initial storage
+  const pool = new WorkspacePool({
+    initialCwd: cwd,
+    fixedDbPath: options?.dbPath,
+    config,
+  });
+  const initialWorkspace = await pool.getOrOpenInitial();
 
-  try {
-    const startupMetrics = processInbox(inboxDir, db, {
-      batchLimit: 0,
-      captureLevel: config.captureLevel,
-      fts5Available: fts5,
-      projectRoot: root,
+  // 3. Confirmation token stores (separate prefix per operation)
+  const purgeTokenStore = new ConfirmationTokenStore('purge');
+  const forgetTokenStore = new ConfirmationTokenStore('forget');
+
+  // 4. MCP server
+  const server = new McpServer({ name: 'locus', version: resolveServerVersion() });
+
+  if (!options?.dbPath) {
+    const refreshActiveWorkspaceFromRoots = async (): Promise<void> => {
+      try {
+        const capabilities = server.server.getClientCapabilities();
+        if (!capabilities?.roots) {
+          return;
+        }
+
+        const response = await server.server.listRoots();
+        await pool.setActiveFromRootUris(response.roots.map((rootItem) => rootItem.uri));
+      } catch (err: unknown) {
+        log(
+          'error',
+          `MCP roots refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    };
+
+    server.server.oninitialized = () => {
+      void refreshActiveWorkspaceFromRoots();
+    };
+
+    server.server.setNotificationHandler(RootsListChangedNotificationSchema, async () => {
+      await refreshActiveWorkspaceFromRoots();
     });
-    runDurableExtraction(db, { source: 'codex' });
-    _lastIngestMetrics = startupMetrics;
-    if (startupMetrics.processed > 0) {
-      lastIngestTime = Date.now();
-    }
-    if (startupMetrics.processed > 0) {
-      log(
-        'info',
-        `Inbox startup: processed=${startupMetrics.processed} errors=${startupMetrics.errors}`,
-      );
-    }
-  } catch (err: unknown) {
-    log('error', `Inbox startup error: ${err instanceof Error ? err.message : String(err)}`);
   }
-
-  // 9. MCP server
-  const server = new McpServer({ name: 'locus', version: '0.2.0' });
 
   // ─── Resources ───────────────────────────────────────────────────────────────
 
-  server.resource('project-map', 'memory://project-map', async () => ({
-    contents: [
-      {
-        uri: 'memory://project-map',
-        mimeType: 'text/plain',
-        text: generateProjectMap(db, projectName),
-      },
-    ],
-  }));
+  server.resource('project-map', 'memory://project-map', async () => {
+    const active = pool.getActive();
+    return {
+      contents: [
+        {
+          uri: 'memory://project-map',
+          mimeType: 'text/plain',
+          text: generateProjectMap(active.db, active.projectName),
+        },
+      ],
+    };
+  });
 
-  server.resource('decisions', 'memory://decisions', async () => ({
-    contents: [
-      {
-        uri: 'memory://decisions',
-        mimeType: 'text/plain',
-        text: generateDecisions(db),
-      },
-    ],
-  }));
+  server.resource('decisions', 'memory://decisions', async () => {
+    const active = pool.getActive();
+    return {
+      contents: [
+        {
+          uri: 'memory://decisions',
+          mimeType: 'text/plain',
+          text: generateDecisions(active.db),
+        },
+      ],
+    };
+  });
 
-  server.resource('recent', 'memory://recent', async () => ({
-    contents: [
-      {
-        uri: 'memory://recent',
-        mimeType: 'text/plain',
-        text: generateRecent(db, config.captureLevel),
-      },
-    ],
-  }));
+  server.resource('recent', 'memory://recent', async () => {
+    const active = pool.getActive();
+    return {
+      contents: [
+        {
+          uri: 'memory://recent',
+          mimeType: 'text/plain',
+          text: generateRecent(active.db, config.captureLevel),
+        },
+      ],
+    };
+  });
 
-  // ─── Tools ───────────────────────────────────────────────────────────────────
+  // ─── Pre-query sync helper ──────────────────────────────────────────────────
 
-  // 1. memory_explore
-  server.tool('memory_explore', { path: z.string() }, async ({ path }) => ({
-    content: [{ type: 'text' as const, text: handleExplore(path, { db }) }],
-  }));
-
-  function runPreQueryCodexFlow(now: number): void {
+  function runPreQuerySyncFlow(workspace: WorkspaceEntry, now: number): void {
     const autoImport = coordinateCodexAutoImport({
       now,
-      snapshot: codexAutoImportSnapshot,
+      snapshot: workspace.codexAutoImportSnapshot,
       runImport: () =>
         handleImportCodex(
           { latestOnly: true },
           {
-            db,
-            inboxDir,
+            db: workspace.db,
+            inboxDir: workspace.inboxDir,
             captureLevel: config.captureLevel,
-            fts5Available: fts5,
-            projectRoot: root,
+            fts5Available: workspace.fts5,
+            projectRoot: workspace.projectRoot,
             env: process.env,
             processInbox,
             runDurableExtraction,
@@ -215,48 +224,64 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
           },
         ),
     });
-    codexAutoImportSnapshot = autoImport.snapshot;
+    workspace.codexAutoImportSnapshot = autoImport.snapshot;
 
-    if (!autoImport.processedInbox && now - lastIngestTime > INGEST_DEBOUNCE_MS) {
+    if (!autoImport.processedInbox && now - workspace.lastIngestTime > INGEST_DEBOUNCE_MS) {
       try {
-        const metrics = processInbox(inboxDir, db, {
+        const metrics = processInbox(workspace.inboxDir, workspace.db, {
           batchLimit: 50,
           captureLevel: config.captureLevel,
-          fts5Available: fts5,
-          projectRoot: root,
+          fts5Available: workspace.fts5,
+          projectRoot: workspace.projectRoot,
         });
-        runDurableExtraction(db, { source: 'codex' });
-        _lastIngestMetrics = metrics;
-        lastIngestTime = now;
+        runDurableExtraction(workspace.db);
+        workspace.lastIngestMetrics = metrics;
+        workspace.lastIngestTime = now;
       } catch {
         // Pre-query ingest failure should not block search or recall
       }
     }
   }
 
+  const timeRangeSchema = z
+    .object({
+      from: z.number().optional(),
+      to: z.number().optional(),
+      relative: z
+        .enum([
+          'today',
+          'yesterday',
+          'this_week',
+          'last_7d',
+          'last_30d',
+          'this_month',
+          'last_month',
+        ])
+        .optional(),
+    })
+    .optional();
+
+  const optionalProjectRootSchema = z
+    .string()
+    .optional()
+    .describe('Optional project root path to target a specific workspace');
+
+  // ─── Tools ───────────────────────────────────────────────────────────────────
+
+  // 1. memory_explore
+  server.tool('memory_explore', { path: z.string() }, async ({ path }) => {
+    const active = pool.getActive();
+    return {
+      content: [{ type: 'text' as const, text: handleExplore(path, { db: active.db }) }],
+    };
+  });
+
   // 2. memory_search (with Codex auto-import + pre-search inbox processing)
   server.tool(
     'memory_search',
     {
       query: z.string(),
-      timeRange: z
-        .object({
-          from: z.number().optional(),
-          to: z.number().optional(),
-          relative: z
-            .enum([
-              'today',
-              'yesterday',
-              'this_week',
-              'last_7d',
-              'last_30d',
-              'this_month',
-              'last_month',
-            ])
-            .optional(),
-        })
-        .optional()
-        .describe('Filter by time range (absolute or relative)'),
+      timeRange: timeRangeSchema.describe('Filter by time range (absolute or relative)'),
       filePath: z.string().optional().describe('Filter by file path (exact match in event_files)'),
       kind: z
         .enum([
@@ -272,20 +297,21 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       source: z.string().optional().describe('Filter by event source'),
       limit: z.number().optional().describe('Max conversation results (default 20)'),
       offset: z.number().optional().describe('Skip N conversation results'),
+      projectRoot: optionalProjectRootSchema,
     },
-    async ({ query, timeRange, filePath, kind, source, limit, offset }) => {
-      const now = Date.now();
-      runPreQueryCodexFlow(now);
+    async ({ query, timeRange, filePath, kind, source, limit, offset, projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
+      runPreQuerySyncFlow(workspace, Date.now());
 
       const results = handleSearch(
         query,
-        { db, semantic, fts5 },
+        { db: workspace.db, semantic: workspace.semantic, fts5: workspace.fts5 },
         {
           timeRange,
           filePath,
           kind,
           source,
-          projectRoot: root,
+          projectRoot: workspace.projectRoot,
           limit,
           offset,
         },
@@ -307,36 +333,23 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     'memory_recall',
     {
       question: z.string(),
-      timeRange: z
-        .object({
-          from: z.number().optional(),
-          to: z.number().optional(),
-          relative: z
-            .enum([
-              'today',
-              'yesterday',
-              'this_week',
-              'last_7d',
-              'last_30d',
-              'this_month',
-              'last_month',
-            ])
-            .optional(),
-        })
-        .optional()
-        .describe('Filter recall candidates by time range (absolute or relative)'),
+      timeRange: timeRangeSchema.describe(
+        'Filter recall candidates by time range (absolute or relative)',
+      ),
       limit: z
         .number()
         .optional()
         .describe('Max recall candidates to inspect per source (default 10)'),
+      projectRoot: optionalProjectRootSchema,
     },
-    async ({ question, timeRange, limit }) => {
+    async ({ question, timeRange, limit, projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
       const now = Date.now();
-      runPreQueryCodexFlow(now);
+      runPreQuerySyncFlow(workspace, now);
 
       const result = handleRecall(
         question,
-        { db, now, projectRoot: root },
+        { db: workspace.db, now, projectRoot: workspace.projectRoot },
         {
           timeRange,
           limit,
@@ -355,37 +368,22 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     },
   );
 
-  // 2c. memory_calendar (with the same debounced Codex pre-query flow)
+  // 2c. memory_calendar (with the same debounced pre-query flow)
   server.tool(
     'memory_calendar',
     {
-      timeRange: z
-        .object({
-          from: z.number().optional(),
-          to: z.number().optional(),
-          relative: z
-            .enum([
-              'today',
-              'yesterday',
-              'this_week',
-              'last_7d',
-              'last_30d',
-              'this_month',
-              'last_month',
-            ])
-            .optional(),
-        })
-        .optional()
-        .describe('Filter memory buckets by time range'),
+      timeRange: timeRangeSchema.describe('Filter memory buckets by time range'),
       granularity: z.enum(['day', 'week', 'month']).optional(),
       limit: z.number().optional(),
+      projectRoot: optionalProjectRootSchema,
     },
-    async ({ timeRange, granularity, limit }) => {
+    async ({ timeRange, granularity, limit, projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
       const now = Date.now();
-      runPreQueryCodexFlow(now);
+      runPreQuerySyncFlow(workspace, now);
 
       const result = handleCalendar(
-        { db, projectRoot: root, now },
+        { db: workspace.db, projectRoot: workspace.projectRoot, now },
         {
           timeRange,
           granularity,
@@ -404,7 +402,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     },
   );
 
-  // 3. memory_remember
+  // 3a. memory_review
   server.tool(
     'memory_review',
     {
@@ -419,24 +417,35 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .describe('Minimum durable evidence confidence to include (0-1)'),
       limit: z.number().optional().describe('Max review candidates to return (default 20)'),
     },
-    async ({ state, topicKey, memoryType, confidence, limit }) => ({
-      content: [
-        {
-          type: 'text' as const,
-          text: JSON.stringify(
-            handleReview({ db }, { state, topicKey, memoryType, confidence, limit }),
-          ),
-        },
-      ],
-    }),
+    async ({ state, topicKey, memoryType, confidence, limit }) => {
+      const active = pool.getActive();
+      return {
+        content: [
+          {
+            type: 'text' as const,
+            text: JSON.stringify(
+              handleReview({ db: active.db }, { state, topicKey, memoryType, confidence, limit }),
+            ),
+          },
+        ],
+      };
+    },
   );
 
-  // 3. memory_remember
+  // 3b. memory_remember
   server.tool(
     'memory_remember',
-    { text: z.string(), tags: z.array(z.string()).optional() },
-    async ({ text, tags }) => {
-      const entry = handleRemember(text, tags ?? [], { semantic, projectRoot: root });
+    {
+      text: z.string(),
+      tags: z.array(z.string()).optional(),
+      projectRoot: optionalProjectRootSchema,
+    },
+    async ({ text, tags, projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
+      const entry = handleRemember(text, tags ?? [], {
+        semantic: workspace.semantic,
+        projectRoot: workspace.projectRoot,
+      });
       return {
         content: [{ type: 'text' as const, text: `Remembered (id=${entry.id}): ${entry.content}` }],
       };
@@ -456,14 +465,15 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .describe('Import only events at or after this Unix timestamp in milliseconds'),
     },
     async ({ latestOnly, projectRoot, sessionId, since }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
       const result = handleImportCodex(
         { latestOnly, projectRoot, sessionId, since },
         {
-          db,
-          inboxDir,
+          db: workspace.db,
+          inboxDir: workspace.inboxDir,
           captureLevel: config.captureLevel,
-          fts5Available: fts5,
-          projectRoot: root,
+          fts5Available: workspace.fts5,
+          projectRoot: workspace.projectRoot,
           env: process.env,
           processInbox,
           runDurableExtraction,
@@ -480,75 +490,105 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     'memory_forget',
     { query: z.string(), confirmToken: z.string().optional() },
     async ({ query, confirmToken }) => {
-      const result = handleForget(query, { semantic, tokenStore: forgetTokenStore }, confirmToken);
+      const active = pool.getActive();
+      const result = handleForget(
+        query,
+        { semantic: active.semantic, tokenStore: forgetTokenStore },
+        confirmToken,
+      );
       return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
     },
   );
 
   // 6. memory_scan
   server.tool('memory_scan', {}, async () => {
-    const result = await handleScan({ projectPath: root, db, config });
+    const active = pool.getActive();
+    const result = await handleScan({ projectPath: active.projectRoot, db: active.db, config });
     return { content: [{ type: 'text' as const, text: JSON.stringify(result.stats) }] };
   });
 
-  // 6b. memory_project_state
-  server.tool('memory_project_state', {}, async () => {
-    const result = handleProjectState({ db, projectRoot: root });
-    return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
-  });
+  // 6b. memory_project_state (runs pre-query sync/ingest first)
+  server.tool(
+    'memory_project_state',
+    {
+      projectRoot: optionalProjectRootSchema,
+    },
+    async ({ projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
+      runPreQuerySyncFlow(workspace, Date.now());
+      const result = handleProjectState({ db: workspace.db, projectRoot: workspace.projectRoot });
+      return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+    },
+  );
 
   // 7. memory_status
-  server.tool('memory_status', {}, async () => {
-    const status = handleStatus({
-      projectPath: cwd,
-      projectRoot: root,
-      projectRootMethod: method,
-      dbPath,
-      db,
-      config,
-      backend,
-      fts5,
-      inboxDir,
-      codexAutoImportSnapshot,
-      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env }),
-    });
-    return { content: [{ type: 'text' as const, text: JSON.stringify(status) }] };
-  });
+  server.tool(
+    'memory_status',
+    {
+      projectRoot: optionalProjectRootSchema,
+    },
+    async ({ projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
+      const status = handleStatus({
+        projectPath: workspace.cwd,
+        projectRoot: workspace.projectRoot,
+        projectRootMethod: workspace.projectRootMethod,
+        dbPath: workspace.dbPath,
+        db: workspace.db,
+        config,
+        backend: workspace.backend,
+        fts5: workspace.fts5,
+        inboxDir: workspace.inboxDir,
+        codexAutoImportSnapshot: workspace.codexAutoImportSnapshot,
+        codexDiagnostics: collectCodexDiagnostics({ db: workspace.db, env: process.env }),
+      });
+      return { content: [{ type: 'text' as const, text: JSON.stringify(status) }] };
+    },
+  );
 
   // 8. memory_doctor
   server.tool('memory_doctor', {}, async () => {
+    const active = pool.getActive();
     const report = handleDoctor({
       nodeVersion: process.version,
-      backend,
-      fts5,
-      dbPath,
-      projectRoot: root,
-      projectRootMethod: method,
+      backend: active.backend,
+      fts5: active.fts5,
+      dbPath: active.dbPath,
+      projectRoot: active.projectRoot,
+      projectRootMethod: active.projectRootMethod,
       captureLevel: config.captureLevel,
       logPath,
-      db,
-      codexDiagnostics: collectCodexDiagnostics({ db, env: process.env }),
+      db: active.db,
+      codexDiagnostics: collectCodexDiagnostics({ db: active.db, env: process.env }),
     });
     return { content: [{ type: 'text' as const, text: JSON.stringify(report) }] };
   });
 
   // 9. memory_audit
   server.tool('memory_audit', {}, async () => {
+    const active = pool.getActive();
     const report = handleAudit({
-      db,
-      projectPath: cwd,
-      dbPath,
+      db: active.db,
+      projectPath: active.cwd,
+      dbPath: active.dbPath,
       logPath,
       captureLevel: config.captureLevel,
-      fts5,
+      fts5: active.fts5,
     });
     return { content: [{ type: 'text' as const, text: report }] };
   });
 
   // 10. memory_purge
   server.tool('memory_purge', { confirmToken: z.string().optional() }, async ({ confirmToken }) => {
+    const active = pool.getActive();
     const result = handlePurge(
-      { db, dbPath, projectPath: cwd, tokenStore: purgeTokenStore, inboxDir },
+      {
+        db: active.db,
+        dbPath: active.dbPath,
+        projectPath: active.cwd,
+        tokenStore: purgeTokenStore,
+        inboxDir: active.inboxDir,
+      },
       confirmToken,
     );
     return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
@@ -556,7 +596,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
   // 11. memory_config
   server.tool('memory_config', {}, async () => {
-    const result = handleConfig(config, process.env, fts5);
+    const result = handleConfig(config, process.env, initialWorkspace.fts5);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
 
@@ -571,33 +611,17 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .describe('Always keep this many recent sessions (default: 5)'),
     },
     async (params) => {
-      const result = handleCompact(db, params);
+      const active = pool.getActive();
+      const result = handleCompact(active.db, params);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     },
   );
 
-  // 13. memory_timeline
+  // 13. memory_timeline (runs pre-query sync/ingest first)
   server.tool(
     'memory_timeline',
     {
-      timeRange: z
-        .object({
-          from: z.number().optional(),
-          to: z.number().optional(),
-          relative: z
-            .enum([
-              'today',
-              'yesterday',
-              'this_week',
-              'last_7d',
-              'last_30d',
-              'this_month',
-              'last_month',
-            ])
-            .optional(),
-        })
-        .optional()
-        .describe('Filter by time range (absolute or relative)'),
+      timeRange: timeRangeSchema.describe('Filter by time range (absolute or relative)'),
       kind: z
         .enum([
           'user_prompt',
@@ -616,10 +640,13 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .describe('When true, returns headers only (kind + timestamp, no payload)'),
       limit: z.number().optional().describe('Max entries (default 20)'),
       offset: z.number().optional().describe('Skip N entries for pagination'),
+      projectRoot: optionalProjectRootSchema,
     },
-    async ({ timeRange, kind, filePath, summary, limit, offset }) => {
+    async ({ timeRange, kind, filePath, summary, limit, offset, projectRoot }) => {
+      const workspace = await pool.resolveForPath(projectRoot);
+      runPreQuerySyncFlow(workspace, Date.now());
       const entries = handleTimeline(
-        { db, projectRoot: root },
+        { db: workspace.db, projectRoot: workspace.projectRoot },
         { timeRange, kind, filePath, summary, limit, offset },
       );
       return { content: [{ type: 'text' as const, text: JSON.stringify(entries) }] };
@@ -628,16 +655,16 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
   return {
     server,
-    db,
+    db: initialWorkspace.db,
     config,
-    backend,
-    fts5,
-    projectRoot: root,
-    projectRootMethod: method,
-    inboxDir,
-    semantic,
-    episodic,
-    cleanup: () => db.close(),
+    backend: initialWorkspace.backend,
+    fts5: initialWorkspace.fts5,
+    projectRoot: initialWorkspace.projectRoot,
+    projectRootMethod: initialWorkspace.projectRootMethod,
+    inboxDir: initialWorkspace.inboxDir,
+    semantic: initialWorkspace.semantic,
+    episodic: initialWorkspace.episodic,
+    cleanup: () => pool.cleanupAll(),
   };
 }
 
@@ -653,7 +680,9 @@ async function main(): Promise<void> {
   log('info', `Locus MCP server started (log level: ${logLevel})`);
 }
 
-main().catch((error: unknown) => {
-  log('error', `Fatal: ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+if (!process.env.VITEST) {
+  main().catch((error: unknown) => {
+    log('error', `Fatal: ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });
+}

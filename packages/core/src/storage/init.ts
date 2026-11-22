@@ -1,3 +1,4 @@
+/// <reference path="../vendor.d.ts" />
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import type { DatabaseAdapter } from '../types.js';

@@ -27,17 +27,31 @@ export function findPackageRoot(startDir = dirname(fileURLToPath(import.meta.url
   }
 }
 
-export function resolvePackageVersion(startDir?: string): string {
-  const root = findPackageRoot(startDir);
-  const packageJson = JSON.parse(
-    readFileSync(resolve(root, 'package.json'), 'utf8'),
-  ) as PackageJson;
+export function resolvePackageVersion(startDir = dirname(fileURLToPath(import.meta.url))): string {
+  try {
+    const root = findPackageRoot(startDir);
+    const packageJson = JSON.parse(
+      readFileSync(resolve(root, 'package.json'), 'utf8'),
+    ) as PackageJson;
 
-  if (!packageJson.version) {
-    throw new Error('Root package.json is missing version');
+    if (!packageJson.version) {
+      throw new Error('Root package.json is missing version');
+    }
+
+    return packageJson.version;
+  } catch (error) {
+    const runtimeManifestPath = resolve(resolve(startDir), 'runtime.json');
+    if (existsSync(runtimeManifestPath)) {
+      const manifest = JSON.parse(readFileSync(runtimeManifestPath, 'utf8')) as {
+        version?: unknown;
+      };
+      if (typeof manifest.version === 'string' && manifest.version.trim().length > 0) {
+        return manifest.version.trim();
+      }
+    }
+
+    throw error;
   }
-
-  return packageJson.version;
 }
 
 export function buildRuntimePackageSpecifier(version: string): string {

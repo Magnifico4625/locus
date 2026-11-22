@@ -1,12 +1,13 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { type ScanDeps, scanProject } from '../../src/scanner/index.js';
 import { initStorage } from '../../src/storage/init.js';
 import { type DatabaseAdapter, LOCUS_DEFAULTS } from '../../src/types.js';
 
-const FIXTURE_PATH = join(__dirname, '..', 'fixtures', 'sample-project');
+const FIXTURE_TEMPLATE_PATH = join(__dirname, '..', 'fixtures', 'sample-project');
+let fixtureDir: string;
 
 // ScanDeps that forces a full scan (no git, mtime returns files to trigger full rescan)
 function fullScanDeps(): ScanDeps {
@@ -35,6 +36,23 @@ describe('scanProject', () => {
   let tempDir: string;
   let db: DatabaseAdapter;
 
+  beforeAll(() => {
+    fixtureDir = mkdtempSync(join(tmpdir(), 'locus-sample-fixture-'));
+    cpSync(FIXTURE_TEMPLATE_PATH, fixtureDir, { recursive: true });
+    if (!existsSync(join(fixtureDir, '.env'))) {
+      writeFileSync(join(fixtureDir, '.env'), 'DUMMY_ENV=placeholder\n', 'utf8');
+    }
+    const nmDir = join(fixtureDir, 'node_modules');
+    mkdirSync(nmDir, { recursive: true });
+    if (!existsSync(join(nmDir, '.keep'))) {
+      writeFileSync(join(nmDir, '.keep'), '', 'utf8');
+    }
+  });
+
+  afterAll(() => {
+    rmSync(fixtureDir, { recursive: true, force: true });
+  });
+
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'locus-scan-'));
     const storage = await initStorage(join(tempDir, 'test.db'));
@@ -48,7 +66,7 @@ describe('scanProject', () => {
 
   it('scans the fixture project and returns correct file count', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     // Should scan 3 TS files: src/index.ts, src/auth/login.ts, src/utils/helpers.ts
     expect(result.stats.scannedFiles).toBe(3);
@@ -59,7 +77,7 @@ describe('scanProject', () => {
 
   it('parses exports correctly for login.ts', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const login = result.files.find((f) => f.relativePath === 'src/auth/login.ts');
     expect(login).toBeDefined();
@@ -70,7 +88,7 @@ describe('scanProject', () => {
 
   it('parses exports correctly for helpers.ts', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const helpers = result.files.find((f) => f.relativePath === 'src/utils/helpers.ts');
     expect(helpers).toBeDefined();
@@ -81,7 +99,7 @@ describe('scanProject', () => {
 
   it('detects barrel file with medium:barrel confidence', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const barrel = result.files.find((f) => f.relativePath === 'src/index.ts');
     expect(barrel).toBeDefined();
@@ -93,7 +111,7 @@ describe('scanProject', () => {
 
   it('parses imports correctly for login.ts', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const login = result.files.find((f) => f.relativePath === 'src/auth/login.ts');
     expect(login).toBeDefined();
@@ -105,7 +123,7 @@ describe('scanProject', () => {
 
   it('populates ScanStats correctly', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     expect(result.stats.scannedFiles).toBe(3);
     expect(result.stats.durationMs).toBeGreaterThanOrEqual(0);
@@ -114,7 +132,7 @@ describe('scanProject', () => {
 
   it('stores file entries in the database', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const rows = db.all<{ relative_path: string }>(
       'SELECT relative_path FROM files WHERE skipped_reason IS NULL ORDER BY relative_path',
@@ -128,7 +146,7 @@ describe('scanProject', () => {
 
   it('updates scan_state after scanning', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const lastScan = db.get<{ value: string }>(
       "SELECT value FROM scan_state WHERE key = 'lastScan'",
@@ -146,14 +164,14 @@ describe('scanProject', () => {
 
   it('returns strategy type full for first scan', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     expect(result.strategy.type).toBe('full');
   });
 
   it('skips denylisted .env file', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const envFile = result.files.find((f) => f.relativePath === '.env');
     expect(envFile).toBeUndefined();
@@ -161,7 +179,7 @@ describe('scanProject', () => {
 
   it('skips node_modules files', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const nmFile = result.files.find((f) => f.relativePath.includes('node_modules'));
     expect(nmFile).toBeUndefined();
@@ -169,7 +187,7 @@ describe('scanProject', () => {
 
   it('writes lastStrategy and lastScanDuration to scan_state', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const strategyRow = db.get<{ value: string }>(
       "SELECT value FROM scan_state WHERE key = 'lastStrategy'",
@@ -186,7 +204,7 @@ describe('scanProject', () => {
 
   it('stops scanning after reaching maxScanFiles limit', async () => {
     const config = { ...LOCUS_DEFAULTS, maxScanFiles: 1 };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     // Only 1 file should be scanned (maxScanFiles=1)
     expect(result.stats.scannedFiles).toBe(1);
@@ -196,7 +214,7 @@ describe('scanProject', () => {
 
   it('stores skipped entries with skippedReason in the database', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    await scanProject(fixtureDir, db, config, fullScanDeps());
 
     // The fixture has .env (ignored — shouldIgnore fires before isDenylisted)
     // and package.json/tsconfig.json (unknown-language)
@@ -213,7 +231,7 @@ describe('scanProject', () => {
 
   it('stores unknown-language skip reason for non-code files', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const skippedRows = db.all<{ relative_path: string; skipped_reason: string }>(
       'SELECT relative_path, skipped_reason FROM files WHERE skipped_reason IS NOT NULL',
@@ -227,7 +245,7 @@ describe('scanProject', () => {
 
   it('stores max-files-reached skip reason when limit hit', async () => {
     const config = { ...LOCUS_DEFAULTS, maxScanFiles: 1 };
-    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const skippedRows = db.all<{ relative_path: string; skipped_reason: string }>(
       "SELECT relative_path, skipped_reason FROM files WHERE skipped_reason = 'max-files-reached'",
@@ -237,7 +255,7 @@ describe('scanProject', () => {
 
   it('stores denylisted skip reason for .key files', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    const result = await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    const result = await scanProject(fixtureDir, db, config, fullScanDeps());
 
     // secrets.key should not appear in scanned files
     expect(result.files.some((f) => f.relativePath.includes('secrets.key'))).toBe(false);
@@ -252,7 +270,7 @@ describe('scanProject', () => {
 
   it('stores NULL for language and confidence on skipped entries', async () => {
     const config = { ...LOCUS_DEFAULTS };
-    await scanProject(FIXTURE_PATH, db, config, fullScanDeps());
+    await scanProject(fixtureDir, db, config, fullScanDeps());
 
     const skippedRows = db.all<{
       relative_path: string;

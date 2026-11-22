@@ -47,4 +47,27 @@ describe('normalizePathForIdentity (shared-runtime)', () => {
       normalizePathForIdentity('c:\\Users\\Admin\\my-project'),
     );
   });
+
+  it('strips Windows extended-length prefixes (\\\\?\\ and \\\\?\\UNC\\)', () => {
+    const normalizePathForIdentity = getNormalizePathForIdentity();
+    expect(typeof normalizePathForIdentity).toBe('function');
+    if (!normalizePathForIdentity) return;
+
+    expect(normalizePathForIdentity('\\\\?\\C:\\Users\\Admin\\repo')).toBe('c:/users/admin/repo');
+    expect(normalizePathForIdentity('\\\\?\\UNC\\server\\share\\repo')).toBe('//server/share/repo');
+    expect(normalizePathForIdentity('\\\\server\\share\\repo\\')).toBe('//server/share/repo');
+  });
+
+  it('converts file:// URLs and normalizes trailing slashes while preserving roots', () => {
+    const normalizePathForIdentity = getNormalizePathForIdentity();
+    expect(typeof normalizePathForIdentity).toBe('function');
+    if (!normalizePathForIdentity) return;
+
+    expect(normalizePathForIdentity('file:///C:/Users/Admin/repo')).toBe('c:/users/admin/repo');
+    expect(normalizePathForIdentity('C:\\Users\\Admin\\repo\\')).toBe(
+      normalizePathForIdentity('C:/Users/Admin/repo'),
+    );
+    expect(normalizePathForIdentity('/')).toBe('/');
+    expect(normalizePathForIdentity('C:\\')).toBe('c:/');
+  });
 });
