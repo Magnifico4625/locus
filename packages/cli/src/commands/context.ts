@@ -8,6 +8,7 @@ import {
   runDurableExtraction,
 } from '@locus/core';
 import { resolveDbPath, resolveInboxDir } from '@locus/shared-runtime';
+import { normalizeCaptureLevel, withScopedEnv } from '../env-scope.js';
 
 export interface RunContextCommandOptions {
   mode?: string;
@@ -25,44 +26,7 @@ export interface RunContextCommandResult {
 }
 
 function resolveCaptureLevel(env: Record<string, string | undefined>): CaptureLevel {
-  const raw = env.LOCUS_CAPTURE_LEVEL;
-  if (raw === 'metadata' || raw === 'redacted' || raw === 'full') {
-    return raw;
-  }
-  return 'metadata';
-}
-
-function withScopedEnv<T>(
-  overrides: Record<string, string | undefined> | undefined,
-  fn: () => Promise<T>,
-): Promise<T> {
-  if (!overrides) {
-    return fn();
-  }
-
-  const savedEnv: Record<string, string | undefined> = { ...process.env };
-  for (const [key, value] of Object.entries(overrides)) {
-    if (value === undefined) {
-      delete process.env[key];
-    } else {
-      process.env[key] = value;
-    }
-  }
-
-  return fn().finally(() => {
-    for (const key of Object.keys(process.env)) {
-      if (!(key in savedEnv)) {
-        delete process.env[key];
-      }
-    }
-    for (const [key, value] of Object.entries(savedEnv)) {
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
-  });
+  return normalizeCaptureLevel(env.LOCUS_CAPTURE_LEVEL, 'metadata');
 }
 
 export async function runContextCommand(

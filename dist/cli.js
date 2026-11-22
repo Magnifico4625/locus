@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 // packages/cli/src/index.ts
+import { realpathSync } from "node:fs";
+import { resolve as resolve8 } from "node:path";
 import { fileURLToPath as fileURLToPath7 } from "node:url";
 
 // packages/core/src/context/auto-brief.ts
@@ -1787,7 +1789,7 @@ function buildSessionStartBrief(deps, options) {
     readGitState: deps.readGitState
   });
   const decisions = deps.db.all(
-    `SELECT id, summary
+    `SELECT id, summary, source_event_id
      FROM durable_memories
      WHERE memory_type = 'decision' AND state = 'active' AND ${scope.clause}
      ORDER BY updated_at DESC, id DESC
@@ -1803,7 +1805,7 @@ function buildSessionStartBrief(deps, options) {
     [...scope.params, maxDecisions]
   ) : [];
   const constraintsAndPrefs = deps.db.all(
-    `SELECT id, summary
+    `SELECT id, summary, source_event_id
      FROM durable_memories
      WHERE memory_type IN ('constraint', 'preference', 'style') AND state = 'active' AND ${scope.clause}
      ORDER BY updated_at DESC, id DESC
@@ -1811,7 +1813,7 @@ function buildSessionStartBrief(deps, options) {
     [...scope.params, maxConstraints]
   );
   const nextSteps = deps.db.all(
-    `SELECT id, summary
+    `SELECT id, summary, source_event_id
      FROM durable_memories
      WHERE memory_type = 'next_step' AND state = 'active' AND ${scope.clause}
      ORDER BY updated_at DESC, id DESC
@@ -1849,6 +1851,13 @@ function buildSessionStartBrief(deps, options) {
   }
   appendLineWithinBudget(lines, `Project: ${projectParts.join(" | ")}`, maxTokens);
   const includedDurableIds = [];
+  const includedEventIds = /* @__PURE__ */ new Set();
+  const recordDurable = (item) => {
+    includedDurableIds.push(item.id);
+    if (item.source_event_id) {
+      includedEventIds.add(item.source_event_id);
+    }
+  };
   if (decisions.length > 0) {
     appendSectionItems(
       lines,
@@ -1856,7 +1865,7 @@ function buildSessionStartBrief(deps, options) {
       decisions,
       maxTokens,
       (item) => item.summary,
-      (item) => includedDurableIds.push(item.id)
+      recordDurable
     );
   } else if (semanticFallback.length > 0) {
     appendSectionItems(lines, "Decisions:", semanticFallback, maxTokens, (item) => item.content);
@@ -1868,7 +1877,7 @@ function buildSessionStartBrief(deps, options) {
       constraintsAndPrefs,
       maxTokens,
       (item) => item.summary,
-      (item) => includedDurableIds.push(item.id)
+      recordDurable
     );
   }
   if (nextSteps.length > 0) {
@@ -1878,7 +1887,7 @@ function buildSessionStartBrief(deps, options) {
       nextSteps,
       maxTokens,
       (item) => item.summary,
-      (item) => includedDurableIds.push(item.id)
+      recordDurable
     );
   }
   if (recentFiles.length > 0) {
@@ -1892,7 +1901,7 @@ function buildSessionStartBrief(deps, options) {
     text,
     estimatedTokens: estimateTokens(text),
     includedDurableIds,
-    includedEventIds: []
+    includedEventIds: [...includedEventIds]
   };
 }
 function meetsConfidence(confidence, minConfidence) {
@@ -1903,6 +1912,18 @@ function meetsConfidence(confidence, minConfidence) {
 }
 function isRelevantCandidate(candidate, hasResolvedRange) {
   return (candidate.matchedTerms?.length ?? 0) > 0 || Boolean(candidate.topicKey) || hasResolvedRange || candidate.sourceKind === "durable" && candidate.confidence === "high";
+}
+function loadDurableSourceEventIds(db, durableIds) {
+  const ids = [...new Set(durableIds)].filter((id) => Number.isInteger(id) && id > 0);
+  if (ids.length === 0) {
+    return [];
+  }
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = db.all(
+    `SELECT source_event_id FROM durable_memories WHERE id IN (${placeholders}) AND source_event_id IS NOT NULL`,
+    ids
+  );
+  return rows.map((row) => row.source_event_id).filter((id) => typeof id === "string" && id.length > 0);
 }
 function isAlreadyInjected(candidate, seenDurable, seenEvents) {
   if (candidate.durableMemoryIds.length > 0) {
@@ -1938,6 +1959,9 @@ function buildPromptRecallBrief(prompt, deps, options) {
   }
   const seenDurable = new Set(options?.alreadyInjectedDurableIds ?? []);
   const seenEvents = new Set(options?.alreadyInjectedEventIds ?? []);
+  for (const eventId of loadDurableSourceEventIds(deps.db, seenDurable)) {
+    seenEvents.add(eventId);
+  }
   const freshCandidates = confidentAndRelevant.filter(
     (candidate) => !isAlreadyInjected(candidate, seenDurable, seenEvents)
   );
@@ -1968,6 +1992,9 @@ function buildPromptRecallBrief(prompt, deps, options) {
   if (added === 0) {
     return emptyBrief("prompt_recall", "empty_memory");
   }
+  for (const eventId of loadDurableSourceEventIds(deps.db, includedDurableIds)) {
+    includedEventIds.add(eventId);
+  }
   const text = lines.join("\n");
   return {
     mode: "prompt_recall",
@@ -1980,9 +2007,23 @@ function buildPromptRecallBrief(prompt, deps, options) {
   };
 }
 
+// packages/core/src/ingest/inbox-writer.ts
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { join as join3 } from "node:path";
+function writeInboxEvent(inboxDir, event) {
+  mkdirSync(inboxDir, { recursive: true });
+  const shortId = event.event_id.slice(0, 8);
+  const filename = `${event.timestamp}-${shortId}.json`;
+  const finalPath = join3(inboxDir, filename);
+  const tmpPath = `${finalPath}.tmp`;
+  writeFileSync(tmpPath, JSON.stringify(event), "utf-8");
+  renameSync(tmpPath, finalPath);
+  return filename;
+}
+
 // packages/core/src/ingest/pipeline.ts
 import { readdirSync, readFileSync as readFileSync2, unlinkSync } from "node:fs";
-import { join as join3 } from "node:path";
+import { join as join4 } from "node:path";
 
 // packages/core/src/security/file-ignore.ts
 var DENYLIST_FILES = [
@@ -2020,7 +2061,7 @@ function matchGlob(name, pattern) {
 }
 function isDenylisted(filePath) {
   const normalized = filePath.replace(/\\/g, "/");
-  const basename4 = normalized.split("/").pop() ?? normalized;
+  const basename5 = normalized.split("/").pop() ?? normalized;
   for (const pattern of DENYLIST_FILES) {
     if (pattern.startsWith("**/") && pattern.endsWith("/**")) {
       const dir = pattern.slice(3, -3);
@@ -2035,7 +2076,7 @@ function isDenylisted(filePath) {
       }
       continue;
     }
-    if (matchGlob(basename4, pattern)) {
+    if (matchGlob(basename5, pattern)) {
       return true;
     }
   }
@@ -2268,7 +2309,7 @@ function processInbox(inboxDir, db, options) {
     toProcess = files;
   }
   for (const filename of toProcess) {
-    const filePath = join3(inboxDir, filename);
+    const filePath = join4(inboxDir, filename);
     let raw;
     try {
       raw = readFileSync2(filePath, "utf-8");
@@ -3056,7 +3097,7 @@ function runDurableExtraction(db, options) {
 import { execFileSync as execFileSync2 } from "node:child_process";
 import { existsSync as existsSync2, readdirSync as readdirSync2 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { dirname, join as join4, resolve } from "node:path";
+import { dirname, join as join5, resolve } from "node:path";
 var PROJECT_MARKERS = [
   "package.json",
   "pyproject.toml",
@@ -3115,7 +3156,7 @@ function hasAnyMarker(dir, markers, deps) {
         if (entry.endsWith(ext)) return true;
       }
     } else {
-      if (deps.fileExists(join4(dir, marker))) return true;
+      if (deps.fileExists(join5(dir, marker))) return true;
     }
   }
   return false;
@@ -3145,7 +3186,7 @@ function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
 }
 
 // packages/core/src/storage/init.ts
-import { existsSync as existsSync3, mkdirSync, readFileSync as readFileSync3 } from "node:fs";
+import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3 } from "node:fs";
 import { dirname as dirname2 } from "node:path";
 
 // packages/core/src/storage/migrations.ts
@@ -3470,7 +3511,7 @@ var NodeSqliteAdapter = class {
 };
 
 // packages/core/src/storage/sql-js.ts
-import { writeFileSync } from "node:fs";
+import { writeFileSync as writeFileSync2 } from "node:fs";
 var SAVE_DEBOUNCE_MS = 5e3;
 var SqlJsAdapter = class {
   db;
@@ -3542,7 +3583,7 @@ var SqlJsAdapter = class {
   }
   saveToDisk() {
     const data = this.db.export();
-    writeFileSync(this.dbPath, Buffer.from(data));
+    writeFileSync2(this.dbPath, Buffer.from(data));
   }
   scheduleSave() {
     if (this.saveTimer !== null) {
@@ -3568,7 +3609,7 @@ function detectFts5(db) {
 function ensureDir(dbPath) {
   const dir = dirname2(dbPath);
   if (!existsSync3(dir)) {
-    mkdirSync(dir, { recursive: true });
+    mkdirSync2(dir, { recursive: true });
   }
 }
 async function initStorage(dbPath) {
@@ -3600,14 +3641,7 @@ async function initStorage(dbPath) {
   return { db, backend: "sql.js", fts5 };
 }
 
-// packages/cli/src/commands/context.ts
-function resolveCaptureLevel(env) {
-  const raw = env.LOCUS_CAPTURE_LEVEL;
-  if (raw === "metadata" || raw === "redacted" || raw === "full") {
-    return raw;
-  }
-  return "metadata";
-}
+// packages/cli/src/env-scope.ts
 function withScopedEnv(overrides, fn) {
   if (!overrides) {
     return fn();
@@ -3634,6 +3668,17 @@ function withScopedEnv(overrides, fn) {
       }
     }
   });
+}
+function normalizeCaptureLevel(raw, fallback) {
+  if (raw === "metadata" || raw === "redacted" || raw === "full") {
+    return raw;
+  }
+  return fallback;
+}
+
+// packages/cli/src/commands/context.ts
+function resolveCaptureLevel(env) {
+  return normalizeCaptureLevel(env.LOCUS_CAPTURE_LEVEL, "metadata");
 }
 async function runContextCommand(options = {}) {
   const mode = options.mode ?? "session-start";
@@ -3698,8 +3743,123 @@ async function runContextCommand(options = {}) {
   });
 }
 
+// packages/cli/src/commands/doctor-antigravity.ts
+import { existsSync as existsSync4, readFileSync as readFileSync4 } from "node:fs";
+import { join as join7 } from "node:path";
+
+// packages/cli/src/antigravity/paths.ts
+import { createHash as createHash2 } from "node:crypto";
+import { homedir as homedir3 } from "node:os";
+import { join as join6 } from "node:path";
+function resolveAntigravityConfigDir(env = process.env) {
+  const override = env.LOCUS_ANTIGRAVITY_CONFIG_DIR?.trim();
+  if (override) {
+    return override;
+  }
+  return join6(homedir3(), ".gemini", "config");
+}
+function resolveAntigravityPluginsDir(env = process.env) {
+  return join6(resolveAntigravityConfigDir(env), "plugins");
+}
+function resolveAntigravityPluginDir(env = process.env, pluginName = "locus-memory") {
+  return join6(resolveAntigravityPluginsDir(env), pluginName);
+}
+function resolveAntigravityStateDir(env = process.env) {
+  return join6(resolveLocusHome(env), "state", "antigravity");
+}
+function resolveAntigravitySessionStatePath(conversationId, env = process.env) {
+  const hash = createHash2("sha256").update(conversationId).digest("hex").slice(0, 24);
+  return join6(resolveAntigravityStateDir(env), `${hash}.json`);
+}
+
+// packages/cli/src/commands/doctor-antigravity.ts
+function readJsonRecord(filePath) {
+  if (!existsSync4(filePath)) {
+    return void 0;
+  }
+  try {
+    const parsed = JSON.parse(readFileSync4(filePath, "utf8"));
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function formatDoctorAntigravity(options = {}) {
+  const env = options.env ?? process.env;
+  const pluginDir = options.targetDir?.trim() || resolveAntigravityPluginDir(env);
+  const issues = [];
+  if (!existsSync4(pluginDir)) {
+    return {
+      exitCode: 1,
+      output: [
+        "Locus Antigravity doctor",
+        `Plugin dir: ${pluginDir}`,
+        "Status: missing (run `locus-memory install antigravity --yes`)"
+      ].join("\n")
+    };
+  }
+  const manifest = readJsonRecord(join7(pluginDir, "plugin.json"));
+  if (!manifest || manifest.name !== "locus-memory") {
+    issues.push("plugin.json missing or invalid name");
+  }
+  const hooks = readJsonRecord(join7(pluginDir, "hooks.json"));
+  const hookEntry = hooks && typeof hooks["locus-memory"] === "object" && hooks["locus-memory"] !== null ? hooks["locus-memory"] : void 0;
+  const requiredEvents = ["SessionStart", "PreInvocation", "PostToolUse", "Stop"];
+  const missingEvents = requiredEvents.filter(
+    (eventName) => !Array.isArray(hookEntry?.[eventName]) || hookEntry[eventName].length === 0
+  );
+  if (missingEvents.length > 0) {
+    issues.push(`hooks.json missing events: ${missingEvents.join(", ")}`);
+  }
+  if (!existsSync4(join7(pluginDir, "hooks", "locus-hook.mjs"))) {
+    issues.push("hooks/locus-hook.mjs missing");
+  }
+  const mcp = readJsonRecord(join7(pluginDir, "mcp_config.json"));
+  const mcpServers = mcp && typeof mcp.mcpServers === "object" && mcp.mcpServers !== null ? mcp.mcpServers : void 0;
+  if (!mcpServers || typeof mcpServers.locus !== "object" || mcpServers.locus === null) {
+    issues.push("mcp_config.json missing mcpServers.locus");
+  }
+  const rulesPath = join7(pluginDir, "rules", "AGENTS.md");
+  if (!existsSync4(rulesPath)) {
+    issues.push("rules/AGENTS.md missing");
+  } else {
+    const rulesText = readFileSync4(rulesPath, "utf8").trimStart();
+    if (rulesText.length === 0 || rulesText.startsWith("---")) {
+      issues.push("rules/AGENTS.md must be non-empty plain markdown without frontmatter");
+    }
+  }
+  const skillPath = join7(pluginDir, "skills", "locus-memory", "SKILL.md");
+  if (!existsSync4(skillPath) || !readFileSync4(skillPath, "utf8").trimStart().startsWith("---")) {
+    issues.push("skills/locus-memory/SKILL.md missing or missing YAML frontmatter");
+  }
+  const runtimeDir = join7(pluginDir, "runtime");
+  for (const runtimeFile of ["cli.js", "server.js", "package.json", "runtime.json"]) {
+    if (!existsSync4(join7(runtimeDir, runtimeFile))) {
+      issues.push(`runtime/${runtimeFile} missing`);
+    }
+  }
+  const healthy = issues.length === 0;
+  const lines = [
+    "Locus Antigravity doctor",
+    `Node version: ${process.version}`,
+    `Plugin dir: ${pluginDir}`,
+    `Version: ${typeof manifest?.version === "string" ? manifest.version : "unknown"}`,
+    `Status: ${healthy ? "ok" : "broken"}`
+  ];
+  if (!healthy) {
+    lines.push(`Issues (${issues.length}):`);
+    for (const issue of issues) {
+      lines.push(`  - ${issue}`);
+    }
+  }
+  return {
+    exitCode: healthy ? 0 : 1,
+    output: lines.join("\n")
+  };
+}
+
 // packages/cli/src/codex/config.ts
-import { copyFileSync, readFileSync as readFileSync4, writeFileSync as writeFileSync2 } from "node:fs";
+import { copyFileSync, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "node:fs";
 var defaultCodexMcpEnv = {
   LOCUS_LOG: "error",
   LOCUS_CODEX_CAPTURE: "redacted",
@@ -3748,7 +3908,7 @@ function createConfigBackup(configPath, now = /* @__PURE__ */ new Date()) {
   return backupPath;
 }
 function setMcpServerCwd(configPath, name, cwd, now = /* @__PURE__ */ new Date()) {
-  const text = readFileSync4(configPath, "utf8");
+  const text = readFileSync5(configPath, "utf8");
   const headerPattern = new RegExp(`^\\[mcp_servers\\.${escapeRegExp2(name)}\\]\\s*$`, "m");
   const headerMatch = headerPattern.exec(text);
   if (!headerMatch) {
@@ -3773,7 +3933,7 @@ ${cwdLine}`);
     updatedSection = section.replace(/^(\[mcp_servers\.[^\]]+\])\s*$/m, `$1
 ${cwdLine}`);
   }
-  writeFileSync2(configPath, `${before}${updatedSection}${after}`, "utf8");
+  writeFileSync3(configPath, `${before}${updatedSection}${after}`, "utf8");
   return { action: "updated", backupPath };
 }
 function escapeRegExp2(value) {
@@ -3786,24 +3946,24 @@ function timestamp(date) {
 // packages/cli/src/codex/hooks.ts
 import {
   copyFileSync as copyFileSync2,
-  existsSync as existsSync5,
-  mkdirSync as mkdirSync2,
-  readFileSync as readFileSync6,
-  renameSync,
-  writeFileSync as writeFileSync3
+  existsSync as existsSync6,
+  mkdirSync as mkdirSync3,
+  readFileSync as readFileSync7,
+  renameSync as renameSync2,
+  writeFileSync as writeFileSync4
 } from "node:fs";
-import { dirname as dirname4, join as join6 } from "node:path";
+import { dirname as dirname4, join as join9 } from "node:path";
 
 // packages/cli/src/package-info.ts
-import { existsSync as existsSync4, readFileSync as readFileSync5 } from "node:fs";
+import { existsSync as existsSync5, readFileSync as readFileSync6 } from "node:fs";
 import { dirname as dirname3, resolve as resolve2 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 function findPackageRoot(startDir = dirname3(fileURLToPath2(import.meta.url))) {
   let current = resolve2(startDir);
   while (true) {
     const packagePath = resolve2(current, "package.json");
-    if (existsSync4(packagePath)) {
-      const packageJson = JSON.parse(readFileSync5(packagePath, "utf8"));
+    if (existsSync5(packagePath)) {
+      const packageJson = JSON.parse(readFileSync6(packagePath, "utf8"));
       if (packageJson.name === "locus-memory") {
         return current;
       }
@@ -3819,7 +3979,7 @@ function resolvePackageVersion(startDir = dirname3(fileURLToPath2(import.meta.ur
   try {
     const root = findPackageRoot(startDir);
     const packageJson = JSON.parse(
-      readFileSync5(resolve2(root, "package.json"), "utf8")
+      readFileSync6(resolve2(root, "package.json"), "utf8")
     );
     if (!packageJson.version) {
       throw new Error("Root package.json is missing version");
@@ -3827,8 +3987,8 @@ function resolvePackageVersion(startDir = dirname3(fileURLToPath2(import.meta.ur
     return packageJson.version;
   } catch (error) {
     const runtimeManifestPath = resolve2(resolve2(startDir), "runtime.json");
-    if (existsSync4(runtimeManifestPath)) {
-      const manifest = JSON.parse(readFileSync5(runtimeManifestPath, "utf8"));
+    if (existsSync5(runtimeManifestPath)) {
+      const manifest = JSON.parse(readFileSync6(runtimeManifestPath, "utf8"));
       if (typeof manifest.version === "string" && manifest.version.trim().length > 0) {
         return manifest.version.trim();
       }
@@ -3845,27 +4005,27 @@ function resolveRuntimePackageOverride(env = process.env) {
 }
 
 // packages/cli/src/codex/paths.ts
-import { homedir as homedir3 } from "node:os";
-import { join as join5, resolve as resolve3 } from "node:path";
+import { homedir as homedir4 } from "node:os";
+import { join as join8, resolve as resolve3 } from "node:path";
 function resolveCodexHome(env = process.env) {
   const configured = env.CODEX_HOME;
   if (configured && configured.trim().length > 0) {
     return resolve3(expandTilde2(configured));
   }
-  return join5(homedir3(), ".codex");
+  return join8(homedir4(), ".codex");
 }
 function resolveCodexConfigPath(env = process.env) {
-  return join5(resolveCodexHome(env), "config.toml");
+  return join8(resolveCodexHome(env), "config.toml");
 }
 function resolveCodexSkillPath(env = process.env, skillName = "locus-memory") {
-  return join5(resolveCodexHome(env), "skills", skillName, "SKILL.md");
+  return join8(resolveCodexHome(env), "skills", skillName, "SKILL.md");
 }
 function expandTilde2(pathValue) {
   if (pathValue === "~") {
-    return homedir3();
+    return homedir4();
   }
   if (pathValue.startsWith("~/") || pathValue.startsWith("~\\")) {
-    return join5(homedir3(), pathValue.slice(2));
+    return join8(homedir4(), pathValue.slice(2));
   }
   return pathValue;
 }
@@ -3930,7 +4090,7 @@ function renderCodexHooksJson(config) {
 `;
 }
 function resolveCodexHooksPath(env = process.env) {
-  return join6(resolveCodexHome(env), "hooks.json");
+  return join9(resolveCodexHome(env), "hooks.json");
 }
 function installCodexHooks(options) {
   const hooksPath = resolveCodexHooksPath(options.env);
@@ -3940,8 +4100,8 @@ function installCodexHooks(options) {
       platform: options.platform
     })
   );
-  if (existsSync5(hooksPath)) {
-    const current = readFileSync6(hooksPath, "utf8");
+  if (existsSync6(hooksPath)) {
+    const current = readFileSync7(hooksPath, "utf8");
     if (current === next) {
       return { action: "unchanged", path: hooksPath };
     }
@@ -3955,10 +4115,10 @@ function installCodexHooks(options) {
 }
 function inspectCodexHooks(options = {}) {
   const hooksPath = resolveCodexHooksPath(options.env);
-  if (!existsSync5(hooksPath)) {
+  if (!existsSync6(hooksPath)) {
     return { status: "not configured", path: hooksPath };
   }
-  const text = readFileSync6(hooksPath, "utf8");
+  const text = readFileSync7(hooksPath, "utf8");
   return {
     status: hasLocusHookCommand(text) ? "configured" : "not configured",
     path: hooksPath
@@ -4012,10 +4172,10 @@ function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function writeHooksFileAtomically(path, text) {
-  mkdirSync2(dirname4(path), { recursive: true });
+  mkdirSync3(dirname4(path), { recursive: true });
   const tempPath = `${path}.locus-tmp`;
-  writeFileSync3(tempPath, text, "utf8");
-  renameSync(tempPath, path);
+  writeFileSync4(tempPath, text, "utf8");
+  renameSync2(tempPath, path);
 }
 function timestamp2(date) {
   return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".", "");
@@ -4058,10 +4218,714 @@ function codexSupportsHooks(featuresList) {
   return /^hooks\s+\S+\s+true\s*$/imu.test(featuresList);
 }
 
+// packages/cli/src/commands/hook-antigravity.ts
+import { createHash as createHash5 } from "node:crypto";
+
+// packages/cli/src/antigravity/session-state.ts
+import { createHash as createHash3 } from "node:crypto";
+import { existsSync as existsSync8, readdirSync as readdirSync3, readFileSync as readFileSync9, rmSync, statSync } from "node:fs";
+import { basename as basename2, dirname as dirname6, join as join11 } from "node:path";
+
+// packages/cli/src/runtime-install.ts
+import { existsSync as existsSync7, mkdirSync as mkdirSync4, readFileSync as readFileSync8, renameSync as renameSync3, writeFileSync as writeFileSync5 } from "node:fs";
+import { dirname as dirname5, join as join10 } from "node:path";
+import { fileURLToPath as fileURLToPath3 } from "node:url";
+function resolveDefaultSourceDistDir(startDir) {
+  const currentDir = dirname5(fileURLToPath3(import.meta.url));
+  if (existsSync7(join10(currentDir, "cli.js")) && existsSync7(join10(currentDir, "server.js"))) {
+    return currentDir;
+  }
+  return join10(findPackageRoot(startDir), "dist");
+}
+function writeFileAtomically(targetPath, content) {
+  mkdirSync4(dirname5(targetPath), { recursive: true });
+  const tempPath = `${targetPath}.locus-tmp`;
+  writeFileSync5(tempPath, content);
+  renameSync3(tempPath, targetPath);
+}
+function syncTextAtomically(targetPath, content) {
+  if (existsSync7(targetPath)) {
+    try {
+      if (readFileSync8(targetPath, "utf8") === content) {
+        return false;
+      }
+    } catch {
+    }
+  }
+  writeFileAtomically(targetPath, content);
+  return true;
+}
+function syncFileAtomically(sourcePath, targetPath) {
+  const nextBytes = readFileSync8(sourcePath);
+  if (existsSync7(targetPath)) {
+    try {
+      const currentBytes = readFileSync8(targetPath);
+      if (nextBytes.equals(currentBytes)) {
+        return false;
+      }
+    } catch {
+    }
+  }
+  writeFileAtomically(targetPath, nextBytes);
+  return true;
+}
+function readExistingManifest(manifestPath) {
+  if (!existsSync7(manifestPath)) {
+    return void 0;
+  }
+  try {
+    return JSON.parse(readFileSync8(manifestPath, "utf8"));
+  } catch {
+    return void 0;
+  }
+}
+function installRuntimeFiles(targetDir, options = {}) {
+  const sourceDistDir = options.sourceDistDir ?? resolveDefaultSourceDistDir(options.startDir);
+  const sourceCliPath = join10(sourceDistDir, "cli.js");
+  const sourceServerPath = join10(sourceDistDir, "server.js");
+  if (!existsSync7(sourceCliPath) || !existsSync7(sourceServerPath)) {
+    throw new Error(
+      `Missing built runtime artifacts in ${sourceDistDir} (expected cli.js and server.js). Run npm run build first.`
+    );
+  }
+  const cliPath = join10(targetDir, "cli.js");
+  const serverPath = join10(targetDir, "server.js");
+  const manifestPath = join10(targetDir, "runtime.json");
+  const packageJsonPath = join10(targetDir, "package.json");
+  const version = resolvePackageVersion(options.startDir);
+  const hadAllTargets = existsSync7(cliPath) && existsSync7(serverPath) && existsSync7(manifestPath) && existsSync7(packageJsonPath);
+  const existingManifest = readExistingManifest(manifestPath);
+  mkdirSync4(targetDir, { recursive: true });
+  const cliChanged = syncFileAtomically(sourceCliPath, cliPath);
+  const serverChanged = syncFileAtomically(sourceServerPath, serverPath);
+  const expectedPackageJson = `${JSON.stringify(
+    { name: "locus-local-runtime", private: true, type: "module" },
+    null,
+    2
+  )}
+`;
+  const packageJsonChanged = syncTextAtomically(packageJsonPath, expectedPackageJson);
+  const manifestOutdated = !existingManifest || existingManifest.version !== version || existingManifest.cliPath !== cliPath || existingManifest.serverPath !== serverPath;
+  const manifestChanged = cliChanged || serverChanged || packageJsonChanged || manifestOutdated;
+  if (manifestChanged) {
+    const manifest = {
+      version,
+      installedAt: (options.now ?? /* @__PURE__ */ new Date()).toISOString(),
+      cliPath,
+      serverPath
+    };
+    writeFileAtomically(manifestPath, `${JSON.stringify(manifest, null, 2)}
+`);
+  }
+  let action = "unchanged";
+  if (!hadAllTargets) {
+    action = "installed";
+  } else if (manifestChanged) {
+    action = "updated";
+  }
+  return {
+    action,
+    binDir: targetDir,
+    cliPath,
+    serverPath,
+    manifestPath,
+    version
+  };
+}
+function installLocalCliRuntime(options = {}) {
+  return installRuntimeFiles(resolveRuntimeBinDir(options.env), options);
+}
+
+// packages/cli/src/antigravity/session-state.ts
+var MAX_TRACKED_IDS = 200;
+var STATE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
+function emptySessionState(conversationId) {
+  return {
+    conversationId,
+    sessionStartInjected: false,
+    injectedDurableIds: [],
+    injectedEventIds: [],
+    updatedAt: 0
+  };
+}
+function dedupeRecentNumbers(values) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of values) {
+    if (typeof item === "number" && Number.isInteger(item) && item > 0) {
+      seen.add(item);
+    }
+  }
+  const result = Array.from(seen);
+  return result.length > MAX_TRACKED_IDS ? result.slice(-MAX_TRACKED_IDS) : result;
+}
+function dedupeRecentStrings(values) {
+  const seen = /* @__PURE__ */ new Set();
+  for (const item of values) {
+    if (typeof item === "string" && item.length > 0) {
+      seen.add(item);
+    }
+  }
+  const result = Array.from(seen);
+  return result.length > MAX_TRACKED_IDS ? result.slice(-MAX_TRACKED_IDS) : result;
+}
+function hashPrompt(prompt) {
+  const normalized = prompt.trim().replace(/\s+/g, " ").toLowerCase();
+  return createHash3("sha256").update(normalized).digest("hex").slice(0, 32);
+}
+function readAntigravitySessionState(conversationId, env = process.env) {
+  const filePath = resolveAntigravitySessionStatePath(conversationId, env);
+  if (!existsSync8(filePath)) {
+    return emptySessionState(conversationId);
+  }
+  try {
+    const parsed = JSON.parse(readFileSync9(filePath, "utf8"));
+    return {
+      conversationId,
+      sessionStartInjected: parsed.sessionStartInjected === true,
+      lastPromptHash: typeof parsed.lastPromptHash === "string" && parsed.lastPromptHash.length > 0 ? parsed.lastPromptHash : void 0,
+      injectedDurableIds: Array.isArray(parsed.injectedDurableIds) ? dedupeRecentNumbers(parsed.injectedDurableIds) : [],
+      injectedEventIds: Array.isArray(parsed.injectedEventIds) ? dedupeRecentStrings(parsed.injectedEventIds) : [],
+      updatedAt: typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : 0
+    };
+  } catch {
+    return emptySessionState(conversationId);
+  }
+}
+function writeAntigravitySessionState(state, env = process.env) {
+  const filePath = resolveAntigravitySessionStatePath(state.conversationId, env);
+  const normalized = {
+    conversationId: state.conversationId,
+    sessionStartInjected: state.sessionStartInjected,
+    ...state.lastPromptHash ? { lastPromptHash: state.lastPromptHash } : {},
+    injectedDurableIds: dedupeRecentNumbers(state.injectedDurableIds),
+    injectedEventIds: dedupeRecentStrings(state.injectedEventIds),
+    updatedAt: state.updatedAt
+  };
+  writeFileAtomically(filePath, `${JSON.stringify(normalized, null, 2)}
+`);
+  pruneStaleSessionStateFiles(dirname6(filePath), basename2(filePath), normalized.updatedAt);
+}
+function pruneStaleSessionStateFiles(stateDir, currentFileName, nowMs) {
+  if (!Number.isFinite(nowMs) || nowMs <= STATE_TTL_MS) {
+    return;
+  }
+  try {
+    const cutoff = nowMs - STATE_TTL_MS;
+    for (const entry of readdirSync3(stateDir)) {
+      if (entry === currentFileName || !entry.endsWith(".json")) {
+        continue;
+      }
+      const entryPath = join11(stateDir, entry);
+      try {
+        const stats = statSync(entryPath);
+        if (stats.mtimeMs < cutoff) {
+          rmSync(entryPath, { force: true });
+        }
+      } catch {
+      }
+    }
+  } catch {
+  }
+}
+
+// packages/cli/src/antigravity/transcript.ts
+import { createHash as createHash4 } from "node:crypto";
+import { readFileSync as readFileSync10 } from "node:fs";
+var ANTIGRAVITY_TRANSCRIPT_CURSOR_PREFIX = "antigravity.transcript.";
+var REDACTED_MAX_CHARS = 600;
+var FULL_MAX_CHARS = 4e3;
+function antigravityTranscriptCursorKey(conversationId) {
+  return `${ANTIGRAVITY_TRANSCRIPT_CURSOR_PREFIX}${conversationId}.last_step_index`;
+}
+function deterministicEventId(key) {
+  return createHash4("sha256").update(key).digest("hex").slice(0, 32);
+}
+function truncateText(text, maxChars) {
+  return text.length <= maxChars ? text : text.slice(0, maxChars);
+}
+function resolveRecordTimestamp(record, fallbackNow) {
+  if (typeof record.created_at === "string") {
+    const parsed = Date.parse(record.created_at);
+    if (Number.isSafeInteger(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+  return fallbackNow;
+}
+function parseAntigravityTranscriptEvents(options) {
+  const afterStepIndex = options.afterStepIndex ?? -1;
+  let maxStepIndex = afterStepIndex;
+  let raw;
+  try {
+    raw = readFileSync10(options.transcriptPath, "utf8");
+  } catch {
+    return { events: [], maxStepIndex };
+  }
+  const events = [];
+  const fallbackNow = options.now ?? Date.now();
+  const maxChars = options.captureLevel === "full" ? FULL_MAX_CHARS : REDACTED_MAX_CHARS;
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      continue;
+    }
+    const record = parsed;
+    const stepIndex = record.step_index;
+    if (typeof stepIndex !== "number" || !Number.isInteger(stepIndex) || stepIndex < 0) {
+      continue;
+    }
+    if (stepIndex > maxStepIndex) {
+      maxStepIndex = stepIndex;
+    }
+    if (stepIndex <= afterStepIndex || options.captureLevel === "metadata") {
+      continue;
+    }
+    if (typeof record.content !== "string" || record.content.trim().length === 0) {
+      continue;
+    }
+    const sanitized = truncateText(redact(record.content).trim(), maxChars).trim();
+    if (!sanitized) {
+      continue;
+    }
+    const timestamp4 = resolveRecordTimestamp(record, fallbackNow);
+    const sourceEventId = `antigravity:${options.conversationId}:step:${stepIndex}`;
+    if (record.type === "USER_INPUT" && record.source === "USER_EXPLICIT" && record.status === "DONE") {
+      const payload = { prompt: sanitized };
+      if (options.captureLevel === "redacted") {
+        payload.capture_policy = "bounded_redacted";
+      }
+      events.push({
+        version: 1,
+        event_id: deterministicEventId(`${sourceEventId}:user_prompt`),
+        source: "antigravity",
+        source_event_id: sourceEventId,
+        project_root: options.projectRoot,
+        session_id: options.conversationId,
+        timestamp: timestamp4,
+        kind: "user_prompt",
+        payload
+      });
+      continue;
+    }
+    if (record.type === "PLANNER_RESPONSE" && record.source === "MODEL" && record.status === "DONE") {
+      const payload = { response: sanitized };
+      if (typeof record.model === "string" && record.model.trim().length > 0) {
+        payload.model = record.model.trim();
+      }
+      if (options.captureLevel === "redacted") {
+        payload.capture_policy = "bounded_redacted";
+      }
+      events.push({
+        version: 1,
+        event_id: deterministicEventId(`${sourceEventId}:ai_response`),
+        source: "antigravity",
+        source_event_id: sourceEventId,
+        project_root: options.projectRoot,
+        session_id: options.conversationId,
+        timestamp: timestamp4,
+        kind: "ai_response",
+        payload
+      });
+    }
+  }
+  return { events, maxStepIndex };
+}
+
+// packages/cli/src/commands/hook-antigravity.ts
+var SUPPORTED_EVENTS = /* @__PURE__ */ new Set([
+  "session-start",
+  "pre-invocation",
+  "post-tool-use",
+  "stop"
+]);
+var CAPTURED_TOOL_NAMES = /* @__PURE__ */ new Set([
+  "write_file",
+  "edit_file",
+  "write_to_file",
+  "replace_file_content",
+  "multi_replace_file_content",
+  "run_command"
+]);
+var FILE_ARG_KEYS = ["Path", "TargetFile", "AbsolutePath", "path", "file_path", "files"];
+function isAntigravityHookEvent(event) {
+  return typeof event === "string" && SUPPORTED_EVENTS.has(event);
+}
+function isPlainObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function stringField(value) {
+  if (typeof value !== "string") {
+    return void 0;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : void 0;
+}
+function parseHookInput(stdin) {
+  if (!stdin || stdin.trim().length === 0) {
+    return { ok: true, value: {} };
+  }
+  try {
+    const parsed = JSON.parse(stdin);
+    return isPlainObject(parsed) ? { ok: true, value: parsed } : { ok: true, value: {} };
+  } catch {
+    return { ok: false };
+  }
+}
+function resolveWorkspaceRawCwd(input) {
+  const cwd = stringField(input.cwd);
+  if (cwd) {
+    return cwd;
+  }
+  if (Array.isArray(input.workspacePaths)) {
+    for (const item of input.workspacePaths) {
+      const candidate = stringField(item);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+  return process.cwd();
+}
+function deterministicEventId2(key) {
+  return createHash5("sha256").update(key).digest("hex").slice(0, 32);
+}
+function resolveAntigravityCaptureLevel(env) {
+  return normalizeCaptureLevel(
+    env.LOCUS_ANTIGRAVITY_CAPTURE ?? env.LOCUS_CAPTURE_LEVEL,
+    "redacted"
+  );
+}
+function isLocusToolName(toolName) {
+  const lower = toolName.toLowerCase();
+  return lower.includes("locus") || lower.includes("memory_");
+}
+function extractCandidateFiles(args) {
+  const collected = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const key of FILE_ARG_KEYS) {
+    const raw = args[key];
+    if (typeof raw === "string") {
+      const candidate = raw.trim();
+      if (candidate && !seen.has(candidate) && !isDenylisted(candidate)) {
+        seen.add(candidate);
+        collected.push(candidate);
+      }
+      continue;
+    }
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        if (typeof entry !== "string") {
+          continue;
+        }
+        const candidate = entry.trim();
+        if (candidate && !seen.has(candidate) && !isDenylisted(candidate)) {
+          seen.add(candidate);
+          collected.push(candidate);
+        }
+      }
+    }
+  }
+  return collected;
+}
+function formatInjectStepsStdout(text) {
+  return JSON.stringify({
+    injectSteps: [
+      {
+        systemMessage: {
+          systemMessage: text
+        }
+      }
+    ]
+  });
+}
+async function handleSessionStart(context) {
+  const dbPath = resolveDbPath(context.projectRoot);
+  const inboxDir = resolveInboxDir(context.projectRoot);
+  const startEvent = {
+    version: 1,
+    event_id: deterministicEventId2(`antigravity:${context.conversationId}:session_start`),
+    source: "antigravity",
+    source_event_id: `antigravity:${context.conversationId}:session_start`,
+    project_root: context.projectRoot,
+    session_id: context.conversationId,
+    timestamp: context.nowMs,
+    kind: "session_start",
+    payload: {
+      tool: "antigravity",
+      ...context.modelName ? { model: context.modelName } : {}
+    }
+  };
+  try {
+    writeInboxEvent(inboxDir, startEvent);
+  } catch {
+  }
+  const { db, fts5 } = await initStorage(dbPath);
+  try {
+    try {
+      processInbox(inboxDir, db, {
+        batchLimit: 100,
+        captureLevel: context.captureLevel,
+        fts5Available: fts5,
+        projectRoot: context.projectRoot
+      });
+      runDurableExtraction(db);
+    } catch {
+    }
+    const brief = buildSessionStartBrief({
+      db,
+      projectRoot: context.projectRoot,
+      now: context.nowMs
+    });
+    const existingState = readAntigravitySessionState(context.conversationId, context.env);
+    writeAntigravitySessionState(
+      {
+        conversationId: context.conversationId,
+        sessionStartInjected: true,
+        ...existingState.lastPromptHash ? { lastPromptHash: existingState.lastPromptHash } : {},
+        injectedDurableIds: [...existingState.injectedDurableIds, ...brief.includedDurableIds],
+        injectedEventIds: [...existingState.injectedEventIds, ...brief.includedEventIds],
+        updatedAt: context.nowMs
+      },
+      context.env
+    );
+    return {
+      exitCode: 0,
+      stdout: brief.injected ? formatInjectStepsStdout(brief.text) : "{}"
+    };
+  } finally {
+    try {
+      db.close();
+    } catch {
+    }
+  }
+}
+async function handlePreInvocation(context) {
+  if (!context.lastUserInput) {
+    return { exitCode: 0, stdout: "{}" };
+  }
+  const state = readAntigravitySessionState(context.conversationId, context.env);
+  const promptHash = hashPrompt(context.lastUserInput);
+  if (state.lastPromptHash === promptHash) {
+    return { exitCode: 0, stdout: "{}" };
+  }
+  if (isNoisyPrompt(context.lastUserInput)) {
+    writeAntigravitySessionState(
+      {
+        ...state,
+        lastPromptHash: promptHash,
+        updatedAt: context.nowMs
+      },
+      context.env
+    );
+    return { exitCode: 0, stdout: "{}" };
+  }
+  const { db } = await initStorage(resolveDbPath(context.projectRoot));
+  try {
+    const brief = buildPromptRecallBrief(
+      context.lastUserInput,
+      {
+        db,
+        projectRoot: context.projectRoot,
+        now: context.nowMs
+      },
+      {
+        alreadyInjectedDurableIds: state.injectedDurableIds,
+        alreadyInjectedEventIds: state.injectedEventIds
+      }
+    );
+    writeAntigravitySessionState(
+      {
+        conversationId: context.conversationId,
+        sessionStartInjected: state.sessionStartInjected,
+        lastPromptHash: promptHash,
+        injectedDurableIds: brief.injected ? [...state.injectedDurableIds, ...brief.includedDurableIds] : state.injectedDurableIds,
+        injectedEventIds: brief.injected ? [...state.injectedEventIds, ...brief.includedEventIds] : state.injectedEventIds,
+        updatedAt: context.nowMs
+      },
+      context.env
+    );
+    return {
+      exitCode: 0,
+      stdout: brief.injected ? formatInjectStepsStdout(brief.text) : "{}"
+    };
+  } finally {
+    try {
+      db.close();
+    } catch {
+    }
+  }
+}
+function handlePostToolUse(context) {
+  const toolCall = isPlainObject(context.input.toolCall) ? context.input.toolCall : void 0;
+  const toolName = toolCall ? stringField(toolCall.name) : void 0;
+  if (!toolName || isLocusToolName(toolName)) {
+    return { exitCode: 0, stdout: "{}" };
+  }
+  const errorText = stringField(context.input.error);
+  const shouldCapture = Boolean(errorText) || CAPTURED_TOOL_NAMES.has(toolName.toLowerCase());
+  if (!shouldCapture) {
+    return { exitCode: 0, stdout: "{}" };
+  }
+  const toolId = toolCall ? stringField(toolCall.id) : void 0;
+  const stepIdx = typeof context.input.stepIdx === "number" && Number.isInteger(context.input.stepIdx) ? context.input.stepIdx : void 0;
+  const toolArgs = toolCall && isPlainObject(toolCall.args) ? toolCall.args : {};
+  const files = extractCandidateFiles(toolArgs);
+  const sourceEventId = toolId ? `antigravity:${context.conversationId}:tool:${toolId}` : stepIdx !== void 0 ? `antigravity:${context.conversationId}:tool:step-${stepIdx}:${toolName}` : `antigravity:${context.conversationId}:tool:${context.nowMs}:${toolName}`;
+  const event = {
+    version: 1,
+    event_id: deterministicEventId2(`${sourceEventId}:post_tool_use`),
+    source: "antigravity",
+    source_event_id: sourceEventId,
+    project_root: context.projectRoot,
+    session_id: context.conversationId,
+    timestamp: context.nowMs,
+    kind: "tool_use",
+    payload: {
+      tool: toolName,
+      files,
+      status: errorText ? "error" : "success"
+    }
+  };
+  writeInboxEvent(resolveInboxDir(context.projectRoot), event);
+  return { exitCode: 0, stdout: "{}" };
+}
+async function handleStop(context) {
+  const dbPath = resolveDbPath(context.projectRoot);
+  const inboxDir = resolveInboxDir(context.projectRoot);
+  const transcriptPath = stringField(context.input.transcriptPath);
+  const { db, fts5 } = await initStorage(dbPath);
+  try {
+    if (transcriptPath) {
+      const cursorKey = antigravityTranscriptCursorKey(context.conversationId);
+      const cursorRow = db.get("SELECT value FROM scan_state WHERE key = ?", [
+        cursorKey
+      ]);
+      const parsedCursor = cursorRow ? Number.parseInt(cursorRow.value, 10) : Number.NaN;
+      const afterStepIndex = Number.isInteger(parsedCursor) && parsedCursor >= 0 ? parsedCursor : -1;
+      const parsedTranscript = parseAntigravityTranscriptEvents({
+        transcriptPath,
+        conversationId: context.conversationId,
+        projectRoot: context.projectRoot,
+        captureLevel: context.captureLevel,
+        afterStepIndex,
+        now: context.nowMs
+      });
+      for (const event of parsedTranscript.events) {
+        writeInboxEvent(inboxDir, event);
+      }
+      if (parsedTranscript.maxStepIndex > afterStepIndex) {
+        db.run("INSERT OR REPLACE INTO scan_state (key, value) VALUES (?, ?)", [
+          cursorKey,
+          String(parsedTranscript.maxStepIndex)
+        ]);
+      }
+    }
+    processInbox(inboxDir, db, {
+      batchLimit: 200,
+      captureLevel: context.captureLevel,
+      fts5Available: fts5,
+      projectRoot: context.projectRoot
+    });
+    runDurableExtraction(db);
+    return { exitCode: 0, stdout: "{}" };
+  } finally {
+    try {
+      db.close();
+    } catch {
+    }
+  }
+}
+async function runAntigravityHook(options) {
+  const event = options.event;
+  if (!isAntigravityHookEvent(event)) {
+    return {
+      exitCode: 1,
+      stdout: "",
+      stderr: `Unsupported Antigravity hook event: ${event ?? "(missing)"}`
+    };
+  }
+  const parsed = parseHookInput(options.stdin);
+  if (!parsed.ok) {
+    return {
+      exitCode: 0,
+      stdout: "{}",
+      stderr: "malformed Antigravity hook input; failing open"
+    };
+  }
+  const baseEnv = options.env ?? process.env;
+  const scopedEnv = {
+    ...baseEnv,
+    LOCUS_CLIENT: baseEnv.LOCUS_CLIENT ?? "antigravity",
+    LOCUS_CLIENT_SURFACE: baseEnv.LOCUS_CLIENT_SURFACE ?? "desktop"
+  };
+  try {
+    return await withScopedEnv(options.env ? scopedEnv : void 0, async () => {
+      const effectiveEnv = options.env ? scopedEnv : process.env;
+      const nowMs = (options.now ?? /* @__PURE__ */ new Date()).getTime();
+      const input = parsed.value;
+      const conversationId = stringField(input.conversationId) ?? "default";
+      const rawCwd = resolveWorkspaceRawCwd(input);
+      const { root: projectRoot } = resolveProjectRoot(rawCwd);
+      const captureLevel = resolveAntigravityCaptureLevel(effectiveEnv);
+      resolveAntigravitySessionStatePath(conversationId, effectiveEnv);
+      if (event === "session-start") {
+        return handleSessionStart({
+          projectRoot,
+          conversationId,
+          captureLevel,
+          modelName: stringField(input.modelName),
+          nowMs,
+          env: effectiveEnv
+        });
+      }
+      if (event === "pre-invocation") {
+        return handlePreInvocation({
+          projectRoot,
+          conversationId,
+          lastUserInput: stringField(input.lastUserInput),
+          nowMs,
+          env: effectiveEnv
+        });
+      }
+      if (event === "post-tool-use") {
+        return handlePostToolUse({
+          input,
+          projectRoot,
+          conversationId,
+          nowMs
+        });
+      }
+      return handleStop({
+        input,
+        projectRoot,
+        conversationId,
+        captureLevel,
+        nowMs
+      });
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      exitCode: 0,
+      stdout: "{}",
+      stderr: `Antigravity hook error; failing open: ${message}`
+    };
+  }
+}
+
 // packages/cli/src/commands/hook-codex.ts
 import { randomBytes } from "node:crypto";
-import { mkdirSync as mkdirSync3, renameSync as renameSync2, writeFileSync as writeFileSync4 } from "node:fs";
-import { join as join7 } from "node:path";
+import { mkdirSync as mkdirSync5, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
+import { join as join12 } from "node:path";
 var supportedEvents = /* @__PURE__ */ new Set(["session-start", "user-prompt-submit", "stop"]);
 function runCodexHook(options) {
   const event = options.event;
@@ -4072,7 +4936,7 @@ function runCodexHook(options) {
       stderr: `Unsupported Codex hook event: ${event ?? "(missing)"}`
     };
   }
-  const parsed = parseHookInput(options.stdin);
+  const parsed = parseHookInput2(options.stdin);
   if (!parsed.ok) {
     return {
       exitCode: 0,
@@ -4102,7 +4966,7 @@ function runCodexHook(options) {
 function isSupportedEvent(event) {
   return typeof event === "string" && supportedEvents.has(event);
 }
-function parseHookInput(stdin) {
+function parseHookInput2(stdin) {
   if (!stdin || stdin.trim().length === 0) {
     return { ok: true, value: {} };
   }
@@ -4115,57 +4979,334 @@ function parseHookInput(stdin) {
 }
 function writeStopTrigger(options) {
   try {
-    const triggerDir = join7(resolveCodexHome(options.env), "locus", "hook-triggers");
-    mkdirSync3(triggerDir, { recursive: true });
+    const triggerDir = join12(resolveCodexHome(options.env), "locus", "hook-triggers");
+    mkdirSync5(triggerDir, { recursive: true });
     const id = `${options.now.getTime()}-${randomBytes(4).toString("hex")}`;
-    const finalPath = join7(triggerDir, `stop-${id}.json`);
+    const finalPath = join12(triggerDir, `stop-${id}.json`);
     const tempPath = `${finalPath}.tmp`;
     const payload = {
       event: "stop",
       createdAt: options.now.toISOString(),
-      sessionId: stringField(options.input.session_id),
-      turnId: stringField(options.input.turn_id)
+      sessionId: stringField2(options.input.session_id),
+      turnId: stringField2(options.input.turn_id)
     };
-    writeFileSync4(tempPath, `${JSON.stringify(payload, null, 2)}
+    writeFileSync6(tempPath, `${JSON.stringify(payload, null, 2)}
 `, "utf8");
-    renameSync2(tempPath, finalPath);
+    renameSync4(tempPath, finalPath);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
   }
 }
-function stringField(value) {
+function stringField2(value) {
   return typeof value === "string" && value.trim().length > 0 ? value : void 0;
 }
 
+// packages/cli/src/antigravity/bundle.ts
+import { existsSync as existsSync9 } from "node:fs";
+import { join as join13 } from "node:path";
+function buildAntigravityPluginManifest(version) {
+  return {
+    name: "locus-memory",
+    displayName: "Locus Memory",
+    version,
+    description: "Persistent project-aware memory for Antigravity Desktop with zero-call context hooks, automatic capture, and local SQLite MCP recall.",
+    suggestedPrompts: [
+      "What architectural decisions and next steps are active in this project?",
+      "Search project memory for recent work and unresolved blockers.",
+      "Check Locus memory status and review durable decisions."
+    ],
+    author: {
+      name: "Magnifico4625",
+      url: "https://github.com/Magnifico4625"
+    },
+    homepage: "https://github.com/Magnifico4625/locus",
+    repository: "https://github.com/Magnifico4625/locus"
+  };
+}
+var PLUGIN_ROOT_SERVER_ARG = ["$", "{PLUGIN_ROOT}/runtime/server.js"].join("");
+function buildAntigravityHooksJson() {
+  return {
+    "locus-memory": {
+      SessionStart: [
+        {
+          type: "command",
+          command: "node hooks/locus-hook.mjs session-start",
+          timeout: 15
+        }
+      ],
+      PreInvocation: [
+        {
+          type: "command",
+          command: "node hooks/locus-hook.mjs pre-invocation",
+          timeout: 15
+        }
+      ],
+      PostToolUse: [
+        {
+          matcher: "*",
+          hooks: [
+            {
+              type: "command",
+              command: "node hooks/locus-hook.mjs post-tool-use",
+              timeout: 15
+            }
+          ]
+        }
+      ],
+      Stop: [
+        {
+          type: "command",
+          command: "node hooks/locus-hook.mjs stop",
+          timeout: 20
+        }
+      ]
+    }
+  };
+}
+function buildAntigravityHookRunnerScript() {
+  return [
+    "import { runCli } from '../runtime/cli.js';",
+    "",
+    "const event = process.argv[2];",
+    "if (!event) {",
+    "  process.stdout.write('{}\\n');",
+    "  process.exit(0);",
+    "}",
+    "",
+    "const exitCode = await runCli(['hook', 'antigravity', event]);",
+    "process.exitCode = exitCode;",
+    ""
+  ].join("\n");
+}
+function buildAntigravityMcpConfigJson(captureLevel = "redacted") {
+  return {
+    mcpServers: {
+      locus: {
+        command: "node",
+        args: [PLUGIN_ROOT_SERVER_ARG],
+        env: {
+          LOCUS_CLIENT: "antigravity",
+          LOCUS_CLIENT_SURFACE: "desktop",
+          LOCUS_CAPTURE_LEVEL: captureLevel,
+          LOCUS_LOG: "error"
+        }
+      }
+    }
+  };
+}
+function buildAntigravityRulesMarkdown() {
+  return [
+    "# Locus Persistent Memory",
+    "",
+    "Locus injects relevant project context automatically via lifecycle hooks (`SessionStart`, `PreInvocation`) and captures workspace progress locally via `PostToolUse` and `Stop`.",
+    "",
+    "## Working Rules",
+    "",
+    "- Treat injected `[Locus Memory \u2014 Project Brief]` and `[Locus Memory \u2014 Relevant Recall]` system messages as verified prior local project context, and cross-check file state in the current workspace before acting.",
+    "- Do NOT call `memory_recall`, `memory_search`, or `memory_status` redundantly on simple continuation turns when automatic context already answered the question.",
+    '- Use `memory_recall` first for deep historical questions about past decisions, bugs, or dates (e.g., "what did we decide last week?").',
+    "- Use `memory_calendar` for date-range discovery and `memory_project_state` when package, git, or next-step freshness matters.",
+    "- Use `memory_remember` proactively when an important architectural decision, invariant, or user constraint is settled.",
+    "- Use `memory_review` or `memory_forget` when inspecting or cleaning up stored durable memories.",
+    "- Keep project-scoped recall isolated to the current workspace unless global recall is explicitly requested.",
+    ""
+  ].join("\n");
+}
+function buildAntigravitySkillMarkdown() {
+  return [
+    "---",
+    "name: locus-memory",
+    "description: >",
+    "  Persistent local SQLite project memory for Antigravity Desktop. Zero-call hooks inject",
+    "  bounded context automatically; invoke deep MCP tools for date queries, saving decisions,",
+    "  project exploration, and memory inspection.",
+    "---",
+    "",
+    "# Locus Memory (Antigravity Desktop)",
+    "",
+    "Locus runs locally on your machine using SQLite with secret redaction and project-level isolation.",
+    "",
+    "## Zero-Call Lifecycle Hooks",
+    "",
+    "- **SessionStart**: injects a compact project state, active decisions, and recent files brief.",
+    "- **PreInvocation**: injects relevant prompt recall when needed (skips noisy confirmations and duplicates).",
+    "- **PostToolUse**: captures mutated file paths, shell commands, and tool errors asynchronously into the local inbox.",
+    "- **Stop**: incrementally imports finalized transcript steps and extracts durable memories.",
+    "",
+    "## Deep MCP Tools",
+    "",
+    "1. `memory_recall` -- Summary-first recall across decisions, sessions, and project events.",
+    "2. `memory_calendar` -- Day/week/month activity overview.",
+    "3. `memory_project_state` -- Live package/git identity, memory freshness, and open next steps.",
+    "4. `memory_search` -- Full-text FTS5 search across files, decisions, and events.",
+    "5. `memory_remember` -- Explicitly persist key architectural choices and conventions.",
+    "6. `memory_review` / `memory_forget` -- Inspect durable facts and forget outdated entries.",
+    "7. `memory_timeline` / `memory_explore` / `memory_scan` / `memory_status` -- Chronology, structure, and diagnostics.",
+    "",
+    "## Capture Modes & Privacy",
+    "",
+    "- `metadata`: structural tool/file activity and diagnostics only; no prompt or response text capture.",
+    "- `redacted` (default): bounded redacted snippets (up to 600 chars) with secret/denylist filtering.",
+    "- `full`: up to 4000 chars of redacted prompt/response text stored locally. Maximum recall carries higher local privacy exposure and is never risk-free.",
+    ""
+  ].join("\n");
+}
+function writeAntigravityPluginBundle(options) {
+  const pluginDir = options.targetDir;
+  const runtimeDir = join13(pluginDir, "runtime");
+  const captureLevel = options.captureLevel ?? "redacted";
+  const manifestPath = join13(pluginDir, "plugin.json");
+  const hooksPath = join13(pluginDir, "hooks.json");
+  const hookRunnerPath = join13(pluginDir, "hooks", "locus-hook.mjs");
+  const mcpPath = join13(pluginDir, "mcp_config.json");
+  const rulesPath = join13(pluginDir, "rules", "AGENTS.md");
+  const skillPath = join13(pluginDir, "skills", "locus-memory", "SKILL.md");
+  const hadAllPluginFiles = existsSync9(manifestPath) && existsSync9(hooksPath) && existsSync9(hookRunnerPath) && existsSync9(mcpPath) && existsSync9(rulesPath) && existsSync9(skillPath) && existsSync9(join13(runtimeDir, "cli.js")) && existsSync9(join13(runtimeDir, "server.js"));
+  const runtimeResult = installRuntimeFiles(runtimeDir, {
+    startDir: options.startDir,
+    sourceDistDir: options.sourceDistDir,
+    now: options.now
+  });
+  const version = options.version ?? runtimeResult.version;
+  const changedFlags = [
+    syncTextAtomically(
+      manifestPath,
+      `${JSON.stringify(buildAntigravityPluginManifest(version), null, 2)}
+`
+    ),
+    syncTextAtomically(hooksPath, `${JSON.stringify(buildAntigravityHooksJson(), null, 2)}
+`),
+    syncTextAtomically(hookRunnerPath, buildAntigravityHookRunnerScript()),
+    syncTextAtomically(
+      mcpPath,
+      `${JSON.stringify(buildAntigravityMcpConfigJson(captureLevel), null, 2)}
+`
+    ),
+    syncTextAtomically(rulesPath, buildAntigravityRulesMarkdown()),
+    syncTextAtomically(skillPath, buildAntigravitySkillMarkdown())
+  ];
+  const anyChanged = changedFlags.some(Boolean) || runtimeResult.action !== "unchanged";
+  let action = "unchanged";
+  if (!hadAllPluginFiles) {
+    action = "installed";
+  } else if (anyChanged) {
+    action = "updated";
+  }
+  return {
+    action,
+    pluginDir,
+    version,
+    runtimeDir,
+    files: [
+      manifestPath,
+      hooksPath,
+      hookRunnerPath,
+      mcpPath,
+      rulesPath,
+      skillPath,
+      runtimeResult.cliPath,
+      runtimeResult.serverPath,
+      runtimeResult.manifestPath,
+      join13(runtimeDir, "package.json")
+    ]
+  };
+}
+
+// packages/cli/src/commands/install-antigravity.ts
+function resolveTargetPluginDir(env, targetDir) {
+  const custom = targetDir?.trim();
+  if (custom) {
+    return { pluginDir: custom, isCustomTarget: true };
+  }
+  return {
+    pluginDir: resolveAntigravityPluginDir(env),
+    isCustomTarget: false
+  };
+}
+function formatInstallAntigravityDryRun(options = {}) {
+  const env = options.env ?? process.env;
+  const { pluginDir } = resolveTargetPluginDir(env, options.targetDir);
+  const captureLevel = options.captureLevel ?? "redacted";
+  const version = resolvePackageVersion(options.startDir);
+  return [
+    "Locus Antigravity Desktop install dry-run",
+    `Version: ${version}`,
+    `Config root: ${resolveAntigravityConfigDir(env)}`,
+    `Target plugin dir: ${pluginDir}`,
+    `Capture level: ${captureLevel}`,
+    "Planned bundle files:",
+    "  - plugin.json",
+    "  - hooks.json (SessionStart, PreInvocation, PostToolUse, Stop)",
+    "  - hooks/locus-hook.mjs",
+    "  - mcp_config.json",
+    "  - rules/AGENTS.md",
+    "  - skills/locus-memory/SKILL.md",
+    "  - runtime/cli.js",
+    "  - runtime/server.js",
+    "  - runtime/package.json",
+    "  - runtime/runtime.json",
+    "Antigravity config.json: untouched (native discovery loads plugins/<name>/)"
+  ].join("\n");
+}
+function runInstallAntigravity(options = {}) {
+  const env = options.env ?? process.env;
+  const captureLevel = options.captureLevel ?? "redacted";
+  const { pluginDir, isCustomTarget } = resolveTargetPluginDir(env, options.targetDir);
+  const bundleResult = writeAntigravityPluginBundle({
+    targetDir: pluginDir,
+    startDir: options.startDir,
+    sourceDistDir: options.sourceDistDir,
+    captureLevel,
+    now: options.now
+  });
+  const localRuntimeResult = isCustomTarget ? void 0 : installLocalCliRuntime({
+    env,
+    startDir: options.startDir,
+    sourceDistDir: options.sourceDistDir,
+    now: options.now
+  });
+  return {
+    exitCode: 0,
+    output: [
+      `Locus Antigravity plugin ${bundleResult.action} (${bundleResult.version})`,
+      `Plugin dir: ${bundleResult.pluginDir}`,
+      `Runtime dir: ${bundleResult.runtimeDir}`,
+      `Capture level: ${captureLevel}`,
+      localRuntimeResult ? `Shared local runtime (${localRuntimeResult.action}): ${localRuntimeResult.binDir}` : "Shared local runtime: skipped (custom --target)",
+      "Restart or reload Antigravity plugins if the MCP server was already running."
+    ].join("\n")
+  };
+}
+
 // packages/cli/src/commands/install-codex.ts
-import { existsSync as existsSync12 } from "node:fs";
-import { join as join15 } from "node:path";
+import { existsSync as existsSync16 } from "node:fs";
+import { join as join21 } from "node:path";
 
 // packages/cli/src/codex/cleanup.ts
-import { existsSync as existsSync6, readdirSync as readdirSync3, rmSync, statSync } from "node:fs";
-import { join as join8 } from "node:path";
+import { existsSync as existsSync10, readdirSync as readdirSync4, rmSync as rmSync2, statSync as statSync2 } from "node:fs";
+import { join as join14 } from "node:path";
 function cleanupInterruptedInstall(codexHome) {
   const removed = [];
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
   for (const path of tempFiles) {
-    rmSync(path, { force: true });
+    rmSync2(path, { force: true });
     removed.push(path);
   }
   return { removed };
 }
 function findInterruptedInstallTempFiles(codexHome) {
-  const skillDir = join8(codexHome, "skills", "locus-memory");
+  const skillDir = join14(codexHome, "skills", "locus-memory");
   const tempFiles = [];
-  if (!existsSync6(skillDir)) {
+  if (!existsSync10(skillDir)) {
     return tempFiles;
   }
-  for (const entry of readdirSync3(skillDir)) {
+  for (const entry of readdirSync4(skillDir)) {
     if (!entry.endsWith(".locus-tmp")) {
       continue;
     }
-    const path = join8(skillDir, entry);
-    if (!statSync(path).isFile()) {
+    const path = join14(skillDir, entry);
+    if (!statSync2(path).isFile()) {
       continue;
     }
     tempFiles.push(path);
@@ -4207,13 +5348,13 @@ function buildCodexMcpRemoveArgs(name) {
 }
 
 // packages/cli/src/codex/lock.ts
-import { existsSync as existsSync7, mkdirSync as mkdirSync4, readFileSync as readFileSync7, rmSync as rmSync2, writeFileSync as writeFileSync5 } from "node:fs";
-import { join as join9 } from "node:path";
+import { existsSync as existsSync11, mkdirSync as mkdirSync6, readFileSync as readFileSync11, rmSync as rmSync3, writeFileSync as writeFileSync7 } from "node:fs";
+import { join as join15 } from "node:path";
 var defaultStaleAfterMs = 15 * 60 * 1e3;
 function acquireInstallLock(codexHome, options = {}) {
-  mkdirSync4(codexHome, { recursive: true });
-  const lockPath = join9(codexHome, ".locus-install.lock");
-  if (existsSync7(lockPath)) {
+  mkdirSync6(codexHome, { recursive: true });
+  const lockPath = join15(codexHome, ".locus-install.lock");
+  if (existsSync11(lockPath)) {
     const stale = isStaleLock(lockPath, options);
     return {
       acquired: false,
@@ -4223,7 +5364,7 @@ function acquireInstallLock(codexHome, options = {}) {
     };
   }
   try {
-    writeFileSync5(
+    writeFileSync7(
       lockPath,
       JSON.stringify(
         {
@@ -4248,7 +5389,7 @@ function acquireInstallLock(codexHome, options = {}) {
     acquired: true,
     path: lockPath,
     release: () => {
-      rmSync2(lockPath, { force: true });
+      rmSync3(lockPath, { force: true });
     }
   };
 }
@@ -4256,7 +5397,7 @@ function isStaleLock(lockPath, options) {
   const staleAfterMs = options.staleAfterMs ?? defaultStaleAfterMs;
   const now = options.now ?? /* @__PURE__ */ new Date();
   try {
-    const lock = JSON.parse(readFileSync7(lockPath, "utf8"));
+    const lock = JSON.parse(readFileSync11(lockPath, "utf8"));
     if (!lock.createdAt) {
       return false;
     }
@@ -4269,57 +5410,57 @@ function isStaleLock(lockPath, options) {
 // packages/cli/src/codex/skill.ts
 import {
   copyFileSync as copyFileSync5,
-  existsSync as existsSync11,
-  mkdirSync as mkdirSync8,
-  readFileSync as readFileSync11,
-  renameSync as renameSync4,
-  writeFileSync as writeFileSync8
+  existsSync as existsSync15,
+  mkdirSync as mkdirSync10,
+  readFileSync as readFileSync15,
+  renameSync as renameSync6,
+  writeFileSync as writeFileSync10
 } from "node:fs";
-import { dirname as dirname7 } from "node:path";
-import { fileURLToPath as fileURLToPath5 } from "node:url";
+import { dirname as dirname9 } from "node:path";
+import { fileURLToPath as fileURLToPath6 } from "node:url";
 
 // packages/codex/src/ids.ts
-import { createHash as createHash2 } from "node:crypto";
-import { basename as basename2 } from "node:path";
+import { createHash as createHash6 } from "node:crypto";
+import { basename as basename3 } from "node:path";
 
 // packages/codex/src/importer.ts
-import { readFileSync as readFileSync8 } from "node:fs";
+import { readFileSync as readFileSync12 } from "node:fs";
 
 // packages/codex/src/inbox-writer.ts
-import { existsSync as existsSync8, mkdirSync as mkdirSync5, renameSync as renameSync3, writeFileSync as writeFileSync6 } from "node:fs";
-import { join as join10 } from "node:path";
+import { existsSync as existsSync12, mkdirSync as mkdirSync7, renameSync as renameSync5, writeFileSync as writeFileSync8 } from "node:fs";
+import { join as join16 } from "node:path";
 
 // packages/codex/src/paths.ts
-import { homedir as homedir4 } from "node:os";
-import { join as join11, resolve as resolve4 } from "node:path";
+import { homedir as homedir5 } from "node:os";
+import { join as join17, resolve as resolve4 } from "node:path";
 
 // packages/codex/src/session-files.ts
-import { readdirSync as readdirSync4 } from "node:fs";
-import { basename as basename3, join as join12, resolve as resolve5 } from "node:path";
+import { readdirSync as readdirSync5 } from "node:fs";
+import { basename as basename4, join as join18, resolve as resolve5 } from "node:path";
 
 // packages/codex/src/plugin-sync.ts
-import { copyFileSync as copyFileSync3, existsSync as existsSync9, mkdirSync as mkdirSync6, readFileSync as readFileSync9, rmSync as rmSync3, writeFileSync as writeFileSync7 } from "node:fs";
-import { dirname as dirname5, join as join13, resolve as resolve6 } from "node:path";
-import { fileURLToPath as fileURLToPath3 } from "node:url";
+import { copyFileSync as copyFileSync3, existsSync as existsSync13, mkdirSync as mkdirSync8, readFileSync as readFileSync13, rmSync as rmSync4, writeFileSync as writeFileSync9 } from "node:fs";
+import { dirname as dirname7, join as join19, resolve as resolve6 } from "node:path";
+import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // packages/codex/src/skill-sync.ts
-import { copyFileSync as copyFileSync4, existsSync as existsSync10, mkdirSync as mkdirSync7, readFileSync as readFileSync10 } from "node:fs";
-import { homedir as homedir5 } from "node:os";
-import { dirname as dirname6, join as join14, resolve as resolve7 } from "node:path";
-import { fileURLToPath as fileURLToPath4 } from "node:url";
+import { copyFileSync as copyFileSync4, existsSync as existsSync14, mkdirSync as mkdirSync9, readFileSync as readFileSync14 } from "node:fs";
+import { homedir as homedir6 } from "node:os";
+import { dirname as dirname8, join as join20, resolve as resolve7 } from "node:path";
+import { fileURLToPath as fileURLToPath5 } from "node:url";
 function resolveCanonicalCodexSkillPath() {
-  return resolve7(fileURLToPath4(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
+  return resolve7(fileURLToPath5(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
 }
 
 // packages/cli/src/codex/skill.ts
 function installCodexSkill(options = {}) {
   const sourcePath = options.sourcePath ?? resolvePackagedCodexSkillPath();
   const targetPath = resolveCodexSkillPath(options.env, "locus-memory");
-  const sourceContent = readFileSync11(sourcePath, "utf8");
+  const sourceContent = readFileSync15(sourcePath, "utf8");
   try {
-    mkdirSync8(dirname7(targetPath), { recursive: true });
-    if (existsSync11(targetPath)) {
-      const targetContent = readFileSync11(targetPath, "utf8");
+    mkdirSync10(dirname9(targetPath), { recursive: true });
+    if (existsSync15(targetPath)) {
+      const targetContent = readFileSync15(targetPath, "utf8");
       if (targetContent === sourceContent) {
         return { action: "unchanged", path: targetPath, targetPath };
       }
@@ -4357,10 +5498,10 @@ function installCodexSkill(options = {}) {
 function resolvePackagedCodexSkillPath() {
   const candidates = [
     resolveCanonicalCodexSkillPath(),
-    fileURLToPath5(new URL("../packages/codex/skills/locus-memory/SKILL.md", import.meta.url))
+    fileURLToPath6(new URL("../packages/codex/skills/locus-memory/SKILL.md", import.meta.url))
   ];
   for (const candidate of candidates) {
-    if (existsSync11(candidate)) {
+    if (existsSync15(candidate)) {
       return candidate;
     }
   }
@@ -4374,10 +5515,10 @@ function backupSkill(targetPath, now) {
     path: backupPath
   };
 }
-function writeAtomically(targetPath, content, writeFile = writeFileSync8) {
+function writeAtomically(targetPath, content, writeFile = writeFileSync10) {
   const tempPath = `${targetPath}.locus-tmp`;
   writeFile(tempPath, content, "utf8");
-  renameSync4(tempPath, targetPath);
+  renameSync6(tempPath, targetPath);
 }
 function timestamp3(date) {
   return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".", "");
@@ -4394,7 +5535,7 @@ function formatInstallCodexDryRun(options = {}) {
   const skillPath = resolveCodexSkillPath(env, "locus-memory");
   const runtimePackage = resolveRuntimePackageOverride(env);
   const runtimeSpecifier = buildRuntimePackageSpecifier(resolvePackageVersion(options.startDir));
-  const lockPath = join15(codexHome, ".locus-install.lock");
+  const lockPath = join21(codexHome, ".locus-install.lock");
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
   return [
     "Locus Codex install dry-run",
@@ -4405,7 +5546,7 @@ function formatInstallCodexDryRun(options = {}) {
     `Hooks path: ${resolveCodexHooksPath(env)}`,
     `Hooks: ${options.withHooks ? "requested (would install)" : "not requested"}`,
     "Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error",
-    `Install lock: ${existsSync12(lockPath) ? `present at ${lockPath}` : "none"}`,
+    `Install lock: ${existsSync16(lockPath) ? `present at ${lockPath}` : "none"}`,
     `Stale temp files: ${tempFiles.length}`
   ].join("\n");
 }
@@ -4588,6 +5729,51 @@ function quoteWindowsArg(value) {
   return `"${value.replaceAll('"', '\\"')}"`;
 }
 
+// packages/cli/src/commands/uninstall-antigravity.ts
+import { existsSync as existsSync17, readFileSync as readFileSync16, rmSync as rmSync5 } from "node:fs";
+import { join as join22 } from "node:path";
+function runUninstallAntigravity(options = {}) {
+  const env = options.env ?? process.env;
+  const pluginDir = options.targetDir?.trim() || resolveAntigravityPluginDir(env);
+  if (!existsSync17(pluginDir)) {
+    return {
+      exitCode: 0,
+      output: [
+        `Locus Antigravity plugin is not installed at ${pluginDir}.`,
+        "Memory data untouched."
+      ].join("\n")
+    };
+  }
+  const manifestPath = join22(pluginDir, "plugin.json");
+  if (!existsSync17(manifestPath)) {
+    return {
+      exitCode: 1,
+      output: `Refusing to remove ${pluginDir}: missing plugin.json.`
+    };
+  }
+  let manifestName;
+  try {
+    const parsed = JSON.parse(readFileSync16(manifestPath, "utf8"));
+    manifestName = parsed.name;
+  } catch {
+    return {
+      exitCode: 1,
+      output: `Refusing to remove ${pluginDir}: unreadable plugin.json.`
+    };
+  }
+  if (manifestName !== "locus-memory") {
+    return {
+      exitCode: 1,
+      output: `Refusing to remove foreign plugin at ${pluginDir} (plugin.json name is "${String(manifestName)}").`
+    };
+  }
+  rmSync5(pluginDir, { recursive: true, force: true });
+  return {
+    exitCode: 0,
+    output: [`Locus Antigravity plugin removed: ${pluginDir}`, "Memory data untouched."].join("\n")
+  };
+}
+
 // packages/cli/src/commands/uninstall-codex.ts
 async function runUninstallCodex(options) {
   const env = options.env ?? process.env;
@@ -4619,117 +5805,21 @@ async function runUninstallCodex(options) {
   return { exitCode: 0, output: lines.join("\n") };
 }
 
-// packages/cli/src/runtime-install.ts
-import { existsSync as existsSync13, mkdirSync as mkdirSync9, readFileSync as readFileSync12, renameSync as renameSync5, writeFileSync as writeFileSync9 } from "node:fs";
-import { dirname as dirname8, join as join16 } from "node:path";
-import { fileURLToPath as fileURLToPath6 } from "node:url";
-function resolveDefaultSourceDistDir(startDir) {
-  const currentDir = dirname8(fileURLToPath6(import.meta.url));
-  if (existsSync13(join16(currentDir, "cli.js")) && existsSync13(join16(currentDir, "server.js"))) {
-    return currentDir;
-  }
-  return join16(findPackageRoot(startDir), "dist");
-}
-function writeFileAtomically(targetPath, content) {
-  mkdirSync9(dirname8(targetPath), { recursive: true });
-  const tempPath = `${targetPath}.locus-tmp`;
-  writeFileSync9(tempPath, content);
-  renameSync5(tempPath, targetPath);
-}
-function syncFileAtomically(sourcePath, targetPath) {
-  const nextBytes = readFileSync12(sourcePath);
-  if (existsSync13(targetPath)) {
-    try {
-      const currentBytes = readFileSync12(targetPath);
-      if (nextBytes.equals(currentBytes)) {
-        return false;
-      }
-    } catch {
-    }
-  }
-  writeFileAtomically(targetPath, nextBytes);
-  return true;
-}
-function readExistingManifest(manifestPath) {
-  if (!existsSync13(manifestPath)) {
-    return void 0;
-  }
-  try {
-    return JSON.parse(readFileSync12(manifestPath, "utf8"));
-  } catch {
-    return void 0;
-  }
-}
-function installLocalCliRuntime(options = {}) {
-  const sourceDistDir = options.sourceDistDir ?? resolveDefaultSourceDistDir(options.startDir);
-  const sourceCliPath = join16(sourceDistDir, "cli.js");
-  const sourceServerPath = join16(sourceDistDir, "server.js");
-  if (!existsSync13(sourceCliPath) || !existsSync13(sourceServerPath)) {
-    throw new Error(
-      `Missing built runtime artifacts in ${sourceDistDir} (expected cli.js and server.js). Run npm run build first.`
-    );
-  }
-  const binDir = resolveRuntimeBinDir(options.env);
-  const cliPath = join16(binDir, "cli.js");
-  const serverPath = join16(binDir, "server.js");
-  const manifestPath = join16(binDir, "runtime.json");
-  const packageJsonPath = join16(binDir, "package.json");
-  const version = resolvePackageVersion(options.startDir);
-  const hadAllTargets = existsSync13(cliPath) && existsSync13(serverPath) && existsSync13(manifestPath) && existsSync13(packageJsonPath);
-  const existingManifest = readExistingManifest(manifestPath);
-  mkdirSync9(binDir, { recursive: true });
-  const cliChanged = syncFileAtomically(sourceCliPath, cliPath);
-  const serverChanged = syncFileAtomically(sourceServerPath, serverPath);
-  const expectedPackageJson = `${JSON.stringify(
-    { name: "locus-local-runtime", private: true, type: "module" },
-    null,
-    2
-  )}
-`;
-  let packageJsonChanged = false;
-  if (!existsSync13(packageJsonPath) || readFileSync12(packageJsonPath, "utf8") !== expectedPackageJson) {
-    writeFileAtomically(packageJsonPath, expectedPackageJson);
-    packageJsonChanged = true;
-  }
-  const manifestOutdated = !existingManifest || existingManifest.version !== version || existingManifest.cliPath !== cliPath || existingManifest.serverPath !== serverPath;
-  const manifestChanged = cliChanged || serverChanged || packageJsonChanged || manifestOutdated;
-  if (manifestChanged) {
-    const manifest = {
-      version,
-      installedAt: (options.now ?? /* @__PURE__ */ new Date()).toISOString(),
-      cliPath,
-      serverPath
-    };
-    writeFileAtomically(manifestPath, `${JSON.stringify(manifest, null, 2)}
-`);
-  }
-  let action = "unchanged";
-  if (!hadAllTargets) {
-    action = "installed";
-  } else if (manifestChanged) {
-    action = "updated";
-  }
-  return {
-    action,
-    binDir,
-    cliPath,
-    serverPath,
-    manifestPath,
-    version
-  };
-}
-
 // packages/cli/src/index.ts
 var usage = `Usage: locus-memory <command>
 
 Commands:
-  locus-memory mcp              Start the Locus MCP server
-  locus-memory context          Print zero-call session/prompt memory brief
-  locus-memory sync-runtime     Install local runtime binaries to ~/.locus/bin
-  locus-memory install codex    Install Locus for Codex
-  locus-memory doctor codex     Diagnose the Codex installation
-  locus-memory hook codex       Run a Codex lifecycle hook
-  locus-memory uninstall codex  Remove Locus from Codex config
+  locus-memory mcp                    Start the Locus MCP server
+  locus-memory context                Print zero-call session/prompt memory brief
+  locus-memory sync-runtime           Install local runtime binaries to ~/.locus/bin
+  locus-memory install antigravity    Install the native Antigravity Desktop plugin
+  locus-memory doctor antigravity     Diagnose the Antigravity Desktop plugin
+  locus-memory hook antigravity       Run an Antigravity lifecycle hook
+  locus-memory uninstall antigravity  Remove the Antigravity Desktop plugin
+  locus-memory install codex          Install Locus for Codex
+  locus-memory doctor codex           Diagnose the Codex installation
+  locus-memory hook codex             Run a Codex lifecycle hook
+  locus-memory uninstall codex        Remove Locus from Codex config
 
 Options:
   --help, help     Show this help
@@ -4740,6 +5830,22 @@ Outputs a bounded zero-call project memory brief for session start or prompt rec
 var syncRuntimeUsage = `Usage: locus-memory sync-runtime [--json]
 
 Installs local cli.js and server.js runtime binaries into ~/.locus/bin (or $LOCUS_HOME/bin).`;
+var installAntigravityUsage = `Usage: locus-memory install antigravity [--dry-run] [--yes] [--target <dir>] [--capture <metadata|redacted|full>]
+
+Installs the native Antigravity Desktop Locus plugin bundle with local runtime and lifecycle hooks.
+
+Options:
+  --dry-run        Show planned changes without writing files
+  --yes            Non-interactive install confirmation
+  --target <dir>   Custom destination plugin directory
+  --capture <lvl>  Capture mode for MCP/hooks: metadata | redacted | full (default: redacted)`;
+var uninstallAntigravityUsage = `Usage: locus-memory uninstall antigravity --yes [--target <dir>]
+
+Removes the Locus Antigravity Desktop plugin directory while preserving local memory databases.
+
+Options:
+  --yes            Confirm removal
+  --target <dir>   Custom plugin directory to remove`;
 var installCodexUsage = `Usage: locus-memory install codex [--dry-run] [--with-hooks]
 
 Installs Locus into Codex by configuring the package-owned MCP server and skill.
@@ -4766,6 +5872,54 @@ function readFlagValue(args, flagName) {
     }
   }
   return void 0;
+}
+function parseCaptureLevelFlag(raw) {
+  if (raw === void 0) {
+    return void 0;
+  }
+  if (raw === "metadata" || raw === "redacted" || raw === "full") {
+    return raw;
+  }
+  return "invalid";
+}
+async function readStdinWhenPiped(maxBytes = 512 * 1024, timeoutMs = 1500) {
+  if (process.stdin.isTTY || process.stdin.readableEnded) {
+    return "";
+  }
+  return new Promise((resolveStdin) => {
+    const chunks = [];
+    let totalBytes = 0;
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      process.stdin.off("data", onData);
+      process.stdin.off("end", finish);
+      process.stdin.off("close", finish);
+      process.stdin.off("error", finish);
+      resolveStdin(chunks.length > 0 ? Buffer.concat(chunks).toString("utf8") : "");
+    };
+    const timer = setTimeout(finish, timeoutMs);
+    timer.unref?.();
+    const onData = (chunk) => {
+      const buf = typeof chunk === "string" ? Buffer.from(chunk, "utf8") : chunk;
+      const remaining = maxBytes - totalBytes;
+      if (remaining <= 0) {
+        finish();
+        return;
+      }
+      chunks.push(buf.length > remaining ? buf.subarray(0, remaining) : buf);
+      totalBytes += Math.min(buf.length, remaining);
+      if (totalBytes >= maxBytes) {
+        finish();
+      }
+    };
+    process.stdin.on("data", onData);
+    process.stdin.once("end", finish);
+    process.stdin.once("close", finish);
+    process.stdin.once("error", finish);
+  });
 }
 async function runCli(argv = process.argv.slice(2), io = {
   stdout: (message) => console.log(message),
@@ -4835,6 +5989,82 @@ async function runCli(argv = process.argv.slice(2), io = {
       io.stderr(error instanceof Error ? error.message : String(error));
       return 1;
     }
+  }
+  if (command === "hook" && subcommand === "antigravity") {
+    const event = argv[2];
+    if (!isAntigravityHookEvent(event)) {
+      io.stderr(`Unsupported Antigravity hook event: ${event ?? "(missing)"}`);
+      return 1;
+    }
+    const stdin = options.stdin ?? await readStdinWhenPiped();
+    const result = await runAntigravityHook({
+      event,
+      stdin,
+      env: options.env
+    });
+    if (result.stdout) {
+      io.stdout(result.stdout);
+    }
+    if (result.stderr) {
+      io.stderr(result.stderr);
+    }
+    return result.exitCode;
+  }
+  if (command === "install" && subcommand === "antigravity" && argv.includes("--help")) {
+    io.stdout(installAntigravityUsage);
+    return 0;
+  }
+  if (command === "install" && subcommand === "antigravity") {
+    const captureLevel = parseCaptureLevelFlag(readFlagValue(argv, "--capture"));
+    if (captureLevel === "invalid") {
+      io.stderr("Option --capture must be one of: metadata, redacted, full.");
+      return 1;
+    }
+    const targetDir = readFlagValue(argv, "--target");
+    if (argv.includes("--dry-run")) {
+      io.stdout(
+        formatInstallAntigravityDryRun({
+          env: options.env,
+          startDir: options.startDir,
+          targetDir,
+          captureLevel
+        })
+      );
+      return 0;
+    }
+    const result = runInstallAntigravity({
+      env: options.env,
+      startDir: options.startDir,
+      sourceDistDir: options.sourceDistDir,
+      targetDir,
+      captureLevel
+    });
+    io.stdout(result.output);
+    return result.exitCode;
+  }
+  if (command === "doctor" && subcommand === "antigravity") {
+    const result = formatDoctorAntigravity({
+      env: options.env,
+      targetDir: readFlagValue(argv, "--target")
+    });
+    io.stdout(result.output);
+    return result.exitCode;
+  }
+  if (command === "uninstall" && subcommand === "antigravity" && argv.includes("--help")) {
+    io.stdout(uninstallAntigravityUsage);
+    return 0;
+  }
+  if (command === "uninstall" && subcommand === "antigravity" && argv.includes("--yes")) {
+    const result = runUninstallAntigravity({
+      env: options.env,
+      targetDir: readFlagValue(argv, "--target")
+    });
+    io.stdout(result.output);
+    return result.exitCode;
+  }
+  if (command === "uninstall" && subcommand === "antigravity") {
+    io.stderr(uninstallAntigravityUsage);
+    return 1;
   }
   if (command === "hook" && subcommand === "codex") {
     const result = runCodexHook({
@@ -4907,8 +6137,24 @@ async function runCli(argv = process.argv.slice(2), io = {
   io.stderr(usage);
   return 1;
 }
-var isDirectRun = process.argv[1] === fileURLToPath7(import.meta.url);
-if (isDirectRun) {
+function isDirectEntrypoint() {
+  const entry = process.argv[1];
+  if (!entry) {
+    return false;
+  }
+  const selfPath = resolve8(fileURLToPath7(import.meta.url));
+  const entryPath = resolve8(entry);
+  const normalizeCmp = (value) => process.platform === "win32" ? value.toLowerCase() : value;
+  if (normalizeCmp(entryPath) === normalizeCmp(selfPath)) {
+    return true;
+  }
+  try {
+    return normalizeCmp(realpathSync(entryPath)) === normalizeCmp(realpathSync(selfPath));
+  } catch {
+    return false;
+  }
+}
+if (isDirectEntrypoint()) {
   const exitCode = await runCli();
   process.exitCode = exitCode;
 }

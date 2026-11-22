@@ -44,6 +44,7 @@ export interface PromptRecallBriefOptions {
 interface DurableSummaryRow {
   id: number;
   summary: string;
+  source_event_id: string | null;
 }
 
 interface SemanticSummaryRow {
@@ -265,7 +266,7 @@ export function buildSessionStartBrief(
   });
 
   const decisions = deps.db.all<DurableSummaryRow>(
-    `SELECT id, summary
+    `SELECT id, summary, source_event_id
      FROM durable_memories
      WHERE memory_type = 'decision' AND state = 'active' AND ${scope.clause}
      ORDER BY updated_at DESC, id DESC
@@ -286,7 +287,7 @@ export function buildSessionStartBrief(
       : [];
 
   const constraintsAndPrefs = deps.db.all<DurableSummaryRow>(
-    `SELECT id, summary
+    `SELECT id, summary, source_event_id
      FROM durable_memories
      WHERE memory_type IN ('constraint', 'preference', 'style') AND state = 'active' AND ${scope.clause}
      ORDER BY updated_at DESC, id DESC
@@ -295,7 +296,7 @@ export function buildSessionStartBrief(
   );
 
   const nextSteps = deps.db.all<DurableSummaryRow>(
-    `SELECT id, summary
+    `SELECT id, summary, source_event_id
      FROM durable_memories
      WHERE memory_type = 'next_step' AND state = 'active' AND ${scope.clause}
      ORDER BY updated_at DESC, id DESC
@@ -346,6 +347,13 @@ export function buildSessionStartBrief(
   appendLineWithinBudget(lines, `Project: ${projectParts.join(' | ')}`, maxTokens);
 
   const includedDurableIds: number[] = [];
+  const includedEventIds = new Set<string>();
+  const recordDurable = (item: DurableSummaryRow) => {
+    includedDurableIds.push(item.id);
+    if (item.source_event_id) {
+      includedEventIds.add(item.source_event_id);
+    }
+  };
 
   if (decisions.length > 0) {
     appendSectionItems(
@@ -354,7 +362,7 @@ export function buildSessionStartBrief(
       decisions,
       maxTokens,
       (item) => item.summary,
-      (item) => includedDurableIds.push(item.id),
+      recordDurable,
     );
   } else if (semanticFallback.length > 0) {
     appendSectionItems(lines, 'Decisions:', semanticFallback, maxTokens, (item) => item.content);
@@ -367,7 +375,7 @@ export function buildSessionStartBrief(
       constraintsAndPrefs,
       maxTokens,
       (item) => item.summary,
-      (item) => includedDurableIds.push(item.id),
+      recordDurable,
     );
   }
 
@@ -378,7 +386,7 @@ export function buildSessionStartBrief(
       nextSteps,
       maxTokens,
       (item) => item.summary,
-      (item) => includedDurableIds.push(item.id),
+      recordDurable,
     );
   }
 
@@ -394,7 +402,7 @@ export function buildSessionStartBrief(
     text,
     estimatedTokens: estimateTokens(text),
     includedDurableIds,
-    includedEventIds: [],
+    includedEventIds: [...includedEventIds],
   };
 }
 
@@ -415,6 +423,22 @@ function isRelevantCandidate(candidate: MemoryRecallCandidate, hasResolvedRange:
     hasResolvedRange ||
     (candidate.sourceKind === 'durable' && candidate.confidence === 'high')
   );
+}
+
+function loadDurableSourceEventIds(db: DatabaseAdapter, durableIds: Iterable<number>): string[] {
+  const ids = [...new Set(durableIds)].filter((id) => Number.isInteger(id) && id > 0);
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const placeholders = ids.map(() => '?').join(', ');
+  const rows = db.all<{ source_event_id: string | null }>(
+    `SELECT source_event_id FROM durable_memories WHERE id IN (${placeholders}) AND source_event_id IS NOT NULL`,
+    ids,
+  );
+  return rows
+    .map((row) => row.source_event_id)
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
 }
 
 function isAlreadyInjected(
@@ -468,6 +492,9 @@ export function buildPromptRecallBrief(
 
   const seenDurable = new Set<number>(options?.alreadyInjectedDurableIds ?? []);
   const seenEvents = new Set<string>(options?.alreadyInjectedEventIds ?? []);
+  for (const eventId of loadDurableSourceEventIds(deps.db, seenDurable)) {
+    seenEvents.add(eventId);
+  }
   const freshCandidates = confidentAndRelevant.filter(
     (candidate) => !isAlreadyInjected(candidate, seenDurable, seenEvents),
   );
@@ -503,6 +530,10 @@ export function buildPromptRecallBrief(
 
   if (added === 0) {
     return emptyBrief('prompt_recall', 'empty_memory');
+  }
+
+  for (const eventId of loadDurableSourceEventIds(deps.db, includedDurableIds)) {
+    includedEventIds.add(eventId);
   }
 
   const text = lines.join('\n');

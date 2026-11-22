@@ -329,5 +329,75 @@ describe('Zero-Call Context Brief Engine (auto-brief)', () => {
       expect(capped.estimatedTokens).toBeLessThanOrEqual(70);
       expect(capped.includedDurableIds).toHaveLength(1);
     });
+
+    it('deduplicates originating conversation events via source_event_id across session-start and prompt recall', () => {
+      const scopedProject = normalizeProjectRootForScope(projectDir);
+      const now = Date.parse('2026-06-20T12:00:00.000Z');
+      const sourceEventId = 'evt-origin-redis-1';
+
+      db.run(
+        `INSERT INTO conversation_events
+         (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          sourceEventId,
+          'antigravity',
+          'antigravity:conv:step:0',
+          scopedProject,
+          'conv-1',
+          now - 1000,
+          'ai_response',
+          JSON.stringify({
+            response: 'Decision: use Redis Cluster for distributed rate limiting.',
+            capture_policy: 'bounded_redacted',
+          }),
+          'high',
+          '["redis"]',
+          now - 1000,
+        ],
+      );
+
+      const dec = store.insert({
+        topicKey: 'general',
+        memoryType: 'decision',
+        summary: 'use Redis Cluster for distributed rate limiting.',
+        evidence: { confidence: 0.9 },
+        projectRoot: scopedProject,
+        sourceEventId,
+        source: 'antigravity',
+      });
+
+      const start = buildSessionStartBrief({
+        db,
+        projectRoot: projectDir,
+        now,
+        readGitState: () => ({ gitBranch: 'main' }),
+      });
+
+      expect(start.injected).toBe(true);
+      expect(start.includedDurableIds).toContain(dec.id);
+      expect(start.includedEventIds).toContain(sourceEventId);
+
+      const followUpWithBoth = buildPromptRecallBrief(
+        'Why did we pick Redis Cluster for rate limiting?',
+        { db, projectRoot: projectDir, now },
+        {
+          alreadyInjectedDurableIds: start.includedDurableIds,
+          alreadyInjectedEventIds: start.includedEventIds,
+        },
+      );
+      expect(followUpWithBoth.injected).toBe(false);
+      expect(followUpWithBoth.reason).toBe('already_injected');
+
+      const followUpDurableOnly = buildPromptRecallBrief(
+        'Why did we pick Redis Cluster for rate limiting?',
+        { db, projectRoot: projectDir, now },
+        {
+          alreadyInjectedDurableIds: start.includedDurableIds,
+        },
+      );
+      expect(followUpDurableOnly.injected).toBe(false);
+      expect(followUpDurableOnly.reason).toBe('already_injected');
+    });
   });
 });

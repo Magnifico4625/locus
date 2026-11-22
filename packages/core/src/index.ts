@@ -18,6 +18,8 @@ export { resolveProjectRoot } from './project-root.js';
 export type { RecallEngineDeps, RecallEngineOptions } from './recall/index.js';
 export { runRecallEngine } from './recall/index.js';
 export { normalizeProjectRootForScope } from './recall/project-scope.js';
+export { isDenylisted } from './security/file-ignore.js';
+export { redact } from './security/redact.js';
 export type { StorageInit } from './storage/init.js';
 export { initStorage } from './storage/init.js';
 export { runMigrations } from './storage/migrations.js';

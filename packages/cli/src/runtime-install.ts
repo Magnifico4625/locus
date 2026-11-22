@@ -38,11 +38,26 @@ function resolveDefaultSourceDistDir(startDir?: string): string {
   return join(findPackageRoot(startDir), 'dist');
 }
 
-function writeFileAtomically(targetPath: string, content: Buffer | string): void {
+export function writeFileAtomically(targetPath: string, content: Buffer | string): void {
   mkdirSync(dirname(targetPath), { recursive: true });
   const tempPath = `${targetPath}.locus-tmp`;
   writeFileSync(tempPath, content);
   renameSync(tempPath, targetPath);
+}
+
+export function syncTextAtomically(targetPath: string, content: string): boolean {
+  if (existsSync(targetPath)) {
+    try {
+      if (readFileSync(targetPath, 'utf8') === content) {
+        return false;
+      }
+    } catch {
+      // Rewrite if existing target cannot be read
+    }
+  }
+
+  writeFileAtomically(targetPath, content);
+  return true;
 }
 
 function syncFileAtomically(sourcePath: string, targetPath: string): boolean {
@@ -74,7 +89,8 @@ function readExistingManifest(manifestPath: string): Partial<RuntimeManifest> | 
   }
 }
 
-export function installLocalCliRuntime(
+export function installRuntimeFiles(
+  targetDir: string,
   options: InstallLocalCliRuntimeOptions = {},
 ): InstallLocalCliRuntimeResult {
   const sourceDistDir = options.sourceDistDir ?? resolveDefaultSourceDistDir(options.startDir);
@@ -87,11 +103,10 @@ export function installLocalCliRuntime(
     );
   }
 
-  const binDir = resolveRuntimeBinDir(options.env);
-  const cliPath = join(binDir, 'cli.js');
-  const serverPath = join(binDir, 'server.js');
-  const manifestPath = join(binDir, 'runtime.json');
-  const packageJsonPath = join(binDir, 'package.json');
+  const cliPath = join(targetDir, 'cli.js');
+  const serverPath = join(targetDir, 'server.js');
+  const manifestPath = join(targetDir, 'runtime.json');
+  const packageJsonPath = join(targetDir, 'package.json');
   const version = resolvePackageVersion(options.startDir);
 
   const hadAllTargets =
@@ -101,7 +116,7 @@ export function installLocalCliRuntime(
     existsSync(packageJsonPath);
   const existingManifest = readExistingManifest(manifestPath);
 
-  mkdirSync(binDir, { recursive: true });
+  mkdirSync(targetDir, { recursive: true });
 
   const cliChanged = syncFileAtomically(sourceCliPath, cliPath);
   const serverChanged = syncFileAtomically(sourceServerPath, serverPath);
@@ -110,14 +125,7 @@ export function installLocalCliRuntime(
     null,
     2,
   )}\n`;
-  let packageJsonChanged = false;
-  if (
-    !existsSync(packageJsonPath) ||
-    readFileSync(packageJsonPath, 'utf8') !== expectedPackageJson
-  ) {
-    writeFileAtomically(packageJsonPath, expectedPackageJson);
-    packageJsonChanged = true;
-  }
+  const packageJsonChanged = syncTextAtomically(packageJsonPath, expectedPackageJson);
   const manifestOutdated =
     !existingManifest ||
     existingManifest.version !== version ||
@@ -144,10 +152,16 @@ export function installLocalCliRuntime(
 
   return {
     action,
-    binDir,
+    binDir: targetDir,
     cliPath,
     serverPath,
     manifestPath,
     version,
   };
+}
+
+export function installLocalCliRuntime(
+  options: InstallLocalCliRuntimeOptions = {},
+): InstallLocalCliRuntimeResult {
+  return installRuntimeFiles(resolveRuntimeBinDir(options.env), options);
 }
