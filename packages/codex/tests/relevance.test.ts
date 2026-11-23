@@ -96,4 +96,22 @@ describe('classifyCodexRelevance', () => {
       reason: 'next_step',
     });
   });
+
+  it('keeps Russian decision confirmations using используем / выбираем / решение / зафиксировал', () => {
+    expect(
+      classifyCodexRelevance(
+        'Подтверждаю: в CODEX-LIVE-V4 используем NATS JetStream для очереди задач.',
+        'assistant',
+      ),
+    ).toEqual({
+      keep: true,
+      reason: 'decision',
+    });
+    expect(
+      classifyCodexRelevance('Решение: выбираем NATS JetStream для очереди задач.', 'user'),
+    ).toEqual({
+      keep: true,
+      reason: 'decision',
+    });
+  });
 });

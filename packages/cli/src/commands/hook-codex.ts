@@ -49,6 +49,8 @@ const FILE_ARG_KEYS = ['path', 'file_path', 'target_file', 'TargetFile', 'Path',
 const CAPTURED_TOOLS = new Set([
   'bash',
   'shell',
+  'shell_command',
+  'exec',
   'exec_command',
   'apply_patch',
   'write',
@@ -292,6 +294,8 @@ async function handleUserPromptSubmit(context: {
   input: Record<string, unknown>;
   projectRoot: string;
   sessionId: string;
+  captureLevel: CaptureLevel;
+  importDisabled: boolean;
   nowMs: number;
   env: Record<string, string | undefined>;
 }): Promise<CodexHookResult> {
@@ -318,6 +322,37 @@ async function handleUserPromptSubmit(context: {
       context.env,
     );
     return { exitCode: 0, stdout: failOpenStdout('user-prompt-submit') };
+  }
+
+  if (!context.importDisabled && context.captureLevel !== 'metadata') {
+    try {
+      const candidateEvent = toInboxEvent(
+        {
+          kind: 'user_prompt',
+          timestamp: context.nowMs,
+          sessionId: context.sessionId,
+          projectRoot: context.projectRoot,
+          sourceFile: 'hook:user-prompt-submit',
+          sourceLine: 1,
+          payload: { prompt },
+        },
+        context.captureLevel,
+      );
+      const capturedPrompt =
+        typeof candidateEvent?.payload.prompt === 'string' ? candidateEvent.payload.prompt : '';
+      if (candidateEvent && capturedPrompt.length > 0) {
+        const sourceEventId = `codex:${context.sessionId}:prompt:${promptHash}`;
+        const promptEvent: InboxEvent = {
+          ...candidateEvent,
+          event_id: deterministicEventId(sourceEventId),
+          source_event_id: sourceEventId,
+          kind: 'user_prompt',
+        };
+        writeInboxEvent(resolveInboxDir(context.projectRoot), promptEvent);
+      }
+    } catch {
+      // Best-effort UserPromptSubmit inbox write
+    }
   }
 
   const { db } = await initStorage(resolveDbPath(context.projectRoot));
@@ -589,6 +624,8 @@ export async function runCodexHook(options: RunCodexHookOptions): Promise<CodexH
           input,
           projectRoot,
           sessionId,
+          captureLevel,
+          importDisabled,
           nowMs,
           env: effectiveEnv,
         });

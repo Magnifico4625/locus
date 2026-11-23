@@ -84,7 +84,7 @@ const EXTRACTOR_PATTERNS: ExtractorPattern[] = [
     matchedPattern: 'decision-prefix',
     confidence: 0.9,
     reason: 'accepted_decision',
-    regex: /(?:decision:|decided to|we decided|решили|мы решили)/iu,
+    regex: /(?:decision:|decided to|we decided|решение:|решили|мы решили|выбрали|выбираем)/iu,
     clean: (match, normalized) =>
       normalized
         .slice((match.index ?? 0) + match[0].length)

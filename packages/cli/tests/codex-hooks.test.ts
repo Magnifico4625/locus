@@ -599,4 +599,137 @@ describe('codex hook config generation', () => {
       }
     }
   });
+
+  it('captures UserPromptSubmit decision prompts under redacted capture without rollout files and skips metadata/off', async () => {
+    const { projectDir, env } = createSandbox();
+    const canonicalRoot = resolveProjectRoot(projectDir).root;
+
+    const promptIo = createIo();
+    expect(
+      await runCli(['hook', 'codex', 'user-prompt-submit'], promptIo.io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'sess-prompt-capture-1',
+          cwd: projectDir,
+          prompt: 'Decision: CODEX-LIVE-V4 используем NATS JetStream для очереди задач.',
+        }),
+      }),
+    ).toBe(0);
+
+    const stopIo = createIo();
+    expect(
+      await runCli(['hook', 'codex', 'stop'], stopIo.io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'Stop',
+          session_id: 'sess-prompt-capture-1',
+          turn_id: 'turn-prompt-capture-1',
+          cwd: projectDir,
+        }),
+      }),
+    ).toBe(0);
+
+    const { db } = await initStorage(resolveDbPath(canonicalRoot));
+    try {
+      const durable = db.all<{ summary: string }>(
+        "SELECT summary FROM durable_memories WHERE state = 'active'",
+      );
+      expect(durable.some((row) => row.summary.includes('NATS JetStream'))).toBe(true);
+    } finally {
+      db.close();
+    }
+
+    for (const captureMode of ['metadata', 'off'] as const) {
+      const restricted = createSandbox();
+      const restrictedRoot = resolveProjectRoot(restricted.projectDir).root;
+      const restrictedEnv = {
+        ...restricted.env,
+        LOCUS_CODEX_CAPTURE: captureMode,
+        LOCUS_CAPTURE_LEVEL: captureMode,
+      };
+
+      expect(
+        await runCli(['hook', 'codex', 'user-prompt-submit'], createIo().io, {
+          env: restrictedEnv,
+          stdin: JSON.stringify({
+            hook_event_name: 'UserPromptSubmit',
+            session_id: `sess-prompt-${captureMode}`,
+            cwd: restricted.projectDir,
+            prompt: 'Decision: secret prompt marker 774411 must not be stored.',
+          }),
+        }),
+      ).toBe(0);
+
+      expect(
+        await runCli(['hook', 'codex', 'stop'], createIo().io, {
+          env: restrictedEnv,
+          stdin: JSON.stringify({
+            hook_event_name: 'Stop',
+            session_id: `sess-prompt-${captureMode}`,
+            turn_id: `turn-${captureMode}`,
+            cwd: restricted.projectDir,
+          }),
+        }),
+      ).toBe(0);
+
+      const restrictedDb = (await initStorage(resolveDbPath(restrictedRoot))).db;
+      try {
+        const rows = restrictedDb.all<{ payload_json: string }>(
+          'SELECT payload_json FROM conversation_events',
+        );
+        expect(rows.some((row) => row.payload_json.includes('774411'))).toBe(false);
+        const durable = restrictedDb.all<{ summary: string }>(
+          'SELECT summary FROM durable_memories',
+        );
+        expect(durable.some((row) => row.summary.includes('774411'))).toBe(false);
+      } finally {
+        restrictedDb.close();
+      }
+    }
+  });
+
+  it('captures Codex 0.171 exec tool in PostToolUse with silent empty stdout', async () => {
+    const { projectDir, env } = createSandbox();
+    const canonicalRoot = resolveProjectRoot(projectDir).root;
+    const postIo = createIo();
+
+    const exitCode = await runCli(['hook', 'codex', 'post-tool-use'], postIo.io, {
+      env,
+      stdin: JSON.stringify({
+        hook_event_name: 'PostToolUse',
+        session_id: 'sess-exec-1',
+        call_id: 'call_exec_0171',
+        cwd: projectDir,
+        tool_name: 'exec',
+        tool_input: { cmd: 'Write-Output LOCUS-POST-TOOL-PROBE' },
+      }),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(postIo.stderr).toEqual([]);
+    expect(postIo.stdout).toEqual([]);
+
+    expect(
+      await runCli(['hook', 'codex', 'stop'], createIo().io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'Stop',
+          session_id: 'sess-exec-1',
+          turn_id: 'turn-exec-1',
+          cwd: projectDir,
+        }),
+      }),
+    ).toBe(0);
+
+    const { db } = await initStorage(resolveDbPath(canonicalRoot));
+    try {
+      const toolRows = db.all<{ payload_json: string }>(
+        "SELECT payload_json FROM conversation_events WHERE kind = 'tool_use'",
+      );
+      expect(toolRows.some((row) => row.payload_json.includes('"tool":"exec"'))).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
 });

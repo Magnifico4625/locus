@@ -106,6 +106,10 @@ const DECISION_PATTERNS = [
   /решили/i,
   /выбрали/i,
   /использовать/i,
+  /решени[еяюи]/iu,
+  /выбира[ею]м/iu,
+  /использу[ею]м/iu,
+  /зафиксировал/iu,
 ];
 
 export function classifyCodexRelevance(text: string, role: CodexSpeakerRole): CodexRelevanceResult {

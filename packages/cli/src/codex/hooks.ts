@@ -70,7 +70,8 @@ const hookEvents: ReadonlyArray<{
   {
     configEvent: 'PostToolUse',
     commandEvent: 'post-tool-use',
-    matcher: 'Bash|Write|Edit|apply_patch|shell|exec_command|run_terminal_command',
+    matcher:
+      'Bash|Write|Edit|apply_patch|shell|shell_command|exec|exec_command|run_terminal_command',
     statusMessage: 'Recording Locus tool activity',
   },
   {

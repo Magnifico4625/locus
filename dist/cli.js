@@ -2726,7 +2726,7 @@ var EXTRACTOR_PATTERNS = [
     matchedPattern: "decision-prefix",
     confidence: 0.9,
     reason: "accepted_decision",
-    regex: /(?:decision:|decided to|we decided|решили|мы решили)/iu,
+    regex: /(?:decision:|decided to|we decided|решение:|решили|мы решили|выбрали|выбираем)/iu,
     clean: (match, normalized) => normalized.slice((match.index ?? 0) + match[0].length).replace(/^[:\s-]+/, "").trim()
   },
   {
@@ -4050,7 +4050,7 @@ var hookEvents = [
   {
     configEvent: "PostToolUse",
     commandEvent: "post-tool-use",
-    matcher: "Bash|Write|Edit|apply_patch|shell|exec_command|run_terminal_command",
+    matcher: "Bash|Write|Edit|apply_patch|shell|shell_command|exec|exec_command|run_terminal_command",
     statusMessage: "Recording Locus tool activity"
   },
   {
@@ -5159,7 +5159,11 @@ var DECISION_PATTERNS = [
   /\bstrategy\b/i,
   /решили/i,
   /выбрали/i,
-  /использовать/i
+  /использовать/i,
+  /решени[еяюи]/iu,
+  /выбира[ею]м/iu,
+  /использу[ею]м/iu,
+  /зафиксировал/iu
 ];
 function classifyCodexRelevance(text, role) {
   const normalized = text.trim();
@@ -5756,6 +5760,41 @@ function normalizeEventMessage(record, sessionId, projectRoot) {
       })
     });
   }
+  if (subtype === "item_completed") {
+    const item = recordObject(event.item);
+    const itemType = stringValue2(item?.type);
+    if (itemType === "UserMessage") {
+      const prompt = extractTextContent(item?.content).trim();
+      if (prompt.length === 0) {
+        return void 0;
+      }
+      return createEvent(record, {
+        kind: "user_prompt",
+        sessionId,
+        projectRoot,
+        itemId: stringValue2(item?.id),
+        payload: { prompt }
+      });
+    }
+    if (itemType === "CommandExecution") {
+      const exitCode = numberValue(item?.exit_code);
+      const rawStatus = stringValue2(item?.status);
+      const status = rawStatus === "failed" || exitCode !== void 0 && exitCode !== 0 ? "error" : "success";
+      return createEvent(record, {
+        kind: "tool_use",
+        sessionId,
+        projectRoot,
+        itemId: stringValue2(item?.id),
+        payload: compactPayload3({
+          tool: "CommandExecution",
+          exitCode,
+          durationMs: durationMsValue(item?.duration),
+          status
+        })
+      });
+    }
+    return void 0;
+  }
   return void 0;
 }
 function normalizeResponseItem(record, sessionId, projectRoot, currentModel) {
@@ -5804,6 +5843,34 @@ function normalizeResponseItem(record, sessionId, projectRoot, currentModel) {
       })
     });
   }
+  if (itemType === "custom_tool_call") {
+    const callId = stringValue2(item.call_id);
+    return createEvent(record, {
+      kind: "tool_use",
+      sessionId,
+      projectRoot,
+      itemId: callId,
+      payload: compactPayload3({
+        tool: stringValue2(item.name) ?? "custom_tool_call",
+        callId,
+        arguments: stringValue2(item.input)
+      })
+    });
+  }
+  if (itemType === "custom_tool_call_output") {
+    const callId = stringValue2(item.call_id);
+    return createEvent(record, {
+      kind: "tool_use",
+      sessionId,
+      projectRoot,
+      itemId: callId,
+      payload: compactPayload3({
+        tool: "custom_tool_call_output",
+        callId,
+        output: extractTextContent(item.output)
+      })
+    });
+  }
   return void 0;
 }
 function createEvent(record, input) {
@@ -5833,7 +5900,7 @@ function extractTextContent(value) {
       return void 0;
     }
     const type = stringValue2(entry.type);
-    return type === void 0 || type === "output_text" || type === "text" ? text : void 0;
+    return type === void 0 || type === "output_text" || type === "input_text" || type === "text" ? text : void 0;
   }).filter((entry) => entry !== void 0).join("\n");
 }
 function timestampValue(value) {
@@ -6112,6 +6179,8 @@ var FILE_ARG_KEYS2 = ["path", "file_path", "target_file", "TargetFile", "Path", 
 var CAPTURED_TOOLS = /* @__PURE__ */ new Set([
   "bash",
   "shell",
+  "shell_command",
+  "exec",
   "exec_command",
   "apply_patch",
   "write",
@@ -6322,6 +6391,34 @@ async function handleUserPromptSubmit(context) {
     );
     return { exitCode: 0, stdout: failOpenStdout("user-prompt-submit") };
   }
+  if (!context.importDisabled && context.captureLevel !== "metadata") {
+    try {
+      const candidateEvent = toInboxEvent(
+        {
+          kind: "user_prompt",
+          timestamp: context.nowMs,
+          sessionId: context.sessionId,
+          projectRoot: context.projectRoot,
+          sourceFile: "hook:user-prompt-submit",
+          sourceLine: 1,
+          payload: { prompt }
+        },
+        context.captureLevel
+      );
+      const capturedPrompt = typeof candidateEvent?.payload.prompt === "string" ? candidateEvent.payload.prompt : "";
+      if (candidateEvent && capturedPrompt.length > 0) {
+        const sourceEventId = `codex:${context.sessionId}:prompt:${promptHash}`;
+        const promptEvent = {
+          ...candidateEvent,
+          event_id: deterministicEventId3(sourceEventId),
+          source_event_id: sourceEventId,
+          kind: "user_prompt"
+        };
+        writeInboxEvent(resolveInboxDir(context.projectRoot), promptEvent);
+      }
+    } catch {
+    }
+  }
   const { db } = await initStorage(resolveDbPath(context.projectRoot));
   try {
     const brief = buildPromptRecallBrief(
@@ -6523,6 +6620,8 @@ async function runCodexHook(options) {
           input,
           projectRoot,
           sessionId,
+          captureLevel,
+          importDisabled,
           nowMs,
           env: effectiveEnv
         });

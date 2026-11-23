@@ -294,4 +294,36 @@ describe('extractDurableCandidatesFromEvent', () => {
 
     expect(extractDurableCandidatesFromEvent(event)).toEqual([]);
   });
+
+  it('extracts decisions from Decision: and Russian Решение: / выбираем phrasings', () => {
+    const enEvent = makeConversationRow({
+      event_id: 'evt-decision-en-ru',
+      payload_json: JSON.stringify({
+        prompt: 'Decision: CODEX-LIVE-V4 используем NATS JetStream для очереди задач.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'decision',
+      }),
+    });
+    const ruEvent = makeConversationRow({
+      event_id: 'evt-decision-ru',
+      payload_json: JSON.stringify({
+        prompt: 'Решение: выбираем NATS JetStream для очереди задач.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'decision',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(enEvent)).toEqual([
+      expect.objectContaining({
+        memoryType: 'decision',
+        summary: 'CODEX-LIVE-V4 используем NATS JetStream для очереди задач.',
+      }),
+    ]);
+    expect(extractDurableCandidatesFromEvent(ruEvent)).toEqual([
+      expect.objectContaining({
+        memoryType: 'decision',
+        summary: 'выбираем NATS JetStream для очереди задач.',
+      }),
+    ]);
+  });
 });

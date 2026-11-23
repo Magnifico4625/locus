@@ -359,4 +359,158 @@ describe('normalizeCodexRecords', () => {
       },
     });
   });
+
+  it('normalizes Codex 0.171 item_completed UserMessage/CommandExecution and custom_tool_call records', () => {
+    const result = normalizeCodexRecords([
+      {
+        filePath: 'rollout-0171.jsonl',
+        line: 1,
+        raw: {
+          type: 'session_meta',
+          timestamp: '2026-11-23T13:30:59.000Z',
+          payload: {
+            id: '01a207f5-7e09-7131-95b1-dfb05a8e3d63',
+            session_id: '01a207f5-7e09-7131-95b1-dfb05a8e3d63',
+            cwd: 'C:\\Projects\\Codex171',
+          },
+        },
+      },
+      {
+        filePath: 'rollout-0171.jsonl',
+        line: 2,
+        raw: {
+          type: 'event_msg',
+          timestamp: '2026-11-23T13:31:00.000Z',
+          payload: {
+            type: 'item_completed',
+            item: {
+              type: 'UserMessage',
+              id: 'user-msg-1',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Decision: CODEX-LIVE-V4 используем NATS JetStream для очереди задач.',
+                },
+              ],
+            },
+          },
+        },
+      },
+      {
+        filePath: 'rollout-0171.jsonl',
+        line: 3,
+        raw: {
+          type: 'event_msg',
+          timestamp: '2026-11-23T13:31:01.000Z',
+          payload: {
+            type: 'item_completed',
+            item: {
+              type: 'AgentMessage',
+              id: 'agent-msg-1',
+              content: [{ type: 'Text', text: 'Duplicate agent event should be ignored.' }],
+            },
+          },
+        },
+      },
+      {
+        filePath: 'rollout-0171.jsonl',
+        line: 4,
+        raw: {
+          type: 'response_item',
+          timestamp: '2026-11-23T13:31:02.000Z',
+          payload: {
+            type: 'custom_tool_call',
+            call_id: 'call_exec_1',
+            name: 'exec',
+            input: 'Write-Output LOCUS-POST-TOOL-PROBE',
+          },
+        },
+      },
+      {
+        filePath: 'rollout-0171.jsonl',
+        line: 5,
+        raw: {
+          type: 'event_msg',
+          timestamp: '2026-11-23T13:31:03.000Z',
+          payload: {
+            type: 'item_completed',
+            item: {
+              type: 'CommandExecution',
+              id: 'exec-cmd-1',
+              status: 'failed',
+              exit_code: -1,
+              duration: { secs: 1, nanos: 250000000 },
+            },
+          },
+        },
+      },
+      {
+        filePath: 'rollout-0171.jsonl',
+        line: 6,
+        raw: {
+          type: 'response_item',
+          timestamp: '2026-11-23T13:31:04.000Z',
+          payload: {
+            type: 'custom_tool_call_output',
+            call_id: 'call_exec_1',
+            output: [{ type: 'input_text', text: 'Script failed' }],
+          },
+        },
+      },
+      {
+        filePath: 'rollout-0171.jsonl',
+        line: 7,
+        raw: {
+          type: 'response_item',
+          timestamp: '2026-11-23T13:31:05.000Z',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'output_text',
+                text: 'Подтверждаю: в CODEX-LIVE-V4 используем NATS JetStream для очереди задач.',
+              },
+            ],
+          },
+        },
+      },
+    ]);
+
+    expect(result.skipped).toBe(1);
+    expect(result.events.map((event) => event.kind)).toEqual([
+      'session_start',
+      'user_prompt',
+      'tool_use',
+      'tool_use',
+      'tool_use',
+      'ai_response',
+    ]);
+    expect(result.events[1]).toMatchObject({
+      kind: 'user_prompt',
+      itemId: 'user-msg-1',
+      payload: {
+        prompt: 'Decision: CODEX-LIVE-V4 используем NATS JetStream для очереди задач.',
+      },
+    });
+    expect(result.events[2]?.payload).toEqual({
+      tool: 'exec',
+      callId: 'call_exec_1',
+      arguments: 'Write-Output LOCUS-POST-TOOL-PROBE',
+    });
+    expect(result.events[3]?.payload).toEqual({
+      tool: 'CommandExecution',
+      exitCode: -1,
+      durationMs: 1250,
+      status: 'error',
+    });
+    expect(result.events[4]?.payload).toEqual({
+      tool: 'custom_tool_call_output',
+      callId: 'call_exec_1',
+      output: 'Script failed',
+    });
+    expect(result.events[5]?.payload).toEqual({
+      response: 'Подтверждаю: в CODEX-LIVE-V4 используем NATS JetStream для очереди задач.',
+    });
+  });
 });

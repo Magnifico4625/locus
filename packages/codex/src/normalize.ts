@@ -127,6 +127,46 @@ function normalizeEventMessage(
     });
   }
 
+  if (subtype === 'item_completed') {
+    const item = recordObject(event.item);
+    const itemType = stringValue(item?.type);
+
+    if (itemType === 'UserMessage') {
+      const prompt = extractTextContent(item?.content).trim();
+      if (prompt.length === 0) {
+        return undefined;
+      }
+      return createEvent(record, {
+        kind: 'user_prompt',
+        sessionId,
+        projectRoot,
+        itemId: stringValue(item?.id),
+        payload: { prompt },
+      });
+    }
+
+    if (itemType === 'CommandExecution') {
+      const exitCode = numberValue(item?.exit_code);
+      const rawStatus = stringValue(item?.status);
+      const status =
+        rawStatus === 'failed' || (exitCode !== undefined && exitCode !== 0) ? 'error' : 'success';
+      return createEvent(record, {
+        kind: 'tool_use',
+        sessionId,
+        projectRoot,
+        itemId: stringValue(item?.id),
+        payload: compactPayload({
+          tool: 'CommandExecution',
+          exitCode,
+          durationMs: durationMsValue(item?.duration),
+          status,
+        }),
+      });
+    }
+
+    return undefined;
+  }
+
   return undefined;
 }
 
@@ -186,6 +226,36 @@ function normalizeResponseItem(
     });
   }
 
+  if (itemType === 'custom_tool_call') {
+    const callId = stringValue(item.call_id);
+    return createEvent(record, {
+      kind: 'tool_use',
+      sessionId,
+      projectRoot,
+      itemId: callId,
+      payload: compactPayload({
+        tool: stringValue(item.name) ?? 'custom_tool_call',
+        callId,
+        arguments: stringValue(item.input),
+      }),
+    });
+  }
+
+  if (itemType === 'custom_tool_call_output') {
+    const callId = stringValue(item.call_id);
+    return createEvent(record, {
+      kind: 'tool_use',
+      sessionId,
+      projectRoot,
+      itemId: callId,
+      payload: compactPayload({
+        tool: 'custom_tool_call_output',
+        callId,
+        output: extractTextContent(item.output),
+      }),
+    });
+  }
+
   return undefined;
 }
 
@@ -226,7 +296,12 @@ function extractTextContent(value: unknown): string {
       }
 
       const type = stringValue(entry.type);
-      return type === undefined || type === 'output_text' || type === 'text' ? text : undefined;
+      return type === undefined ||
+        type === 'output_text' ||
+        type === 'input_text' ||
+        type === 'text'
+        ? text
+        : undefined;
     })
     .filter((entry): entry is string => entry !== undefined)
     .join('\n');
