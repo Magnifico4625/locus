@@ -19,6 +19,8 @@ export interface MarketplaceBundleOptions {
   rootDir?: string;
   version: string;
   platform?: NodeJS.Platform;
+  runtimeCliPath?: string;
+  bundleRuntime?: boolean;
 }
 
 export interface MarketplaceBundleResult {
@@ -26,7 +28,9 @@ export interface MarketplaceBundleResult {
   marketplacePath: string;
   pluginRoot: string;
   mcpPath: string;
+  hooksPath: string;
   skillPath: string;
+  runtimeDir?: string;
 }
 
 export function resolveCanonicalPluginSkillSourcePath(): string {
@@ -78,6 +82,7 @@ export function generateCodexMarketplaceBundle(
   const marketplacePath = join(marketplaceRoot, '.agents', 'plugins', 'marketplace.json');
   const manifestPath = join(pluginRoot, '.codex-plugin', 'plugin.json');
   const mcpPath = join(pluginRoot, '.mcp.json');
+  const hooksPath = join(pluginRoot, 'hooks.json');
   const skillPath = join(pluginRoot, 'skills', 'locus-memory', 'SKILL.md');
 
   rmSync(marketplaceRoot, { recursive: true, force: true });
@@ -85,9 +90,45 @@ export function generateCodexMarketplaceBundle(
   mkdirSync(dirname(manifestPath), { recursive: true });
   mkdirSync(dirname(skillPath), { recursive: true });
 
+  let bundledRuntimeDir: string | undefined;
+  let bundledCliPath = options.runtimeCliPath;
+  let bundledServerPath: string | undefined;
+
+  if (options.bundleRuntime) {
+    const distCli = join(rootDir, 'dist', 'cli.js');
+    const distServer = join(rootDir, 'dist', 'server.js');
+    if (!existsSync(distCli) || !existsSync(distServer)) {
+      throw new Error(
+        `Missing built runtime artifacts in ${join(rootDir, 'dist')} (expected cli.js and server.js).`,
+      );
+    }
+
+    bundledRuntimeDir = join(pluginRoot, 'runtime');
+    mkdirSync(bundledRuntimeDir, { recursive: true });
+    const targetCli = join(bundledRuntimeDir, 'cli.js');
+    const targetServer = join(bundledRuntimeDir, 'server.js');
+    copyFileSync(distCli, targetCli);
+    copyFileSync(distServer, targetServer);
+    writeJson(join(bundledRuntimeDir, 'package.json'), {
+      name: 'locus-local-runtime',
+      private: true,
+      type: 'module',
+    });
+    writeJson(join(bundledRuntimeDir, 'runtime.json'), {
+      version: options.version,
+      installedAt: new Date().toISOString(),
+      cliPath: targetCli,
+      serverPath: targetServer,
+    });
+
+    bundledCliPath = bundledCliPath ?? targetCli;
+    bundledServerPath = targetServer;
+  }
+
   writeJson(marketplacePath, buildMarketplaceJson());
   writeJson(manifestPath, buildPluginManifest(options.version));
-  writeJson(mcpPath, buildPublicMcpJson(options.version, options.platform));
+  writeJson(mcpPath, buildMcpJson(options.version, options.platform, bundledServerPath));
+  writeJson(hooksPath, buildHooksJson(options.version, options.platform, bundledCliPath));
   copyFileSync(resolveCanonicalPluginSkillSourcePath(), skillPath);
 
   return {
@@ -95,7 +136,9 @@ export function generateCodexMarketplaceBundle(
     marketplacePath,
     pluginRoot,
     mcpPath,
+    hooksPath,
     skillPath,
+    ...(bundledRuntimeDir ? { runtimeDir: bundledRuntimeDir } : {}),
   };
 }
 
@@ -145,6 +188,7 @@ function buildPluginManifest(version: string): unknown {
     keywords: ['codex', 'mcp', 'memory', 'productivity'],
     skills: './skills/',
     mcpServers: './.mcp.json',
+    hooks: './hooks.json',
     interface: {
       displayName: 'Locus Memory',
       shortDescription: 'Persistent memory and Codex recall for local projects.',
@@ -166,21 +210,118 @@ function buildPluginManifest(version: string): unknown {
   };
 }
 
-function buildPublicMcpJson(
+function buildMcpJson(
   version: string,
   platform: NodeJS.Platform = process.platform,
+  runtimeServerPath?: string,
 ): unknown {
+  const env = {
+    LOCUS_LOG: 'error',
+    LOCUS_CODEX_CAPTURE: 'redacted',
+    LOCUS_CAPTURE_LEVEL: 'redacted',
+  };
+
+  if (runtimeServerPath) {
+    return {
+      mcpServers: {
+        locus: {
+          command: 'node',
+          args: [runtimeServerPath],
+          env,
+        },
+      },
+    };
+  }
+
   return {
     mcpServers: {
       locus: {
         command: platform === 'win32' ? 'npx.cmd' : 'npx',
         args: ['-y', `locus-memory@${version}`, 'mcp'],
-        env: {
-          LOCUS_LOG: 'error',
-          LOCUS_CODEX_CAPTURE: 'redacted',
-          LOCUS_CAPTURE_LEVEL: 'redacted',
-        },
+        env,
       },
+    },
+  };
+}
+
+function quoteShellArg(value: string): string {
+  if (!/[ \t"]/u.test(value)) {
+    return value;
+  }
+  return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function buildHookCommand(
+  event: 'session-start' | 'user-prompt-submit' | 'post-tool-use' | 'stop',
+  version: string,
+  platform: NodeJS.Platform = process.platform,
+  runtimeCliPath?: string,
+): string {
+  if (runtimeCliPath) {
+    return ['node', runtimeCliPath, 'hook', 'codex', event].map(quoteShellArg).join(' ');
+  }
+
+  const npxCmd = platform === 'win32' ? 'npx.cmd' : 'npx';
+  return `${npxCmd} -y locus-memory@${version} hook codex ${event}`;
+}
+
+function buildHooksJson(
+  version: string,
+  platform: NodeJS.Platform = process.platform,
+  runtimeCliPath?: string,
+): unknown {
+  return {
+    hooks: {
+      SessionStart: [
+        {
+          matcher: 'startup|resume|clear',
+          hooks: [
+            {
+              type: 'command',
+              command: buildHookCommand('session-start', version, platform, runtimeCliPath),
+              timeout: 10,
+              statusMessage: 'Preparing Locus recall freshness',
+            },
+          ],
+        },
+      ],
+      UserPromptSubmit: [
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: buildHookCommand('user-prompt-submit', version, platform, runtimeCliPath),
+              timeout: 10,
+              statusMessage: 'Notifying Locus about a new prompt',
+            },
+          ],
+        },
+      ],
+      PostToolUse: [
+        {
+          matcher: 'Bash|Write|Edit|apply_patch|shell|exec_command|run_terminal_command',
+          hooks: [
+            {
+              type: 'command',
+              command: buildHookCommand('post-tool-use', version, platform, runtimeCliPath),
+              timeout: 10,
+              statusMessage: 'Recording Locus tool activity',
+            },
+          ],
+        },
+      ],
+      Stop: [
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: buildHookCommand('stop', version, platform, runtimeCliPath),
+              timeout: 10,
+              statusMessage: 'Notifying Locus that the turn stopped',
+            },
+          ],
+        },
+      ],
     },
   };
 }

@@ -406,13 +406,19 @@ describe('codex install model', () => {
     );
   });
 
-  it('installs Codex hooks only when explicitly requested', async () => {
+  it('installs Codex hooks only when explicitly requested and uses stable local runtime when built dist is available', async () => {
     const codexHome = makeTempDir();
+    const locusHome = makeTempDir();
+    const distDir = join(makeTempDir(), 'dist');
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(join(distDir, 'cli.js'), 'console.log("cli mock");\n', 'utf8');
+    writeFileSync(join(distDir, 'server.js'), 'console.log("server mock");\n', 'utf8');
     const { io, stdout } = createIo();
 
     const exitCode = await runCli(['install', 'codex', '--yes', '--with-hooks'], io, {
-      env: { CODEX_HOME: codexHome },
+      env: { CODEX_HOME: codexHome, LOCUS_HOME: locusHome },
       startDir: repoRoot,
+      sourceDistDir: distDir,
       platform: 'linux',
       commandRunner: async (_command, args) => {
         if (args.includes('add')) {
@@ -433,20 +439,32 @@ describe('codex install model', () => {
 
     expect(exitCode).toBe(0);
     expect(stdout.join('\n')).toContain('Hooks: created');
-    expect(readFileSync(join(codexHome, 'hooks.json'), 'utf8')).toContain(
-      'locus-memory@3.7.0 hook codex stop',
+    expect(stdout.join('\n')).toContain(`Local hook runtime: ${join(locusHome, 'bin')}`);
+    const parsedHooks = JSON.parse(readFileSync(join(codexHome, 'hooks.json'), 'utf8')) as {
+      hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    expect(parsedHooks.hooks.Stop[0]?.hooks[0]?.command).toBe(
+      `node ${join(locusHome, 'bin', 'cli.js')} hook codex stop`,
     );
+    expect(existsSync(join(locusHome, 'bin', 'cli.js'))).toBe(true);
+    expect(existsSync(join(locusHome, 'bin', 'server.js'))).toBe(true);
   });
 
   it('backs up existing hook config before overwrite', async () => {
     const codexHome = makeTempDir();
+    const locusHome = makeTempDir();
+    const distDir = join(makeTempDir(), 'dist');
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(join(distDir, 'cli.js'), 'console.log("cli mock");\n', 'utf8');
+    writeFileSync(join(distDir, 'server.js'), 'console.log("server mock");\n', 'utf8');
     mkdirSync(codexHome, { recursive: true });
     writeFileSync(join(codexHome, 'hooks.json'), '{"hooks":{"Custom":[]}}\n', 'utf8');
     const { io, stdout } = createIo();
 
     const exitCode = await runCli(['install', 'codex', '--yes', '--with-hooks'], io, {
-      env: { CODEX_HOME: codexHome },
+      env: { CODEX_HOME: codexHome, LOCUS_HOME: locusHome },
       startDir: repoRoot,
+      sourceDistDir: distDir,
       platform: 'linux',
       commandRunner: async (_command, args) => {
         if (args.includes('add')) {
@@ -468,25 +486,40 @@ describe('codex install model', () => {
     expect(exitCode).toBe(0);
     expect(stdout.join('\n')).toContain('Hooks: updated');
     expect(stdout.join('\n')).toContain('Hooks backup:');
-    expect(readFileSync(join(codexHome, 'hooks.json'), 'utf8')).toContain(
-      'locus-memory@3.7.0 hook codex stop',
+    const parsedHooks = JSON.parse(readFileSync(join(codexHome, 'hooks.json'), 'utf8')) as {
+      hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    expect(parsedHooks.hooks.Stop[0]?.hooks[0]?.command).toBe(
+      `node ${join(locusHome, 'bin', 'cli.js')} hook codex stop`,
     );
     expect(readdirSync(codexHome).some((file) => /^hooks\.json\..+\.bak$/u.test(file))).toBe(true);
   });
 
   it('leaves matching hook config unchanged on repeated install', async () => {
     const codexHome = makeTempDir();
+    const locusHome = makeTempDir();
+    const distDir = join(makeTempDir(), 'dist');
+    mkdirSync(distDir, { recursive: true });
+    writeFileSync(join(distDir, 'cli.js'), 'console.log("cli mock");\n', 'utf8');
+    writeFileSync(join(distDir, 'server.js'), 'console.log("server mock");\n', 'utf8');
     mkdirSync(codexHome, { recursive: true });
     writeFileSync(
       join(codexHome, 'hooks.json'),
-      renderCodexHooksJson(buildCodexHooksConfig({ version: '3.7.0', platform: 'linux' })),
+      renderCodexHooksJson(
+        buildCodexHooksConfig({
+          version: '3.7.0',
+          platform: 'linux',
+          runtimeCliPath: join(locusHome, 'bin', 'cli.js'),
+        }),
+      ),
       'utf8',
     );
     const { io, stdout } = createIo();
 
     const exitCode = await runCli(['install', 'codex', '--yes', '--with-hooks'], io, {
-      env: { CODEX_HOME: codexHome },
+      env: { CODEX_HOME: codexHome, LOCUS_HOME: locusHome },
       startDir: repoRoot,
+      sourceDistDir: distDir,
       platform: 'linux',
       commandRunner: async (_command, args) => {
         if (args.includes('add')) {

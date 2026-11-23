@@ -4048,13 +4048,19 @@ var hookEvents = [
     statusMessage: "Notifying Locus about a new prompt"
   },
   {
+    configEvent: "PostToolUse",
+    commandEvent: "post-tool-use",
+    matcher: "Bash|Write|Edit|apply_patch|shell|exec_command|run_terminal_command",
+    statusMessage: "Recording Locus tool activity"
+  },
+  {
     configEvent: "Stop",
     commandEvent: "stop",
     statusMessage: "Notifying Locus that the turn stopped"
   }
 ];
 function buildCodexHooksConfig(options) {
-  const timeout = options.timeoutSeconds ?? 3;
+  const timeout = options.timeoutSeconds ?? (options.runtimeCliPath ? 10 : 3);
   const hooks = {};
   for (const event of hookEvents) {
     hooks[event.configEvent] = [
@@ -4067,7 +4073,8 @@ function buildCodexHooksConfig(options) {
               event: event.commandEvent,
               version: options.version,
               platform: options.platform,
-              binaryPath: options.binaryPath
+              binaryPath: options.binaryPath,
+              runtimeCliPath: options.runtimeCliPath
             }),
             timeout,
             statusMessage: event.statusMessage
@@ -4079,6 +4086,9 @@ function buildCodexHooksConfig(options) {
   return { hooks };
 }
 function buildCodexHookCommand(options) {
+  if (options.runtimeCliPath) {
+    return ["node", options.runtimeCliPath, "hook", "codex", options.event].map(quoteShellArg).join(" ");
+  }
   const command = options.binaryPath ?? (options.platform === "win32" ? "npx.cmd" : "npx");
   const args = options.binaryPath ? ["hook", "codex", options.event] : [
     "-y",
@@ -4101,7 +4111,8 @@ function installCodexHooks(options) {
   const next = renderCodexHooksJson(
     buildCodexHooksConfig({
       version: options.version,
-      platform: options.platform
+      platform: options.platform,
+      runtimeCliPath: options.runtimeCliPath
     })
   );
   if (existsSync6(hooksPath)) {
@@ -4167,10 +4178,10 @@ function hasLocusHookCommand(text) {
   }
 }
 function isLocusHookCommand(command) {
-  if (typeof command !== "string") {
+  if (typeof command !== "string" || !/\bhook codex\b/u.test(command)) {
     return false;
   }
-  return /\blocus-memory(?:\.cmd)?(?:@[\w.-]+)?\b/u.test(command) && /\bhook codex\b/u.test(command);
+  return /\blocus-memory(?:\.cmd)?(?:@[\w.-]+)?\b/u.test(command) || /\bnode\b.*\bcli\.js\b/u.test(command);
 }
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
@@ -4225,7 +4236,7 @@ function codexSupportsHooks(featuresList) {
 // packages/cli/src/commands/hook-antigravity.ts
 import { createHash as createHash5 } from "node:crypto";
 
-// packages/cli/src/antigravity/session-state.ts
+// packages/cli/src/hook-session-state.ts
 import { createHash as createHash3 } from "node:crypto";
 import { existsSync as existsSync8, readdirSync as readdirSync3, readFileSync as readFileSync9, rmSync, statSync } from "node:fs";
 import { basename as basename2, dirname as dirname6, join as join11 } from "node:path";
@@ -4340,12 +4351,16 @@ function installLocalCliRuntime(options = {}) {
   return installRuntimeFiles(resolveRuntimeBinDir(options.env), options);
 }
 
-// packages/cli/src/antigravity/session-state.ts
+// packages/cli/src/hook-session-state.ts
 var MAX_TRACKED_IDS = 200;
 var STATE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
-function emptySessionState(conversationId) {
+function resolveHookSessionStatePath(client, sessionId, env = process.env) {
+  const hash = createHash3("sha256").update(sessionId).digest("hex").slice(0, 24);
+  return join11(resolveLocusHome(env), "state", client, `${hash}.json`);
+}
+function emptySessionState(sessionId) {
   return {
-    conversationId,
+    sessionId,
     sessionStartInjected: false,
     injectedDurableIds: [],
     injectedEventIds: [],
@@ -4376,15 +4391,15 @@ function hashPrompt(prompt) {
   const normalized = prompt.trim().replace(/\s+/g, " ").toLowerCase();
   return createHash3("sha256").update(normalized).digest("hex").slice(0, 32);
 }
-function readAntigravitySessionState(conversationId, env = process.env) {
-  const filePath = resolveAntigravitySessionStatePath(conversationId, env);
+function readHookSessionState(client, sessionId, env = process.env) {
+  const filePath = resolveHookSessionStatePath(client, sessionId, env);
   if (!existsSync8(filePath)) {
-    return emptySessionState(conversationId);
+    return emptySessionState(sessionId);
   }
   try {
     const parsed = JSON.parse(readFileSync9(filePath, "utf8"));
     return {
-      conversationId,
+      sessionId,
       sessionStartInjected: parsed.sessionStartInjected === true,
       lastPromptHash: typeof parsed.lastPromptHash === "string" && parsed.lastPromptHash.length > 0 ? parsed.lastPromptHash : void 0,
       injectedDurableIds: Array.isArray(parsed.injectedDurableIds) ? dedupeRecentNumbers(parsed.injectedDurableIds) : [],
@@ -4392,13 +4407,13 @@ function readAntigravitySessionState(conversationId, env = process.env) {
       updatedAt: typeof parsed.updatedAt === "number" && Number.isFinite(parsed.updatedAt) ? parsed.updatedAt : 0
     };
   } catch {
-    return emptySessionState(conversationId);
+    return emptySessionState(sessionId);
   }
 }
-function writeAntigravitySessionState(state, env = process.env) {
-  const filePath = resolveAntigravitySessionStatePath(state.conversationId, env);
+function writeHookSessionState(client, state, env = process.env) {
+  const filePath = resolveHookSessionStatePath(client, state.sessionId, env);
   const normalized = {
-    conversationId: state.conversationId,
+    sessionId: state.sessionId,
     sessionStartInjected: state.sessionStartInjected,
     ...state.lastPromptHash ? { lastPromptHash: state.lastPromptHash } : {},
     injectedDurableIds: dedupeRecentNumbers(state.injectedDurableIds),
@@ -4430,6 +4445,35 @@ function pruneStaleSessionStateFiles(stateDir, currentFileName, nowMs) {
     }
   } catch {
   }
+}
+
+// packages/cli/src/antigravity/session-state.ts
+function toAntigravityState(state) {
+  return {
+    conversationId: state.sessionId,
+    sessionStartInjected: state.sessionStartInjected,
+    ...state.lastPromptHash ? { lastPromptHash: state.lastPromptHash } : {},
+    injectedDurableIds: state.injectedDurableIds,
+    injectedEventIds: state.injectedEventIds,
+    updatedAt: state.updatedAt
+  };
+}
+function readAntigravitySessionState(conversationId, env = process.env) {
+  return toAntigravityState(readHookSessionState("antigravity", conversationId, env));
+}
+function writeAntigravitySessionState(state, env = process.env) {
+  writeHookSessionState(
+    "antigravity",
+    {
+      sessionId: state.conversationId,
+      sessionStartInjected: state.sessionStartInjected,
+      ...state.lastPromptHash ? { lastPromptHash: state.lastPromptHash } : {},
+      injectedDurableIds: state.injectedDurableIds,
+      injectedEventIds: state.injectedEventIds,
+      updatedAt: state.updatedAt
+    },
+    env
+  );
 }
 
 // packages/cli/src/antigravity/transcript.ts
@@ -4949,13 +4993,1486 @@ async function runAntigravityHook(options) {
 }
 
 // packages/cli/src/commands/hook-codex.ts
-import { randomBytes } from "node:crypto";
-import { mkdirSync as mkdirSync5, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
+import { createHash as createHash7, randomBytes } from "node:crypto";
+import { mkdirSync as mkdirSync8, renameSync as renameSync5, writeFileSync as writeFileSync8 } from "node:fs";
+import { join as join17 } from "node:path";
+
+// packages/codex/src/bounded-snippets.ts
+var USER_CHAR_LIMIT = 280;
+var ASSISTANT_CHAR_LIMIT = 220;
+var USER_MAX_SENTENCES = 3;
+var ASSISTANT_MAX_SENTENCES = 2;
+var GLOBAL_HARD_CHAR_MAX = 640;
+var TRUNCATION_SUFFIX = " ...";
+var SNIPPET_LIMITS_BY_REASON = {
+  style: { chars: 180, sentences: 1 },
+  preference: { chars: 220, sentences: 1 },
+  constraint: { chars: 220, sentences: 1 },
+  decision: { chars: 320, sentences: 2 },
+  rejected_alternative: { chars: 320, sentences: 2 },
+  next_step: { chars: 260, sentences: 2 },
+  release_context: { chars: 420, sentences: 3 },
+  bug_context: { chars: 600, sentences: 4 },
+  validation_fact: { chars: 500, sentences: 3 }
+};
+function boundCodexSnippet(text, options) {
+  const normalized = collapseWhitespace(text);
+  if (normalized.length === 0) {
+    return { text: "", truncated: false };
+  }
+  const limit = limitForReason(options);
+  const sentenceLimit = limit.sentences;
+  const charLimit = limit.chars;
+  const sentences = splitSentences(normalized);
+  const keptSentences = [];
+  for (const sentence of sentences) {
+    if (keptSentences.length >= sentenceLimit) {
+      break;
+    }
+    const candidate = [...keptSentences, sentence].join(" ");
+    if (candidate.length > charLimit) {
+      break;
+    }
+    keptSentences.push(sentence);
+  }
+  let boundedText = keptSentences.join(" ");
+  if (boundedText.length === 0) {
+    boundedText = normalized.slice(0, charLimit).trimEnd();
+  }
+  const truncated = boundedText.length < normalized.length;
+  if (!truncated) {
+    return {
+      text: boundedText,
+      truncated
+    };
+  }
+  const textBudget = Math.max(0, limit.chars - TRUNCATION_SUFFIX.length);
+  return {
+    text: `${boundedText.slice(0, textBudget).trimEnd()}${TRUNCATION_SUFFIX}`,
+    truncated
+  };
+}
+function collapseWhitespace(text) {
+  return text.replace(/\s+/g, " ").trim();
+}
+function limitForReason(options) {
+  const roleDefault = {
+    chars: options.role === "assistant" ? ASSISTANT_CHAR_LIMIT : USER_CHAR_LIMIT,
+    sentences: options.role === "assistant" ? ASSISTANT_MAX_SENTENCES : USER_MAX_SENTENCES
+  };
+  const reasonLimit = SNIPPET_LIMITS_BY_REASON[options.reason] ?? roleDefault;
+  return {
+    chars: Math.min(reasonLimit.chars, GLOBAL_HARD_CHAR_MAX),
+    sentences: reasonLimit.sentences
+  };
+}
+function splitSentences(text) {
+  return text.split(/(?<=[.!?])\s+(?=[A-ZА-Я])/u).map((sentence) => sentence.trim()).filter((sentence) => sentence.length > 0);
+}
+
+// packages/codex/src/relevance.ts
+var NOISE_PATTERNS = [
+  /\bfor general learning\b/i,
+  /\bexplain what\b/i,
+  /\bin general terms\b/i,
+  /\bhistory of\b/i,
+  /\bcompare\b/i,
+  /\bwhat are\b/i,
+  /что\s+такое/i,
+  /для\s+общего\s+развития/i,
+  /рассказать\s+подробнее/i
+];
+var BUG_PATTERNS = [
+  /\bbug\b/i,
+  /\bcrash(?:es|ed|ing)?\b/i,
+  /\bfail(?:s|ed|ing|ure)?\b/i,
+  /\berror\b/i,
+  /\bfix(?:ed|es|ing)?\b/i,
+  /\bregression\b/i,
+  /\brefactor\b/i,
+  /\bnull(?:able)?\b/i,
+  /\broot\s+cause\b/i,
+  /\brecall\s+gap\b/i,
+  /пада(?:ет|л|ют)/i,
+  /ошибк/i,
+  /регрес/i,
+  /рефактор/i,
+  /причин[ау]/i,
+  /не\s+сохранял/i
+];
+var PREFERENCE_PATTERNS = [
+  /\bprefer\b/i,
+  /\bkeep\b.{0,24}\bsurgical\b/i,
+  /\bdo not touch\b/i,
+  /\bdon't touch\b/i,
+  /\bavoid touching\b/i,
+  /\bunrelated modules?\b/i,
+  /\bunrelated code\b/i
+];
+var STYLE_PATTERNS = [
+  /\bmy\s+style\b/i,
+  /\bcode\s+style\b/i,
+  /\bshort\s+direct\s+progress\s+reports\b/i,
+  /\bapproval\s+gates?\b/i,
+  /мой\s+стиль/i,
+  /стиль\s+работы/i,
+  /коротк(?:ие|их)\s+отчет/i,
+  /после\s+одобрения/i
+];
+var CONSTRAINT_PATTERNS = [
+  /\bconstraint\b/i,
+  /\bmust\s+not\b/i,
+  /\bdo\s+not\s+modify\b/i,
+  /ограничени[ея]/i,
+  /не\s+трогай/i
+];
+var REJECTED_ALTERNATIVE_PATTERNS = [
+  /\breject(?:ed)?\b/i,
+  /\bdecided\s+against\b/i,
+  /\bnot\s+stable\s+enough\b/i,
+  /отказал(?:ись|и)?/i,
+  /не\s+подош[её]л/i
+];
+var VALIDATION_FACT_PATTERNS = [
+  /\bvalidation\s+passed\b/i,
+  /\btests?\s+passed\b/i,
+  /\btypecheck\b.{0,24}\b(?:green|passed)\b/i,
+  /\bgreen\b/i,
+  /проверено/i,
+  /прош[её]л/i,
+  /зел[её]н/i
+];
+var NEXT_STEP_PATTERNS = [
+  /\bnext\b.{0,24}\b(i|we)\b.{0,24}\bwill\b/i,
+  /\bi will add\b/i,
+  /\bi will run\b/i,
+  /\bi will wire\b/i,
+  /\bthen run\b/i
+];
+var DECISION_PATTERNS = [
+  /\bdecision\b/i,
+  /\bdecide(?:d)?\b/i,
+  /\buse\s+[a-z0-9_-]+/i,
+  /\bchoose\b/i,
+  /\bkeep the fix\b/i,
+  /\bpatch\b.{0,24}\bfirst\b/i,
+  /\bstrategy\b/i,
+  /решили/i,
+  /выбрали/i,
+  /использовать/i
+];
+function classifyCodexRelevance(text, role) {
+  const normalized = text.trim();
+  if (normalized.length === 0) {
+    return { keep: false, reason: "noise" };
+  }
+  if (role === "assistant" && matchesAny(normalized, NEXT_STEP_PATTERNS)) {
+    return { keep: true, reason: "next_step" };
+  }
+  if (matchesAny(normalized, REJECTED_ALTERNATIVE_PATTERNS)) {
+    return { keep: true, reason: "rejected_alternative" };
+  }
+  if (matchesAny(normalized, VALIDATION_FACT_PATTERNS)) {
+    return { keep: true, reason: "validation_fact" };
+  }
+  if (matchesAny(normalized, CONSTRAINT_PATTERNS)) {
+    return { keep: true, reason: "constraint" };
+  }
+  if (matchesAny(normalized, STYLE_PATTERNS)) {
+    return { keep: true, reason: "style" };
+  }
+  if (matchesAny(normalized, PREFERENCE_PATTERNS)) {
+    return { keep: true, reason: "preference" };
+  }
+  if (matchesAny(normalized, BUG_PATTERNS)) {
+    return { keep: true, reason: "bug_context" };
+  }
+  if (matchesAny(normalized, DECISION_PATTERNS)) {
+    return { keep: true, reason: "decision" };
+  }
+  if (matchesAny(normalized, NOISE_PATTERNS)) {
+    return { keep: false, reason: "noise" };
+  }
+  if (role === "assistant") {
+    return { keep: false, reason: "noise" };
+  }
+  return { keep: true, reason: "general_context" };
+}
+function matchesAny(text, patterns) {
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+// packages/codex/src/capture.ts
+var VALID_CAPTURE_MODES = /* @__PURE__ */ new Set(["off", "metadata", "redacted", "full"]);
+function getCodexCaptureMode(env = process.env) {
+  const value = env.LOCUS_CODEX_CAPTURE;
+  return isCodexCaptureMode(value) ? value : "metadata";
+}
+function shouldImportCodexEvent(mode, kind) {
+  if (mode === "off") {
+    return false;
+  }
+  if (mode === "metadata") {
+    return kind !== "user_prompt" && kind !== "ai_response";
+  }
+  if (mode === "redacted") {
+    return true;
+  }
+  return true;
+}
+function captureCodexEvent(event, mode) {
+  if (!shouldImportCodexEvent(mode, event.kind)) {
+    return {
+      event: null,
+      capturePolicy: captureModeToPolicy(mode),
+      truncated: false,
+      retained: false,
+      filtered: true
+    };
+  }
+  if (mode === "metadata") {
+    if (event.kind === "user_prompt" || event.kind === "ai_response") {
+      return {
+        event: null,
+        capturePolicy: "metadata",
+        truncated: false,
+        retained: false,
+        filtered: true
+      };
+    }
+    return {
+      event: annotateEvent(event, {
+        capturePolicy: "metadata",
+        truncated: false,
+        retained: true,
+        filtered: false
+      }),
+      capturePolicy: "metadata",
+      truncated: false,
+      retained: true,
+      filtered: false
+    };
+  }
+  if (mode === "full") {
+    return keepFullEvent(event);
+  }
+  return keepBoundedRedactedEvent(event);
+}
+function redactCodexTextWithMetadata(text) {
+  const redacted = text.replace(
+    /-----BEGIN ([A-Z ]*PRIVATE KEY)-----[\s\S]*?-----END \1-----/g,
+    "-----BEGIN $1-----\n[REDACTED]"
+  ).replace(/\bBearer\s+[A-Za-z0-9._~+/=-]+/g, "Bearer [REDACTED]").replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[REDACTED]").replace(/\bgh[pousr]_[A-Za-z0-9_]{12,}\b/g, "[REDACTED]").replace(/(_authToken\s*=\s*)[^\s\r\n]+/gi, "$1[REDACTED]").replace(
+    /\b(password|passwd|secret|api[_-]?key|github[_-]?token|npm[_-]?token|token)\b(\s*[:=]\s*)(?:"[^"\r\n]*"|'[^'\r\n]*'|[^\s\r\n]+)/gi,
+    (_match, key, separator) => `${key}${separator}[REDACTED]`
+  );
+  return {
+    text: redacted,
+    redactionApplied: redacted !== text
+  };
+}
+function isCodexCaptureMode(value) {
+  return value !== void 0 && VALID_CAPTURE_MODES.has(value);
+}
+function captureModeToPolicy(mode) {
+  if (mode === "redacted") {
+    return "bounded_redacted";
+  }
+  return mode;
+}
+function keepFullEvent(event) {
+  if (event.kind === "user_prompt") {
+    const prompt = redactCodexTextWithMetadata(stringValue(event.payload.prompt));
+    return keepDecision(
+      annotateEvent(event, {
+        prompt: prompt.text,
+        redactionApplied: prompt.redactionApplied,
+        capturePolicy: "full",
+        truncated: false,
+        retained: true,
+        filtered: false
+      }),
+      "full"
+    );
+  }
+  if (event.kind === "ai_response") {
+    const response = redactCodexTextWithMetadata(stringValue(event.payload.response));
+    return keepDecision(
+      annotateEvent(event, {
+        response: response.text,
+        model: optionalString(event.payload.model),
+        redactionApplied: response.redactionApplied,
+        capturePolicy: "full",
+        truncated: false,
+        retained: true,
+        filtered: false
+      }),
+      "full"
+    );
+  }
+  if (event.kind === "session_end") {
+    const summary = maybeRedactSummary(event.payload.summary);
+    return keepDecision(
+      annotateEvent(event, {
+        summary: summary?.text,
+        redactionApplied: summary?.redactionApplied,
+        capturePolicy: "full",
+        truncated: false,
+        retained: true,
+        filtered: false
+      }),
+      "full"
+    );
+  }
+  return keepDecision(
+    annotateEvent(event, {
+      capturePolicy: "full",
+      truncated: false,
+      retained: true,
+      filtered: false
+    }),
+    "full"
+  );
+}
+function keepBoundedRedactedEvent(event) {
+  if (event.kind === "user_prompt") {
+    return keepBoundedTextEvent(event, "prompt", "user");
+  }
+  if (event.kind === "ai_response") {
+    return keepBoundedTextEvent(event, "response", "assistant");
+  }
+  if (event.kind === "session_end") {
+    const summary = maybeRedactSummary(event.payload.summary);
+    return keepDecision(
+      annotateEvent(event, {
+        summary: summary?.text,
+        redactionApplied: summary?.redactionApplied,
+        capturePolicy: "bounded_redacted",
+        captureReason: "general_context",
+        truncated: false,
+        retained: true,
+        filtered: false
+      }),
+      "bounded_redacted",
+      "general_context"
+    );
+  }
+  return keepDecision(
+    annotateEvent(event, {
+      capturePolicy: "bounded_redacted",
+      truncated: false,
+      retained: true,
+      filtered: false
+    }),
+    "bounded_redacted"
+  );
+}
+function keepBoundedTextEvent(event, payloadKey, role) {
+  const originalText = stringValue(event.payload[payloadKey]);
+  const redaction = redactCodexTextWithMetadata(originalText);
+  const redactedText = redaction.text;
+  const relevance = classifyCodexRelevance(redactedText, role);
+  if (!relevance.keep) {
+    return {
+      event: null,
+      capturePolicy: "bounded_redacted",
+      captureReason: relevance.reason,
+      truncated: false,
+      retained: false,
+      filtered: true
+    };
+  }
+  if (role === "assistant" && relevance.reason === "general_context") {
+    return {
+      event: null,
+      capturePolicy: "bounded_redacted",
+      captureReason: "noise",
+      truncated: false,
+      retained: false,
+      filtered: true
+    };
+  }
+  const snippet = boundCodexSnippet(redactedText, {
+    role,
+    reason: relevance.reason
+  });
+  if (payloadKey === "prompt") {
+    return keepDecision(
+      annotateEvent(event, {
+        prompt: snippet.text,
+        capturePolicy: "bounded_redacted",
+        captureReason: relevance.reason,
+        redactionApplied: redaction.redactionApplied,
+        truncated: snippet.truncated,
+        retained: true,
+        filtered: false
+      }),
+      "bounded_redacted",
+      relevance.reason,
+      snippet.truncated
+    );
+  }
+  return keepDecision(
+    annotateEvent(event, {
+      response: snippet.text,
+      model: optionalString(event.payload.model),
+      capturePolicy: "bounded_redacted",
+      captureReason: relevance.reason,
+      redactionApplied: redaction.redactionApplied,
+      truncated: snippet.truncated,
+      retained: true,
+      filtered: false
+    }),
+    "bounded_redacted",
+    relevance.reason,
+    snippet.truncated
+  );
+}
+function annotateEvent(event, payloadPatch) {
+  return {
+    ...event,
+    payload: compactPayload({
+      ...event.payload,
+      ...payloadPatch
+    })
+  };
+}
+function keepDecision(event, capturePolicy, captureReason, truncated = false) {
+  return {
+    event,
+    capturePolicy,
+    captureReason,
+    truncated,
+    retained: true,
+    filtered: false
+  };
+}
+function compactPayload(input) {
+  const output = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== void 0) {
+      output[key] = value;
+    }
+  }
+  return output;
+}
+function stringValue(value) {
+  return typeof value === "string" ? value : "";
+}
+function optionalString(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function maybeRedactSummary(value) {
+  const summary = optionalString(value);
+  return summary === void 0 ? void 0 : redactCodexTextWithMetadata(summary);
+}
+
+// packages/codex/src/ids.ts
+import { createHash as createHash6 } from "node:crypto";
+import { basename as basename3 } from "node:path";
+function createCodexSourceEventId(input) {
+  const sessionId = input.sessionId ?? "unknown-session";
+  const fileName = basename3(input.filePath);
+  const itemId = input.itemId ?? "no-item";
+  return `codex:${sessionId}:${fileName}:${input.line}:${input.kind}:${itemId}`;
+}
+function createCodexEventId(sourceEventId) {
+  return createHash6("sha256").update(sourceEventId).digest("hex");
+}
+
+// packages/codex/src/importer.ts
+import { readFileSync as readFileSync11, statSync as statSync2 } from "node:fs";
+
+// packages/codex/src/inbox-event.ts
+function toInboxEvent(normalizedEvent, captureMode) {
+  const captured = captureCodexEvent(normalizedEvent, captureMode);
+  if (!captured.event) {
+    return null;
+  }
+  const sourceEventId = createCodexSourceEventId({
+    sessionId: captured.event.sessionId,
+    filePath: captured.event.sourceFile,
+    line: captured.event.sourceLine,
+    kind: captured.event.kind,
+    itemId: captured.event.itemId
+  });
+  return {
+    version: 1,
+    event_id: createCodexEventId(sourceEventId),
+    source: "codex",
+    source_event_id: sourceEventId,
+    project_root: captured.event.projectRoot,
+    session_id: captured.event.sessionId,
+    timestamp: captured.event.timestamp,
+    kind: captured.event.kind,
+    payload: toInboxPayload(captured.event, captured.capturePolicy, captured.captureReason)
+  };
+}
+function toInboxPayload(normalizedEvent, capturePolicy, captureReason) {
+  switch (normalizedEvent.kind) {
+    case "user_prompt":
+      return withCaptureMetadata(
+        {
+          prompt: stringPayload(normalizedEvent.payload.prompt)
+        },
+        capturePolicy,
+        captureReason,
+        optionalBoolean(normalizedEvent.payload.truncated),
+        optionalBoolean(normalizedEvent.payload.redactionApplied)
+      );
+    case "ai_response":
+      return withCaptureMetadata(
+        compactPayload2({
+          response: stringPayload(normalizedEvent.payload.response),
+          model: optionalString2(normalizedEvent.payload.model)
+        }),
+        capturePolicy,
+        captureReason,
+        optionalBoolean(normalizedEvent.payload.truncated),
+        optionalBoolean(normalizedEvent.payload.redactionApplied)
+      );
+    case "tool_use":
+      return compactPayload2({
+        tool: optionalString2(normalizedEvent.payload.tool) ?? "unknown",
+        files: arrayPayload(normalizedEvent.payload.files),
+        status: optionalString2(normalizedEvent.payload.status) ?? "success",
+        exitCode: optionalNumber(normalizedEvent.payload.exitCode)
+      });
+    case "session_start":
+      return compactPayload2({
+        tool: optionalString2(normalizedEvent.payload.tool) ?? "codex",
+        model: optionalString2(normalizedEvent.payload.model)
+      });
+    case "session_end":
+      return withCaptureMetadata(
+        compactPayload2({
+          summary: optionalString2(normalizedEvent.payload.summary)
+        }),
+        capturePolicy,
+        captureReason,
+        optionalBoolean(normalizedEvent.payload.truncated),
+        optionalBoolean(normalizedEvent.payload.redactionApplied)
+      );
+  }
+}
+function withCaptureMetadata(payload, capturePolicy, captureReason, truncated, redactionApplied) {
+  const redactionPayload = capturePolicy === "bounded_redacted" ? redactionApplied : redactionApplied || void 0;
+  if (capturePolicy !== "bounded_redacted") {
+    return compactPayload2({
+      ...payload,
+      redaction_applied: redactionPayload
+    });
+  }
+  return compactPayload2({
+    ...payload,
+    capture_policy: capturePolicy,
+    capture_reason: captureReason,
+    redaction_applied: redactionPayload,
+    truncated
+  });
+}
+function compactPayload2(input) {
+  const output = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== void 0) {
+      output[key] = value;
+    }
+  }
+  return output;
+}
+function stringPayload(value) {
+  return typeof value === "string" ? value : "";
+}
+function optionalString2(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function optionalNumber(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function optionalBoolean(value) {
+  return typeof value === "boolean" ? value : void 0;
+}
+function arrayPayload(value) {
+  return Array.isArray(value) && value.every((entry) => typeof entry === "string") ? value : [];
+}
+
+// packages/codex/src/inbox-writer.ts
+import { existsSync as existsSync9, mkdirSync as mkdirSync5, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
 import { join as join12 } from "node:path";
-var supportedEvents = /* @__PURE__ */ new Set(["session-start", "user-prompt-submit", "stop"]);
-function runCodexHook(options) {
+function writeCodexInboxEvent(inboxDir, event) {
+  mkdirSync5(inboxDir, { recursive: true });
+  const filename = `${event.timestamp}-${event.event_id.slice(0, 8)}.json`;
+  const finalPath = join12(inboxDir, filename);
+  if (existsSync9(finalPath)) {
+    return { status: "duplicate_pending", filename };
+  }
+  const tmpPath = `${finalPath}.tmp`;
+  writeFileSync6(tmpPath, JSON.stringify(event), "utf-8");
+  renameSync4(tmpPath, finalPath);
+  return { status: "written", filename };
+}
+
+// packages/codex/src/jsonl.ts
+function parseCodexJsonl(raw, filePath) {
+  const records = [];
+  const errors = [];
+  const lines = raw.split(/\r?\n/);
+  for (let index = 0; index < lines.length; index++) {
+    const line = lines[index];
+    const lineNumber = index + 1;
+    const trimmed = line?.trim() ?? "";
+    if (trimmed.length === 0) {
+      continue;
+    }
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch (error) {
+      errors.push({
+        line: lineNumber,
+        filePath,
+        message: error instanceof Error ? error.message : "Invalid JSON"
+      });
+      continue;
+    }
+    if (!isRecordObject(parsed)) {
+      errors.push({
+        line: lineNumber,
+        filePath,
+        message: "JSONL record must be an object"
+      });
+      continue;
+    }
+    records.push({
+      line: lineNumber,
+      filePath,
+      raw: parsed
+    });
+  }
+  return { records, errors };
+}
+function isRecordObject(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+// packages/codex/src/normalize.ts
+var UNKNOWN_SESSION = "unknown-session";
+function normalizeCodexRecords(records) {
+  const events = [];
+  let skipped = 0;
+  let currentSessionId = UNKNOWN_SESSION;
+  let currentProjectRoot = process.cwd();
+  let currentModel;
+  for (const record of records) {
+    const raw = record.raw;
+    const type = stringValue2(raw.type);
+    if (type === "session_meta") {
+      const meta = recordObject(raw.payload);
+      currentSessionId = firstString(raw.session_id, meta?.session_id, meta?.id) ?? currentSessionId;
+      currentProjectRoot = firstString(raw.cwd, meta?.cwd) ?? currentProjectRoot;
+      currentModel = firstString(raw.model, meta?.model) ?? currentModel;
+      events.push(
+        createEvent(record, {
+          kind: "session_start",
+          sessionId: currentSessionId,
+          projectRoot: currentProjectRoot,
+          payload: compactPayload3({
+            tool: "codex",
+            model: currentModel
+          })
+        })
+      );
+      continue;
+    }
+    if (type === "turn_context") {
+      const turn = recordObject(raw.payload);
+      currentProjectRoot = firstString(raw.cwd, turn?.cwd) ?? currentProjectRoot;
+      currentModel = firstString(raw.model, turn?.model) ?? currentModel;
+      skipped++;
+      continue;
+    }
+    const sessionId = stringValue2(raw.session_id) ?? currentSessionId;
+    const projectRoot = stringValue2(raw.cwd) ?? currentProjectRoot;
+    if (type === "event_msg") {
+      const normalized = normalizeEventMessage(record, sessionId, projectRoot);
+      if (normalized) {
+        events.push(normalized);
+      } else {
+        skipped++;
+      }
+      continue;
+    }
+    if (type === "response_item") {
+      const normalized = normalizeResponseItem(record, sessionId, projectRoot, currentModel);
+      if (normalized) {
+        events.push(normalized);
+      } else {
+        skipped++;
+      }
+      continue;
+    }
+    skipped++;
+  }
+  return { events, skipped };
+}
+function normalizeEventMessage(record, sessionId, projectRoot) {
+  const payloadRecord = recordObject(record.raw.payload);
+  const event = payloadRecord ?? record.raw;
+  const subtype = stringValue2(record.raw.subtype) ?? stringValue2(event.type);
+  if (subtype === "user_message") {
+    const payload = {
+      prompt: firstString(event.message, event.text) ?? ""
+    };
+    return createEvent(record, {
+      kind: "user_prompt",
+      sessionId,
+      projectRoot,
+      payload
+    });
+  }
+  if (subtype === "task_complete") {
+    const summary = firstString(event.summary, event.last_agent_message, event.message, event.text);
+    const payload = compactPayload3({ summary });
+    return createEvent(record, {
+      kind: "session_end",
+      sessionId,
+      projectRoot,
+      payload
+    });
+  }
+  if (subtype === "exec_command_end") {
+    const exitCode = numberValue(event.exit_code);
+    return createEvent(record, {
+      kind: "tool_use",
+      sessionId,
+      projectRoot,
+      itemId: stringValue2(event.call_id),
+      payload: compactPayload3({
+        tool: "exec_command_end",
+        callId: stringValue2(event.call_id),
+        exitCode,
+        durationMs: numberValue(event.duration_ms) ?? durationMsValue(event.duration),
+        status: exitCode === void 0 || exitCode === 0 ? "success" : "error"
+      })
+    });
+  }
+  return void 0;
+}
+function normalizeResponseItem(record, sessionId, projectRoot, currentModel) {
+  const item = recordObject(record.raw.item) ?? recordObject(record.raw.payload);
+  if (!item) {
+    return void 0;
+  }
+  const itemType = stringValue2(item.type);
+  if (itemType === "message" && stringValue2(item.role) === "assistant") {
+    const payload = compactPayload3({
+      response: extractTextContent(item.content),
+      model: currentModel
+    });
+    return createEvent(record, {
+      kind: "ai_response",
+      sessionId,
+      projectRoot,
+      payload
+    });
+  }
+  if (itemType === "function_call") {
+    const callId = stringValue2(item.call_id);
+    return createEvent(record, {
+      kind: "tool_use",
+      sessionId,
+      projectRoot,
+      itemId: callId,
+      payload: compactPayload3({
+        tool: stringValue2(item.name) ?? "function_call",
+        callId,
+        arguments: stringValue2(item.arguments)
+      })
+    });
+  }
+  if (itemType === "function_call_output") {
+    const callId = stringValue2(item.call_id);
+    return createEvent(record, {
+      kind: "tool_use",
+      sessionId,
+      projectRoot,
+      itemId: callId,
+      payload: compactPayload3({
+        tool: "function_call_output",
+        callId,
+        output: stringValue2(item.output)
+      })
+    });
+  }
+  return void 0;
+}
+function createEvent(record, input) {
+  return {
+    ...input,
+    timestamp: timestampValue(record.raw.timestamp),
+    sourceFile: record.filePath,
+    sourceLine: record.line
+  };
+}
+function extractTextContent(value) {
+  if (typeof value === "string") {
+    return value;
+  }
+  if (!Array.isArray(value)) {
+    return "";
+  }
+  return value.map((entry) => {
+    if (typeof entry === "string") {
+      return entry;
+    }
+    if (!isRecordObject2(entry)) {
+      return void 0;
+    }
+    const text = stringValue2(entry.text);
+    if (text === void 0) {
+      return void 0;
+    }
+    const type = stringValue2(entry.type);
+    return type === void 0 || type === "output_text" || type === "text" ? text : void 0;
+  }).filter((entry) => entry !== void 0).join("\n");
+}
+function timestampValue(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string") {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return Date.now();
+}
+function compactPayload3(input) {
+  const output = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== void 0) {
+      output[key] = value;
+    }
+  }
+  return output;
+}
+function firstString(...values) {
+  for (const value of values) {
+    const text = stringValue2(value);
+    if (text !== void 0) {
+      return text;
+    }
+  }
+  return void 0;
+}
+function recordObject(value) {
+  return isRecordObject2(value) ? value : void 0;
+}
+function isRecordObject2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function stringValue2(value) {
+  return typeof value === "string" ? value : void 0;
+}
+function numberValue(value) {
+  return typeof value === "number" && Number.isFinite(value) ? value : void 0;
+}
+function durationMsValue(value) {
+  const duration = recordObject(value);
+  if (!duration) {
+    return void 0;
+  }
+  const secs = numberValue(duration.secs);
+  const nanos = numberValue(duration.nanos);
+  if (secs === void 0 && nanos === void 0) {
+    return void 0;
+  }
+  return Math.round((secs ?? 0) * 1e3 + (nanos ?? 0) / 1e6);
+}
+
+// packages/codex/src/paths.ts
+import { homedir as homedir5 } from "node:os";
+import { join as join13, resolve as resolve4 } from "node:path";
+function resolveCodexHome2(env = process.env) {
+  const configured = env.CODEX_HOME;
+  if (configured && configured.trim().length > 0) {
+    return resolve4(expandTilde3(configured));
+  }
+  return join13(homedir5(), ".codex");
+}
+function resolveCodexSessionsDir(options = {}) {
+  if (options.sessionsDir && options.sessionsDir.trim().length > 0) {
+    return resolve4(expandTilde3(options.sessionsDir));
+  }
+  return join13(resolveCodexHome2(options.env), "sessions");
+}
+function expandTilde3(pathValue) {
+  if (pathValue === "~") {
+    return homedir5();
+  }
+  if (pathValue.startsWith("~/") || pathValue.startsWith("~\\")) {
+    return join13(homedir5(), pathValue.slice(2));
+  }
+  return pathValue;
+}
+
+// packages/codex/src/session-files.ts
+import { readdirSync as readdirSync4 } from "node:fs";
+import { basename as basename4, join as join14, resolve as resolve5 } from "node:path";
+function findCodexRolloutFiles(sessionsDir) {
+  return collectRolloutFiles(resolve5(sessionsDir)).sort();
+}
+function collectRolloutFiles(dir) {
+  let entries;
+  try {
+    entries = readdirSync4(dir, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  const files = [];
+  for (const entry of entries) {
+    const fullPath = join14(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...collectRolloutFiles(fullPath));
+      continue;
+    }
+    if (entry.isFile() && isRolloutJsonl(fullPath)) {
+      files.push(resolve5(fullPath));
+    }
+  }
+  return files;
+}
+function isRolloutJsonl(filePath) {
+  return /^rollout-.*\.jsonl$/.test(basename4(filePath));
+}
+
+// packages/codex/src/importer.ts
+function importCodexSessionsToInbox(options) {
+  const captureMode = options.captureMode ?? getCodexCaptureMode(options.env);
+  const sessionsDir = resolveCodexSessionsDir({
+    sessionsDir: options.sessionsDir,
+    env: options.env
+  });
+  const metrics = createEmptyMetrics();
+  const files = selectFiles(findCodexRolloutFiles(sessionsDir), options);
+  metrics.filesScanned = files.length;
+  let latestTimestamp = Number.NEGATIVE_INFINITY;
+  for (const filePath of files) {
+    if (options.maxFileBytes !== void 0) {
+      try {
+        if (statSync2(filePath).size > options.maxFileBytes) {
+          metrics.skippedByFilter++;
+          continue;
+        }
+      } catch {
+        metrics.errors++;
+        continue;
+      }
+    }
+    let raw;
+    try {
+      raw = readFileSync11(filePath, "utf-8");
+    } catch {
+      metrics.errors++;
+      continue;
+    }
+    const parsed = parseCodexJsonl(raw, filePath);
+    metrics.recordsParsed += parsed.records.length;
+    metrics.parseErrors += parsed.errors.length;
+    const normalized = normalizeCodexRecords(parsed.records);
+    metrics.skippedUnknown += normalized.skipped;
+    const filteredEvents = normalized.events.filter((event) => matchesFilters(event, options)).map((event) => ({
+      ...event,
+      projectRoot: canonicalImportProjectRoot(event.projectRoot, options.projectRoot)
+    }));
+    metrics.normalized += filteredEvents.length;
+    metrics.skippedByFilter += normalized.events.length - filteredEvents.length;
+    latestTimestamp = updateLatestSession(metrics, filteredEvents, latestTimestamp);
+    for (const event of filteredEvents) {
+      importFilteredEvent(event, captureMode, options, metrics);
+    }
+  }
+  return metrics;
+}
+function importFilteredEvent(event, captureMode, options, metrics) {
+  const inboxEvent = toInboxEvent(event, captureMode);
+  if (!inboxEvent) {
+    metrics.skippedByCapture++;
+    return;
+  }
+  if (options.shouldSkipEventId?.(inboxEvent.event_id) === true) {
+    metrics.duplicatePending++;
+    return;
+  }
+  try {
+    const writeResult = writeCodexInboxEvent(options.inboxDir, inboxEvent);
+    if (writeResult.status === "written") {
+      metrics.written++;
+    } else {
+      metrics.duplicatePending++;
+    }
+  } catch {
+    metrics.errors++;
+  }
+}
+function createEmptyMetrics() {
+  return {
+    filesScanned: 0,
+    recordsParsed: 0,
+    parseErrors: 0,
+    normalized: 0,
+    written: 0,
+    duplicatePending: 0,
+    skippedUnknown: 0,
+    skippedByCapture: 0,
+    skippedByFilter: 0,
+    errors: 0,
+    latestSession: void 0
+  };
+}
+function updateLatestSession(metrics, events, latestTimestamp) {
+  let nextLatestTimestamp = latestTimestamp;
+  for (const event of events) {
+    if (event.timestamp >= nextLatestTimestamp) {
+      nextLatestTimestamp = event.timestamp;
+      metrics.latestSession = event.sessionId;
+    }
+  }
+  return nextLatestTimestamp;
+}
+function selectFiles(files, options) {
+  if (options.latestOnly) {
+    const latestFile = files.at(-1);
+    return latestFile === void 0 ? [] : [latestFile];
+  }
+  return [...files];
+}
+function matchesFilters(event, options) {
+  if (options.projectRoot !== void 0 && !sameOrInsideProjectRoot(event.projectRoot, options.projectRoot)) {
+    return false;
+  }
+  if (options.sessionId !== void 0 && event.sessionId !== options.sessionId) {
+    return false;
+  }
+  if (options.since !== void 0 && event.timestamp < options.since) {
+    return false;
+  }
+  return true;
+}
+function normalizedProjectRoot(value) {
+  const normalized = normalizePathForIdentity(value);
+  if (normalized === "/" || /^[a-z]:\/$/u.test(normalized)) {
+    return normalized;
+  }
+  return normalized.replace(/\/$/u, "");
+}
+function sameOrInsideProjectRoot(eventRootValue, requestedRootValue) {
+  const eventRoot = normalizedProjectRoot(eventRootValue);
+  const requestedRoot = normalizedProjectRoot(requestedRootValue);
+  return eventRoot === requestedRoot || isInsideProjectRoot2(eventRoot, requestedRoot);
+}
+function isInsideProjectRoot2(eventRoot, requestedRoot) {
+  if (requestedRoot === "/" || /^[a-z]:\/$/u.test(requestedRoot)) {
+    return eventRoot.startsWith(requestedRoot);
+  }
+  return eventRoot.startsWith(`${requestedRoot}/`);
+}
+function canonicalImportProjectRoot(eventRoot, requestedRoot) {
+  if (requestedRoot && sameOrInsideProjectRoot(eventRoot, requestedRoot)) {
+    return normalizedProjectRoot(requestedRoot);
+  }
+  return normalizedProjectRoot(eventRoot);
+}
+
+// packages/codex/src/plugin-sync.ts
+import { copyFileSync as copyFileSync3, existsSync as existsSync10, mkdirSync as mkdirSync6, readFileSync as readFileSync12, rmSync as rmSync2, writeFileSync as writeFileSync7 } from "node:fs";
+import { dirname as dirname7, join as join15, resolve as resolve6 } from "node:path";
+import { fileURLToPath as fileURLToPath4 } from "node:url";
+
+// packages/codex/src/skill-sync.ts
+import { copyFileSync as copyFileSync4, existsSync as existsSync11, mkdirSync as mkdirSync7, readFileSync as readFileSync13 } from "node:fs";
+import { homedir as homedir6 } from "node:os";
+import { dirname as dirname8, join as join16, resolve as resolve7 } from "node:path";
+import { fileURLToPath as fileURLToPath5 } from "node:url";
+function resolveCanonicalCodexSkillPath() {
+  return resolve7(fileURLToPath5(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
+}
+
+// packages/cli/src/commands/hook-codex.ts
+var SUPPORTED_EVENTS2 = /* @__PURE__ */ new Set([
+  "session-start",
+  "user-prompt-submit",
+  "post-tool-use",
+  "stop"
+]);
+var PROMPT_KEYS = ["prompt", "text", "input", "user_prompt"];
+var CWD_KEYS = ["cwd", "workingDirectory", "workdir"];
+var FILE_ARG_KEYS2 = ["path", "file_path", "target_file", "TargetFile", "Path", "files"];
+var CAPTURED_TOOLS = /* @__PURE__ */ new Set([
+  "bash",
+  "shell",
+  "exec_command",
+  "apply_patch",
+  "write",
+  "edit",
+  "write_file",
+  "edit_file",
+  "notebookedit",
+  "run_terminal_command"
+]);
+var READ_ONLY_TOOLS = /* @__PURE__ */ new Set(["read", "glob", "grep", "view_image", "read_file", "list_dir"]);
+function isCodexHookEvent(event) {
+  return typeof event === "string" && SUPPORTED_EVENTS2.has(event);
+}
+function isPlainObject2(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function stringField2(value) {
+  if (typeof value !== "string") {
+    return void 0;
+  }
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : void 0;
+}
+function parseHookInput2(stdin) {
+  if (!stdin || stdin.trim().length === 0) {
+    return { ok: true, value: {} };
+  }
+  try {
+    const value = JSON.parse(stdin);
+    return isPlainObject2(value) ? { ok: true, value } : { ok: true, value: {} };
+  } catch {
+    return { ok: false };
+  }
+}
+function extractRecursiveKey(value, keys) {
+  if (isPlainObject2(value)) {
+    for (const key of keys) {
+      const candidate = stringField2(value[key]);
+      if (candidate) {
+        return candidate;
+      }
+    }
+    for (const nested of Object.values(value)) {
+      const candidate = extractRecursiveKey(nested, keys);
+      if (candidate) {
+        return candidate;
+      }
+    }
+    return void 0;
+  }
+  if (Array.isArray(value)) {
+    for (const nested of value) {
+      const candidate = extractRecursiveKey(nested, keys);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+  return void 0;
+}
+function extractWorkspaceRawCwd(input) {
+  const fromKeys = extractRecursiveKey(input, CWD_KEYS);
+  if (fromKeys) {
+    return fromKeys;
+  }
+  if (Array.isArray(input.workspacePaths)) {
+    for (const item of input.workspacePaths) {
+      const candidate = stringField2(item);
+      if (candidate) {
+        return candidate;
+      }
+    }
+  }
+  return process.cwd();
+}
+function extractSessionId(input) {
+  return stringField2(input.session_id) ?? stringField2(input.sessionId) ?? stringField2(input.thread_id) ?? stringField2(input.threadId) ?? "default";
+}
+function deterministicEventId3(key) {
+  return createHash7("sha256").update(key).digest("hex").slice(0, 32);
+}
+function isLocusToolName2(toolName) {
+  const lower = toolName.toLowerCase();
+  return lower.includes("locus") || lower.includes("memory_");
+}
+function extractCandidateFiles2(args) {
+  const collected = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const key of FILE_ARG_KEYS2) {
+    const raw = args[key];
+    if (typeof raw === "string") {
+      const candidate = raw.trim();
+      if (candidate && !seen.has(candidate) && !isDenylisted(candidate)) {
+        seen.add(candidate);
+        collected.push(candidate);
+      }
+      continue;
+    }
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        if (typeof entry !== "string") {
+          continue;
+        }
+        const candidate = entry.trim();
+        if (candidate && !seen.has(candidate) && !isDenylisted(candidate)) {
+          seen.add(candidate);
+          collected.push(candidate);
+        }
+      }
+    }
+  }
+  return collected;
+}
+function failOpenStdout(event) {
+  return event === "post-tool-use" ? "" : JSON.stringify({ continue: true, suppressOutput: true });
+}
+function formatContinueWithContext(hookEventName, additionalContext) {
+  return JSON.stringify({
+    continue: true,
+    suppressOutput: true,
+    hookSpecificOutput: {
+      hookEventName,
+      additionalContext
+    }
+  });
+}
+async function handleSessionStart2(context) {
+  const dbPath = resolveDbPath(context.projectRoot);
+  const inboxDir = resolveInboxDir(context.projectRoot);
+  const startEvent = {
+    version: 1,
+    event_id: deterministicEventId3(`codex:${context.sessionId}:session_start`),
+    source: "codex",
+    source_event_id: `codex:${context.sessionId}:session_start`,
+    project_root: context.projectRoot,
+    session_id: context.sessionId,
+    timestamp: context.nowMs,
+    kind: "session_start",
+    payload: {
+      tool: "codex",
+      ...context.modelName ? { model: context.modelName } : {}
+    }
+  };
+  try {
+    writeInboxEvent(inboxDir, startEvent);
+  } catch {
+  }
+  const { db, fts5 } = await initStorage(dbPath);
+  try {
+    try {
+      processInbox(inboxDir, db, {
+        batchLimit: 100,
+        captureLevel: context.captureLevel,
+        fts5Available: fts5,
+        projectRoot: context.projectRoot
+      });
+      runDurableExtraction(db);
+    } catch {
+    }
+    const brief = buildSessionStartBrief({
+      db,
+      projectRoot: context.projectRoot,
+      now: context.nowMs
+    });
+    const existing = readHookSessionState("codex", context.sessionId, context.env);
+    writeHookSessionState(
+      "codex",
+      {
+        sessionId: context.sessionId,
+        sessionStartInjected: true,
+        ...existing.lastPromptHash ? { lastPromptHash: existing.lastPromptHash } : {},
+        injectedDurableIds: [...existing.injectedDurableIds, ...brief.includedDurableIds],
+        injectedEventIds: [...existing.injectedEventIds, ...brief.includedEventIds],
+        updatedAt: context.nowMs
+      },
+      context.env
+    );
+    return {
+      exitCode: 0,
+      stdout: brief.injected ? formatContinueWithContext("SessionStart", brief.text) : failOpenStdout("session-start")
+    };
+  } finally {
+    try {
+      db.close();
+    } catch {
+    }
+  }
+}
+async function handleUserPromptSubmit(context) {
+  const prompt = extractRecursiveKey(context.input, PROMPT_KEYS);
+  if (!prompt) {
+    return { exitCode: 0, stdout: failOpenStdout("user-prompt-submit") };
+  }
+  const state = readHookSessionState("codex", context.sessionId, context.env);
+  const promptHash = hashPrompt(prompt);
+  if (state.lastPromptHash === promptHash) {
+    return { exitCode: 0, stdout: failOpenStdout("user-prompt-submit") };
+  }
+  if (isNoisyPrompt(prompt)) {
+    writeHookSessionState(
+      "codex",
+      {
+        ...state,
+        lastPromptHash: promptHash,
+        updatedAt: context.nowMs
+      },
+      context.env
+    );
+    return { exitCode: 0, stdout: failOpenStdout("user-prompt-submit") };
+  }
+  const { db } = await initStorage(resolveDbPath(context.projectRoot));
+  try {
+    const brief = buildPromptRecallBrief(
+      prompt,
+      {
+        db,
+        projectRoot: context.projectRoot,
+        now: context.nowMs
+      },
+      {
+        alreadyInjectedDurableIds: state.injectedDurableIds,
+        alreadyInjectedEventIds: state.injectedEventIds
+      }
+    );
+    writeHookSessionState(
+      "codex",
+      {
+        sessionId: context.sessionId,
+        sessionStartInjected: state.sessionStartInjected,
+        lastPromptHash: promptHash,
+        injectedDurableIds: brief.injected ? [...state.injectedDurableIds, ...brief.includedDurableIds] : state.injectedDurableIds,
+        injectedEventIds: brief.injected ? [...state.injectedEventIds, ...brief.includedEventIds] : state.injectedEventIds,
+        updatedAt: context.nowMs
+      },
+      context.env
+    );
+    return {
+      exitCode: 0,
+      stdout: brief.injected ? formatContinueWithContext("UserPromptSubmit", brief.text) : failOpenStdout("user-prompt-submit")
+    };
+  } finally {
+    try {
+      db.close();
+    } catch {
+    }
+  }
+}
+function handlePostToolUse2(context) {
+  const toolName = stringField2(context.input.tool_name) ?? stringField2(context.input.toolName) ?? stringField2(context.input.tool);
+  if (!toolName || isLocusToolName2(toolName)) {
+    return { exitCode: 0, stdout: "" };
+  }
+  const isError = Boolean(stringField2(context.input.error)) || context.input.success === false || context.input.is_error === true;
+  const lowerTool = toolName.toLowerCase();
+  const shouldCapture = isError || CAPTURED_TOOLS.has(lowerTool) && !READ_ONLY_TOOLS.has(lowerTool);
+  if (!shouldCapture) {
+    return { exitCode: 0, stdout: "" };
+  }
+  const toolInput = isPlainObject2(context.input.tool_input) ? context.input.tool_input : isPlainObject2(context.input.toolInput) ? context.input.toolInput : {};
+  const files = extractCandidateFiles2(toolInput);
+  const callId = stringField2(context.input.call_id) ?? stringField2(context.input.tool_use_id) ?? stringField2(context.input.id);
+  const sourceEventId = callId ? `codex:${context.sessionId}:tool:${callId}` : `codex:${context.sessionId}:tool:${context.nowMs}:${toolName}`;
+  const event = {
+    version: 1,
+    event_id: deterministicEventId3(`${sourceEventId}:post_tool_use`),
+    source: "codex",
+    source_event_id: sourceEventId,
+    project_root: context.projectRoot,
+    session_id: context.sessionId,
+    timestamp: context.nowMs,
+    kind: "tool_use",
+    payload: {
+      tool: toolName,
+      files,
+      status: isError ? "error" : "success"
+    }
+  };
+  writeInboxEvent(resolveInboxDir(context.projectRoot), event);
+  return { exitCode: 0, stdout: "" };
+}
+async function handleStop2(context) {
+  const writeResult = writeStopTrigger({
+    env: context.env,
+    input: context.input,
+    now: context.nowDate
+  });
+  const dbPath = resolveDbPath(context.projectRoot);
+  const inboxDir = resolveInboxDir(context.projectRoot);
+  const { db, fts5 } = await initStorage(dbPath);
+  try {
+    if (!context.importDisabled) {
+      try {
+        importCodexSessionsToInbox({
+          inboxDir,
+          projectRoot: context.projectRoot,
+          env: context.env,
+          captureMode: context.captureLevel,
+          latestOnly: true,
+          maxFileBytes: 10 * 1024 * 1024,
+          shouldSkipEventId: (eventId) => db.get("SELECT id FROM ingest_log WHERE event_id = ?", [eventId]) !== void 0
+        });
+      } catch {
+      }
+      if (context.captureLevel !== "metadata") {
+        const lastAssistantMessage = stringField2(context.input.last_assistant_message);
+        if (lastAssistantMessage) {
+          const candidateEvent = toInboxEvent(
+            {
+              kind: "ai_response",
+              timestamp: context.nowDate.getTime(),
+              sessionId: context.sessionId,
+              projectRoot: context.projectRoot,
+              sourceFile: "hook:stop",
+              sourceLine: 1,
+              payload: {
+                response: lastAssistantMessage
+              }
+            },
+            context.captureLevel
+          );
+          const responseText = typeof candidateEvent?.payload.response === "string" ? candidateEvent.payload.response : "";
+          if (candidateEvent && responseText.length > 0) {
+            const stopEventId = `codex:${context.sessionId}:stop:${hashPrompt(responseText)}`;
+            const responseEvent = {
+              ...candidateEvent,
+              event_id: deterministicEventId3(stopEventId),
+              source_event_id: stopEventId,
+              kind: "ai_response"
+            };
+            try {
+              writeInboxEvent(inboxDir, responseEvent);
+            } catch {
+            }
+          }
+        }
+      }
+    }
+    processInbox(inboxDir, db, {
+      batchLimit: 200,
+      captureLevel: context.captureLevel,
+      fts5Available: fts5,
+      projectRoot: context.projectRoot
+    });
+    runDurableExtraction(db);
+    return {
+      exitCode: 0,
+      stdout: failOpenStdout("stop"),
+      ...writeResult.ok ? {} : {
+        stderr: `could not write Codex hook trigger; failing open: ${writeResult.error.message}`
+      }
+    };
+  } finally {
+    try {
+      db.close();
+    } catch {
+    }
+  }
+}
+async function runCodexHook(options) {
   const event = options.event;
-  if (!isSupportedEvent(event)) {
+  if (!isCodexHookEvent(event)) {
     return {
       exitCode: 1,
       stdout: "",
@@ -4966,49 +6483,83 @@ function runCodexHook(options) {
   if (!parsed.ok) {
     return {
       exitCode: 0,
-      stdout: JSON.stringify({ continue: true, suppressOutput: true }),
+      stdout: failOpenStdout(event),
       stderr: "malformed Codex hook input; failing open"
     };
   }
-  if (event === "stop") {
-    const writeResult = writeStopTrigger({
-      env: options.env,
-      input: parsed.value,
-      now: options.now ?? /* @__PURE__ */ new Date()
-    });
-    if (!writeResult.ok) {
-      return {
-        exitCode: 0,
-        stdout: JSON.stringify({ continue: true, suppressOutput: true }),
-        stderr: `could not write Codex hook trigger; failing open: ${writeResult.error.message}`
-      };
-    }
-  }
-  return {
-    exitCode: 0,
-    stdout: JSON.stringify({ continue: true, suppressOutput: true })
+  const baseEnv = options.env ?? process.env;
+  const scopedEnv = {
+    ...baseEnv,
+    LOCUS_CLIENT: baseEnv.LOCUS_CLIENT ?? "codex",
+    LOCUS_CLIENT_SURFACE: baseEnv.LOCUS_CLIENT_SURFACE ?? "desktop"
   };
-}
-function isSupportedEvent(event) {
-  return typeof event === "string" && supportedEvents.has(event);
-}
-function parseHookInput2(stdin) {
-  if (!stdin || stdin.trim().length === 0) {
-    return { ok: true, value: {} };
-  }
   try {
-    const value = JSON.parse(stdin);
-    return value && typeof value === "object" && !Array.isArray(value) ? { ok: true, value } : { ok: true, value: {} };
-  } catch {
-    return { ok: false };
+    return await withScopedEnv(options.env ? scopedEnv : void 0, async () => {
+      const effectiveEnv = options.env ? scopedEnv : process.env;
+      const nowDate = options.now ?? /* @__PURE__ */ new Date();
+      const nowMs = nowDate.getTime();
+      const input = parsed.value;
+      const rawCodexCapture = effectiveEnv.LOCUS_CODEX_CAPTURE?.trim().toLowerCase();
+      const importDisabled = rawCodexCapture === "off";
+      const captureLevel = normalizeCaptureLevel(
+        importDisabled ? effectiveEnv.LOCUS_CAPTURE_LEVEL : effectiveEnv.LOCUS_CODEX_CAPTURE ?? effectiveEnv.LOCUS_CAPTURE_LEVEL,
+        "redacted"
+      );
+      const rawCwd = extractWorkspaceRawCwd(input);
+      const { root: projectRoot } = resolveProjectRoot(rawCwd);
+      const sessionId = extractSessionId(input);
+      if (event === "session-start") {
+        return handleSessionStart2({
+          projectRoot,
+          sessionId,
+          captureLevel,
+          modelName: stringField2(input.model),
+          nowMs,
+          env: effectiveEnv
+        });
+      }
+      if (event === "user-prompt-submit") {
+        return handleUserPromptSubmit({
+          input,
+          projectRoot,
+          sessionId,
+          nowMs,
+          env: effectiveEnv
+        });
+      }
+      if (event === "post-tool-use") {
+        return handlePostToolUse2({
+          input,
+          projectRoot,
+          sessionId,
+          nowMs
+        });
+      }
+      return handleStop2({
+        input,
+        projectRoot,
+        sessionId,
+        captureLevel,
+        importDisabled,
+        nowDate,
+        env: effectiveEnv
+      });
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      exitCode: 0,
+      stdout: failOpenStdout(event),
+      stderr: `Codex hook error; failing open: ${message}`
+    };
   }
 }
 function writeStopTrigger(options) {
   try {
-    const triggerDir = join12(resolveCodexHome(options.env), "locus", "hook-triggers");
-    mkdirSync5(triggerDir, { recursive: true });
+    const triggerDir = join17(resolveCodexHome(options.env), "locus", "hook-triggers");
+    mkdirSync8(triggerDir, { recursive: true });
     const id = `${options.now.getTime()}-${randomBytes(4).toString("hex")}`;
-    const finalPath = join12(triggerDir, `stop-${id}.json`);
+    const finalPath = join17(triggerDir, `stop-${id}.json`);
     const tempPath = `${finalPath}.tmp`;
     const payload = {
       event: "stop",
@@ -5016,21 +6567,18 @@ function writeStopTrigger(options) {
       sessionId: stringField2(options.input.session_id),
       turnId: stringField2(options.input.turn_id)
     };
-    writeFileSync6(tempPath, `${JSON.stringify(payload, null, 2)}
+    writeFileSync8(tempPath, `${JSON.stringify(payload, null, 2)}
 `, "utf8");
-    renameSync4(tempPath, finalPath);
+    renameSync5(tempPath, finalPath);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
   }
 }
-function stringField2(value) {
-  return typeof value === "string" && value.trim().length > 0 ? value : void 0;
-}
 
 // packages/cli/src/antigravity/bundle.ts
-import { existsSync as existsSync9 } from "node:fs";
-import { join as join13 } from "node:path";
+import { existsSync as existsSync12 } from "node:fs";
+import { join as join18 } from "node:path";
 function buildAntigravityPluginManifest(version) {
   return {
     name: "locus-memory",
@@ -5180,15 +6728,15 @@ function buildAntigravitySkillMarkdown() {
 }
 function writeAntigravityPluginBundle(options) {
   const pluginDir = options.targetDir;
-  const runtimeDir = join13(pluginDir, "runtime");
+  const runtimeDir = join18(pluginDir, "runtime");
   const captureLevel = options.captureLevel ?? "redacted";
-  const manifestPath = join13(pluginDir, "plugin.json");
-  const hooksPath = join13(pluginDir, "hooks.json");
-  const hookRunnerPath = join13(pluginDir, "hooks", "locus-hook.mjs");
-  const mcpPath = join13(pluginDir, "mcp_config.json");
-  const rulesPath = join13(pluginDir, "rules", "AGENTS.md");
-  const skillPath = join13(pluginDir, "skills", "locus-memory", "SKILL.md");
-  const hadAllPluginFiles = existsSync9(manifestPath) && existsSync9(hooksPath) && existsSync9(hookRunnerPath) && existsSync9(mcpPath) && existsSync9(rulesPath) && existsSync9(skillPath) && existsSync9(join13(runtimeDir, "cli.js")) && existsSync9(join13(runtimeDir, "server.js"));
+  const manifestPath = join18(pluginDir, "plugin.json");
+  const hooksPath = join18(pluginDir, "hooks.json");
+  const hookRunnerPath = join18(pluginDir, "hooks", "locus-hook.mjs");
+  const mcpPath = join18(pluginDir, "mcp_config.json");
+  const rulesPath = join18(pluginDir, "rules", "AGENTS.md");
+  const skillPath = join18(pluginDir, "skills", "locus-memory", "SKILL.md");
+  const hadAllPluginFiles = existsSync12(manifestPath) && existsSync12(hooksPath) && existsSync12(hookRunnerPath) && existsSync12(mcpPath) && existsSync12(rulesPath) && existsSync12(skillPath) && existsSync12(join18(runtimeDir, "cli.js")) && existsSync12(join18(runtimeDir, "server.js"));
   const runtimeResult = installRuntimeFiles(runtimeDir, {
     startDir: options.startDir,
     sourceDistDir: options.sourceDistDir,
@@ -5234,7 +6782,7 @@ function writeAntigravityPluginBundle(options) {
       runtimeResult.cliPath,
       runtimeResult.serverPath,
       runtimeResult.manifestPath,
-      join13(runtimeDir, "package.json")
+      join18(runtimeDir, "package.json")
     ]
   };
 }
@@ -5310,29 +6858,29 @@ import { existsSync as existsSync16 } from "node:fs";
 import { join as join21 } from "node:path";
 
 // packages/cli/src/codex/cleanup.ts
-import { existsSync as existsSync10, readdirSync as readdirSync4, rmSync as rmSync2, statSync as statSync2 } from "node:fs";
-import { join as join14 } from "node:path";
+import { existsSync as existsSync13, readdirSync as readdirSync5, rmSync as rmSync3, statSync as statSync3 } from "node:fs";
+import { join as join19 } from "node:path";
 function cleanupInterruptedInstall(codexHome) {
   const removed = [];
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
   for (const path of tempFiles) {
-    rmSync2(path, { force: true });
+    rmSync3(path, { force: true });
     removed.push(path);
   }
   return { removed };
 }
 function findInterruptedInstallTempFiles(codexHome) {
-  const skillDir = join14(codexHome, "skills", "locus-memory");
+  const skillDir = join19(codexHome, "skills", "locus-memory");
   const tempFiles = [];
-  if (!existsSync10(skillDir)) {
+  if (!existsSync13(skillDir)) {
     return tempFiles;
   }
-  for (const entry of readdirSync4(skillDir)) {
+  for (const entry of readdirSync5(skillDir)) {
     if (!entry.endsWith(".locus-tmp")) {
       continue;
     }
-    const path = join14(skillDir, entry);
-    if (!statSync2(path).isFile()) {
+    const path = join19(skillDir, entry);
+    if (!statSync3(path).isFile()) {
       continue;
     }
     tempFiles.push(path);
@@ -5374,13 +6922,13 @@ function buildCodexMcpRemoveArgs(name) {
 }
 
 // packages/cli/src/codex/lock.ts
-import { existsSync as existsSync11, mkdirSync as mkdirSync6, readFileSync as readFileSync11, rmSync as rmSync3, writeFileSync as writeFileSync7 } from "node:fs";
-import { join as join15 } from "node:path";
+import { existsSync as existsSync14, mkdirSync as mkdirSync9, readFileSync as readFileSync14, rmSync as rmSync4, writeFileSync as writeFileSync9 } from "node:fs";
+import { join as join20 } from "node:path";
 var defaultStaleAfterMs = 15 * 60 * 1e3;
 function acquireInstallLock(codexHome, options = {}) {
-  mkdirSync6(codexHome, { recursive: true });
-  const lockPath = join15(codexHome, ".locus-install.lock");
-  if (existsSync11(lockPath)) {
+  mkdirSync9(codexHome, { recursive: true });
+  const lockPath = join20(codexHome, ".locus-install.lock");
+  if (existsSync14(lockPath)) {
     const stale = isStaleLock(lockPath, options);
     return {
       acquired: false,
@@ -5390,7 +6938,7 @@ function acquireInstallLock(codexHome, options = {}) {
     };
   }
   try {
-    writeFileSync7(
+    writeFileSync9(
       lockPath,
       JSON.stringify(
         {
@@ -5415,7 +6963,7 @@ function acquireInstallLock(codexHome, options = {}) {
     acquired: true,
     path: lockPath,
     release: () => {
-      rmSync3(lockPath, { force: true });
+      rmSync4(lockPath, { force: true });
     }
   };
 }
@@ -5423,7 +6971,7 @@ function isStaleLock(lockPath, options) {
   const staleAfterMs = options.staleAfterMs ?? defaultStaleAfterMs;
   const now = options.now ?? /* @__PURE__ */ new Date();
   try {
-    const lock = JSON.parse(readFileSync11(lockPath, "utf8"));
+    const lock = JSON.parse(readFileSync14(lockPath, "utf8"));
     if (!lock.createdAt) {
       return false;
     }
@@ -5444,41 +6992,6 @@ import {
 } from "node:fs";
 import { dirname as dirname9 } from "node:path";
 import { fileURLToPath as fileURLToPath6 } from "node:url";
-
-// packages/codex/src/ids.ts
-import { createHash as createHash6 } from "node:crypto";
-import { basename as basename3 } from "node:path";
-
-// packages/codex/src/importer.ts
-import { readFileSync as readFileSync12 } from "node:fs";
-
-// packages/codex/src/inbox-writer.ts
-import { existsSync as existsSync12, mkdirSync as mkdirSync7, renameSync as renameSync5, writeFileSync as writeFileSync8 } from "node:fs";
-import { join as join16 } from "node:path";
-
-// packages/codex/src/paths.ts
-import { homedir as homedir5 } from "node:os";
-import { join as join17, resolve as resolve4 } from "node:path";
-
-// packages/codex/src/session-files.ts
-import { readdirSync as readdirSync5 } from "node:fs";
-import { basename as basename4, join as join18, resolve as resolve5 } from "node:path";
-
-// packages/codex/src/plugin-sync.ts
-import { copyFileSync as copyFileSync3, existsSync as existsSync13, mkdirSync as mkdirSync8, readFileSync as readFileSync13, rmSync as rmSync4, writeFileSync as writeFileSync9 } from "node:fs";
-import { dirname as dirname7, join as join19, resolve as resolve6 } from "node:path";
-import { fileURLToPath as fileURLToPath4 } from "node:url";
-
-// packages/codex/src/skill-sync.ts
-import { copyFileSync as copyFileSync4, existsSync as existsSync14, mkdirSync as mkdirSync9, readFileSync as readFileSync14 } from "node:fs";
-import { homedir as homedir6 } from "node:os";
-import { dirname as dirname8, join as join20, resolve as resolve7 } from "node:path";
-import { fileURLToPath as fileURLToPath5 } from "node:url";
-function resolveCanonicalCodexSkillPath() {
-  return resolve7(fileURLToPath5(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
-}
-
-// packages/cli/src/codex/skill.ts
 function installCodexSkill(options = {}) {
   const sourcePath = options.sourcePath ?? resolvePackagedCodexSkillPath();
   const targetPath = resolveCodexSkillPath(options.env, "locus-memory");
@@ -5666,7 +7179,23 @@ async function runInstallCodex(options) {
     }
     const cwdResult = setMcpServerCwd(resolveCodexConfigPath(env), "locus", codexHome);
     const skill = installCodexSkill({ env, overwrite: true, backup: true });
-    const hooks = options.withHooks ? installCodexHooks({ env, version, platform: options.platform }) : void 0;
+    let localRuntime;
+    if (options.withHooks) {
+      try {
+        localRuntime = installLocalCliRuntime({
+          env,
+          startDir: options.startDir,
+          sourceDistDir: options.sourceDistDir
+        });
+      } catch {
+      }
+    }
+    const hooks = options.withHooks ? installCodexHooks({
+      env,
+      version,
+      platform: options.platform,
+      runtimeCliPath: localRuntime?.cliPath
+    }) : void 0;
     return {
       exitCode: skill.error ? 1 : 0,
       output: [
@@ -5682,6 +7211,7 @@ async function runInstallCodex(options) {
         skill.backup ? `Backup: ${skill.backup.path}` : void 0,
         hooks ? `Hooks: ${hooks.action}` : "Hooks: not requested",
         hooks ? `Hooks path: ${hooks.path}` : void 0,
+        localRuntime ? `Local hook runtime: ${localRuntime.binDir}` : void 0,
         hooks?.backupPath ? `Hooks backup: ${hooks.backupPath}` : void 0,
         skill.error ? `Error: ${skill.error.message}` : void 0
       ].filter((line) => Boolean(line)).join("\n")
@@ -6093,9 +7623,15 @@ async function runCli(argv = process.argv.slice(2), io = {
     return 1;
   }
   if (command === "hook" && subcommand === "codex") {
-    const result = runCodexHook({
-      event: argv[2],
-      stdin: options.stdin,
+    const event = argv[2];
+    if (!isCodexHookEvent(event)) {
+      io.stderr(`Unsupported Codex hook event: ${event ?? "(missing)"}`);
+      return 1;
+    }
+    const stdin = options.stdin ?? await readStdinWhenPiped();
+    const result = await runCodexHook({
+      event,
+      stdin,
       env: options.env
     });
     if (result.stdout) {
@@ -6124,6 +7660,7 @@ async function runCli(argv = process.argv.slice(2), io = {
     const result = await runInstallCodex({
       env: options.env,
       startDir: options.startDir,
+      sourceDistDir: options.sourceDistDir,
       commandRunner: options.commandRunner ?? defaultCommandRunner,
       platform: options.platform,
       withHooks: argv.includes("--with-hooks")

@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { normalizePathForIdentity } from '@locus/shared-runtime';
 import { getCodexCaptureMode } from './capture.js';
 import { toInboxEvent } from './inbox-event.js';
@@ -21,6 +21,18 @@ export function importCodexSessionsToInbox(options: CodexImportOptions): CodexIm
   let latestTimestamp = Number.NEGATIVE_INFINITY;
 
   for (const filePath of files) {
+    if (options.maxFileBytes !== undefined) {
+      try {
+        if (statSync(filePath).size > options.maxFileBytes) {
+          metrics.skippedByFilter++;
+          continue;
+        }
+      } catch {
+        metrics.errors++;
+        continue;
+      }
+    }
+
     let raw: string;
     try {
       raw = readFileSync(filePath, 'utf-8');

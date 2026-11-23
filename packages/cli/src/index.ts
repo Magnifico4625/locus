@@ -7,7 +7,7 @@ import { runContextCommand } from './commands/context.js';
 import { formatDoctorAntigravity } from './commands/doctor-antigravity.js';
 import { formatDoctorCodex } from './commands/doctor-codex.js';
 import { isAntigravityHookEvent, runAntigravityHook } from './commands/hook-antigravity.js';
-import { runCodexHook } from './commands/hook-codex.js';
+import { isCodexHookEvent, runCodexHook } from './commands/hook-codex.js';
 import {
   formatInstallAntigravityDryRun,
   runInstallAntigravity,
@@ -334,9 +334,16 @@ export async function runCli(
   }
 
   if (command === 'hook' && subcommand === 'codex') {
-    const result = runCodexHook({
-      event: argv[2],
-      stdin: options.stdin,
+    const event = argv[2];
+    if (!isCodexHookEvent(event)) {
+      io.stderr(`Unsupported Codex hook event: ${event ?? '(missing)'}`);
+      return 1;
+    }
+
+    const stdin = options.stdin ?? (await readStdinWhenPiped());
+    const result = await runCodexHook({
+      event,
+      stdin,
       env: options.env,
     });
     if (result.stdout) {
@@ -368,6 +375,7 @@ export async function runCli(
     const result = await runInstallCodex({
       env: options.env,
       startDir: options.startDir,
+      sourceDistDir: options.sourceDistDir,
       commandRunner: options.commandRunner ?? defaultCommandRunner,
       platform: options.platform,
       withHooks: argv.includes('--with-hooks'),

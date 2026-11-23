@@ -7374,7 +7374,7 @@ function createCodexEventId(sourceEventId) {
 }
 
 // packages/codex/src/importer.ts
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 
 // packages/shared-runtime/detect-client.js
 var EXPLICIT_CLIENTS = /* @__PURE__ */ new Set(["claude-code", "codex", "antigravity", "opencode", "dsh"]);
@@ -7747,9 +7747,10 @@ function normalizeCodexRecords(records) {
     const raw = record2.raw;
     const type = stringValue2(raw.type);
     if (type === "session_meta") {
-      currentSessionId = stringValue2(raw.session_id) ?? currentSessionId;
-      currentProjectRoot = stringValue2(raw.cwd) ?? currentProjectRoot;
-      currentModel = stringValue2(raw.model) ?? currentModel;
+      const meta3 = recordObject(raw.payload);
+      currentSessionId = firstString(raw.session_id, meta3?.session_id, meta3?.id) ?? currentSessionId;
+      currentProjectRoot = firstString(raw.cwd, meta3?.cwd) ?? currentProjectRoot;
+      currentModel = firstString(raw.model, meta3?.model) ?? currentModel;
       events.push(
         createEvent(record2, {
           kind: "session_start",
@@ -7761,6 +7762,13 @@ function normalizeCodexRecords(records) {
           })
         })
       );
+      continue;
+    }
+    if (type === "turn_context") {
+      const turn = recordObject(raw.payload);
+      currentProjectRoot = firstString(raw.cwd, turn?.cwd) ?? currentProjectRoot;
+      currentModel = firstString(raw.model, turn?.model) ?? currentModel;
+      skipped++;
       continue;
     }
     const sessionId = stringValue2(raw.session_id) ?? currentSessionId;
@@ -8031,6 +8039,17 @@ function importCodexSessionsToInbox(options) {
   metrics.filesScanned = files.length;
   let latestTimestamp = Number.NEGATIVE_INFINITY;
   for (const filePath of files) {
+    if (options.maxFileBytes !== void 0) {
+      try {
+        if (statSync(filePath).size > options.maxFileBytes) {
+          metrics.skippedByFilter++;
+          continue;
+        }
+      } catch {
+        metrics.errors++;
+        continue;
+      }
+    }
     let raw;
     try {
       raw = readFileSync(filePath, "utf-8");
@@ -31932,7 +31951,7 @@ function tryDelete(filePath) {
 }
 
 // packages/core/src/logger.ts
-import { appendFileSync, existsSync as existsSync4, mkdirSync as mkdirSync4, renameSync as renameSync2, statSync, unlinkSync as unlinkSync2 } from "node:fs";
+import { appendFileSync, existsSync as existsSync4, mkdirSync as mkdirSync4, renameSync as renameSync2, statSync as statSync2, unlinkSync as unlinkSync2 } from "node:fs";
 import { dirname as dirname3 } from "node:path";
 var LEVELS = { error: 0, info: 1, debug: 2 };
 var currentLevel = "error";
@@ -32969,7 +32988,7 @@ function generateRecent(db, captureLevel) {
 }
 
 // packages/core/src/tools/audit.ts
-import { statSync as statSync2 } from "node:fs";
+import { statSync as statSync3 } from "node:fs";
 var CAPTURE_REASON_AUDIT_LIMIT = 1e3;
 var CAPTURE_REASON_RECENT_WINDOW_MS = 30 * 24 * 60 * 60 * 1e3;
 function tableExists(db, name) {
@@ -32986,7 +33005,7 @@ function formatSize(bytes) {
 }
 function getFileSize(filePath) {
   try {
-    return statSync2(filePath).size;
+    return statSync3(filePath).size;
   } catch {
     return 0;
   }
@@ -33903,7 +33922,7 @@ function handleCalendar(deps, options) {
 }
 
 // packages/core/src/tools/codex-diagnostics.ts
-import { closeSync, existsSync as existsSync5, openSync, readFileSync as readFileSync5, statSync as statSync3 } from "node:fs";
+import { closeSync, existsSync as existsSync5, openSync, readFileSync as readFileSync5, statSync as statSync4 } from "node:fs";
 function collectCodexDiagnostics(deps) {
   const env = deps.env ?? process.env;
   const codexHome = env.CODEX_HOME;
@@ -33975,7 +33994,7 @@ function latestCodexRolloutEventTimestamp(filePath) {
 }
 function latestCodexRolloutMtime(filePath) {
   try {
-    return statSync3(filePath).mtimeMs;
+    return statSync4(filePath).mtimeMs;
   } catch {
     return void 0;
   }
@@ -34891,11 +34910,11 @@ function handleProjectState(deps) {
 }
 
 // packages/core/src/tools/purge.ts
-import { readdirSync as readdirSync4, statSync as statSync4, unlinkSync as unlinkSync3 } from "node:fs";
+import { readdirSync as readdirSync4, statSync as statSync5, unlinkSync as unlinkSync3 } from "node:fs";
 import { join as join10 } from "node:path";
 function getDbSizeBytes(dbPath) {
   try {
-    return statSync4(dbPath).size;
+    return statSync5(dbPath).size;
   } catch {
     return 0;
   }
@@ -36201,7 +36220,7 @@ function handleReview(deps, options = {}) {
 
 // packages/core/src/scanner/index.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
-import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync8, statSync as statSync5 } from "node:fs";
+import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync8, statSync as statSync6 } from "node:fs";
 import { extname, join as join11, relative } from "node:path";
 
 // packages/core/src/scanner/aliases.ts
@@ -36652,7 +36671,7 @@ var defaultScanDeps = {
       for (const entry of entries) {
         const fullPath = join11(dir, entry);
         try {
-          const stat = statSync5(fullPath);
+          const stat = statSync6(fullPath);
           if (stat.isDirectory()) {
             if (entry === "node_modules" || entry === ".git" || entry === "dist") {
               continue;
@@ -36790,7 +36809,7 @@ function walkDirectory(dir, basePath) {
     for (const entry of entries) {
       const fullPath = join11(current, entry);
       try {
-        const stat = statSync5(fullPath);
+        const stat = statSync6(fullPath);
         if (stat.isDirectory()) {
           walk(fullPath);
         } else {
@@ -36913,7 +36932,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
     const fullPath = join11(projectPath, relPath);
     let stat;
     try {
-      stat = statSync5(fullPath);
+      stat = statSync6(fullPath);
     } catch {
       storeSkippedEntry(db, relPath, "stat-failed", now);
       skippedFiles++;
@@ -37043,7 +37062,7 @@ async function handleScan(deps) {
 }
 
 // packages/core/src/tools/status.ts
-import { readdirSync as readdirSync6, statSync as statSync6 } from "node:fs";
+import { readdirSync as readdirSync6, statSync as statSync7 } from "node:fs";
 function getDefaultCodexAutoImportSnapshot() {
   return {
     clientDetected: false,
@@ -37171,7 +37190,7 @@ function handleStatus(deps) {
   }
   let dbSizeBytes = 0;
   try {
-    dbSizeBytes = statSync6(dbPath).size;
+    dbSizeBytes = statSync7(dbPath).size;
   } catch {
     dbSizeBytes = 0;
   }

@@ -1,6 +1,16 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { initStorage, resolveProjectRoot } from '@locus/core';
+import { resolveDbPath, resolveInboxDir } from '@locus/shared-runtime';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   buildCodexHookCommand,
@@ -8,9 +18,11 @@ import {
   inspectCodexHooks,
   renderCodexHooksJson,
 } from '../src/codex/hooks.js';
+import { readHookSessionState } from '../src/hook-session-state.js';
 import { runCli } from '../src/index.js';
 
 const tempDirs: string[] = [];
+const savedEnv = { ...process.env };
 
 function makeTempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'locus-cli-codex-hooks-'));
@@ -32,7 +44,39 @@ function createIo() {
   };
 }
 
+function createSandbox() {
+  const root = makeTempDir();
+  const codexHome = join(root, 'codex-home');
+  const locusHome = join(root, 'locus-home');
+  const storageRoot = join(root, 'memory-storage');
+  const projectDir = join(root, 'workspace');
+  mkdirSync(codexHome, { recursive: true });
+  mkdirSync(locusHome, { recursive: true });
+  mkdirSync(projectDir, { recursive: true });
+  writeFileSync(
+    join(projectDir, 'package.json'),
+    '{"name":"codex-demo","version":"1.2.0"}',
+    'utf8',
+  );
+
+  const env = {
+    CODEX_HOME: codexHome,
+    LOCUS_HOME: locusHome,
+    LOCUS_STORAGE_ROOT: storageRoot,
+    LOCUS_CODEX_CAPTURE: 'redacted',
+    LOCUS_CAPTURE_LEVEL: 'redacted',
+  };
+
+  process.env.CODEX_HOME = codexHome;
+  process.env.LOCUS_HOME = locusHome;
+  process.env.LOCUS_STORAGE_ROOT = storageRoot;
+  delete process.env.CLAUDE_PLUGIN_ROOT;
+
+  return { root, codexHome, locusHome, storageRoot, projectDir, env };
+}
+
 afterEach(() => {
+  process.env = { ...savedEnv };
   for (const dir of tempDirs.splice(0)) {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -40,12 +84,12 @@ afterEach(() => {
 
 describe('codex hook command', () => {
   it.each(['session-start', 'user-prompt-submit', 'stop'])('accepts %s events', async (event) => {
-    const codexHome = makeTempDir();
+    const { projectDir, env } = createSandbox();
     const { io, stdout, stderr } = createIo();
 
     const exitCode = await runCli(['hook', 'codex', event], io, {
-      env: { CODEX_HOME: codexHome },
-      stdin: JSON.stringify({ hook_event_name: event }),
+      env,
+      stdin: JSON.stringify({ hook_event_name: event, cwd: projectDir }),
     });
 
     expect(exitCode).toBe(0);
@@ -53,11 +97,31 @@ describe('codex hook command', () => {
     expect(JSON.parse(stdout.join('\n'))).toMatchObject({ continue: true });
   });
 
-  it('rejects unsupported events', async () => {
-    const { io, stderr } = createIo();
+  it('accepts post-tool-use events with empty silent stdout', async () => {
+    const { projectDir, env } = createSandbox();
+    const { io, stdout, stderr } = createIo();
 
     const exitCode = await runCli(['hook', 'codex', 'post-tool-use'], io, {
-      env: { CODEX_HOME: makeTempDir() },
+      env,
+      stdin: JSON.stringify({
+        hook_event_name: 'PostToolUse',
+        cwd: projectDir,
+        tool_name: 'Read',
+        tool_input: { path: join(projectDir, 'README.md') },
+      }),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toEqual([]);
+    expect(stdout).toEqual([]);
+  });
+
+  it('rejects unsupported events', async () => {
+    const { env } = createSandbox();
+    const { io, stderr } = createIo();
+
+    const exitCode = await runCli(['hook', 'codex', 'unknown-event'], io, {
+      env,
       stdin: '{}',
     });
 
@@ -66,10 +130,11 @@ describe('codex hook command', () => {
   });
 
   it('fails open with valid JSON when Stop receives malformed stdin', async () => {
+    const { env } = createSandbox();
     const { io, stdout, stderr } = createIo();
 
     const exitCode = await runCli(['hook', 'codex', 'stop'], io, {
-      env: { CODEX_HOME: makeTempDir() },
+      env,
       stdin: '{bad json',
     });
 
@@ -79,15 +144,16 @@ describe('codex hook command', () => {
   });
 
   it('writes a Stop trigger marker atomically without leaving temp files', async () => {
-    const codexHome = makeTempDir();
+    const { codexHome, projectDir, env } = createSandbox();
     const { io } = createIo();
 
     const exitCode = await runCli(['hook', 'codex', 'stop'], io, {
-      env: { CODEX_HOME: codexHome },
+      env,
       stdin: JSON.stringify({
         hook_event_name: 'Stop',
         session_id: 'session-1',
         turn_id: 'turn-1',
+        cwd: projectDir,
       }),
     });
 
@@ -105,14 +171,222 @@ describe('codex hook command', () => {
     });
   });
 
-  it('does not depend on SQLite, core, or MCP implementation modules', () => {
+  it('imports Codex rollout JSONL on Stop, injects SessionStart & UserPromptSubmit context, and deduplicates', async () => {
+    const { codexHome, projectDir, env } = createSandbox();
+    const canonicalRoot = resolveProjectRoot(projectDir).root;
+    const rolloutDir = join(codexHome, 'sessions', '2026', '11', '23');
+    mkdirSync(rolloutDir, { recursive: true });
+    writeFileSync(
+      join(rolloutDir, 'rollout-2026-11-23-01.jsonl'),
+      `${[
+        JSON.stringify({
+          type: 'session_meta',
+          timestamp: '2026-11-23T10:00:00.000Z',
+          session_id: 'sess-codex-1',
+          cwd: projectDir,
+          model: 'gpt-5.4',
+        }),
+        JSON.stringify({
+          type: 'event_msg',
+          subtype: 'user_message',
+          timestamp: '2026-11-23T10:00:01.000Z',
+          message: 'Decision: use SQLite WAL mode for Codex local storage.',
+        }),
+        JSON.stringify({
+          type: 'response_item',
+          timestamp: '2026-11-23T10:00:05.000Z',
+          item: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'output_text',
+                text: 'Decision: SQLite WAL mode configured for fast concurrent reads and writes.',
+              },
+            ],
+          },
+        }),
+      ].join('\n')}\n`,
+      'utf8',
+    );
+
+    const stopIo = createIo();
+    const stopCode = await runCli(['hook', 'codex', 'stop'], stopIo.io, {
+      env,
+      stdin: JSON.stringify({
+        hook_event_name: 'Stop',
+        session_id: 'sess-codex-1',
+        turn_id: 'turn-1',
+        cwd: projectDir,
+      }),
+    });
+    expect(stopCode).toBe(0);
+    expect(JSON.parse(stopIo.stdout.join('\n'))).toEqual({
+      continue: true,
+      suppressOutput: true,
+    });
+
+    const { db } = await initStorage(resolveDbPath(canonicalRoot));
+    try {
+      const durable = db.all<{ summary: string }>(
+        "SELECT summary FROM durable_memories WHERE state = 'active'",
+      );
+      expect(durable.some((row) => row.summary.includes('SQLite WAL mode'))).toBe(true);
+    } finally {
+      db.close();
+    }
+
+    // SessionStart in a new session injects [Locus Memory — Project Brief]
+    const startIo = createIo();
+    const startCode = await runCli(['hook', 'codex', 'session-start'], startIo.io, {
+      env,
+      stdin: JSON.stringify({
+        hook_event_name: 'SessionStart',
+        session_id: 'sess-codex-live-1',
+        cwd: projectDir,
+      }),
+    });
+    expect(startCode).toBe(0);
+    const startOut = JSON.parse(startIo.stdout.join('\n')) as {
+      continue: boolean;
+      suppressOutput: boolean;
+      hookSpecificOutput?: { hookEventName: string; additionalContext: string };
+    };
+    expect(startOut.continue).toBe(true);
+    expect(startOut.hookSpecificOutput?.hookEventName).toBe('SessionStart');
+    expect(startOut.hookSpecificOutput?.additionalContext).toContain(
+      '[Locus Memory — Project Brief]',
+    );
+    expect(startOut.hookSpecificOutput?.additionalContext).toContain('SQLite WAL mode');
+
+    const startState = readHookSessionState('codex', 'sess-codex-live-1', env);
+    expect(startState.sessionStartInjected).toBe(true);
+    expect(startState.injectedDurableIds.length).toBeGreaterThan(0);
+
+    // Asking the same question right after SessionStart in that session is deduplicated
+    const dupIo = createIo();
+    expect(
+      await runCli(['hook', 'codex', 'user-prompt-submit'], dupIo.io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'sess-codex-live-1',
+          cwd: projectDir,
+          prompt: 'Why did we choose SQLite WAL mode for local storage?',
+        }),
+      }),
+    ).toBe(0);
+    expect(JSON.parse(dupIo.stdout.join('\n'))).toEqual({
+      continue: true,
+      suppressOutput: true,
+    });
+
+    // Fresh session without SessionStart gets UserPromptSubmit additionalContext once, then dedups
+    const freshPromptIo = createIo();
+    expect(
+      await runCli(['hook', 'codex', 'user-prompt-submit'], freshPromptIo.io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'sess-codex-live-2',
+          cwd: projectDir,
+          prompt: 'What did we decide about SQLite WAL mode?',
+        }),
+      }),
+    ).toBe(0);
+    const promptOut = JSON.parse(freshPromptIo.stdout.join('\n')) as {
+      hookSpecificOutput?: { hookEventName: string; additionalContext: string };
+    };
+    expect(promptOut.hookSpecificOutput?.hookEventName).toBe('UserPromptSubmit');
+    expect(promptOut.hookSpecificOutput?.additionalContext).toContain(
+      '[Locus Memory — Relevant Recall]',
+    );
+    expect(promptOut.hookSpecificOutput?.additionalContext).toContain('SQLite WAL mode');
+
+    // Noisy prompt stays silent without hookSpecificOutput
+    for (const noisyPrompt of ['продолжай', 'ok']) {
+      const noisyIo = createIo();
+      expect(
+        await runCli(['hook', 'codex', 'user-prompt-submit'], noisyIo.io, {
+          env,
+          stdin: JSON.stringify({
+            session_id: 'sess-codex-live-2',
+            cwd: projectDir,
+            prompt: noisyPrompt,
+          }),
+        }),
+      ).toBe(0);
+      expect(JSON.parse(noisyIo.stdout.join('\n'))).toEqual({
+        continue: true,
+        suppressOutput: true,
+      });
+    }
+  });
+
+  it('captures Bash/Edit/error PostToolUse into inbox, filters .env, skips Read and memory_*', async () => {
+    const { projectDir, env } = createSandbox();
+    const canonicalRoot = resolveProjectRoot(projectDir).root;
+    const inboxDir = resolveInboxDir(canonicalRoot);
+
+    // Ignored: successful Read & memory_recall
+    await runCli(['hook', 'codex', 'post-tool-use'], createIo().io, {
+      env,
+      stdin: JSON.stringify({
+        session_id: 'sess-tools',
+        cwd: projectDir,
+        tool_name: 'Read',
+        tool_input: { path: join(projectDir, 'README.md') },
+      }),
+    });
+    await runCli(['hook', 'codex', 'post-tool-use'], createIo().io, {
+      env,
+      stdin: JSON.stringify({
+        session_id: 'sess-tools',
+        cwd: projectDir,
+        tool_name: 'memory_recall',
+        error: 'ignored internal tool error',
+      }),
+    });
+    expect(existsSync(inboxDir) ? readdirSync(inboxDir) : []).toHaveLength(0);
+
+    // Captured: Edit with .env filtered + safe target_file
+    const editIo = createIo();
+    const editCode = await runCli(['hook', 'codex', 'post-tool-use'], editIo.io, {
+      env,
+      stdin: JSON.stringify({
+        session_id: 'sess-tools',
+        cwd: projectDir,
+        call_id: 'call-1',
+        tool_name: 'Edit',
+        tool_input: {
+          path: join(projectDir, '.env'),
+          target_file: join(projectDir, 'src', 'worker.ts'),
+        },
+      }),
+    });
+    expect(editCode).toBe(0);
+    expect(editIo.stdout).toEqual([]);
+
+    const files = readdirSync(inboxDir).filter((f) => f.endsWith('.json'));
+    expect(files).toHaveLength(1);
+    const written = JSON.parse(readFileSync(join(inboxDir, files[0] ?? ''), 'utf8')) as {
+      source: string;
+      kind: string;
+      payload: { tool: string; files: string[]; status: string };
+    };
+    expect(written.source).toBe('codex');
+    expect(written.kind).toBe('tool_use');
+    expect(written.payload.tool).toBe('Edit');
+    expect(written.payload.files).toEqual([join(projectDir, 'src', 'worker.ts')]);
+    expect(written.payload.status).toBe('success');
+  });
+
+  it('does not depend on MCP server implementation modules', () => {
     const source = readFileSync(
       join(import.meta.dirname, '..', 'src', 'commands', 'hook-codex.ts'),
       'utf8',
     );
 
-    expect(source).not.toContain('node:sqlite');
-    expect(source).not.toContain('@locus/core');
     expect(source).not.toContain('runMcp');
     expect(source).not.toContain('commands/mcp');
     expect(existsSync(join(import.meta.dirname, '..', 'src', 'commands', 'hook-codex.ts'))).toBe(
@@ -122,13 +396,17 @@ describe('codex hook command', () => {
 });
 
 describe('codex hook config generation', () => {
-  it('generates lifecycle hooks for safe recall freshness triggers', () => {
+  it('generates lifecycle hooks for SessionStart, UserPromptSubmit, PostToolUse, and Stop', () => {
     const config = buildCodexHooksConfig({ version: '3.7.0' });
 
-    expect(Object.keys(config.hooks).sort()).toEqual(['SessionStart', 'Stop', 'UserPromptSubmit']);
-    expect(config.hooks.PostToolUse).toBeUndefined();
+    expect(Object.keys(config.hooks).sort()).toEqual([
+      'PostToolUse',
+      'SessionStart',
+      'Stop',
+      'UserPromptSubmit',
+    ]);
 
-    for (const event of ['SessionStart', 'UserPromptSubmit', 'Stop'] as const) {
+    for (const event of ['SessionStart', 'UserPromptSubmit', 'PostToolUse', 'Stop'] as const) {
       expect(config.hooks[event]).toHaveLength(1);
       expect(config.hooks[event]?.[0]?.hooks).toHaveLength(1);
       expect(config.hooks[event]?.[0]?.hooks[0]).toMatchObject({
@@ -140,6 +418,31 @@ describe('codex hook config generation', () => {
     }
   });
 
+  it('produces versionless identical hooks.json across versions when runtimeCliPath is supplied (trusted_hash stability)', () => {
+    const cliPath = 'C:\\Users\\Admin\\.locus\\bin\\cli.js';
+    const v370 = renderCodexHooksJson(
+      buildCodexHooksConfig({ version: '3.7.0', runtimeCliPath: cliPath }),
+    );
+    const v400 = renderCodexHooksJson(
+      buildCodexHooksConfig({ version: '4.0.0', runtimeCliPath: cliPath }),
+    );
+
+    expect(v370).toBe(v400);
+    const parsed = JSON.parse(v370) as {
+      hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
+    };
+    expect(parsed.hooks.SessionStart?.[0]?.hooks[0]?.command).toBe(
+      `node ${cliPath} hook codex session-start`,
+    );
+    expect(parsed.hooks.UserPromptSubmit?.[0]?.hooks[0]?.command).toBe(
+      `node ${cliPath} hook codex user-prompt-submit`,
+    );
+    expect(parsed.hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe(
+      `node ${cliPath} hook codex post-tool-use`,
+    );
+    expect(parsed.hooks.Stop?.[0]?.hooks[0]?.command).toBe(`node ${cliPath} hook codex stop`);
+  });
+
   it('uses event-specific hook command arguments', () => {
     const config = buildCodexHooksConfig({ version: '3.7.0', platform: 'linux' });
 
@@ -148,6 +451,9 @@ describe('codex hook config generation', () => {
     );
     expect(config.hooks.UserPromptSubmit?.[0]?.hooks[0]?.command).toBe(
       'npx -y locus-memory@3.7.0 hook codex user-prompt-submit',
+    );
+    expect(config.hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe(
+      'npx -y locus-memory@3.7.0 hook codex post-tool-use',
     );
     expect(config.hooks.Stop?.[0]?.hooks[0]?.command).toBe(
       'npx -y locus-memory@3.7.0 hook codex stop',
@@ -171,7 +477,7 @@ describe('codex hook config generation', () => {
     expect(json.endsWith('\n')).toBe(true);
   });
 
-  it('inspects configured hooks from installed binary command policy', () => {
+  it('inspects configured hooks from both installed binary and local runtime node commands', () => {
     const codexHome = makeTempDir();
     writeFileSync(
       join(codexHome, 'hooks.json'),
@@ -179,6 +485,19 @@ describe('codex hook config generation', () => {
         buildCodexHooksConfig({
           version: '3.7.0',
           binaryPath: 'C:\\Program Files\\Locus\\locus-memory.cmd',
+        }),
+      ),
+      'utf8',
+    );
+
+    expect(inspectCodexHooks({ env: { CODEX_HOME: codexHome } }).status).toBe('configured');
+
+    writeFileSync(
+      join(codexHome, 'hooks.json'),
+      renderCodexHooksJson(
+        buildCodexHooksConfig({
+          version: '3.7.0',
+          runtimeCliPath: 'C:\\Users\\Admin\\.locus\\bin\\cli.js',
         }),
       ),
       'utf8',
@@ -210,5 +529,74 @@ describe('codex hook config generation', () => {
     );
 
     expect(inspectCodexHooks({ env: { CODEX_HOME: codexHome } }).status).toBe('not configured');
+  });
+
+  it('captures Stop last_assistant_message under redacted capture when no rollout file exists', async () => {
+    const { projectDir, env } = createSandbox();
+    const canonicalRoot = resolveProjectRoot(projectDir).root;
+    const stopIo = createIo();
+
+    const exitCode = await runCli(['hook', 'codex', 'stop'], stopIo.io, {
+      env,
+      stdin: JSON.stringify({
+        hook_event_name: 'Stop',
+        session_id: 'sess-stop-msg-1',
+        turn_id: 'turn-msg-1',
+        cwd: projectDir,
+        last_assistant_message: 'Decision: use Postgres advisory locks for cron job coordination.',
+      }),
+    });
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(stopIo.stdout.join('\n'))).toEqual({
+      continue: true,
+      suppressOutput: true,
+    });
+
+    const { db } = await initStorage(resolveDbPath(canonicalRoot));
+    try {
+      const durable = db.all<{ summary: string }>(
+        "SELECT summary FROM durable_memories WHERE state = 'active'",
+      );
+      expect(durable.some((row) => row.summary.includes('advisory locks'))).toBe(true);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('does not store Stop last_assistant_message text when LOCUS_CODEX_CAPTURE is metadata or off', async () => {
+    for (const captureMode of ['metadata', 'off'] as const) {
+      const { projectDir, env } = createSandbox();
+      const canonicalRoot = resolveProjectRoot(projectDir).root;
+      const stopIo = createIo();
+
+      const exitCode = await runCli(['hook', 'codex', 'stop'], stopIo.io, {
+        env: {
+          ...env,
+          LOCUS_CODEX_CAPTURE: captureMode,
+          LOCUS_CAPTURE_LEVEL: captureMode,
+        },
+        stdin: JSON.stringify({
+          hook_event_name: 'Stop',
+          session_id: `sess-stop-${captureMode}`,
+          turn_id: `turn-${captureMode}`,
+          cwd: projectDir,
+          last_assistant_message: 'Decision: never persist this secret fallback marker 9918273.',
+        }),
+      });
+
+      expect(exitCode).toBe(0);
+      const { db } = await initStorage(resolveDbPath(canonicalRoot));
+      try {
+        const rows = db.all<{ payload_json: string }>(
+          'SELECT payload_json FROM conversation_events',
+        );
+        expect(rows.some((row) => row.payload_json.includes('9918273'))).toBe(false);
+        const durable = db.all<{ summary: string }>('SELECT summary FROM durable_memories');
+        expect(durable.some((row) => row.summary.includes('9918273'))).toBe(false);
+      } finally {
+        db.close();
+      }
+    }
   });
 });

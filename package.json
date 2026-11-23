@@ -19,6 +19,7 @@
     "packages/codex/config/config.toml.example",
     "plugins/locus-memory/.mcp.json",
     "plugins/locus-memory/.codex-plugin/plugin.json",
+    "plugins/locus-memory/hooks.json",
     "plugins/locus-memory/skills/locus-memory/SKILL.md",
     "docs/releases/v3.7.0.md",
     "LICENSE",

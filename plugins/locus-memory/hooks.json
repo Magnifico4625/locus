@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx -y locus-memory@3.7.0 hook codex session-start",
+            "timeout": 10,
+            "statusMessage": "Preparing Locus recall freshness"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx -y locus-memory@3.7.0 hook codex user-prompt-submit",
+            "timeout": 10,
+            "statusMessage": "Notifying Locus about a new prompt"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|Write|Edit|apply_patch|shell|exec_command|run_terminal_command",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx -y locus-memory@3.7.0 hook codex post-tool-use",
+            "timeout": 10,
+            "statusMessage": "Recording Locus tool activity"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "npx -y locus-memory@3.7.0 hook codex stop",
+            "timeout": 10,
+            "statusMessage": "Notifying Locus that the turn stopped"
+          }
+        ]
+      }
+    ]
+  }
+}

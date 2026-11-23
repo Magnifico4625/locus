@@ -21,9 +21,11 @@ export function normalizeCodexRecords(records: readonly CodexJsonlRecord[]): Cod
     const type = stringValue(raw.type);
 
     if (type === 'session_meta') {
-      currentSessionId = stringValue(raw.session_id) ?? currentSessionId;
-      currentProjectRoot = stringValue(raw.cwd) ?? currentProjectRoot;
-      currentModel = stringValue(raw.model) ?? currentModel;
+      const meta = recordObject(raw.payload);
+      currentSessionId =
+        firstString(raw.session_id, meta?.session_id, meta?.id) ?? currentSessionId;
+      currentProjectRoot = firstString(raw.cwd, meta?.cwd) ?? currentProjectRoot;
+      currentModel = firstString(raw.model, meta?.model) ?? currentModel;
 
       events.push(
         createEvent(record, {
@@ -36,6 +38,14 @@ export function normalizeCodexRecords(records: readonly CodexJsonlRecord[]): Cod
           }),
         }),
       );
+      continue;
+    }
+
+    if (type === 'turn_context') {
+      const turn = recordObject(raw.payload);
+      currentProjectRoot = firstString(raw.cwd, turn?.cwd) ?? currentProjectRoot;
+      currentModel = firstString(raw.model, turn?.model) ?? currentModel;
+      skipped++;
       continue;
     }
 

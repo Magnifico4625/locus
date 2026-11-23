@@ -17,6 +17,7 @@ import {
   resolvePackageVersion,
   resolveRuntimePackageOverride,
 } from '../package-info.js';
+import { type InstallLocalCliRuntimeResult, installLocalCliRuntime } from '../runtime-install.js';
 import type { CommandRunner } from './runner.js';
 
 export interface InstallCodexDryRunOptions {
@@ -28,6 +29,7 @@ export interface InstallCodexDryRunOptions {
 export interface InstallCodexOptions extends InstallCodexDryRunOptions {
   commandRunner: CommandRunner;
   platform?: NodeJS.Platform;
+  sourceDistDir?: string;
 }
 
 export function formatInstallCodexDryRun(options: InstallCodexDryRunOptions = {}): string {
@@ -158,8 +160,25 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
 
     const cwdResult = setMcpServerCwd(resolveCodexConfigPath(env), 'locus', codexHome);
     const skill = installCodexSkill({ env, overwrite: true, backup: true });
+    let localRuntime: InstallLocalCliRuntimeResult | undefined;
+    if (options.withHooks) {
+      try {
+        localRuntime = installLocalCliRuntime({
+          env,
+          startDir: options.startDir,
+          sourceDistDir: options.sourceDistDir,
+        });
+      } catch {
+        // Fall back cleanly to pinned npx hook command when built dist/ is unavailable.
+      }
+    }
     const hooks = options.withHooks
-      ? installCodexHooks({ env, version, platform: options.platform })
+      ? installCodexHooks({
+          env,
+          version,
+          platform: options.platform,
+          runtimeCliPath: localRuntime?.cliPath,
+        })
       : undefined;
 
     return {
@@ -177,6 +196,7 @@ export async function runInstallCodex(options: InstallCodexOptions): Promise<{
         skill.backup ? `Backup: ${skill.backup.path}` : undefined,
         hooks ? `Hooks: ${hooks.action}` : 'Hooks: not requested',
         hooks ? `Hooks path: ${hooks.path}` : undefined,
+        localRuntime ? `Local hook runtime: ${localRuntime.binDir}` : undefined,
         hooks?.backupPath ? `Hooks backup: ${hooks.backupPath}` : undefined,
         skill.error ? `Error: ${skill.error.message}` : undefined,
       ]

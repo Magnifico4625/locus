@@ -10,8 +10,12 @@ import { dirname, join } from 'node:path';
 import { buildRuntimePackageSpecifier } from '../package-info.js';
 import { resolveCodexHome } from './paths.js';
 
-export type CodexHookConfigEvent = 'SessionStart' | 'UserPromptSubmit' | 'Stop';
-export type CodexHookCommandEvent = 'session-start' | 'user-prompt-submit' | 'stop';
+export type CodexHookConfigEvent = 'SessionStart' | 'UserPromptSubmit' | 'PostToolUse' | 'Stop';
+export type CodexHookCommandEvent =
+  | 'session-start'
+  | 'user-prompt-submit'
+  | 'post-tool-use'
+  | 'stop';
 
 export interface CodexHookHandler {
   type: 'command';
@@ -26,7 +30,7 @@ export interface CodexHookMatcherGroup {
 }
 
 export interface CodexHooksConfig {
-  hooks: Partial<Record<CodexHookConfigEvent | 'PostToolUse', CodexHookMatcherGroup[]>>;
+  hooks: Partial<Record<CodexHookConfigEvent, CodexHookMatcherGroup[]>>;
 }
 
 export interface BuildCodexHooksConfigOptions {
@@ -34,6 +38,7 @@ export interface BuildCodexHooksConfigOptions {
   platform?: NodeJS.Platform;
   timeoutSeconds?: number;
   binaryPath?: string;
+  runtimeCliPath?: string;
 }
 
 export type CodexHooksInstallAction = 'created' | 'updated' | 'unchanged';
@@ -63,6 +68,12 @@ const hookEvents: ReadonlyArray<{
     statusMessage: 'Notifying Locus about a new prompt',
   },
   {
+    configEvent: 'PostToolUse',
+    commandEvent: 'post-tool-use',
+    matcher: 'Bash|Write|Edit|apply_patch|shell|exec_command|run_terminal_command',
+    statusMessage: 'Recording Locus tool activity',
+  },
+  {
     configEvent: 'Stop',
     commandEvent: 'stop',
     statusMessage: 'Notifying Locus that the turn stopped',
@@ -70,7 +81,7 @@ const hookEvents: ReadonlyArray<{
 ];
 
 export function buildCodexHooksConfig(options: BuildCodexHooksConfigOptions): CodexHooksConfig {
-  const timeout = options.timeoutSeconds ?? 3;
+  const timeout = options.timeoutSeconds ?? (options.runtimeCliPath ? 10 : 3);
   const hooks: CodexHooksConfig['hooks'] = {};
 
   for (const event of hookEvents) {
@@ -85,6 +96,7 @@ export function buildCodexHooksConfig(options: BuildCodexHooksConfigOptions): Co
               version: options.version,
               platform: options.platform,
               binaryPath: options.binaryPath,
+              runtimeCliPath: options.runtimeCliPath,
             }),
             timeout,
             statusMessage: event.statusMessage,
@@ -102,7 +114,14 @@ export function buildCodexHookCommand(options: {
   version?: string;
   platform?: NodeJS.Platform;
   binaryPath?: string;
+  runtimeCliPath?: string;
 }): string {
+  if (options.runtimeCliPath) {
+    return ['node', options.runtimeCliPath, 'hook', 'codex', options.event]
+      .map(quoteShellArg)
+      .join(' ');
+  }
+
   const command = options.binaryPath ?? (options.platform === 'win32' ? 'npx.cmd' : 'npx');
   const args = options.binaryPath
     ? ['hook', 'codex', options.event]
@@ -131,6 +150,7 @@ export function installCodexHooks(options: {
   env?: Record<string, string | undefined>;
   version: string;
   platform?: NodeJS.Platform;
+  runtimeCliPath?: string;
   now?: Date;
 }): InstallCodexHooksResult {
   const hooksPath = resolveCodexHooksPath(options.env);
@@ -138,6 +158,7 @@ export function installCodexHooks(options: {
     buildCodexHooksConfig({
       version: options.version,
       platform: options.platform,
+      runtimeCliPath: options.runtimeCliPath,
     }),
   );
 
@@ -220,12 +241,13 @@ function hasLocusHookCommand(text: string): boolean {
 }
 
 function isLocusHookCommand(command: unknown): boolean {
-  if (typeof command !== 'string') {
+  if (typeof command !== 'string' || !/\bhook codex\b/u.test(command)) {
     return false;
   }
 
   return (
-    /\blocus-memory(?:\.cmd)?(?:@[\w.-]+)?\b/u.test(command) && /\bhook codex\b/u.test(command)
+    /\blocus-memory(?:\.cmd)?(?:@[\w.-]+)?\b/u.test(command) ||
+    /\bnode\b.*\bcli\.js\b/u.test(command)
   );
 }
 

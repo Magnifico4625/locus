@@ -690,4 +690,25 @@ describe('importCodexSessionsToInbox', () => {
       model: 'gpt-5.4',
     });
   });
+
+  it('skips rollout files exceeding maxFileBytes without reading or raising errors', () => {
+    const root = tempRoot();
+    const sessionsDir = join(root, 'sessions');
+    const inboxDir = join(root, 'inbox');
+    mkdirSync(sessionsDir, { recursive: true });
+    copyFixtureAsRollout(sessionsDir, 'decision-session.jsonl', 'rollout-oversized.jsonl');
+
+    const metrics = importCodexSessionsToInbox({
+      sessionsDir,
+      inboxDir,
+      captureMode: 'redacted',
+      maxFileBytes: 10,
+    });
+
+    expect(metrics.filesScanned).toBe(1);
+    expect(metrics.errors).toBe(0);
+    expect(metrics.skippedByFilter).toBeGreaterThanOrEqual(1);
+    expect(metrics.written).toBe(0);
+    expect(existsSync(inboxDir)).toBe(false);
+  });
 });

@@ -1,7 +1,23 @@
 import { execFileSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { generateCodexMarketplaceBundle } from '../src/plugin-sync.js';
+
+const tempDirs: string[] = [];
+
+function makeTempRoot(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'locus-codex-bundle-'));
+  tempDirs.push(dir);
+  return dir;
+}
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 function repoRoot(): string {
   return join(import.meta.dirname, '..', '..', '..');
@@ -20,6 +36,7 @@ describe('codex plugin bundle', () => {
       true,
     );
     expect(existsSync(join(root, 'plugins', 'locus-memory', '.mcp.json'))).toBe(true);
+    expect(existsSync(join(root, 'plugins', 'locus-memory', 'hooks.json'))).toBe(true);
     expect(
       existsSync(join(root, 'plugins', 'locus-memory', 'skills', 'locus-memory', 'SKILL.md')),
     ).toBe(true);
@@ -93,11 +110,56 @@ describe('codex plugin bundle', () => {
     const pluginManifest = readJson(pluginManifestPath) as {
       skills?: string;
       mcpServers?: string;
+      hooks?: string;
       name?: string;
     };
     expect(pluginManifest.name).toBe('locus-memory');
     expect(pluginManifest.skills).toBe('./skills/');
     expect(pluginManifest.mcpServers).toBe('./.mcp.json');
+    expect(pluginManifest.hooks).toBe('./hooks.json');
+
+    const pluginHooks = readJson(join(root, 'plugins', 'locus-memory', 'hooks.json')) as {
+      hooks?: Record<string, unknown>;
+    };
+    expect(Object.keys(pluginHooks.hooks ?? {}).sort()).toEqual([
+      'PostToolUse',
+      'SessionStart',
+      'Stop',
+      'UserPromptSubmit',
+    ]);
+  });
+
+  it('generates self-contained marketplace bundle with local runtime and hooks when bundleRuntime=true', () => {
+    const tempRoot = makeTempRoot();
+    mkdirSync(join(tempRoot, 'dist'), { recursive: true });
+    writeFileSync(join(tempRoot, 'dist', 'cli.js'), 'console.log("cli");\n', 'utf8');
+    writeFileSync(join(tempRoot, 'dist', 'server.js'), 'console.log("server");\n', 'utf8');
+
+    const result = generateCodexMarketplaceBundle({
+      rootDir: tempRoot,
+      version: '3.7.0',
+      bundleRuntime: true,
+    });
+
+    expect(existsSync(result.hooksPath)).toBe(true);
+    expect(result.runtimeDir).toBe(join(result.pluginRoot, 'runtime'));
+    expect(existsSync(join(result.runtimeDir ?? '', 'cli.js'))).toBe(true);
+    expect(existsSync(join(result.runtimeDir ?? '', 'server.js'))).toBe(true);
+    expect(existsSync(join(result.runtimeDir ?? '', 'package.json'))).toBe(true);
+    expect(existsSync(join(result.runtimeDir ?? '', 'runtime.json'))).toBe(true);
+
+    const mcp = readJson(result.mcpPath) as {
+      mcpServers: { locus: { command: string; args: string[] } };
+    };
+    expect(mcp.mcpServers.locus.command).toBe('node');
+    expect(mcp.mcpServers.locus.args[0]).toBe(join(result.runtimeDir ?? '', 'server.js'));
+
+    const hooks = readJson(result.hooksPath) as {
+      hooks: { Stop: Array<{ hooks: Array<{ command: string }> }> };
+    };
+    expect(hooks.hooks.Stop[0]?.hooks[0]?.command).toContain(
+      join(result.runtimeDir ?? '', 'cli.js'),
+    );
   });
 
   it('sync:codex-plugin restores the canonical skill into the plugin bundle', () => {

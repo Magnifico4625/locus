@@ -271,4 +271,92 @@ describe('normalizeCodexRecords', () => {
       summary: 'Live recall test showed no imported user prompt before the fix.',
     });
   });
+
+  it('normalizes nested session_meta.payload and turn_context.payload from real Codex Desktop rollouts', () => {
+    const result = normalizeCodexRecords([
+      {
+        filePath: 'rollout-desktop.jsonl',
+        line: 1,
+        raw: {
+          type: 'session_meta',
+          timestamp: '2026-11-23T12:00:00.000Z',
+          payload: {
+            id: '019fb276-fallback-id',
+            session_id: '019fb276-f410-74e3-947b-d8ba6d1abb5d',
+            cwd: 'C:\\Users\\Admin\\gemini-project\\APPS\\GasworkersSite',
+          },
+        },
+      },
+      {
+        filePath: 'rollout-desktop.jsonl',
+        line: 2,
+        raw: {
+          type: 'turn_context',
+          timestamp: '2026-11-23T12:00:01.000Z',
+          payload: {
+            cwd: 'C:\\Users\\Admin\\gemini-project\\APPS\\GasworkersSite\\subdir',
+            model: 'gpt-5.6-codex',
+          },
+        },
+      },
+      {
+        filePath: 'rollout-desktop.jsonl',
+        line: 3,
+        raw: {
+          type: 'response_item',
+          timestamp: '2026-11-23T12:00:02.000Z',
+          payload: {
+            type: 'message',
+            role: 'assistant',
+            content: [
+              {
+                type: 'output_text',
+                text: 'Decision: keep shared rollout ingestion synchronized across workspaces.',
+              },
+            ],
+          },
+        },
+      },
+      {
+        filePath: 'rollout-desktop.jsonl',
+        line: 4,
+        raw: {
+          type: 'event_msg',
+          timestamp: '2026-11-23T12:00:03.000Z',
+          payload: {
+            type: 'task_complete',
+            last_agent_message: 'Wrapped up Codex Desktop nested payload support.',
+          },
+        },
+      },
+    ]);
+
+    expect(result.skipped).toBe(1);
+    expect(result.events.map((event) => event.kind)).toEqual([
+      'session_start',
+      'ai_response',
+      'session_end',
+    ]);
+    expect(result.events[0]).toMatchObject({
+      kind: 'session_start',
+      sessionId: '019fb276-f410-74e3-947b-d8ba6d1abb5d',
+      projectRoot: 'C:\\Users\\Admin\\gemini-project\\APPS\\GasworkersSite',
+    });
+    expect(result.events[1]).toMatchObject({
+      kind: 'ai_response',
+      sessionId: '019fb276-f410-74e3-947b-d8ba6d1abb5d',
+      projectRoot: 'C:\\Users\\Admin\\gemini-project\\APPS\\GasworkersSite\\subdir',
+      payload: {
+        response: 'Decision: keep shared rollout ingestion synchronized across workspaces.',
+        model: 'gpt-5.6-codex',
+      },
+    });
+    expect(result.events[2]).toMatchObject({
+      kind: 'session_end',
+      sessionId: '019fb276-f410-74e3-947b-d8ba6d1abb5d',
+      payload: {
+        summary: 'Wrapped up Codex Desktop nested payload support.',
+      },
+    });
+  });
 });

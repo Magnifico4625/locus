@@ -95,6 +95,7 @@ export interface CodexImportOptions {
   sessionsDir?: string;
   captureMode?: CodexCaptureMode;
   latestOnly?: boolean;
+  maxFileBytes?: number;
   projectRoot?: string;
   sessionId?: string;
   since?: number;
