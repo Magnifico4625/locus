@@ -363,4 +363,37 @@ describe('extractDurableCandidatesFromEvent', () => {
       }),
     ]);
   });
+
+  it('extracts only the first decision sentence while preserving dotted filenames in sentence', () => {
+    const multiSentence = makeConversationRow({
+      event_id: 'evt-decision-first-sentence',
+      payload_json: JSON.stringify({
+        prompt:
+          'Decision: CODEX-LIVE-V4-FIX3 используем NATS JetStream для очереди задач. Измени в файле probe.txt строку pending на verified через apply_patch.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'decision',
+      }),
+    });
+    const dottedInFirstSentence = makeConversationRow({
+      event_id: 'evt-decision-dotted-filename',
+      payload_json: JSON.stringify({
+        prompt: 'Decision: храним статус в probe.txt для проверки.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'decision',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(multiSentence)).toEqual([
+      expect.objectContaining({
+        memoryType: 'decision',
+        summary: 'CODEX-LIVE-V4-FIX3 используем NATS JetStream для очереди задач.',
+      }),
+    ]);
+    expect(extractDurableCandidatesFromEvent(dottedInFirstSentence)).toEqual([
+      expect.objectContaining({
+        memoryType: 'decision',
+        summary: 'храним статус в probe.txt для проверки.',
+      }),
+    ]);
+  });
 });

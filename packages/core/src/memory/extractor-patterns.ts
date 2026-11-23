@@ -86,10 +86,12 @@ const EXTRACTOR_PATTERNS: ExtractorPattern[] = [
     reason: 'accepted_decision',
     regex: /(?:decision:|decided to|we decided|решение:|решили|мы решили|выбрали|выбираем)/iu,
     clean: (match, normalized) =>
-      normalized
-        .slice((match.index ?? 0) + match[0].length)
-        .replace(/^[:\s-]+/, '')
-        .trim(),
+      extractFirstSentence(
+        normalized
+          .slice((match.index ?? 0) + match[0].length)
+          .replace(/^[:\s-]+/, '')
+          .trim(),
+      ),
   },
   {
     memoryType: 'decision',
@@ -146,6 +148,14 @@ export function extractPatternMatches(text: string): ExtractorPatternMatch[] {
 
 function normalizeSentence(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
+}
+
+function extractFirstSentence(text: string): string {
+  const match = text.match(/^(.+?[.!])(?:\s+|$)/u);
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+  return text.trim();
 }
 
 function isQuestionLike(text: string): boolean {

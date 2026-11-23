@@ -32298,7 +32298,9 @@ var EXTRACTOR_PATTERNS = [
     confidence: 0.9,
     reason: "accepted_decision",
     regex: /(?:decision:|decided to|we decided|решение:|решили|мы решили|выбрали|выбираем)/iu,
-    clean: (match, normalized) => normalized.slice((match.index ?? 0) + match[0].length).replace(/^[:\s-]+/, "").trim()
+    clean: (match, normalized) => extractFirstSentence(
+      normalized.slice((match.index ?? 0) + match[0].length).replace(/^[:\s-]+/, "").trim()
+    )
   },
   {
     memoryType: "decision",
@@ -32346,6 +32348,13 @@ function extractPatternMatches(text) {
 }
 function normalizeSentence(text) {
   return text.replace(/\s+/g, " ").trim();
+}
+function extractFirstSentence(text) {
+  const match = text.match(/^(.+?[.!])(?:\s+|$)/u);
+  if (match?.[1]) {
+    return match[1].trim();
+  }
+  return text.trim();
 }
 function isQuestionLike(text) {
   return /\?\s*$/.test(text) || /^(?:what|why|how|which|кто|что|почему|какой|какие|как)(?![\p{L}\p{N}_])/iu.test(text);
@@ -32546,6 +32555,10 @@ var PARAPHRASE_STOPWORDS = /* @__PURE__ */ new Set([
   "keep",
   "store",
   "local",
+  "previously",
+  "context",
+  "recorded",
+  "noted",
   "\u0434\u043B\u044F",
   "\u043A\u0430\u043A",
   "\u0438\u043B\u0438",
@@ -32557,6 +32570,15 @@ var PARAPHRASE_STOPWORDS = /* @__PURE__ */ new Set([
   "\u0431\u0435\u0437",
   "\u043F\u0440\u043E",
   "\u0447\u0435\u0440\u0435\u0437",
+  "\u0440\u0430\u043D\u0435\u0435",
+  "\u0431\u044B\u043B\u043E",
+  "\u043F\u0440\u0438\u043D\u044F\u0442\u043E",
+  "\u0443\u043A\u0430\u0437\u0430\u043D\u043E",
+  "\u043E\u0442\u043C\u0435\u0447\u0435\u043D\u043E",
+  "\u0441\u043E\u0433\u043B\u0430\u0441\u043D\u043E",
+  "\u043A\u043E\u043D\u0442\u0435\u043A\u0441\u0442\u0435",
+  "\u043F\u0435\u0440\u0435\u0434\u0430\u043D\u043D\u043E\u043C",
+  "\u0441\u0438\u0441\u0442\u0435\u043C\u043D\u043E\u043C",
   "\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u043C",
   "\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C",
   "\u0432\u044B\u0431\u0440\u0430\u043B\u0438",

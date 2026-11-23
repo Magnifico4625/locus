@@ -812,4 +812,61 @@ describe('codex hook config generation', () => {
       db.close();
     }
   });
+
+  it('deduplicates multi-sentence Session 1 prompt and Session 2 recall-meta assistant echo', async () => {
+    const { projectDir, env } = createSandbox();
+    const canonicalRoot = resolveProjectRoot(projectDir).root;
+
+    expect(
+      await runCli(['hook', 'codex', 'user-prompt-submit'], createIo().io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'sess-fix3-repro-1',
+          cwd: projectDir,
+          prompt:
+            'Decision: CODEX-LIVE-V4-FIX3 используем NATS JetStream для очереди задач. Измени в файле probe.txt строку pending на verified через apply_patch, затем кратко подтверди решение.',
+        }),
+      }),
+    ).toBe(0);
+
+    expect(
+      await runCli(['hook', 'codex', 'stop'], createIo().io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'Stop',
+          session_id: 'sess-fix3-repro-1',
+          turn_id: 'turn-fix3-repro-1',
+          cwd: projectDir,
+        }),
+      }),
+    ).toBe(0);
+
+    expect(
+      await runCli(['hook', 'codex', 'stop'], createIo().io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'Stop',
+          session_id: 'sess-fix3-repro-2',
+          turn_id: 'turn-fix3-repro-2',
+          cwd: projectDir,
+          last_assistant_message:
+            'По CODEX-LIVE-V4-FIX3 решили использовать **NATS JetStream для очереди задач**. В переданном контексте решение отмечено как подтверждённое, а статус в `probe.txt` — как изменённый с `pending` на `verified`.',
+        }),
+      }),
+    ).toBe(0);
+
+    const { db } = await initStorage(resolveDbPath(canonicalRoot));
+    try {
+      const rows = db.all<{ summary: string }>(
+        "SELECT summary FROM durable_memories WHERE state = 'active' AND memory_type = 'decision'",
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.summary).toBe(
+        'CODEX-LIVE-V4-FIX3 используем NATS JetStream для очереди задач.',
+      );
+    } finally {
+      db.close();
+    }
+  });
 });
