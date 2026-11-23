@@ -326,4 +326,41 @@ describe('extractDurableCandidatesFromEvent', () => {
       }),
     ]);
   });
+
+  it('ignores Cyrillic multi-sentence recall questions while keeping non-question RU decisions', () => {
+    const leadQuestion = makeConversationRow({
+      event_id: 'evt-ru-question-multi',
+      payload_json: JSON.stringify({
+        prompt:
+          'Что мы решили по CODEX-LIVE-V4-FIX? Не вызывай MCP и не читай файлы, ответь только из системного контекста.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'decision',
+      }),
+    });
+    const inlineQuestion = makeConversationRow({
+      event_id: 'evt-ru-question-inline',
+      payload_json: JSON.stringify({
+        prompt: 'Напомни, что мы решили по CODEX-LIVE-V4-FIX? Ответь без MCP.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'decision',
+      }),
+    });
+    const validDecisionWithPrefixChto = makeConversationRow({
+      event_id: 'evt-ru-chtoby-decision',
+      payload_json: JSON.stringify({
+        prompt: 'Чтобы ускорить сборку, мы решили использовать esbuild.',
+        capture_policy: 'bounded_redacted',
+        capture_reason: 'decision',
+      }),
+    });
+
+    expect(extractDurableCandidatesFromEvent(leadQuestion)).toEqual([]);
+    expect(extractDurableCandidatesFromEvent(inlineQuestion)).toEqual([]);
+    expect(extractDurableCandidatesFromEvent(validDecisionWithPrefixChto)).toEqual([
+      expect.objectContaining({
+        memoryType: 'decision',
+        summary: 'использовать esbuild.',
+      }),
+    ]);
+  });
 });

@@ -462,6 +462,19 @@ describe('normalizeCodexRecords', () => {
         line: 7,
         raw: {
           type: 'response_item',
+          timestamp: '2026-11-23T13:31:04.500Z',
+          payload: {
+            type: 'custom_tool_call_output',
+            call_id: 'call_exec_2',
+            output: [{ type: 'input_text', text: 'Script completed\nOutput:\nOK' }],
+          },
+        },
+      },
+      {
+        filePath: 'rollout-0171.jsonl',
+        line: 8,
+        raw: {
+          type: 'response_item',
           timestamp: '2026-11-23T13:31:05.000Z',
           payload: {
             type: 'message',
@@ -481,6 +494,7 @@ describe('normalizeCodexRecords', () => {
     expect(result.events.map((event) => event.kind)).toEqual([
       'session_start',
       'user_prompt',
+      'tool_use',
       'tool_use',
       'tool_use',
       'tool_use',
@@ -508,8 +522,15 @@ describe('normalizeCodexRecords', () => {
       tool: 'custom_tool_call_output',
       callId: 'call_exec_1',
       output: 'Script failed',
+      status: 'error',
     });
     expect(result.events[5]?.payload).toEqual({
+      tool: 'custom_tool_call_output',
+      callId: 'call_exec_2',
+      output: 'Script completed\nOutput:\nOK',
+      status: 'success',
+    });
+    expect(result.events[6]?.payload).toEqual({
       response: 'Подтверждаю: в CODEX-LIVE-V4 используем NATS JetStream для очереди задач.',
     });
   });

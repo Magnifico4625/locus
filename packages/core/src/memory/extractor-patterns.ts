@@ -122,6 +122,10 @@ export function extractPatternMatches(text: string): ExtractorPatternMatch[] {
       continue;
     }
 
+    if (match.index !== undefined && isInsideQuestionSentence(normalized, match.index)) {
+      continue;
+    }
+
     const summary = pattern.clean?.(match, normalized) || normalized;
     if (!summary) {
       continue;
@@ -146,6 +150,20 @@ function normalizeSentence(text: string): string {
 
 function isQuestionLike(text: string): boolean {
   return (
-    /\?\s*$/.test(text) || /^(?:what|why|how|which|кто|что|почему|какой|какие|как)\b/iu.test(text)
+    /\?\s*$/.test(text) ||
+    /^(?:what|why|how|which|кто|что|почему|какой|какие|как)(?![\p{L}\p{N}_])/iu.test(text)
   );
+}
+
+function isInsideQuestionSentence(text: string, matchIndex: number): boolean {
+  for (let i = matchIndex; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === '?') {
+      return true;
+    }
+    if (ch === '.' || ch === '!' || ch === '\n') {
+      return false;
+    }
+  }
+  return false;
 }

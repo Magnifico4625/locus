@@ -7939,6 +7939,7 @@ function normalizeResponseItem(record2, sessionId, projectRoot, currentModel) {
   }
   if (itemType === "custom_tool_call_output") {
     const callId = stringValue2(item.call_id);
+    const output = extractTextContent(item.output);
     return createEvent(record2, {
       kind: "tool_use",
       sessionId,
@@ -7947,11 +7948,20 @@ function normalizeResponseItem(record2, sessionId, projectRoot, currentModel) {
       payload: compactPayload3({
         tool: "custom_tool_call_output",
         callId,
-        output: extractTextContent(item.output)
+        output,
+        status: inferToolOutputStatus(output)
       })
     });
   }
   return void 0;
+}
+function inferToolOutputStatus(output) {
+  if (/(?:^\s*script\s+failed\b|\bscript\s+error:|\bexit\s+code:\s*(?:-[1-9]\d*|[1-9]\d*)|\bverification\s+failed\b|\baccess\s+is\s+denied\b|\brejected\s*\()/im.test(
+    output
+  )) {
+    return "error";
+  }
+  return "success";
 }
 function createEvent(record2, input) {
   return {
@@ -32316,6 +32326,9 @@ function extractPatternMatches(text) {
     if (!match) {
       continue;
     }
+    if (match.index !== void 0 && isInsideQuestionSentence(normalized, match.index)) {
+      continue;
+    }
     const summary = pattern.clean?.(match, normalized) || normalized;
     if (!summary) {
       continue;
@@ -32335,7 +32348,19 @@ function normalizeSentence(text) {
   return text.replace(/\s+/g, " ").trim();
 }
 function isQuestionLike(text) {
-  return /\?\s*$/.test(text) || /^(?:what|why|how|which|кто|что|почему|какой|какие|как)\b/iu.test(text);
+  return /\?\s*$/.test(text) || /^(?:what|why|how|which|кто|что|почему|какой|какие|как)(?![\p{L}\p{N}_])/iu.test(text);
+}
+function isInsideQuestionSentence(text, matchIndex) {
+  for (let i = matchIndex; i < text.length; i++) {
+    const ch = text[i];
+    if (ch === "?") {
+      return true;
+    }
+    if (ch === "." || ch === "!" || ch === "\n") {
+      return false;
+    }
+  }
+  return false;
 }
 
 // packages/core/src/memory/topic-key-registry.ts

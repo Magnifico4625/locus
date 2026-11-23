@@ -243,6 +243,7 @@ function normalizeResponseItem(
 
   if (itemType === 'custom_tool_call_output') {
     const callId = stringValue(item.call_id);
+    const output = extractTextContent(item.output);
     return createEvent(record, {
       kind: 'tool_use',
       sessionId,
@@ -251,12 +252,24 @@ function normalizeResponseItem(
       payload: compactPayload({
         tool: 'custom_tool_call_output',
         callId,
-        output: extractTextContent(item.output),
+        output,
+        status: inferToolOutputStatus(output),
       }),
     });
   }
 
   return undefined;
+}
+
+function inferToolOutputStatus(output: string): 'success' | 'error' {
+  if (
+    /(?:^\s*script\s+failed\b|\bscript\s+error:|\bexit\s+code:\s*(?:-[1-9]\d*|[1-9]\d*)|\bverification\s+failed\b|\baccess\s+is\s+denied\b|\brejected\s*\()/im.test(
+      output,
+    )
+  ) {
+    return 'error';
+  }
+  return 'success';
 }
 
 function createEvent(
