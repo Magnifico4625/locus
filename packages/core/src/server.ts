@@ -46,6 +46,13 @@ export interface CreateServerOptions {
   dbPath?: string;
 }
 
+export interface LazyServerContext {
+  server: McpServer;
+  pool: WorkspacePool;
+  config: LocusConfig;
+  cleanup: () => void;
+}
+
 export interface ServerContext {
   server: McpServer;
   db: DatabaseAdapter;
@@ -101,7 +108,7 @@ function resolveServerVersion(): string {
 
 // ─── Factory ──────────────────────────────────────────────────────────────────
 
-export async function createServer(options?: CreateServerOptions): Promise<ServerContext> {
+export function createLazyServer(options?: CreateServerOptions): LazyServerContext {
   const cwd = options?.cwd ?? process.cwd();
   const logPath = resolveLogPath();
 
@@ -119,13 +126,12 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     );
   }
 
-  // 2. Workspace pool + initial storage
+  // 2. Lazy workspace pool (defers SQLite open until roots/list or first tool/resource call)
   const pool = new WorkspacePool({
     initialCwd: cwd,
     fixedDbPath: options?.dbPath,
     config,
   });
-  const initialWorkspace = await pool.getOrOpenInitial();
 
   // 3. Confirmation token stores (separate prefix per operation)
   const purgeTokenStore = new ConfirmationTokenStore('purge');
@@ -164,7 +170,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   // ─── Resources ───────────────────────────────────────────────────────────────
 
   server.resource('project-map', 'memory://project-map', async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     return {
       contents: [
         {
@@ -177,7 +183,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   });
 
   server.resource('decisions', 'memory://decisions', async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     return {
       contents: [
         {
@@ -190,7 +196,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
   });
 
   server.resource('recent', 'memory://recent', async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     return {
       contents: [
         {
@@ -270,7 +276,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
   // 1. memory_explore
   server.tool('memory_explore', { path: z.string() }, async ({ path }) => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     return {
       content: [{ type: 'text' as const, text: handleExplore(path, { db: active.db }) }],
     };
@@ -418,7 +424,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
       limit: z.number().optional().describe('Max review candidates to return (default 20)'),
     },
     async ({ state, topicKey, memoryType, confidence, limit }) => {
-      const active = pool.getActive();
+      const active = await pool.getOrOpenActive();
       return {
         content: [
           {
@@ -490,7 +496,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     'memory_forget',
     { query: z.string(), confirmToken: z.string().optional() },
     async ({ query, confirmToken }) => {
-      const active = pool.getActive();
+      const active = await pool.getOrOpenActive();
       const result = handleForget(
         query,
         { semantic: active.semantic, tokenStore: forgetTokenStore },
@@ -502,7 +508,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
   // 6. memory_scan
   server.tool('memory_scan', {}, async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     const result = await handleScan({ projectPath: active.projectRoot, db: active.db, config });
     return { content: [{ type: 'text' as const, text: JSON.stringify(result.stats) }] };
   });
@@ -548,7 +554,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
   // 8. memory_doctor
   server.tool('memory_doctor', {}, async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     const report = handleDoctor({
       nodeVersion: process.version,
       backend: active.backend,
@@ -566,7 +572,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
   // 9. memory_audit
   server.tool('memory_audit', {}, async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     const report = handleAudit({
       db: active.db,
       projectPath: active.cwd,
@@ -580,7 +586,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
   // 10. memory_purge
   server.tool('memory_purge', { confirmToken: z.string().optional() }, async ({ confirmToken }) => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     const result = handlePurge(
       {
         db: active.db,
@@ -596,7 +602,8 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
   // 11. memory_config
   server.tool('memory_config', {}, async () => {
-    const result = handleConfig(config, process.env, initialWorkspace.fts5);
+    const active = await pool.getOrOpenActive();
+    const result = handleConfig(config, process.env, active.fts5);
     return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
   });
 
@@ -611,7 +618,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
         .describe('Always keep this many recent sessions (default: 5)'),
     },
     async (params) => {
-      const active = pool.getActive();
+      const active = await pool.getOrOpenActive();
       const result = handleCompact(active.db, params);
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     },
@@ -655,8 +662,20 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
 
   return {
     server,
-    db: initialWorkspace.db,
+    pool,
     config,
+    cleanup: () => pool.cleanupAll(),
+  };
+}
+
+export async function createServer(options?: CreateServerOptions): Promise<ServerContext> {
+  const lazy = createLazyServer(options);
+  const initialWorkspace = await lazy.pool.getOrOpenInitial();
+
+  return {
+    server: lazy.server,
+    db: initialWorkspace.db,
+    config: lazy.config,
     backend: initialWorkspace.backend,
     fts5: initialWorkspace.fts5,
     projectRoot: initialWorkspace.projectRoot,
@@ -664,7 +683,7 @@ export async function createServer(options?: CreateServerOptions): Promise<Serve
     inboxDir: initialWorkspace.inboxDir,
     semantic: initialWorkspace.semantic,
     episodic: initialWorkspace.episodic,
-    cleanup: () => pool.cleanupAll(),
+    cleanup: lazy.cleanup,
   };
 }
 
@@ -674,7 +693,7 @@ const logLevel = (process.env.LOCUS_LOG as 'error' | 'info' | 'debug') ?? 'error
 setLogLevel(logLevel);
 
 async function main(): Promise<void> {
-  const ctx = await createServer();
+  const ctx = createLazyServer();
   const transport = new StdioServerTransport();
   await ctx.server.connect(transport);
   log('info', `Locus MCP server started (log level: ${logLevel})`);

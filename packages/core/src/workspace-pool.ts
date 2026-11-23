@@ -100,14 +100,21 @@ export class WorkspacePool {
     return this.activeEntry;
   }
 
+  async getOrOpenActive(): Promise<WorkspaceEntry> {
+    if (this.activeEntry) {
+      return this.activeEntry;
+    }
+    return this.getOrOpenInitial();
+  }
+
   async resolveForPath(targetCwd?: string): Promise<WorkspaceEntry> {
-    if (!this.activeEntry) {
-      await this.getOrOpenInitial();
+    if (this.fixedDbPath) {
+      return this.getOrOpenInitial();
     }
 
     const trimmed = targetCwd?.trim();
-    if (this.fixedDbPath || !trimmed) {
-      return this.getActive();
+    if (!trimmed) {
+      return this.getOrOpenActive();
     }
 
     const { root, method } = resolveProjectRoot(trimmed);
@@ -115,12 +122,8 @@ export class WorkspacePool {
   }
 
   async setActiveFromRootUris(uris: readonly string[]): Promise<WorkspaceEntry | undefined> {
-    if (!this.activeEntry) {
-      await this.getOrOpenInitial();
-    }
-
     if (this.fixedDbPath) {
-      return this.activeEntry;
+      return this.getOrOpenInitial();
     }
 
     for (const uri of uris) {
@@ -129,7 +132,8 @@ export class WorkspacePool {
         continue;
       }
 
-      const entry = await this.resolveForPath(localPath);
+      const { root, method } = resolveProjectRoot(localPath);
+      const entry = await this.openWorkspace(localPath, root, method, resolveDbPath(root));
       this.activeEntry = entry;
       return entry;
     }

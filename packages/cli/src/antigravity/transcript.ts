@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import { type CaptureLevel, type InboxEvent, redact } from '@locus/core';
+import { type CaptureLevel, type InboxEvent, isNoisyPrompt, redact } from '@locus/core';
 
 export const ANTIGRAVITY_TRANSCRIPT_CURSOR_PREFIX = 'antigravity.transcript.';
 
@@ -20,6 +20,25 @@ export interface ParseAntigravityTranscriptResult {
 
 const REDACTED_MAX_CHARS = 600;
 const FULL_MAX_CHARS = 4000;
+const USER_REQUEST_BLOCK_RE = /<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/gi;
+const SYSTEM_ENVELOPE_BLOCK_RE =
+  /<(?:ADDITIONAL_METADATA|SYSTEM_MESSAGE|CONTEXT_SUMMARY)>[\s\S]*?<\/(?:ADDITIONAL_METADATA|SYSTEM_MESSAGE|CONTEXT_SUMMARY)>/gi;
+const SYSTEM_MESSAGE_BLOCK_RE = /<SYSTEM_MESSAGE>[\s\S]*?<\/SYSTEM_MESSAGE>/gi;
+
+export function cleanAntigravityUserInput(raw: string): string {
+  const extracted = [...raw.matchAll(USER_REQUEST_BLOCK_RE)]
+    .map((match) => (match[1] ?? '').trim())
+    .filter((segment) => segment.length > 0);
+
+  if (extracted.length > 0) {
+    return extracted.join('\n').trim();
+  }
+
+  return raw
+    .replace(SYSTEM_ENVELOPE_BLOCK_RE, ' ')
+    .replace(/<\/?USER_REQUEST>/gi, ' ')
+    .trim();
+}
 
 export function antigravityTranscriptCursorKey(conversationId: string): string {
   return `${ANTIGRAVITY_TRANSCRIPT_CURSOR_PREFIX}${conversationId}.last_step_index`;
@@ -95,12 +114,6 @@ export function parseAntigravityTranscriptEvents(
       continue;
     }
 
-    // Intentionally ignore `thinking` and capture only finalized user input / model text responses.
-    const sanitized = truncateText(redact(record.content).trim(), maxChars).trim();
-    if (!sanitized) {
-      continue;
-    }
-
     const timestamp = resolveRecordTimestamp(record, fallbackNow);
     const sourceEventId = `antigravity:${options.conversationId}:step:${stepIndex}`;
 
@@ -109,6 +122,16 @@ export function parseAntigravityTranscriptEvents(
       record.source === 'USER_EXPLICIT' &&
       record.status === 'DONE'
     ) {
+      const cleaned = cleanAntigravityUserInput(record.content);
+      if (!cleaned || isNoisyPrompt(cleaned)) {
+        continue;
+      }
+
+      const sanitized = truncateText(redact(cleaned).trim(), maxChars).trim();
+      if (!sanitized) {
+        continue;
+      }
+
       const payload: Record<string, unknown> = { prompt: sanitized };
       if (options.captureLevel === 'redacted') {
         payload.capture_policy = 'bounded_redacted';
@@ -133,6 +156,17 @@ export function parseAntigravityTranscriptEvents(
       record.source === 'MODEL' &&
       record.status === 'DONE'
     ) {
+      // Intentionally ignore `thinking` and strip any injected system wrappers before redacting.
+      const cleaned = record.content.replace(SYSTEM_MESSAGE_BLOCK_RE, ' ').trim();
+      if (!cleaned || cleaned.startsWith('[Locus Memory —')) {
+        continue;
+      }
+
+      const sanitized = truncateText(redact(cleaned).trim(), maxChars).trim();
+      if (!sanitized) {
+        continue;
+      }
+
       const payload: Record<string, unknown> = { response: sanitized };
       if (typeof record.model === 'string' && record.model.trim().length > 0) {
         payload.model = record.model.trim();

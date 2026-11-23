@@ -399,5 +399,81 @@ describe('Zero-Call Context Brief Engine (auto-brief)', () => {
       expect(followUpDurableOnly.injected).toBe(false);
       expect(followUpDurableOnly.reason).toBe('already_injected');
     });
+
+    it('does not inject unmatched general conversation history when prompt terms do not overlap', () => {
+      const scopedProject = normalizeProjectRootForScope(projectDir);
+      const now = Date.parse('2026-06-20T12:00:00.000Z');
+
+      db.run(
+        `INSERT INTO conversation_events
+         (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          'evt-general-chat-1',
+          'antigravity',
+          'antigravity:conv:step:0',
+          scopedProject,
+          'conv-1',
+          now - 2000,
+          'user_prompt',
+          JSON.stringify({
+            prompt: 'Привет, как успехи, все еще ждем ответа по интерфейсу?',
+            capture_policy: 'bounded_redacted',
+          }),
+          'medium',
+          '[]',
+          now - 2000,
+        ],
+      );
+      db.run(
+        `INSERT INTO conversation_events
+         (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          'evt-general-chat-2',
+          'antigravity',
+          'antigravity:conv:step:1',
+          scopedProject,
+          'conv-1',
+          now - 1000,
+          'ai_response',
+          JSON.stringify({
+            response: 'Давай проведем живую проверку, интересно же, работает ли.',
+            capture_policy: 'bounded_redacted',
+          }),
+          'medium',
+          '[]',
+          now - 1000,
+        ],
+      );
+
+      const disjointBrief = buildPromptRecallBrief(
+        'Однозначно сначала давай фиксить найденные баги в серверном SQLite пуле',
+        { db, projectRoot: projectDir, now },
+        { minConfidence: 'medium' },
+      );
+
+      expect(disjointBrief.injected).toBe(false);
+
+      // Even when query-parser falls back to recent timeline (no extracted keywords, matchedTerms=[]),
+      // unmatched general conversation and topicKey='general' entries must not be injected blindly.
+      store.insert({
+        topicKey: 'general',
+        memoryType: 'decision',
+        summary: 'Use SQLite for local workspace persistence.',
+        evidence: { confidence: 0.95 },
+        projectRoot: scopedProject,
+        source: 'antigravity',
+      });
+
+      const genericPromptBrief = buildPromptRecallBrief(
+        'what happened?',
+        { db, projectRoot: projectDir, now },
+        { minConfidence: 'medium' },
+      );
+
+      expect(genericPromptBrief.injected).toBe(false);
+      expect(genericPromptBrief.reason).toBe('low_confidence');
+    });
   });
 });

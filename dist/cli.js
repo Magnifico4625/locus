@@ -1911,7 +1911,11 @@ function meetsConfidence(confidence, minConfidence) {
   return confidence === "high" || confidence === "medium";
 }
 function isRelevantCandidate(candidate, hasResolvedRange) {
-  return (candidate.matchedTerms?.length ?? 0) > 0 || Boolean(candidate.topicKey) || hasResolvedRange || candidate.sourceKind === "durable" && candidate.confidence === "high";
+  if ((candidate.matchedTerms?.length ?? 0) > 0 || hasResolvedRange) {
+    return true;
+  }
+  const hasSpecificTopic = typeof candidate.topicKey === "string" && candidate.topicKey.length > 0 && candidate.topicKey !== "general";
+  return hasSpecificTopic && candidate.sourceKind === "durable" && candidate.confidence === "high";
 }
 function loadDurableSourceEventIds(db, durableIds) {
   const ids = [...new Set(durableIds)].filter((id) => Number.isInteger(id) && id > 0);
@@ -4434,6 +4438,16 @@ import { readFileSync as readFileSync10 } from "node:fs";
 var ANTIGRAVITY_TRANSCRIPT_CURSOR_PREFIX = "antigravity.transcript.";
 var REDACTED_MAX_CHARS = 600;
 var FULL_MAX_CHARS = 4e3;
+var USER_REQUEST_BLOCK_RE = /<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/gi;
+var SYSTEM_ENVELOPE_BLOCK_RE = /<(?:ADDITIONAL_METADATA|SYSTEM_MESSAGE|CONTEXT_SUMMARY)>[\s\S]*?<\/(?:ADDITIONAL_METADATA|SYSTEM_MESSAGE|CONTEXT_SUMMARY)>/gi;
+var SYSTEM_MESSAGE_BLOCK_RE = /<SYSTEM_MESSAGE>[\s\S]*?<\/SYSTEM_MESSAGE>/gi;
+function cleanAntigravityUserInput(raw) {
+  const extracted = [...raw.matchAll(USER_REQUEST_BLOCK_RE)].map((match) => (match[1] ?? "").trim()).filter((segment) => segment.length > 0);
+  if (extracted.length > 0) {
+    return extracted.join("\n").trim();
+  }
+  return raw.replace(SYSTEM_ENVELOPE_BLOCK_RE, " ").replace(/<\/?USER_REQUEST>/gi, " ").trim();
+}
 function antigravityTranscriptCursorKey(conversationId) {
   return `${ANTIGRAVITY_TRANSCRIPT_CURSOR_PREFIX}${conversationId}.last_step_index`;
 }
@@ -4492,13 +4506,17 @@ function parseAntigravityTranscriptEvents(options) {
     if (typeof record.content !== "string" || record.content.trim().length === 0) {
       continue;
     }
-    const sanitized = truncateText(redact(record.content).trim(), maxChars).trim();
-    if (!sanitized) {
-      continue;
-    }
     const timestamp4 = resolveRecordTimestamp(record, fallbackNow);
     const sourceEventId = `antigravity:${options.conversationId}:step:${stepIndex}`;
     if (record.type === "USER_INPUT" && record.source === "USER_EXPLICIT" && record.status === "DONE") {
+      const cleaned = cleanAntigravityUserInput(record.content);
+      if (!cleaned || isNoisyPrompt(cleaned)) {
+        continue;
+      }
+      const sanitized = truncateText(redact(cleaned).trim(), maxChars).trim();
+      if (!sanitized) {
+        continue;
+      }
       const payload = { prompt: sanitized };
       if (options.captureLevel === "redacted") {
         payload.capture_policy = "bounded_redacted";
@@ -4517,6 +4535,14 @@ function parseAntigravityTranscriptEvents(options) {
       continue;
     }
     if (record.type === "PLANNER_RESPONSE" && record.source === "MODEL" && record.status === "DONE") {
+      const cleaned = record.content.replace(SYSTEM_MESSAGE_BLOCK_RE, " ").trim();
+      if (!cleaned || cleaned.startsWith("[Locus Memory \u2014")) {
+        continue;
+      }
+      const sanitized = truncateText(redact(cleaned).trim(), maxChars).trim();
+      if (!sanitized) {
+        continue;
+      }
       const payload = { response: sanitized };
       if (typeof record.model === "string" && record.model.trim().length > 0) {
         payload.model = record.model.trim();

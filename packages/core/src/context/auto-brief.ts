@@ -417,12 +417,16 @@ function meetsConfidence(
 }
 
 function isRelevantCandidate(candidate: MemoryRecallCandidate, hasResolvedRange: boolean): boolean {
-  return (
-    (candidate.matchedTerms?.length ?? 0) > 0 ||
-    Boolean(candidate.topicKey) ||
-    hasResolvedRange ||
-    (candidate.sourceKind === 'durable' && candidate.confidence === 'high')
-  );
+  if ((candidate.matchedTerms?.length ?? 0) > 0 || hasResolvedRange) {
+    return true;
+  }
+
+  const hasSpecificTopic =
+    typeof candidate.topicKey === 'string' &&
+    candidate.topicKey.length > 0 &&
+    candidate.topicKey !== 'general';
+
+  return hasSpecificTopic && candidate.sourceKind === 'durable' && candidate.confidence === 'high';
 }
 
 function loadDurableSourceEventIds(db: DatabaseAdapter, durableIds: Iterable<number>): string[] {

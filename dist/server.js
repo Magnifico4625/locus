@@ -38018,30 +38018,34 @@ var WorkspacePool = class {
     }
     return this.activeEntry;
   }
+  async getOrOpenActive() {
+    if (this.activeEntry) {
+      return this.activeEntry;
+    }
+    return this.getOrOpenInitial();
+  }
   async resolveForPath(targetCwd) {
-    if (!this.activeEntry) {
-      await this.getOrOpenInitial();
+    if (this.fixedDbPath) {
+      return this.getOrOpenInitial();
     }
     const trimmed = targetCwd?.trim();
-    if (this.fixedDbPath || !trimmed) {
-      return this.getActive();
+    if (!trimmed) {
+      return this.getOrOpenActive();
     }
     const { root, method } = resolveProjectRoot(trimmed);
     return this.openWorkspace(trimmed, root, method, resolveDbPath(root));
   }
   async setActiveFromRootUris(uris) {
-    if (!this.activeEntry) {
-      await this.getOrOpenInitial();
-    }
     if (this.fixedDbPath) {
-      return this.activeEntry;
+      return this.getOrOpenInitial();
     }
     for (const uri of uris) {
       const localPath = rootUriToLocalPath(uri);
       if (!localPath) {
         continue;
       }
-      const entry = await this.resolveForPath(localPath);
+      const { root, method } = resolveProjectRoot(localPath);
+      const entry = await this.openWorkspace(localPath, root, method, resolveDbPath(root));
       this.activeEntry = entry;
       return entry;
     }
@@ -38175,7 +38179,7 @@ function resolveServerVersion() {
   }
   return "3.7.0";
 }
-async function createServer(options) {
+function createLazyServer(options) {
   const cwd = options?.cwd ?? process.cwd();
   const logPath = resolveLogPath();
   const config2 = { ...LOCUS_DEFAULTS };
@@ -38194,7 +38198,6 @@ async function createServer(options) {
     fixedDbPath: options?.dbPath,
     config: config2
   });
-  const initialWorkspace = await pool.getOrOpenInitial();
   const purgeTokenStore = new ConfirmationTokenStore("purge");
   const forgetTokenStore = new ConfirmationTokenStore("forget");
   const server = new McpServer({ name: "locus", version: resolveServerVersion() });
@@ -38222,7 +38225,7 @@ async function createServer(options) {
     });
   }
   server.resource("project-map", "memory://project-map", async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     return {
       contents: [
         {
@@ -38234,7 +38237,7 @@ async function createServer(options) {
     };
   });
   server.resource("decisions", "memory://decisions", async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     return {
       contents: [
         {
@@ -38246,7 +38249,7 @@ async function createServer(options) {
     };
   });
   server.resource("recent", "memory://recent", async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     return {
       contents: [
         {
@@ -38307,7 +38310,7 @@ async function createServer(options) {
   }).optional();
   const optionalProjectRootSchema = external_exports3.string().optional().describe("Optional project root path to target a specific workspace");
   server.tool("memory_explore", { path: external_exports3.string() }, async ({ path }) => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     return {
       content: [{ type: "text", text: handleExplore(path, { db: active.db }) }]
     };
@@ -38430,7 +38433,7 @@ async function createServer(options) {
       limit: external_exports3.number().optional().describe("Max review candidates to return (default 20)")
     },
     async ({ state, topicKey, memoryType, confidence, limit }) => {
-      const active = pool.getActive();
+      const active = await pool.getOrOpenActive();
       return {
         content: [
           {
@@ -38492,7 +38495,7 @@ async function createServer(options) {
     "memory_forget",
     { query: external_exports3.string(), confirmToken: external_exports3.string().optional() },
     async ({ query, confirmToken }) => {
-      const active = pool.getActive();
+      const active = await pool.getOrOpenActive();
       const result = handleForget(
         query,
         { semantic: active.semantic, tokenStore: forgetTokenStore },
@@ -38502,7 +38505,7 @@ async function createServer(options) {
     }
   );
   server.tool("memory_scan", {}, async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     const result = await handleScan({ projectPath: active.projectRoot, db: active.db, config: config2 });
     return { content: [{ type: "text", text: JSON.stringify(result.stats) }] };
   });
@@ -38542,7 +38545,7 @@ async function createServer(options) {
     }
   );
   server.tool("memory_doctor", {}, async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     const report = handleDoctor({
       nodeVersion: process.version,
       backend: active.backend,
@@ -38558,7 +38561,7 @@ async function createServer(options) {
     return { content: [{ type: "text", text: JSON.stringify(report) }] };
   });
   server.tool("memory_audit", {}, async () => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     const report = handleAudit({
       db: active.db,
       projectPath: active.cwd,
@@ -38570,7 +38573,7 @@ async function createServer(options) {
     return { content: [{ type: "text", text: report }] };
   });
   server.tool("memory_purge", { confirmToken: external_exports3.string().optional() }, async ({ confirmToken }) => {
-    const active = pool.getActive();
+    const active = await pool.getOrOpenActive();
     const result = handlePurge(
       {
         db: active.db,
@@ -38584,7 +38587,8 @@ async function createServer(options) {
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   });
   server.tool("memory_config", {}, async () => {
-    const result = handleConfig(config2, process.env, initialWorkspace.fts5);
+    const active = await pool.getOrOpenActive();
+    const result = handleConfig(config2, process.env, active.fts5);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   });
   server.tool(
@@ -38594,7 +38598,7 @@ async function createServer(options) {
       keepSessions: external_exports3.number().optional().describe("Always keep this many recent sessions (default: 5)")
     },
     async (params) => {
-      const active = pool.getActive();
+      const active = await pool.getOrOpenActive();
       const result = handleCompact(active.db, params);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }
@@ -38629,8 +38633,18 @@ async function createServer(options) {
   );
   return {
     server,
-    db: initialWorkspace.db,
+    pool,
     config: config2,
+    cleanup: () => pool.cleanupAll()
+  };
+}
+async function createServer(options) {
+  const lazy2 = createLazyServer(options);
+  const initialWorkspace = await lazy2.pool.getOrOpenInitial();
+  return {
+    server: lazy2.server,
+    db: initialWorkspace.db,
+    config: lazy2.config,
     backend: initialWorkspace.backend,
     fts5: initialWorkspace.fts5,
     projectRoot: initialWorkspace.projectRoot,
@@ -38638,13 +38652,13 @@ async function createServer(options) {
     inboxDir: initialWorkspace.inboxDir,
     semantic: initialWorkspace.semantic,
     episodic: initialWorkspace.episodic,
-    cleanup: () => pool.cleanupAll()
+    cleanup: lazy2.cleanup
   };
 }
 var logLevel = process.env.LOCUS_LOG ?? "error";
 setLogLevel(logLevel);
 async function main() {
-  const ctx = await createServer();
+  const ctx = createLazyServer();
   const transport = new StdioServerTransport();
   await ctx.server.connect(transport);
   log("info", `Locus MCP server started (log level: ${logLevel})`);
@@ -38656,6 +38670,7 @@ if (!process.env.VITEST) {
   });
 }
 export {
+  createLazyServer,
   createServer
 };
 //# sourceMappingURL=server.js.map

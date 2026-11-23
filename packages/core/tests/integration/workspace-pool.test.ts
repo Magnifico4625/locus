@@ -1,10 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { normalizePathForIdentity } from '@locus/shared-runtime';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ServerContext } from '../../src/server.js';
-import { createServer } from '../../src/server.js';
+import { createLazyServer, createServer } from '../../src/server.js';
 import { LOCUS_DEFAULTS, type MemoryProjectStateResult } from '../../src/types.js';
 import { rootUriToLocalPath, WorkspacePool } from '../../src/workspace-pool.js';
 
@@ -205,6 +205,40 @@ describe('multi-source pre-query sync on memory_project_state & memory_timeline'
       expect(timeline.some((entry) => entry.eventId === 'oc-timeline-001')).toBe(true);
     } finally {
       ctx.cleanup();
+    }
+  });
+});
+
+describe('lazy MCP server startup', () => {
+  it('defers opening SQLite for initialCwd until needed and opens only real MCP root URIs', async () => {
+    const root = makeTempDir();
+    const storageRoot = join(root, 'storage');
+    const pluginDir = join(root, 'plugin-dir');
+    const realProjectDir = join(root, 'real-project');
+    mkdirSync(pluginDir, { recursive: true });
+    mkdirSync(realProjectDir, { recursive: true });
+    writeFileSync(join(realProjectDir, 'package.json'), '{"name":"real-proj","version":"1.0.0"}');
+
+    process.env.LOCUS_STORAGE_ROOT = storageRoot;
+    delete process.env.CODEX_HOME;
+    delete process.env.CLAUDE_PLUGIN_ROOT;
+
+    const lazyServer = createLazyServer({ cwd: pluginDir });
+    try {
+      expect(lazyServer.pool.listEntries()).toHaveLength(0);
+      expect(existsSync(storageRoot)).toBe(false);
+
+      const entry = await lazyServer.pool.setActiveFromRootUris([
+        `file:///${realProjectDir.replace(/\\/g, '/')}`,
+      ]);
+      expect(entry?.projectName).toBe('real-project');
+      expect(lazyServer.pool.listEntries()).toHaveLength(1);
+      expect(readdirSync(storageRoot)).toHaveLength(1);
+      expect(normalizePathForIdentity(entry?.projectRoot ?? '')).toBe(
+        normalizePathForIdentity(realProjectDir),
+      );
+    } finally {
+      lazyServer.cleanup();
     }
   });
 });

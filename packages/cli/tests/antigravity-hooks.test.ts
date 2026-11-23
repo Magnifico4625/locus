@@ -424,4 +424,99 @@ describe('antigravity lifecycle hooks', () => {
     const unsupported = createIo();
     expect(await runCli(['hook', 'antigravity', 'unknown-event'], unsupported.io, { env })).toBe(1);
   });
+
+  it('strips Antigravity XML request/metadata envelopes and drops noisy or injected wrappers on stop', async () => {
+    const { root, projectDir, env } = setupSandbox();
+    const transcriptPath = join(root, 'transcript-envelopes.jsonl');
+    const canonicalRoot = resolveProjectRoot(projectDir).root;
+
+    const lines = [
+      JSON.stringify({
+        step_index: 0,
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        status: 'DONE',
+        created_at: '2026-11-23T12:00:00Z',
+        content: [
+          '<USER_REQUEST>',
+          'Refactor WorkerPool to initialize SQLite lazily after MCP roots/list.',
+          '</USER_REQUEST>',
+          '<ADDITIONAL_METADATA>',
+          'The current local time is: 2026-11-23T12:00:00+03:00.',
+          '</ADDITIONAL_METADATA>',
+          '<SYSTEM_MESSAGE>',
+          '[Locus Memory — Relevant Recall]',
+          '- [general] unrelated chatter',
+          '</SYSTEM_MESSAGE>',
+        ].join('\n'),
+      }),
+      JSON.stringify({
+        step_index: 1,
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        status: 'DONE',
+        created_at: '2026-11-23T12:00:05Z',
+        content:
+          '<SYSTEM_MESSAGE>\n[notice] server started\n</SYSTEM_MESSAGE>\n<CONTEXT_SUMMARY>\nSummary block\n</CONTEXT_SUMMARY>',
+      }),
+      JSON.stringify({
+        step_index: 2,
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        status: 'DONE',
+        created_at: '2026-11-23T12:00:10Z',
+        content:
+          '<USER_REQUEST>\nок\n</USER_REQUEST>\n<ADDITIONAL_METADATA>time</ADDITIONAL_METADATA>',
+      }),
+      JSON.stringify({
+        step_index: 3,
+        source: 'MODEL',
+        type: 'PLANNER_RESPONSE',
+        status: 'DONE',
+        created_at: '2026-11-23T12:00:15Z',
+        content: '[Locus Memory — Project Brief]\nProject: demo',
+      }),
+      JSON.stringify({
+        step_index: 4,
+        source: 'MODEL',
+        type: 'PLANNER_RESPONSE',
+        status: 'DONE',
+        created_at: '2026-11-23T12:00:20Z',
+        content: 'Decision: initialize WorkspacePool lazily when real workspace root arrives.',
+      }),
+    ];
+    writeFileSync(transcriptPath, `${lines.join('\n')}\n`, 'utf8');
+
+    const res = createIo();
+    expect(
+      await runCli(['hook', 'antigravity', 'stop'], res.io, {
+        env,
+        stdin: JSON.stringify({
+          conversationId: 'conv-envelopes',
+          workspacePaths: [projectDir],
+          transcriptPath,
+        }),
+      }),
+    ).toBe(0);
+
+    const { db } = await initStorage(resolveDbPath(canonicalRoot));
+    try {
+      const events = db.all<{ kind: string; payload_json: string | null }>(
+        'SELECT kind, payload_json FROM conversation_events ORDER BY timestamp ASC',
+      );
+      expect(events).toHaveLength(2);
+      expect(events[0]?.kind).toBe('user_prompt');
+      expect(events[0]?.payload_json).toContain(
+        'Refactor WorkerPool to initialize SQLite lazily after MCP roots/list.',
+      );
+      expect(events[0]?.payload_json).not.toContain('<USER_REQUEST>');
+      expect(events[0]?.payload_json).not.toContain('<ADDITIONAL_METADATA>');
+      expect(events[0]?.payload_json).not.toContain('<SYSTEM_MESSAGE>');
+
+      expect(events[1]?.kind).toBe('ai_response');
+      expect(events[1]?.payload_json).toContain('initialize WorkspacePool lazily');
+    } finally {
+      db.close();
+    }
+  });
 });
