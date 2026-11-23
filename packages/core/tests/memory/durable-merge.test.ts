@@ -257,4 +257,63 @@ describe('mergeDurableCandidate', () => {
       action: 'insert_new_active',
     });
   });
+
+  it('confirms an existing durable entry when assistant echoes the same decision as a paraphrase', () => {
+    const existing = makeDurableEntry({
+      id: 21,
+      topicKey: undefined,
+      summary: 'CODEX-LIVE-V4-FIX2 используем NATS JetStream для очереди задач.',
+    });
+
+    const echoed = {
+      topicKey: undefined,
+      memoryType: 'decision' as const,
+      summary: 'использовать NATS JetStream как очередь задач.',
+      evidence: { source: 'assistant-echo', confidence: 0.9 },
+      sourceEventId: 'evt-echo-1',
+      source: 'codex' as const,
+    };
+
+    expect(mergeDurableCandidate([existing], echoed)).toEqual({
+      action: 'confirm_existing',
+      existingId: 21,
+    });
+  });
+
+  it('does not treat a different technology choice without topicKey as a paraphrase duplicate', () => {
+    const existingNats = makeDurableEntry({
+      id: 22,
+      topicKey: undefined,
+      summary: 'CODEX-LIVE-V4-FIX2 используем NATS JetStream для очереди задач.',
+    });
+    const rabbitCandidate = {
+      topicKey: undefined,
+      memoryType: 'decision' as const,
+      summary: 'CODEX-LIVE-V4-FIX2 используем RabbitMQ для очереди задач.',
+      evidence: { source: 'other-tech', confidence: 0.9 },
+      sourceEventId: 'evt-rabbit',
+      source: 'codex' as const,
+    };
+
+    const existingSqlite = makeDurableEntry({
+      id: 23,
+      topicKey: undefined,
+      summary: 'Use SQLite cache for session recall telemetry.',
+    });
+    const redisCandidate = {
+      topicKey: undefined,
+      memoryType: 'decision' as const,
+      summary: 'Use Redis cache for session recall telemetry.',
+      evidence: { source: 'other-cache', confidence: 0.9 },
+      sourceEventId: 'evt-redis',
+      source: 'codex' as const,
+    };
+
+    expect(mergeDurableCandidate([existingNats], rabbitCandidate)).toEqual({
+      action: 'insert_new_active',
+    });
+    expect(mergeDurableCandidate([existingSqlite], redisCandidate)).toEqual({
+      action: 'insert_new_active',
+    });
+  });
 });

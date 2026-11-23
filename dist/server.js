@@ -32527,8 +32527,87 @@ var SUPERSEDABLE_TYPES = /* @__PURE__ */ new Set([
   "constraint",
   "next_step"
 ]);
+var PARAPHRASE_STOPWORDS = /* @__PURE__ */ new Set([
+  "the",
+  "for",
+  "and",
+  "with",
+  "from",
+  "that",
+  "this",
+  "use",
+  "using",
+  "used",
+  "choose",
+  "chosen",
+  "decide",
+  "decided",
+  "decision",
+  "keep",
+  "store",
+  "local",
+  "\u0434\u043B\u044F",
+  "\u043A\u0430\u043A",
+  "\u0438\u043B\u0438",
+  "\u0447\u0442\u043E",
+  "\u044D\u0442\u043E",
+  "\u043F\u0440\u0438",
+  "\u043F\u043E\u0434",
+  "\u043D\u0430\u0434",
+  "\u0431\u0435\u0437",
+  "\u043F\u0440\u043E",
+  "\u0447\u0435\u0440\u0435\u0437",
+  "\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u0443\u0435\u043C",
+  "\u0438\u0441\u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u044C",
+  "\u0432\u044B\u0431\u0440\u0430\u043B\u0438",
+  "\u0432\u044B\u0431\u0438\u0440\u0430\u0435\u043C",
+  "\u0440\u0435\u0448\u0438\u043B\u0438",
+  "\u0440\u0435\u0448\u0435\u043D\u0438\u0435",
+  "\u0437\u0430\u0444\u0438\u043A\u0441\u0438\u0440\u043E\u0432\u0430\u043B",
+  "\u043F\u043E\u0434\u0442\u0432\u0435\u0440\u0436\u0434\u0430\u044E"
+]);
 function normalizeSummary2(summary) {
   return summary.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+function stemCyrillicToken(token) {
+  if (!/^[а-яё]+$/u.test(token) || token.length < 5) {
+    return token;
+  }
+  const stem = token.replace(
+    /(?:ами|ями|ому|ему|ого|его|ими|ыми|ою|ею|ью|ов|ев|ей|ом|ем|ах|ях|ая|яя|ое|ее|ые|ие|ую|юю|ий|ый|ой|[аяуеиоыь])$/u,
+    ""
+  );
+  return stem.length >= 3 ? stem : token;
+}
+function extractContentTokens(summary) {
+  const tokens = /* @__PURE__ */ new Set();
+  const rawTokens = summary.toLowerCase().replace(/[^\p{L}\p{N}-]+/gu, " ").split(/\s+/u);
+  for (const raw of rawTokens) {
+    const trimmed = raw.replace(/^-+|-+$/gu, "");
+    if (trimmed.length < 3 || PARAPHRASE_STOPWORDS.has(trimmed)) {
+      continue;
+    }
+    const normalized = stemCyrillicToken(trimmed);
+    if (normalized.length >= 3 && !PARAPHRASE_STOPWORDS.has(normalized)) {
+      tokens.add(normalized);
+    }
+  }
+  return tokens;
+}
+function isParaphraseDuplicate(existingSummary, candidateSummary) {
+  const existingTokens = extractContentTokens(existingSummary);
+  const candidateTokens = extractContentTokens(candidateSummary);
+  const minSize = Math.min(existingTokens.size, candidateTokens.size);
+  if (minSize < 2) {
+    return false;
+  }
+  let overlap = 0;
+  for (const token of existingTokens) {
+    if (candidateTokens.has(token)) {
+      overlap++;
+    }
+  }
+  return overlap === minSize;
 }
 function hasMappingConfidence(candidate) {
   return typeof candidate.evidence.confidence === "number";
@@ -32558,7 +32637,7 @@ function mergeDurableCandidate(existingEntries, candidate) {
   const matchingEntries = activeEntries.filter((entry) => entry.memoryType === candidate.memoryType).filter((entry) => candidate.topicKey ? entry.topicKey === candidate.topicKey : true);
   const candidateSummary = normalizeSummary2(candidate.summary);
   const duplicate = matchingEntries.find(
-    (entry) => normalizeSummary2(entry.summary) === candidateSummary
+    (entry) => normalizeSummary2(entry.summary) === candidateSummary || isParaphraseDuplicate(entry.summary, candidate.summary)
   );
   if (duplicate) {
     return {

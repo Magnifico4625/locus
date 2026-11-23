@@ -732,4 +732,84 @@ describe('codex hook config generation', () => {
       db.close();
     }
   });
+
+  it('deduplicates Session 2 echoed assistant decision across two live Codex sessions', async () => {
+    const { projectDir, env } = createSandbox();
+    const canonicalRoot = resolveProjectRoot(projectDir).root;
+
+    // Session 1: decision prompt -> Stop
+    expect(
+      await runCli(['hook', 'codex', 'user-prompt-submit'], createIo().io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'sess-echo-1',
+          cwd: projectDir,
+          prompt: 'Decision: CODEX-LIVE-V4-FIX2 используем NATS JetStream для очереди задач.',
+        }),
+      }),
+    ).toBe(0);
+
+    expect(
+      await runCli(['hook', 'codex', 'stop'], createIo().io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'Stop',
+          session_id: 'sess-echo-1',
+          turn_id: 'turn-echo-1',
+          cwd: projectDir,
+        }),
+      }),
+    ).toBe(0);
+
+    // Session 2: SessionStart -> recall question UserPromptSubmit -> echoed Stop response
+    const startIo = createIo();
+    expect(
+      await runCli(['hook', 'codex', 'session-start'], startIo.io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'SessionStart',
+          session_id: 'sess-echo-2',
+          cwd: projectDir,
+        }),
+      }),
+    ).toBe(0);
+    expect(startIo.stdout.join('\n')).toContain('NATS JetStream');
+
+    expect(
+      await runCli(['hook', 'codex', 'user-prompt-submit'], createIo().io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'sess-echo-2',
+          cwd: projectDir,
+          prompt: 'Что мы решили по CODEX-LIVE-V4-FIX2? Не вызывай MCP и не читай файлы.',
+        }),
+      }),
+    ).toBe(0);
+
+    expect(
+      await runCli(['hook', 'codex', 'stop'], createIo().io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'Stop',
+          session_id: 'sess-echo-2',
+          turn_id: 'turn-echo-2',
+          cwd: projectDir,
+          last_assistant_message:
+            'Для CODEX-LIVE-V4-FIX2 решили использовать NATS JetStream как очередь задач.',
+        }),
+      }),
+    ).toBe(0);
+
+    const { db } = await initStorage(resolveDbPath(canonicalRoot));
+    try {
+      const countRow = db.get<{ cnt: number }>(
+        "SELECT COUNT(*) AS cnt FROM durable_memories WHERE state = 'active' AND memory_type = 'decision'",
+      );
+      expect(countRow?.cnt).toBe(1);
+    } finally {
+      db.close();
+    }
+  });
 });

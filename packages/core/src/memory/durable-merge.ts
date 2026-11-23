@@ -14,11 +14,101 @@ const SUPERSEDABLE_TYPES = new Set<DurableMemoryType>([
   'next_step',
 ]);
 
+const PARAPHRASE_STOPWORDS = new Set([
+  'the',
+  'for',
+  'and',
+  'with',
+  'from',
+  'that',
+  'this',
+  'use',
+  'using',
+  'used',
+  'choose',
+  'chosen',
+  'decide',
+  'decided',
+  'decision',
+  'keep',
+  'store',
+  'local',
+  'для',
+  'как',
+  'или',
+  'что',
+  'это',
+  'при',
+  'под',
+  'над',
+  'без',
+  'про',
+  'через',
+  'используем',
+  'использовать',
+  'выбрали',
+  'выбираем',
+  'решили',
+  'решение',
+  'зафиксировал',
+  'подтверждаю',
+]);
+
 function normalizeSummary(summary: string): string {
   return summary
     .toLowerCase()
     .replace(/[^\p{L}\p{N}]+/gu, ' ')
     .trim();
+}
+
+function stemCyrillicToken(token: string): string {
+  if (!/^[а-яё]+$/u.test(token) || token.length < 5) {
+    return token;
+  }
+  const stem = token.replace(
+    /(?:ами|ями|ому|ему|ого|его|ими|ыми|ою|ею|ью|ов|ев|ей|ом|ем|ах|ях|ая|яя|ое|ее|ые|ие|ую|юю|ий|ый|ой|[аяуеиоыь])$/u,
+    '',
+  );
+  return stem.length >= 3 ? stem : token;
+}
+
+function extractContentTokens(summary: string): Set<string> {
+  const tokens = new Set<string>();
+  const rawTokens = summary
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}-]+/gu, ' ')
+    .split(/\s+/u);
+
+  for (const raw of rawTokens) {
+    const trimmed = raw.replace(/^-+|-+$/gu, '');
+    if (trimmed.length < 3 || PARAPHRASE_STOPWORDS.has(trimmed)) {
+      continue;
+    }
+    const normalized = stemCyrillicToken(trimmed);
+    if (normalized.length >= 3 && !PARAPHRASE_STOPWORDS.has(normalized)) {
+      tokens.add(normalized);
+    }
+  }
+
+  return tokens;
+}
+
+function isParaphraseDuplicate(existingSummary: string, candidateSummary: string): boolean {
+  const existingTokens = extractContentTokens(existingSummary);
+  const candidateTokens = extractContentTokens(candidateSummary);
+  const minSize = Math.min(existingTokens.size, candidateTokens.size);
+  if (minSize < 2) {
+    return false;
+  }
+
+  let overlap = 0;
+  for (const token of existingTokens) {
+    if (candidateTokens.has(token)) {
+      overlap++;
+    }
+  }
+
+  return overlap === minSize;
 }
 
 function hasMappingConfidence(candidate: DurableMemoryCandidate): boolean {
@@ -65,7 +155,9 @@ export function mergeDurableCandidate(
 
   const candidateSummary = normalizeSummary(candidate.summary);
   const duplicate = matchingEntries.find(
-    (entry) => normalizeSummary(entry.summary) === candidateSummary,
+    (entry) =>
+      normalizeSummary(entry.summary) === candidateSummary ||
+      isParaphraseDuplicate(entry.summary, candidate.summary),
   );
   if (duplicate) {
     return {
