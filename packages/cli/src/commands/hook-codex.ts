@@ -6,19 +6,22 @@ import {
   buildPromptRecallBrief,
   buildSessionStartBrief,
   type CaptureLevel,
+  formatLocalDateKey,
   type InboxEvent,
   initStorage,
   isDenylisted,
   isNoisyPrompt,
   processInbox,
-  resolveProjectRoot,
+  resolveJournalDirFromDbPath,
   runDurableExtraction,
+  syncDailyJournal,
   writeInboxEvent,
 } from '@locus/core';
 import { resolveDbPath, resolveInboxDir } from '@locus/shared-runtime';
 import { resolveCodexHome } from '../codex/paths.js';
 import { normalizeCaptureLevel, withScopedEnv } from '../env-scope.js';
 import { hashPrompt, readHookSessionState, writeHookSessionState } from '../hook-session-state.js';
+import { evaluateHookWorkspace } from '../workspace-gate.js';
 
 export type CodexHookEvent = 'session-start' | 'user-prompt-submit' | 'post-tool-use' | 'stop';
 
@@ -123,7 +126,7 @@ function extractRecursiveKey(value: unknown, keys: readonly string[]): string | 
   return undefined;
 }
 
-function extractWorkspaceRawCwd(input: Record<string, unknown>): string {
+function extractWorkspaceRawCwd(input: Record<string, unknown>): string | undefined {
   const fromKeys = extractRecursiveKey(input, CWD_KEYS);
   if (fromKeys) {
     return fromKeys;
@@ -138,7 +141,7 @@ function extractWorkspaceRawCwd(input: Record<string, unknown>): string {
     }
   }
 
-  return process.cwd();
+  return undefined;
 }
 
 function extractSessionId(input: Record<string, unknown>): string {
@@ -244,13 +247,22 @@ async function handleSessionStart(context: {
   const { db, fts5 } = await initStorage(dbPath);
   try {
     try {
-      processInbox(inboxDir, db, {
+      const ingestMetrics = processInbox(inboxDir, db, {
         batchLimit: 100,
         captureLevel: context.captureLevel,
         fts5Available: fts5,
         projectRoot: context.projectRoot,
       });
       runDurableExtraction(db);
+      if (ingestMetrics.processed > 0) {
+        syncDailyJournal({
+          db,
+          projectRoot: context.projectRoot,
+          journalDir: resolveJournalDirFromDbPath(dbPath),
+          dateKeys: [formatLocalDateKey(context.nowMs)],
+          now: context.nowMs,
+        });
+      }
     } catch {
       // Best-effort pre-brief ingest
     }
@@ -545,6 +557,17 @@ async function handleStop(context: {
       projectRoot: context.projectRoot,
     });
     runDurableExtraction(db);
+    try {
+      syncDailyJournal({
+        db,
+        projectRoot: context.projectRoot,
+        journalDir: resolveJournalDirFromDbPath(dbPath),
+        dateKeys: [formatLocalDateKey(context.nowDate.getTime())],
+        now: context.nowDate.getTime(),
+      });
+    } catch {
+      // Best-effort daily journal sync on Stop
+    }
 
     return {
       exitCode: 0,
@@ -605,7 +628,12 @@ export async function runCodexHook(options: RunCodexHookOptions): Promise<CodexH
         'redacted',
       );
       const rawCwd = extractWorkspaceRawCwd(input);
-      const { root: projectRoot } = resolveProjectRoot(rawCwd);
+      const gate = evaluateHookWorkspace({ rawCwd, env: effectiveEnv });
+      if (!gate.allowed) {
+        return { exitCode: 0, stdout: failOpenStdout(event) };
+      }
+
+      const projectRoot = gate.projectRoot;
       const sessionId = extractSessionId(input);
 
       if (event === 'session-start') {

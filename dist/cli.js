@@ -2,11 +2,92 @@
 
 // packages/cli/src/index.ts
 import { realpathSync } from "node:fs";
-import { resolve as resolve8 } from "node:path";
-import { fileURLToPath as fileURLToPath7 } from "node:url";
+import { resolve as resolve9 } from "node:path";
+import { fileURLToPath as fileURLToPath8 } from "node:url";
 
 // packages/core/src/context/auto-brief.ts
-import { basename } from "node:path";
+import { basename as basename2 } from "node:path";
+
+// packages/core/src/memory/daily-journal.ts
+import { randomBytes } from "node:crypto";
+import { mkdirSync, renameSync, writeFileSync } from "node:fs";
+import { basename, dirname, join as join2 } from "node:path";
+
+// packages/core/src/recall/calendar.ts
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+function dateKey(timestamp4, mode) {
+  const date = new Date(timestamp4);
+  const year = mode === "utc" ? date.getUTCFullYear() : date.getFullYear();
+  const month = mode === "utc" ? date.getUTCMonth() + 1 : date.getMonth() + 1;
+  const day = mode === "utc" ? date.getUTCDate() : date.getDate();
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+function monthKey(timestamp4, mode) {
+  const date = new Date(timestamp4);
+  const year = mode === "utc" ? date.getUTCFullYear() : date.getFullYear();
+  const month = mode === "utc" ? date.getUTCMonth() + 1 : date.getMonth() + 1;
+  return `${year}-${pad2(month)}`;
+}
+function startOfDay(timestamp4, options) {
+  const mode = options?.mode ?? "local";
+  const date = new Date(timestamp4);
+  if (mode === "utc") {
+    return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+  }
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+function addDays(timestamp4, days, mode) {
+  const date = new Date(timestamp4);
+  if (mode === "utc") {
+    date.setUTCDate(date.getUTCDate() + days);
+  } else {
+    date.setDate(date.getDate() + days);
+  }
+  return date.getTime();
+}
+function startOfMonth(timestamp4, mode) {
+  const date = new Date(timestamp4);
+  if (mode === "utc") {
+    return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
+  }
+  return new Date(date.getFullYear(), date.getMonth(), 1).getTime();
+}
+function addMonths(timestamp4, months, mode) {
+  const date = new Date(timestamp4);
+  if (mode === "utc") {
+    date.setUTCMonth(date.getUTCMonth() + months);
+  } else {
+    date.setMonth(date.getMonth() + months);
+  }
+  return date.getTime();
+}
+function dayBucket(timestamp4, options) {
+  const mode = options?.mode ?? "local";
+  const from = startOfDay(timestamp4, { mode });
+  const to = addDays(from, 1, mode);
+  const key = dateKey(from, mode);
+  return { key, label: key, from, to };
+}
+function weekBucket(timestamp4, options) {
+  const mode = options?.mode ?? "local";
+  const dayStart = startOfDay(timestamp4, { mode });
+  const date = new Date(dayStart);
+  const day = mode === "utc" ? date.getUTCDay() : date.getDay();
+  const mondayOffset = day === 0 ? 6 : day - 1;
+  const from = addDays(dayStart, -mondayOffset, mode);
+  const to = addDays(from, 7, mode);
+  const key = `${dateKey(from, mode)}/week`;
+  return { key, label: key, from, to };
+}
+function monthBucket(timestamp4, options) {
+  const mode = options?.mode ?? "local";
+  const from = startOfMonth(timestamp4, mode);
+  const to = addMonths(from, 1, mode);
+  const key = monthKey(from, mode);
+  return { key, label: key, from, to };
+}
 
 // packages/shared-runtime/detect-client.js
 var EXPLICIT_CLIENTS = /* @__PURE__ */ new Set(["claude-code", "codex", "antigravity", "opencode", "dsh"]);
@@ -233,6 +314,296 @@ function buildProjectScopeClause(column, projectRoot, options) {
   };
 }
 
+// packages/core/src/memory/daily-journal.ts
+var MAX_HIGHLIGHTS = 8;
+var HIGHLIGHT_MAX_CHARS = 180;
+var DURABLE_MAX_CHARS = 220;
+var MAX_MODIFIED_FILES = 15;
+var PREVIEW_MAX_CHARS = 100;
+var HOOK_ECHO_PREFIXES = [
+  "the following system message was injected by a preinvocation hook:",
+  "[locus memory \u2014 project brief]",
+  "[locus memory \u2014 relevant recall]"
+];
+function formatLocalDateKey(timestampMs) {
+  return dayBucket(timestampMs, { mode: "local" }).key;
+}
+function resolveJournalDirFromDbPath(dbPath) {
+  return join2(dirname(dbPath), "journal");
+}
+function extractDailyPreview(summaryMd) {
+  for (const line of summaryMd.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("- ")) {
+      continue;
+    }
+    const clean = trimmed.slice(2).replace(/^`([^`]+)`$/u, "$1").trim();
+    if (clean.length === 0) {
+      continue;
+    }
+    return clean.length <= PREVIEW_MAX_CHARS ? clean : `${clean.slice(0, PREVIEW_MAX_CHARS - 3).trimEnd()}...`;
+  }
+  return void 0;
+}
+function listRecentDailySummaries(db, projectRoot, limit = 3) {
+  const safeLimit = Math.max(0, Math.trunc(limit));
+  if (safeLimit === 0) {
+    return [];
+  }
+  const scopedRoot = normalizeProjectRootForScope(projectRoot);
+  try {
+    const rows = db.all(
+      `SELECT project_root, date_key, event_count, session_count, decision_count, summary_md, updated_at
+       FROM daily_summaries
+       WHERE project_root = ?
+       ORDER BY date_key DESC
+       LIMIT ?`,
+      [scopedRoot, safeLimit]
+    );
+    return rows.map(toDailySummaryRow);
+  } catch {
+    return [];
+  }
+}
+function syncDailyJournal(options) {
+  const scopedRoot = normalizeProjectRootForScope(options.projectRoot);
+  const now = options.now ?? Date.now();
+  const projectName = basename(scopedRoot) || scopedRoot;
+  const ceScope = buildProjectScopeClause("project_root", scopedRoot);
+  const dmScope = buildProjectScopeClause("project_root", scopedRoot);
+  const ceJoinedScope = buildProjectScopeClause("ce.project_root", scopedRoot);
+  const dateKeys = options.dateKeys && options.dateKeys.length > 0 ? [...new Set(options.dateKeys)].sort() : discoverProjectDateKeys(options.db, ceScope, dmScope);
+  const syncedDates = [];
+  let journalFilesWritten = 0;
+  if (options.journalDir && dateKeys.length > 0) {
+    mkdirSync(options.journalDir, { recursive: true });
+  }
+  for (const dateKey2 of dateKeys) {
+    const bounds = parseLocalDateKeyBounds(dateKey2);
+    if (!bounds) {
+      continue;
+    }
+    const durableRows = options.db.all(
+      `SELECT id, memory_type, summary, updated_at
+       FROM durable_memories
+       WHERE state = 'active'
+         AND ${dmScope.clause}
+         AND ((updated_at >= ? AND updated_at < ?) OR (created_at >= ? AND created_at < ?))
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 30`,
+      [...dmScope.params, bounds.from, bounds.to, bounds.from, bounds.to]
+    );
+    const eventRows = options.db.all(
+      `SELECT session_id, kind, payload_json
+       FROM conversation_events
+       WHERE ${ceScope.clause}
+         AND timestamp >= ?
+         AND timestamp < ?
+       ORDER BY timestamp ASC, id ASC`,
+      [...ceScope.params, bounds.from, bounds.to]
+    );
+    if (eventRows.length === 0 && durableRows.length === 0) {
+      continue;
+    }
+    const modifiedFiles = options.db.all(
+      `SELECT ef.file_path
+         FROM event_files ef
+         JOIN conversation_events ce ON ce.event_id = ef.event_id
+         WHERE ${ceJoinedScope.clause}
+           AND ce.timestamp >= ?
+           AND ce.timestamp < ?
+         GROUP BY ef.file_path
+         ORDER BY COUNT(*) DESC, MAX(ce.timestamp) DESC
+         LIMIT ?`,
+      [...ceJoinedScope.params, bounds.from, bounds.to, MAX_MODIFIED_FILES]
+    ).map((row) => row.file_path);
+    const sessions = /* @__PURE__ */ new Set();
+    const highlights = [];
+    const seenHighlights = /* @__PURE__ */ new Set();
+    for (const row of eventRows) {
+      if (row.session_id && row.session_id.trim().length > 0) {
+        sessions.add(row.session_id);
+      }
+      if (highlights.length >= MAX_HIGHLIGHTS) {
+        continue;
+      }
+      const text = extractHighlightText(row.kind, row.payload_json);
+      if (!text) {
+        continue;
+      }
+      const key = text.toLowerCase();
+      if (seenHighlights.has(key)) {
+        continue;
+      }
+      seenHighlights.add(key);
+      highlights.push(text);
+    }
+    const decisionCount = durableRows.filter((row) => row.memory_type === "decision").length;
+    const summaryMd = buildDailyMarkdown({
+      dateKey: dateKey2,
+      projectName,
+      eventCount: eventRows.length,
+      sessionCount: sessions.size,
+      decisionCount,
+      durableRows,
+      modifiedFiles,
+      highlights
+    });
+    options.db.run(
+      `INSERT INTO daily_summaries (
+         project_root, date_key, event_count, session_count, decision_count, summary_md, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(project_root, date_key) DO UPDATE SET
+         event_count = excluded.event_count,
+         session_count = excluded.session_count,
+         decision_count = excluded.decision_count,
+         summary_md = excluded.summary_md,
+         updated_at = excluded.updated_at`,
+      [scopedRoot, dateKey2, eventRows.length, sessions.size, decisionCount, summaryMd, now]
+    );
+    syncedDates.push(dateKey2);
+    if (options.journalDir) {
+      atomicWriteText(join2(options.journalDir, `${dateKey2}.md`), `${summaryMd}
+`);
+      journalFilesWritten++;
+    }
+  }
+  if (options.journalDir && syncedDates.length > 0) {
+    const allDays = listRecentDailySummaries(options.db, scopedRoot, 3650);
+    if (allDays.length > 0) {
+      const indexLines = [
+        `# Locus Memory Journal \u2014 ${projectName}`,
+        "",
+        ...allDays.map(
+          (day) => `- [${day.dateKey}](./${day.dateKey}.md) \u2014 ${day.decisionCount} decisions, ${day.eventCount} events, ${day.sessionCount} sessions`
+        )
+      ];
+      atomicWriteText(join2(options.journalDir, "INDEX.md"), `${indexLines.join("\n")}
+`);
+      journalFilesWritten++;
+    }
+  }
+  return { syncedDates, journalFilesWritten };
+}
+function toDailySummaryRow(row) {
+  return {
+    projectRoot: row.project_root,
+    dateKey: row.date_key,
+    eventCount: row.event_count,
+    sessionCount: row.session_count,
+    decisionCount: row.decision_count,
+    summaryMd: row.summary_md,
+    updatedAt: row.updated_at
+  };
+}
+function discoverProjectDateKeys(db, ceScope, dmScope) {
+  const keys = /* @__PURE__ */ new Set();
+  const ceRows = db.all(
+    `SELECT timestamp FROM conversation_events WHERE ${ceScope.clause}`,
+    ceScope.params
+  );
+  for (const row of ceRows) {
+    if (Number.isFinite(row.timestamp)) {
+      keys.add(formatLocalDateKey(row.timestamp));
+    }
+  }
+  const dmRows = db.all(
+    `SELECT created_at, updated_at FROM durable_memories WHERE state = 'active' AND ${dmScope.clause}`,
+    dmScope.params
+  );
+  for (const row of dmRows) {
+    if (Number.isFinite(row.created_at)) {
+      keys.add(formatLocalDateKey(row.created_at));
+    }
+    if (Number.isFinite(row.updated_at)) {
+      keys.add(formatLocalDateKey(row.updated_at));
+    }
+  }
+  return [...keys].sort();
+}
+function parseLocalDateKeyBounds(dateKey2) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(dateKey2);
+  if (!match) {
+    return void 0;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const fromDate = new Date(year, month, day, 0, 0, 0, 0);
+  if (Number.isNaN(fromDate.getTime()) || fromDate.getFullYear() !== year || fromDate.getMonth() !== month || fromDate.getDate() !== day) {
+    return void 0;
+  }
+  const toDate = new Date(year, month, day + 1, 0, 0, 0, 0);
+  return { from: fromDate.getTime(), to: toDate.getTime() };
+}
+function extractHighlightText(kind, payloadJson) {
+  if (!payloadJson || kind !== "user_prompt" && kind !== "ai_response" && kind !== "session_end") {
+    return void 0;
+  }
+  let rawText;
+  try {
+    const payload = JSON.parse(payloadJson);
+    if (typeof payload.prompt === "string") {
+      rawText = payload.prompt;
+    } else if (typeof payload.response === "string") {
+      rawText = payload.response;
+    } else if (typeof payload.summary === "string") {
+      rawText = payload.summary;
+    }
+  } catch {
+    return void 0;
+  }
+  if (!rawText) {
+    return void 0;
+  }
+  const collapsed = rawText.replace(/\s+/gu, " ").trim();
+  if (!collapsed) {
+    return void 0;
+  }
+  const lower = collapsed.toLowerCase();
+  if (HOOK_ECHO_PREFIXES.some((prefix) => lower.includes(prefix))) {
+    return void 0;
+  }
+  return truncateText(collapsed, HIGHLIGHT_MAX_CHARS);
+}
+function buildDailyMarkdown(input) {
+  const lines = [
+    `# ${input.dateKey} \u2014 ${input.projectName}`,
+    `Stats: ${input.eventCount} events | ${input.sessionCount} sessions | ${input.decisionCount} decisions`
+  ];
+  if (input.durableRows.length > 0) {
+    lines.push("", "## Decisions & Durable Memory");
+    for (const row of input.durableRows) {
+      lines.push(`- [${row.memory_type}] ${truncateText(row.summary, DURABLE_MAX_CHARS)}`);
+    }
+  }
+  if (input.modifiedFiles.length > 0) {
+    lines.push("", "## Modified Files");
+    for (const filePath of input.modifiedFiles) {
+      lines.push(`- \`${filePath}\``);
+    }
+  }
+  if (input.highlights.length > 0) {
+    lines.push("", "## Highlights");
+    for (const highlight of input.highlights) {
+      lines.push(`- ${highlight}`);
+    }
+  }
+  return lines.join("\n");
+}
+function truncateText(text, maxChars) {
+  const collapsed = text.replace(/\s+/gu, " ").trim();
+  if (collapsed.length <= maxChars) {
+    return collapsed;
+  }
+  return `${collapsed.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
+}
+function atomicWriteText(targetPath, content) {
+  const tempPath = `${targetPath}.${randomBytes(4).toString("hex")}.tmp`;
+  writeFileSync(tempPath, content, "utf8");
+  renameSync(tempPath, targetPath);
+}
+
 // packages/core/src/utils.ts
 function estimateTokens(text) {
   return Math.ceil(text.length / 4);
@@ -292,14 +663,14 @@ function setStartOfDay(date, mode) {
   }
   date.setHours(0, 0, 0, 0);
 }
-function startOfMonth(timestamp4, mode) {
+function startOfMonth2(timestamp4, mode) {
   const date = new Date(timestamp4);
   if (mode === "utc") {
     return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1));
   }
   return new Date(date.getFullYear(), date.getMonth(), 1);
 }
-function addMonths(date, months, mode) {
+function addMonths2(date, months, mode) {
   const next = new Date(date);
   if (mode === "utc") {
     next.setUTCMonth(next.getUTCMonth() + months);
@@ -345,13 +716,13 @@ function resolveTimeRange(range2, referenceNow, mode = "local") {
       case "last_30d":
         return { from: now - 30 * 24 * 3600 * 1e3, to: now };
       case "this_month": {
-        const start = startOfMonth(now, mode);
-        const end = addMonths(start, 1, mode);
+        const start = startOfMonth2(now, mode);
+        const end = addMonths2(start, 1, mode);
         return { from: start.getTime(), to: end.getTime() };
       }
       case "last_month": {
-        const thisMonth = startOfMonth(now, mode);
-        const previousMonth = addMonths(thisMonth, -1, mode);
+        const thisMonth = startOfMonth2(now, mode);
+        const previousMonth = addMonths2(thisMonth, -1, mode);
         return { from: previousMonth.getTime(), to: thisMonth.getTime() };
       }
     }
@@ -360,82 +731,6 @@ function resolveTimeRange(range2, referenceNow, mode = "local") {
     from: range2.from ?? 0,
     to: range2.to ?? now
   };
-}
-
-// packages/core/src/recall/calendar.ts
-function pad2(value) {
-  return String(value).padStart(2, "0");
-}
-function dateKey(timestamp4, mode) {
-  const date = new Date(timestamp4);
-  const year = mode === "utc" ? date.getUTCFullYear() : date.getFullYear();
-  const month = mode === "utc" ? date.getUTCMonth() + 1 : date.getMonth() + 1;
-  const day = mode === "utc" ? date.getUTCDate() : date.getDate();
-  return `${year}-${pad2(month)}-${pad2(day)}`;
-}
-function monthKey(timestamp4, mode) {
-  const date = new Date(timestamp4);
-  const year = mode === "utc" ? date.getUTCFullYear() : date.getFullYear();
-  const month = mode === "utc" ? date.getUTCMonth() + 1 : date.getMonth() + 1;
-  return `${year}-${pad2(month)}`;
-}
-function startOfDay(timestamp4, options) {
-  const mode = options?.mode ?? "local";
-  const date = new Date(timestamp4);
-  if (mode === "utc") {
-    return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
-  }
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
-}
-function addDays(timestamp4, days, mode) {
-  const date = new Date(timestamp4);
-  if (mode === "utc") {
-    date.setUTCDate(date.getUTCDate() + days);
-  } else {
-    date.setDate(date.getDate() + days);
-  }
-  return date.getTime();
-}
-function startOfMonth2(timestamp4, mode) {
-  const date = new Date(timestamp4);
-  if (mode === "utc") {
-    return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1);
-  }
-  return new Date(date.getFullYear(), date.getMonth(), 1).getTime();
-}
-function addMonths2(timestamp4, months, mode) {
-  const date = new Date(timestamp4);
-  if (mode === "utc") {
-    date.setUTCMonth(date.getUTCMonth() + months);
-  } else {
-    date.setMonth(date.getMonth() + months);
-  }
-  return date.getTime();
-}
-function dayBucket(timestamp4, options) {
-  const mode = options?.mode ?? "local";
-  const from = startOfDay(timestamp4, { mode });
-  const to = addDays(from, 1, mode);
-  const key = dateKey(from, mode);
-  return { key, label: key, from, to };
-}
-function weekBucket(timestamp4, options) {
-  const mode = options?.mode ?? "local";
-  const dayStart = startOfDay(timestamp4, { mode });
-  const date = new Date(dayStart);
-  const day = mode === "utc" ? date.getUTCDay() : date.getDay();
-  const mondayOffset = day === 0 ? 6 : day - 1;
-  const from = addDays(dayStart, -mondayOffset, mode);
-  const to = addDays(from, 7, mode);
-  const key = `${dateKey(from, mode)}/week`;
-  return { key, label: key, from, to };
-}
-function monthBucket(timestamp4, options) {
-  const mode = options?.mode ?? "local";
-  const from = startOfMonth2(timestamp4, mode);
-  const to = addMonths2(from, 1, mode);
-  const key = monthKey(from, mode);
-  return { key, label: key, from, to };
 }
 
 // packages/core/src/tools/timeline.ts
@@ -1521,7 +1816,7 @@ function runRecallEngine(question, deps, options) {
 // packages/core/src/tools/project-state.ts
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
-import { join as join2 } from "node:path";
+import { join as join3 } from "node:path";
 var GIT_STATE_CACHE_MS = 5e3;
 var gitStateCache;
 function gitOutput(cwd, args) {
@@ -1555,7 +1850,7 @@ function readGitState(cwd) {
   }
 }
 function readPackageMetadata(projectRoot) {
-  const packagePath = join2(projectRoot, "package.json");
+  const packagePath = join3(projectRoot, "package.json");
   if (!existsSync(packagePath)) {
     return {};
   }
@@ -1831,7 +2126,8 @@ function buildSessionStartBrief(deps, options) {
        LIMIT ?`,
     [...eventScope.params, maxRecentFiles]
   ).map((row) => row.file_path);
-  const hasContent = decisions.length > 0 || semanticFallback.length > 0 || constraintsAndPrefs.length > 0 || nextSteps.length > 0 || state.latestConversationTimestamp !== void 0;
+  const recentDays = listRecentDailySummaries(deps.db, deps.projectRoot, 3);
+  const hasContent = decisions.length > 0 || semanticFallback.length > 0 || constraintsAndPrefs.length > 0 || nextSteps.length > 0 || state.latestConversationTimestamp !== void 0 || recentDays.length > 0;
   if (!hasContent) {
     return emptyBrief("session_start", "empty_memory");
   }
@@ -1839,7 +2135,7 @@ function buildSessionStartBrief(deps, options) {
   if (!appendLineWithinBudget(lines, "[Locus Memory \u2014 Project Brief]", maxTokens)) {
     return emptyBrief("session_start", "empty_memory");
   }
-  const projectParts = [state.packageName || basename(scopedRoot) || scopedRoot];
+  const projectParts = [state.packageName || basename2(scopedRoot) || scopedRoot];
   if (state.packageVersion) {
     projectParts.push(`v${state.packageVersion}`);
   }
@@ -1892,6 +2188,13 @@ function buildSessionStartBrief(deps, options) {
   }
   if (recentFiles.length > 0) {
     appendLineWithinBudget(lines, `Recent Files: ${recentFiles.join(", ")}`, maxTokens);
+  }
+  if (recentDays.length > 0) {
+    appendSectionItems(lines, "Recent Days:", recentDays, maxTokens, (day) => {
+      const preview = extractDailyPreview(day.summaryMd);
+      const base = `${day.dateKey}: ${day.decisionCount} decisions, ${day.eventCount} events`;
+      return preview ? `${base} (${preview})` : base;
+    });
   }
   const text = lines.join("\n");
   return {
@@ -2012,22 +2315,22 @@ function buildPromptRecallBrief(prompt, deps, options) {
 }
 
 // packages/core/src/ingest/inbox-writer.ts
-import { mkdirSync, renameSync, writeFileSync } from "node:fs";
-import { join as join3 } from "node:path";
+import { mkdirSync as mkdirSync2, renameSync as renameSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { join as join4 } from "node:path";
 function writeInboxEvent(inboxDir, event) {
-  mkdirSync(inboxDir, { recursive: true });
+  mkdirSync2(inboxDir, { recursive: true });
   const shortId = event.event_id.slice(0, 8);
   const filename = `${event.timestamp}-${shortId}.json`;
-  const finalPath = join3(inboxDir, filename);
+  const finalPath = join4(inboxDir, filename);
   const tmpPath = `${finalPath}.tmp`;
-  writeFileSync(tmpPath, JSON.stringify(event), "utf-8");
-  renameSync(tmpPath, finalPath);
+  writeFileSync2(tmpPath, JSON.stringify(event), "utf-8");
+  renameSync2(tmpPath, finalPath);
   return filename;
 }
 
 // packages/core/src/ingest/pipeline.ts
 import { readdirSync, readFileSync as readFileSync2, unlinkSync } from "node:fs";
-import { join as join4 } from "node:path";
+import { join as join5 } from "node:path";
 
 // packages/core/src/security/file-ignore.ts
 var DENYLIST_FILES = [
@@ -2065,7 +2368,7 @@ function matchGlob(name, pattern) {
 }
 function isDenylisted(filePath) {
   const normalized = filePath.replace(/\\/g, "/");
-  const basename5 = normalized.split("/").pop() ?? normalized;
+  const basename6 = normalized.split("/").pop() ?? normalized;
   for (const pattern of DENYLIST_FILES) {
     if (pattern.startsWith("**/") && pattern.endsWith("/**")) {
       const dir = pattern.slice(3, -3);
@@ -2080,7 +2383,7 @@ function isDenylisted(filePath) {
       }
       continue;
     }
-    if (matchGlob(basename5, pattern)) {
+    if (matchGlob(basename6, pattern)) {
       return true;
     }
   }
@@ -2313,7 +2616,7 @@ function processInbox(inboxDir, db, options) {
     toProcess = files;
   }
   for (const filename of toProcess) {
-    const filePath = join4(inboxDir, filename);
+    const filePath = join5(inboxDir, filename);
     let raw;
     try {
       raw = readFileSync2(filePath, "utf-8");
@@ -3217,7 +3520,7 @@ function runDurableExtraction(db, options) {
 import { execFileSync as execFileSync2 } from "node:child_process";
 import { existsSync as existsSync2, readdirSync as readdirSync2 } from "node:fs";
 import { homedir as homedir2 } from "node:os";
-import { dirname, join as join5, resolve } from "node:path";
+import { dirname as dirname2, join as join6, resolve } from "node:path";
 var PROJECT_MARKERS = [
   "package.json",
   "pyproject.toml",
@@ -3230,7 +3533,8 @@ var PROJECT_MARKERS = [
   "composer.json",
   "Gemfile",
   "deno.json",
-  "bun.lockb"
+  "bun.lockb",
+  ".locus.json"
 ];
 var defaultProjectRootDeps = {
   tryGitRoot(cwd) {
@@ -3276,7 +3580,7 @@ function hasAnyMarker(dir, markers, deps) {
         if (entry.endsWith(ext)) return true;
       }
     } else {
-      if (deps.fileExists(join5(dir, marker))) return true;
+      if (deps.fileExists(join6(dir, marker))) return true;
     }
   }
   return false;
@@ -3295,7 +3599,7 @@ function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
     if (!isAncestorHomeDir && hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
       highestMarkerDir = dir;
     }
-    const parent = dirname(dir);
+    const parent = dirname2(dir);
     if (parent === dir) break;
     dir = parent;
   }
@@ -3306,8 +3610,8 @@ function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
 }
 
 // packages/core/src/storage/init.ts
-import { existsSync as existsSync3, mkdirSync as mkdirSync2, readFileSync as readFileSync3 } from "node:fs";
-import { dirname as dirname2 } from "node:path";
+import { existsSync as existsSync3, mkdirSync as mkdirSync3, readFileSync as readFileSync3 } from "node:fs";
+import { dirname as dirname3 } from "node:path";
 
 // packages/core/src/storage/migrations.ts
 function getCurrentVersion(db) {
@@ -3493,6 +3797,22 @@ function migrationV4(db) {
   );
   db.run("UPDATE schema_version SET version = ?", [4]);
 }
+function migrationV5(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS daily_summaries (
+    project_root   TEXT NOT NULL,
+    date_key       TEXT NOT NULL,
+    event_count    INTEGER NOT NULL DEFAULT 0,
+    session_count  INTEGER NOT NULL DEFAULT 0,
+    decision_count INTEGER NOT NULL DEFAULT 0,
+    summary_md     TEXT NOT NULL,
+    updated_at     INTEGER NOT NULL,
+    PRIMARY KEY (project_root, date_key)
+  )`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_daily_summaries_project_date ON daily_summaries(project_root, date_key DESC)"
+  );
+  db.run("UPDATE schema_version SET version = ?", [5]);
+}
 function extractFtsFromRow(kind, payloadJson) {
   const parts = [kind];
   if (!payloadJson) return parts.join(" ");
@@ -3568,6 +3888,9 @@ function runMigrations(db, fts5) {
   if (currentVersion < 4) {
     migrationV4(db);
   }
+  if (currentVersion < 5) {
+    migrationV5(db);
+  }
   ensureFts(db, fts5);
 }
 
@@ -3631,7 +3954,7 @@ var NodeSqliteAdapter = class {
 };
 
 // packages/core/src/storage/sql-js.ts
-import { writeFileSync as writeFileSync2 } from "node:fs";
+import { writeFileSync as writeFileSync3 } from "node:fs";
 var SAVE_DEBOUNCE_MS = 5e3;
 var SqlJsAdapter = class {
   db;
@@ -3703,7 +4026,7 @@ var SqlJsAdapter = class {
   }
   saveToDisk() {
     const data = this.db.export();
-    writeFileSync2(this.dbPath, Buffer.from(data));
+    writeFileSync3(this.dbPath, Buffer.from(data));
   }
   scheduleSave() {
     if (this.saveTimer !== null) {
@@ -3727,9 +4050,9 @@ function detectFts5(db) {
   }
 }
 function ensureDir(dbPath) {
-  const dir = dirname2(dbPath);
+  const dir = dirname3(dbPath);
   if (!existsSync3(dir)) {
-    mkdirSync2(dir, { recursive: true });
+    mkdirSync3(dir, { recursive: true });
   }
 }
 async function initStorage(dbPath) {
@@ -3865,31 +4188,31 @@ async function runContextCommand(options = {}) {
 
 // packages/cli/src/commands/doctor-antigravity.ts
 import { existsSync as existsSync4, readFileSync as readFileSync4 } from "node:fs";
-import { join as join7 } from "node:path";
+import { join as join8 } from "node:path";
 
 // packages/cli/src/antigravity/paths.ts
 import { createHash as createHash2 } from "node:crypto";
 import { homedir as homedir3 } from "node:os";
-import { join as join6 } from "node:path";
+import { join as join7 } from "node:path";
 function resolveAntigravityConfigDir(env = process.env) {
   const override = env.LOCUS_ANTIGRAVITY_CONFIG_DIR?.trim();
   if (override) {
     return override;
   }
-  return join6(homedir3(), ".gemini", "config");
+  return join7(homedir3(), ".gemini", "config");
 }
 function resolveAntigravityPluginsDir(env = process.env) {
-  return join6(resolveAntigravityConfigDir(env), "plugins");
+  return join7(resolveAntigravityConfigDir(env), "plugins");
 }
 function resolveAntigravityPluginDir(env = process.env, pluginName = "locus-memory") {
-  return join6(resolveAntigravityPluginsDir(env), pluginName);
+  return join7(resolveAntigravityPluginsDir(env), pluginName);
 }
 function resolveAntigravityStateDir(env = process.env) {
-  return join6(resolveLocusHome(env), "state", "antigravity");
+  return join7(resolveLocusHome(env), "state", "antigravity");
 }
 function resolveAntigravitySessionStatePath(conversationId, env = process.env) {
   const hash = createHash2("sha256").update(conversationId).digest("hex").slice(0, 24);
-  return join6(resolveAntigravityStateDir(env), `${hash}.json`);
+  return join7(resolveAntigravityStateDir(env), `${hash}.json`);
 }
 
 // packages/cli/src/commands/doctor-antigravity.ts
@@ -3918,11 +4241,11 @@ function formatDoctorAntigravity(options = {}) {
       ].join("\n")
     };
   }
-  const manifest = readJsonRecord(join7(pluginDir, "plugin.json"));
+  const manifest = readJsonRecord(join8(pluginDir, "plugin.json"));
   if (!manifest || manifest.name !== "locus-memory") {
     issues.push("plugin.json missing or invalid name");
   }
-  const hooks = readJsonRecord(join7(pluginDir, "hooks.json"));
+  const hooks = readJsonRecord(join8(pluginDir, "hooks.json"));
   const hookEntry = hooks && typeof hooks["locus-memory"] === "object" && hooks["locus-memory"] !== null ? hooks["locus-memory"] : void 0;
   const requiredEvents = ["SessionStart", "PreInvocation", "PostToolUse", "Stop"];
   const missingEvents = requiredEvents.filter(
@@ -3931,15 +4254,15 @@ function formatDoctorAntigravity(options = {}) {
   if (missingEvents.length > 0) {
     issues.push(`hooks.json missing events: ${missingEvents.join(", ")}`);
   }
-  if (!existsSync4(join7(pluginDir, "hooks", "locus-hook.mjs"))) {
+  if (!existsSync4(join8(pluginDir, "hooks", "locus-hook.mjs"))) {
     issues.push("hooks/locus-hook.mjs missing");
   }
-  const mcp = readJsonRecord(join7(pluginDir, "mcp_config.json"));
+  const mcp = readJsonRecord(join8(pluginDir, "mcp_config.json"));
   const mcpServers = mcp && typeof mcp.mcpServers === "object" && mcp.mcpServers !== null ? mcp.mcpServers : void 0;
   if (!mcpServers || typeof mcpServers.locus !== "object" || mcpServers.locus === null) {
     issues.push("mcp_config.json missing mcpServers.locus");
   }
-  const rulesPath = join7(pluginDir, "rules", "AGENTS.md");
+  const rulesPath = join8(pluginDir, "rules", "AGENTS.md");
   if (!existsSync4(rulesPath)) {
     issues.push("rules/AGENTS.md missing");
   } else {
@@ -3948,13 +4271,13 @@ function formatDoctorAntigravity(options = {}) {
       issues.push("rules/AGENTS.md must be non-empty plain markdown without frontmatter");
     }
   }
-  const skillPath = join7(pluginDir, "skills", "locus-memory", "SKILL.md");
+  const skillPath = join8(pluginDir, "skills", "locus-memory", "SKILL.md");
   if (!existsSync4(skillPath) || !readFileSync4(skillPath, "utf8").trimStart().startsWith("---")) {
     issues.push("skills/locus-memory/SKILL.md missing or missing YAML frontmatter");
   }
-  const runtimeDir = join7(pluginDir, "runtime");
+  const runtimeDir = join8(pluginDir, "runtime");
   for (const runtimeFile of ["cli.js", "server.js", "package.json", "runtime.json"]) {
-    if (!existsSync4(join7(runtimeDir, runtimeFile))) {
+    if (!existsSync4(join8(runtimeDir, runtimeFile))) {
       issues.push(`runtime/${runtimeFile} missing`);
     }
   }
@@ -3979,7 +4302,7 @@ function formatDoctorAntigravity(options = {}) {
 }
 
 // packages/cli/src/codex/config.ts
-import { copyFileSync, readFileSync as readFileSync5, writeFileSync as writeFileSync3 } from "node:fs";
+import { copyFileSync, readFileSync as readFileSync5, writeFileSync as writeFileSync4 } from "node:fs";
 var defaultCodexMcpEnv = {
   LOCUS_LOG: "error",
   LOCUS_CODEX_CAPTURE: "redacted",
@@ -4053,7 +4376,7 @@ ${cwdLine}`);
     updatedSection = section.replace(/^(\[mcp_servers\.[^\]]+\])\s*$/m, `$1
 ${cwdLine}`);
   }
-  writeFileSync3(configPath, `${before}${updatedSection}${after}`, "utf8");
+  writeFileSync4(configPath, `${before}${updatedSection}${after}`, "utf8");
   return { action: "updated", backupPath };
 }
 function escapeRegExp2(value) {
@@ -4067,18 +4390,18 @@ function timestamp(date) {
 import {
   copyFileSync as copyFileSync2,
   existsSync as existsSync6,
-  mkdirSync as mkdirSync3,
+  mkdirSync as mkdirSync4,
   readFileSync as readFileSync7,
-  renameSync as renameSync2,
-  writeFileSync as writeFileSync4
+  renameSync as renameSync3,
+  writeFileSync as writeFileSync5
 } from "node:fs";
-import { dirname as dirname4, join as join9 } from "node:path";
+import { dirname as dirname5, join as join10 } from "node:path";
 
 // packages/cli/src/package-info.ts
 import { existsSync as existsSync5, readFileSync as readFileSync6 } from "node:fs";
-import { dirname as dirname3, resolve as resolve2 } from "node:path";
+import { dirname as dirname4, resolve as resolve2 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
-function findPackageRoot(startDir = dirname3(fileURLToPath2(import.meta.url))) {
+function findPackageRoot(startDir = dirname4(fileURLToPath2(import.meta.url))) {
   let current = resolve2(startDir);
   while (true) {
     const packagePath = resolve2(current, "package.json");
@@ -4088,14 +4411,14 @@ function findPackageRoot(startDir = dirname3(fileURLToPath2(import.meta.url))) {
         return current;
       }
     }
-    const parent = dirname3(current);
+    const parent = dirname4(current);
     if (parent === current) {
       throw new Error(`Could not find locus-memory package root from ${startDir}`);
     }
     current = parent;
   }
 }
-function resolvePackageVersion(startDir = dirname3(fileURLToPath2(import.meta.url))) {
+function resolvePackageVersion(startDir = dirname4(fileURLToPath2(import.meta.url))) {
   try {
     const root = findPackageRoot(startDir);
     const packageJson = JSON.parse(
@@ -4126,26 +4449,26 @@ function resolveRuntimePackageOverride(env = process.env) {
 
 // packages/cli/src/codex/paths.ts
 import { homedir as homedir4 } from "node:os";
-import { join as join8, resolve as resolve3 } from "node:path";
+import { join as join9, resolve as resolve3 } from "node:path";
 function resolveCodexHome(env = process.env) {
   const configured = env.CODEX_HOME;
   if (configured && configured.trim().length > 0) {
     return resolve3(expandTilde2(configured));
   }
-  return join8(homedir4(), ".codex");
+  return join9(homedir4(), ".codex");
 }
 function resolveCodexConfigPath(env = process.env) {
-  return join8(resolveCodexHome(env), "config.toml");
+  return join9(resolveCodexHome(env), "config.toml");
 }
 function resolveCodexSkillPath(env = process.env, skillName = "locus-memory") {
-  return join8(resolveCodexHome(env), "skills", skillName, "SKILL.md");
+  return join9(resolveCodexHome(env), "skills", skillName, "SKILL.md");
 }
 function expandTilde2(pathValue) {
   if (pathValue === "~") {
     return homedir4();
   }
   if (pathValue.startsWith("~/") || pathValue.startsWith("~\\")) {
-    return join8(homedir4(), pathValue.slice(2));
+    return join9(homedir4(), pathValue.slice(2));
   }
   return pathValue;
 }
@@ -4220,7 +4543,7 @@ function renderCodexHooksJson(config) {
 `;
 }
 function resolveCodexHooksPath(env = process.env) {
-  return join9(resolveCodexHome(env), "hooks.json");
+  return join10(resolveCodexHome(env), "hooks.json");
 }
 function installCodexHooks(options) {
   const hooksPath = resolveCodexHooksPath(options.env);
@@ -4303,10 +4626,10 @@ function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 function writeHooksFileAtomically(path, text) {
-  mkdirSync3(dirname4(path), { recursive: true });
+  mkdirSync4(dirname5(path), { recursive: true });
   const tempPath = `${path}.locus-tmp`;
-  writeFileSync4(tempPath, text, "utf8");
-  renameSync2(tempPath, path);
+  writeFileSync5(tempPath, text, "utf8");
+  renameSync3(tempPath, path);
 }
 function timestamp2(date) {
   return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".", "");
@@ -4355,24 +4678,24 @@ import { createHash as createHash5 } from "node:crypto";
 // packages/cli/src/hook-session-state.ts
 import { createHash as createHash3 } from "node:crypto";
 import { existsSync as existsSync8, readdirSync as readdirSync3, readFileSync as readFileSync9, rmSync, statSync } from "node:fs";
-import { basename as basename2, dirname as dirname6, join as join11 } from "node:path";
+import { basename as basename3, dirname as dirname7, join as join12 } from "node:path";
 
 // packages/cli/src/runtime-install.ts
-import { existsSync as existsSync7, mkdirSync as mkdirSync4, readFileSync as readFileSync8, renameSync as renameSync3, writeFileSync as writeFileSync5 } from "node:fs";
-import { dirname as dirname5, join as join10 } from "node:path";
+import { existsSync as existsSync7, mkdirSync as mkdirSync5, readFileSync as readFileSync8, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
+import { dirname as dirname6, join as join11 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 function resolveDefaultSourceDistDir(startDir) {
-  const currentDir = dirname5(fileURLToPath3(import.meta.url));
-  if (existsSync7(join10(currentDir, "cli.js")) && existsSync7(join10(currentDir, "server.js"))) {
+  const currentDir = dirname6(fileURLToPath3(import.meta.url));
+  if (existsSync7(join11(currentDir, "cli.js")) && existsSync7(join11(currentDir, "server.js"))) {
     return currentDir;
   }
-  return join10(findPackageRoot(startDir), "dist");
+  return join11(findPackageRoot(startDir), "dist");
 }
 function writeFileAtomically(targetPath, content) {
-  mkdirSync4(dirname5(targetPath), { recursive: true });
+  mkdirSync5(dirname6(targetPath), { recursive: true });
   const tempPath = `${targetPath}.locus-tmp`;
-  writeFileSync5(tempPath, content);
-  renameSync3(tempPath, targetPath);
+  writeFileSync6(tempPath, content);
+  renameSync4(tempPath, targetPath);
 }
 function syncTextAtomically(targetPath, content) {
   if (existsSync7(targetPath)) {
@@ -4412,21 +4735,21 @@ function readExistingManifest(manifestPath) {
 }
 function installRuntimeFiles(targetDir, options = {}) {
   const sourceDistDir = options.sourceDistDir ?? resolveDefaultSourceDistDir(options.startDir);
-  const sourceCliPath = join10(sourceDistDir, "cli.js");
-  const sourceServerPath = join10(sourceDistDir, "server.js");
+  const sourceCliPath = join11(sourceDistDir, "cli.js");
+  const sourceServerPath = join11(sourceDistDir, "server.js");
   if (!existsSync7(sourceCliPath) || !existsSync7(sourceServerPath)) {
     throw new Error(
       `Missing built runtime artifacts in ${sourceDistDir} (expected cli.js and server.js). Run npm run build first.`
     );
   }
-  const cliPath = join10(targetDir, "cli.js");
-  const serverPath = join10(targetDir, "server.js");
-  const manifestPath = join10(targetDir, "runtime.json");
-  const packageJsonPath = join10(targetDir, "package.json");
+  const cliPath = join11(targetDir, "cli.js");
+  const serverPath = join11(targetDir, "server.js");
+  const manifestPath = join11(targetDir, "runtime.json");
+  const packageJsonPath = join11(targetDir, "package.json");
   const version = resolvePackageVersion(options.startDir);
   const hadAllTargets = existsSync7(cliPath) && existsSync7(serverPath) && existsSync7(manifestPath) && existsSync7(packageJsonPath);
   const existingManifest = readExistingManifest(manifestPath);
-  mkdirSync4(targetDir, { recursive: true });
+  mkdirSync5(targetDir, { recursive: true });
   const cliChanged = syncFileAtomically(sourceCliPath, cliPath);
   const serverChanged = syncFileAtomically(sourceServerPath, serverPath);
   const expectedPackageJson = `${JSON.stringify(
@@ -4472,7 +4795,7 @@ var MAX_TRACKED_IDS = 200;
 var STATE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
 function resolveHookSessionStatePath(client, sessionId, env = process.env) {
   const hash = createHash3("sha256").update(sessionId).digest("hex").slice(0, 24);
-  return join11(resolveLocusHome(env), "state", client, `${hash}.json`);
+  return join12(resolveLocusHome(env), "state", client, `${hash}.json`);
 }
 function emptySessionState(sessionId) {
   return {
@@ -4538,7 +4861,7 @@ function writeHookSessionState(client, state, env = process.env) {
   };
   writeFileAtomically(filePath, `${JSON.stringify(normalized, null, 2)}
 `);
-  pruneStaleSessionStateFiles(dirname6(filePath), basename2(filePath), normalized.updatedAt);
+  pruneStaleSessionStateFiles(dirname7(filePath), basename3(filePath), normalized.updatedAt);
 }
 function pruneStaleSessionStateFiles(stateDir, currentFileName, nowMs) {
   if (!Number.isFinite(nowMs) || nowMs <= STATE_TTL_MS) {
@@ -4550,7 +4873,7 @@ function pruneStaleSessionStateFiles(stateDir, currentFileName, nowMs) {
       if (entry === currentFileName || !entry.endsWith(".json")) {
         continue;
       }
-      const entryPath = join11(stateDir, entry);
+      const entryPath = join12(stateDir, entry);
       try {
         const stats = statSync(entryPath);
         if (stats.mtimeMs < cutoff) {
@@ -4601,12 +4924,25 @@ var FULL_MAX_CHARS = 4e3;
 var USER_REQUEST_BLOCK_RE = /<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/gi;
 var SYSTEM_ENVELOPE_BLOCK_RE = /<(?:ADDITIONAL_METADATA|SYSTEM_MESSAGE|CONTEXT_SUMMARY)>[\s\S]*?<\/(?:ADDITIONAL_METADATA|SYSTEM_MESSAGE|CONTEXT_SUMMARY)>/gi;
 var SYSTEM_MESSAGE_BLOCK_RE = /<SYSTEM_MESSAGE>[\s\S]*?<\/SYSTEM_MESSAGE>/gi;
+var HOOK_ECHO_PATTERNS = [
+  /The following system message was injected by a (?:PreInvocation|SessionStart|UserPromptSubmit) hook:[\s\S]*/gi,
+  /\[Locus Memory — (?:Project Brief|Relevant Recall)\][\s\S]*/gi
+];
+function stripAntigravityHookEchoes(text) {
+  let cleaned = text;
+  for (const pattern of HOOK_ECHO_PATTERNS) {
+    cleaned = cleaned.replace(pattern, " ");
+  }
+  return cleaned.trim();
+}
 function cleanAntigravityUserInput(raw) {
-  const extracted = [...raw.matchAll(USER_REQUEST_BLOCK_RE)].map((match) => (match[1] ?? "").trim()).filter((segment) => segment.length > 0);
+  const extracted = [...raw.matchAll(USER_REQUEST_BLOCK_RE)].map((match) => stripAntigravityHookEchoes((match[1] ?? "").trim())).filter((segment) => segment.length > 0);
   if (extracted.length > 0) {
     return extracted.join("\n").trim();
   }
-  return raw.replace(SYSTEM_ENVELOPE_BLOCK_RE, " ").replace(/<\/?USER_REQUEST>/gi, " ").trim();
+  return stripAntigravityHookEchoes(
+    raw.replace(SYSTEM_ENVELOPE_BLOCK_RE, " ").replace(/<\/?USER_REQUEST>/gi, " ")
+  );
 }
 function antigravityTranscriptCursorKey(conversationId) {
   return `${ANTIGRAVITY_TRANSCRIPT_CURSOR_PREFIX}${conversationId}.last_step_index`;
@@ -4614,7 +4950,7 @@ function antigravityTranscriptCursorKey(conversationId) {
 function deterministicEventId(key) {
   return createHash4("sha256").update(key).digest("hex").slice(0, 32);
 }
-function truncateText(text, maxChars) {
+function truncateText2(text, maxChars) {
   return text.length <= maxChars ? text : text.slice(0, maxChars);
 }
 function resolveRecordTimestamp(record, fallbackNow) {
@@ -4673,7 +5009,7 @@ function parseAntigravityTranscriptEvents(options) {
       if (!cleaned || isNoisyPrompt(cleaned)) {
         continue;
       }
-      const sanitized = truncateText(redact(cleaned).trim(), maxChars).trim();
+      const sanitized = truncateText2(redact(cleaned).trim(), maxChars).trim();
       if (!sanitized) {
         continue;
       }
@@ -4695,11 +5031,13 @@ function parseAntigravityTranscriptEvents(options) {
       continue;
     }
     if (record.type === "PLANNER_RESPONSE" && record.source === "MODEL" && record.status === "DONE") {
-      const cleaned = record.content.replace(SYSTEM_MESSAGE_BLOCK_RE, " ").trim();
-      if (!cleaned || cleaned.startsWith("[Locus Memory \u2014")) {
+      const cleaned = stripAntigravityHookEchoes(
+        record.content.replace(SYSTEM_MESSAGE_BLOCK_RE, " ")
+      );
+      if (!cleaned) {
         continue;
       }
-      const sanitized = truncateText(redact(cleaned).trim(), maxChars).trim();
+      const sanitized = truncateText2(redact(cleaned).trim(), maxChars).trim();
       if (!sanitized) {
         continue;
       }
@@ -4724,6 +5062,222 @@ function parseAntigravityTranscriptEvents(options) {
     }
   }
   return { events, maxStepIndex };
+}
+
+// packages/cli/src/workspace-gate.ts
+import { existsSync as existsSync9, readFileSync as readFileSync11 } from "node:fs";
+import { homedir as homedir5, tmpdir } from "node:os";
+import { join as join13, resolve as resolve4 } from "node:path";
+import { fileURLToPath as fileURLToPath4 } from "node:url";
+var DENIED_HOME_SUBDIRS = [".gemini", ".codex", ".locus", ".claude", ".config"];
+var DENIED_WIN_SYSTEM_PREFIXES = [
+  "c:/windows",
+  "c:/program files",
+  "c:/program files (x86)"
+];
+var DENIED_POSIX_SYSTEM_PREFIXES = [
+  "/usr",
+  "/etc",
+  "/var",
+  "/bin",
+  "/sbin",
+  "/system",
+  "/library"
+];
+function normalizeWorkspacePath(raw) {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return void 0;
+  }
+  let candidate = trimmed;
+  if (/^file:\/\//iu.test(candidate)) {
+    try {
+      candidate = fileURLToPath4(candidate);
+    } catch {
+      return void 0;
+    }
+  }
+  const normalized = resolve4(candidate).replace(/\\/g, "/");
+  if (normalized === "/" || /^[a-z]:\/$/iu.test(normalized)) {
+    return normalized;
+  }
+  return normalized.replace(/\/+$/u, "");
+}
+function comparablePath(normalizedPath, platform) {
+  if (platform === "win32" || /^[a-z]:\//iu.test(normalizedPath)) {
+    return normalizedPath.toLowerCase();
+  }
+  return normalizedPath;
+}
+function isSamePath(left, right, platform) {
+  return comparablePath(left, platform) === comparablePath(right, platform);
+}
+function isSameOrChild(candidate, base, platform) {
+  const left = comparablePath(candidate, platform);
+  const right = comparablePath(base, platform);
+  if (left === right) {
+    return true;
+  }
+  if (right === "/" || /^[a-z]:\/$/u.test(right)) {
+    return left.startsWith(right);
+  }
+  return left.startsWith(`${right}/`);
+}
+function isFilesystemRoot(normalizedPath) {
+  return normalizedPath === "/" || /^[a-z]:\/$/iu.test(normalizedPath);
+}
+function readStringArray(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((entry) => typeof entry === "string").map((entry) => normalizeWorkspacePath(entry)).filter((entry) => entry !== void 0);
+}
+function resolveLocusWorkspaceConfigPath(env = process.env, customHomeDir) {
+  const configuredHome = env.LOCUS_HOME?.trim();
+  if (configuredHome) {
+    return join13(resolveLocusHome(env), "config.json");
+  }
+  if (customHomeDir) {
+    return join13(customHomeDir, ".locus", "config.json");
+  }
+  return join13(resolveLocusHome(env), "config.json");
+}
+function readLocusWorkspaceConfig(env = process.env, customHomeDir) {
+  const configPath = resolveLocusWorkspaceConfigPath(env, customHomeDir);
+  if (!existsSync9(configPath)) {
+    return { mode: "auto", includePaths: [], excludePaths: [] };
+  }
+  try {
+    const parsed = JSON.parse(readFileSync11(configPath, "utf8"));
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return { mode: "auto", includePaths: [], excludePaths: [] };
+    }
+    const record = parsed;
+    return {
+      mode: record.mode === "opt-in" ? "opt-in" : "auto",
+      includePaths: readStringArray(record.includePaths),
+      excludePaths: readStringArray(record.excludePaths)
+    };
+  } catch {
+    return { mode: "auto", includePaths: [], excludePaths: [] };
+  }
+}
+function isDeniedAgentOrSystemPath(normalizedPath, normalizedHome, platform) {
+  if (isFilesystemRoot(normalizedPath)) {
+    return "denied_system_path";
+  }
+  if (normalizedHome) {
+    if (isSamePath(normalizedPath, normalizedHome, platform)) {
+      return "home_directory";
+    }
+    for (const subdir of DENIED_HOME_SUBDIRS) {
+      const denied = normalizeWorkspacePath(join13(normalizedHome, subdir));
+      if (denied && isSameOrChild(normalizedPath, denied, platform)) {
+        return "denied_system_path";
+      }
+    }
+    const appData = normalizeWorkspacePath(join13(normalizedHome, "AppData"));
+    if (appData && isSameOrChild(normalizedPath, appData, platform)) {
+      return "denied_system_path";
+    }
+  }
+  for (const prefix of DENIED_WIN_SYSTEM_PREFIXES) {
+    if (isSameOrChild(normalizedPath, prefix, "win32")) {
+      return "denied_system_path";
+    }
+  }
+  for (const prefix of DENIED_POSIX_SYSTEM_PREFIXES) {
+    if (isSameOrChild(normalizedPath, prefix, platform)) {
+      return "denied_system_path";
+    }
+  }
+  return void 0;
+}
+function collectTempDirs(options, env, normalizedHome) {
+  const candidates = [
+    options.tempDir ?? tmpdir(),
+    env.TEMP,
+    env.TMP,
+    env.TMPDIR,
+    normalizedHome ? join13(normalizedHome, "AppData", "Local", "Temp") : void 0
+  ];
+  const normalizedSet = /* @__PURE__ */ new Set();
+  for (const entry of candidates) {
+    if (!entry) continue;
+    const norm = normalizeWorkspacePath(entry);
+    if (norm && !isFilesystemRoot(norm)) {
+      normalizedSet.add(norm);
+    }
+  }
+  return [...normalizedSet];
+}
+function evaluateHookWorkspace(options) {
+  const env = options.env ?? process.env;
+  const platform = options.platform ?? process.platform;
+  if (!options.rawCwd) {
+    return { allowed: false, reason: "missing_workspace" };
+  }
+  const candidatePath = normalizeWorkspacePath(options.rawCwd);
+  if (!candidatePath) {
+    return { allowed: false, reason: "missing_workspace" };
+  }
+  const rawHome = options.homeDir ?? homedir5();
+  const normalizedHome = normalizeWorkspacePath(rawHome);
+  const config = readLocusWorkspaceConfig(env, options.homeDir);
+  if (config.excludePaths?.some((excluded) => isSameOrChild(candidatePath, excluded, platform))) {
+    return { allowed: false, reason: "excluded_path" };
+  }
+  const explicitlyIncluded = config.includePaths?.some((included) => isSameOrChild(candidatePath, included, platform)) ?? false;
+  if (explicitlyIncluded) {
+    const resolved2 = resolveProjectRoot(candidatePath);
+    const resolvedNorm2 = normalizeWorkspacePath(resolved2.root) ?? resolved2.root;
+    if (config.excludePaths?.some((excluded) => isSameOrChild(resolvedNorm2, excluded, platform))) {
+      return { allowed: false, reason: "excluded_path" };
+    }
+    return {
+      allowed: true,
+      projectRoot: resolvedNorm2,
+      method: resolved2.method === "cwd-fallback" ? "include-list" : resolved2.method
+    };
+  }
+  if (config.mode === "opt-in") {
+    return { allowed: false, reason: "opt_in_required" };
+  }
+  const tempDirs = collectTempDirs(options, env, normalizedHome);
+  const insideTemp = tempDirs.some((tempPath) => isSameOrChild(candidatePath, tempPath, platform));
+  const tempAllowed = env.LOCUS_ALLOW_TEMP_WORKSPACE === "1" || Boolean(env.LOCUS_STORAGE_ROOT);
+  if (insideTemp) {
+    if (!tempAllowed) {
+      return { allowed: false, reason: "temp_directory" };
+    }
+  } else {
+    const deniedReason = isDeniedAgentOrSystemPath(candidatePath, normalizedHome, platform);
+    if (deniedReason) {
+      return { allowed: false, reason: deniedReason };
+    }
+  }
+  const resolved = resolveProjectRoot(candidatePath);
+  if (resolved.method === "cwd-fallback") {
+    return { allowed: false, reason: "no_project_marker" };
+  }
+  const resolvedNorm = normalizeWorkspacePath(resolved.root) ?? resolved.root;
+  if (config.excludePaths?.some((excluded) => isSameOrChild(resolvedNorm, excluded, platform))) {
+    return { allowed: false, reason: "excluded_path" };
+  }
+  const resolvedInsideTemp = tempDirs.some(
+    (tempPath) => isSameOrChild(resolvedNorm, tempPath, platform)
+  );
+  if (!resolvedInsideTemp) {
+    const deniedRootReason = isDeniedAgentOrSystemPath(resolvedNorm, normalizedHome, platform);
+    if (deniedRootReason) {
+      return { allowed: false, reason: deniedRootReason };
+    }
+  }
+  return {
+    allowed: true,
+    projectRoot: resolvedNorm,
+    method: resolved.method
+  };
 }
 
 // packages/cli/src/commands/hook-antigravity.ts
@@ -4767,10 +5321,6 @@ function parseHookInput(stdin) {
   }
 }
 function resolveWorkspaceRawCwd(input) {
-  const cwd = stringField(input.cwd);
-  if (cwd) {
-    return cwd;
-  }
   if (Array.isArray(input.workspacePaths)) {
     for (const item of input.workspacePaths) {
       const candidate = stringField(item);
@@ -4779,7 +5329,7 @@ function resolveWorkspaceRawCwd(input) {
       }
     }
   }
-  return process.cwd();
+  return stringField(input.cwd);
 }
 function deterministicEventId2(key) {
   return createHash5("sha256").update(key).digest("hex").slice(0, 32);
@@ -4857,13 +5407,22 @@ async function handleSessionStart(context) {
   const { db, fts5 } = await initStorage(dbPath);
   try {
     try {
-      processInbox(inboxDir, db, {
+      const ingestMetrics = processInbox(inboxDir, db, {
         batchLimit: 100,
         captureLevel: context.captureLevel,
         fts5Available: fts5,
         projectRoot: context.projectRoot
       });
       runDurableExtraction(db);
+      if (ingestMetrics.processed > 0) {
+        syncDailyJournal({
+          db,
+          projectRoot: context.projectRoot,
+          journalDir: resolveJournalDirFromDbPath(dbPath),
+          dateKeys: [formatLocalDateKey(context.nowMs)],
+          now: context.nowMs
+        });
+      }
     } catch {
     }
     const brief = buildSessionStartBrief({
@@ -5022,6 +5581,16 @@ async function handleStop(context) {
       projectRoot: context.projectRoot
     });
     runDurableExtraction(db);
+    try {
+      syncDailyJournal({
+        db,
+        projectRoot: context.projectRoot,
+        journalDir: resolveJournalDirFromDbPath(dbPath),
+        dateKeys: [formatLocalDateKey(context.nowMs)],
+        now: context.nowMs
+      });
+    } catch {
+    }
     return { exitCode: 0, stdout: "{}" };
   } finally {
     try {
@@ -5060,7 +5629,11 @@ async function runAntigravityHook(options) {
       const input = parsed.value;
       const conversationId = stringField(input.conversationId) ?? "default";
       const rawCwd = resolveWorkspaceRawCwd(input);
-      const { root: projectRoot } = resolveProjectRoot(rawCwd);
+      const gate = evaluateHookWorkspace({ rawCwd, env: effectiveEnv });
+      if (!gate.allowed) {
+        return { exitCode: 0, stdout: "{}" };
+      }
+      const projectRoot = gate.projectRoot;
       const captureLevel = resolveAntigravityCaptureLevel(effectiveEnv);
       resolveAntigravitySessionStatePath(conversationId, effectiveEnv);
       if (event === "session-start") {
@@ -5109,9 +5682,9 @@ async function runAntigravityHook(options) {
 }
 
 // packages/cli/src/commands/hook-codex.ts
-import { createHash as createHash7, randomBytes } from "node:crypto";
-import { mkdirSync as mkdirSync8, renameSync as renameSync5, writeFileSync as writeFileSync8 } from "node:fs";
-import { join as join17 } from "node:path";
+import { createHash as createHash7, randomBytes as randomBytes2 } from "node:crypto";
+import { mkdirSync as mkdirSync9, renameSync as renameSync6, writeFileSync as writeFileSync9 } from "node:fs";
+import { join as join19 } from "node:path";
 
 // packages/codex/src/bounded-snippets.ts
 var USER_CHAR_LIMIT = 280;
@@ -5589,10 +6162,10 @@ function maybeRedactSummary(value) {
 
 // packages/codex/src/ids.ts
 import { createHash as createHash6 } from "node:crypto";
-import { basename as basename3 } from "node:path";
+import { basename as basename4 } from "node:path";
 function createCodexSourceEventId(input) {
   const sessionId = input.sessionId ?? "unknown-session";
-  const fileName = basename3(input.filePath);
+  const fileName = basename4(input.filePath);
   const itemId = input.itemId ?? "no-item";
   return `codex:${sessionId}:${fileName}:${input.line}:${input.kind}:${itemId}`;
 }
@@ -5601,7 +6174,7 @@ function createCodexEventId(sourceEventId) {
 }
 
 // packages/codex/src/importer.ts
-import { readFileSync as readFileSync11, statSync as statSync2 } from "node:fs";
+import { readFileSync as readFileSync12, statSync as statSync2 } from "node:fs";
 
 // packages/codex/src/inbox-event.ts
 function toInboxEvent(normalizedEvent, captureMode) {
@@ -5717,18 +6290,18 @@ function arrayPayload(value) {
 }
 
 // packages/codex/src/inbox-writer.ts
-import { existsSync as existsSync9, mkdirSync as mkdirSync5, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
-import { join as join12 } from "node:path";
+import { existsSync as existsSync10, mkdirSync as mkdirSync6, renameSync as renameSync5, writeFileSync as writeFileSync7 } from "node:fs";
+import { join as join14 } from "node:path";
 function writeCodexInboxEvent(inboxDir, event) {
-  mkdirSync5(inboxDir, { recursive: true });
+  mkdirSync6(inboxDir, { recursive: true });
   const filename = `${event.timestamp}-${event.event_id.slice(0, 8)}.json`;
-  const finalPath = join12(inboxDir, filename);
-  if (existsSync9(finalPath)) {
+  const finalPath = join14(inboxDir, filename);
+  if (existsSync10(finalPath)) {
     return { status: "duplicate_pending", filename };
   }
   const tmpPath = `${finalPath}.tmp`;
-  writeFileSync6(tmpPath, JSON.stringify(event), "utf-8");
-  renameSync4(tmpPath, finalPath);
+  writeFileSync7(tmpPath, JSON.stringify(event), "utf-8");
+  renameSync5(tmpPath, finalPath);
   return { status: "written", filename };
 }
 
@@ -6085,36 +6658,36 @@ function durationMsValue(value) {
 }
 
 // packages/codex/src/paths.ts
-import { homedir as homedir5 } from "node:os";
-import { join as join13, resolve as resolve4 } from "node:path";
+import { homedir as homedir6 } from "node:os";
+import { join as join15, resolve as resolve5 } from "node:path";
 function resolveCodexHome2(env = process.env) {
   const configured = env.CODEX_HOME;
   if (configured && configured.trim().length > 0) {
-    return resolve4(expandTilde3(configured));
+    return resolve5(expandTilde3(configured));
   }
-  return join13(homedir5(), ".codex");
+  return join15(homedir6(), ".codex");
 }
 function resolveCodexSessionsDir(options = {}) {
   if (options.sessionsDir && options.sessionsDir.trim().length > 0) {
-    return resolve4(expandTilde3(options.sessionsDir));
+    return resolve5(expandTilde3(options.sessionsDir));
   }
-  return join13(resolveCodexHome2(options.env), "sessions");
+  return join15(resolveCodexHome2(options.env), "sessions");
 }
 function expandTilde3(pathValue) {
   if (pathValue === "~") {
-    return homedir5();
+    return homedir6();
   }
   if (pathValue.startsWith("~/") || pathValue.startsWith("~\\")) {
-    return join13(homedir5(), pathValue.slice(2));
+    return join15(homedir6(), pathValue.slice(2));
   }
   return pathValue;
 }
 
 // packages/codex/src/session-files.ts
 import { readdirSync as readdirSync4 } from "node:fs";
-import { basename as basename4, join as join14, resolve as resolve5 } from "node:path";
+import { basename as basename5, join as join16, resolve as resolve6 } from "node:path";
 function findCodexRolloutFiles(sessionsDir) {
-  return collectRolloutFiles(resolve5(sessionsDir)).sort();
+  return collectRolloutFiles(resolve6(sessionsDir)).sort();
 }
 function collectRolloutFiles(dir) {
   let entries;
@@ -6125,19 +6698,19 @@ function collectRolloutFiles(dir) {
   }
   const files = [];
   for (const entry of entries) {
-    const fullPath = join14(dir, entry.name);
+    const fullPath = join16(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...collectRolloutFiles(fullPath));
       continue;
     }
     if (entry.isFile() && isRolloutJsonl(fullPath)) {
-      files.push(resolve5(fullPath));
+      files.push(resolve6(fullPath));
     }
   }
   return files;
 }
 function isRolloutJsonl(filePath) {
-  return /^rollout-.*\.jsonl$/.test(basename4(filePath));
+  return /^rollout-.*\.jsonl$/.test(basename5(filePath));
 }
 
 // packages/codex/src/importer.ts
@@ -6165,7 +6738,7 @@ function importCodexSessionsToInbox(options) {
     }
     let raw;
     try {
-      raw = readFileSync11(filePath, "utf-8");
+      raw = readFileSync12(filePath, "utf-8");
     } catch {
       metrics.errors++;
       continue;
@@ -6279,17 +6852,17 @@ function canonicalImportProjectRoot(eventRoot, requestedRoot) {
 }
 
 // packages/codex/src/plugin-sync.ts
-import { copyFileSync as copyFileSync3, existsSync as existsSync10, mkdirSync as mkdirSync6, readFileSync as readFileSync12, rmSync as rmSync2, writeFileSync as writeFileSync7 } from "node:fs";
-import { dirname as dirname7, join as join15, resolve as resolve6 } from "node:path";
-import { fileURLToPath as fileURLToPath4 } from "node:url";
+import { copyFileSync as copyFileSync3, existsSync as existsSync11, mkdirSync as mkdirSync7, readFileSync as readFileSync13, rmSync as rmSync2, writeFileSync as writeFileSync8 } from "node:fs";
+import { dirname as dirname8, join as join17, resolve as resolve7 } from "node:path";
+import { fileURLToPath as fileURLToPath5 } from "node:url";
 
 // packages/codex/src/skill-sync.ts
-import { copyFileSync as copyFileSync4, existsSync as existsSync11, mkdirSync as mkdirSync7, readFileSync as readFileSync13 } from "node:fs";
-import { homedir as homedir6 } from "node:os";
-import { dirname as dirname8, join as join16, resolve as resolve7 } from "node:path";
-import { fileURLToPath as fileURLToPath5 } from "node:url";
+import { copyFileSync as copyFileSync4, existsSync as existsSync12, mkdirSync as mkdirSync8, readFileSync as readFileSync14 } from "node:fs";
+import { homedir as homedir7 } from "node:os";
+import { dirname as dirname9, join as join18, resolve as resolve8 } from "node:path";
+import { fileURLToPath as fileURLToPath6 } from "node:url";
 function resolveCanonicalCodexSkillPath() {
-  return resolve7(fileURLToPath5(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
+  return resolve8(fileURLToPath6(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
 }
 
 // packages/cli/src/commands/hook-codex.ts
@@ -6380,7 +6953,7 @@ function extractWorkspaceRawCwd(input) {
       }
     }
   }
-  return process.cwd();
+  return void 0;
 }
 function extractSessionId(input) {
   return stringField2(input.session_id) ?? stringField2(input.sessionId) ?? stringField2(input.thread_id) ?? stringField2(input.threadId) ?? "default";
@@ -6457,13 +7030,22 @@ async function handleSessionStart2(context) {
   const { db, fts5 } = await initStorage(dbPath);
   try {
     try {
-      processInbox(inboxDir, db, {
+      const ingestMetrics = processInbox(inboxDir, db, {
         batchLimit: 100,
         captureLevel: context.captureLevel,
         fts5Available: fts5,
         projectRoot: context.projectRoot
       });
       runDurableExtraction(db);
+      if (ingestMetrics.processed > 0) {
+        syncDailyJournal({
+          db,
+          projectRoot: context.projectRoot,
+          journalDir: resolveJournalDirFromDbPath(dbPath),
+          dateKeys: [formatLocalDateKey(context.nowMs)],
+          now: context.nowMs
+        });
+      }
     } catch {
     }
     const brief = buildSessionStartBrief({
@@ -6679,6 +7261,16 @@ async function handleStop2(context) {
       projectRoot: context.projectRoot
     });
     runDurableExtraction(db);
+    try {
+      syncDailyJournal({
+        db,
+        projectRoot: context.projectRoot,
+        journalDir: resolveJournalDirFromDbPath(dbPath),
+        dateKeys: [formatLocalDateKey(context.nowDate.getTime())],
+        now: context.nowDate.getTime()
+      });
+    } catch {
+    }
     return {
       exitCode: 0,
       stdout: failOpenStdout("stop"),
@@ -6729,7 +7321,11 @@ async function runCodexHook(options) {
         "redacted"
       );
       const rawCwd = extractWorkspaceRawCwd(input);
-      const { root: projectRoot } = resolveProjectRoot(rawCwd);
+      const gate = evaluateHookWorkspace({ rawCwd, env: effectiveEnv });
+      if (!gate.allowed) {
+        return { exitCode: 0, stdout: failOpenStdout(event) };
+      }
+      const projectRoot = gate.projectRoot;
       const sessionId = extractSessionId(input);
       if (event === "session-start") {
         return handleSessionStart2({
@@ -6781,10 +7377,10 @@ async function runCodexHook(options) {
 }
 function writeStopTrigger(options) {
   try {
-    const triggerDir = join17(resolveCodexHome(options.env), "locus", "hook-triggers");
-    mkdirSync8(triggerDir, { recursive: true });
-    const id = `${options.now.getTime()}-${randomBytes(4).toString("hex")}`;
-    const finalPath = join17(triggerDir, `stop-${id}.json`);
+    const triggerDir = join19(resolveCodexHome(options.env), "locus", "hook-triggers");
+    mkdirSync9(triggerDir, { recursive: true });
+    const id = `${options.now.getTime()}-${randomBytes2(4).toString("hex")}`;
+    const finalPath = join19(triggerDir, `stop-${id}.json`);
     const tempPath = `${finalPath}.tmp`;
     const payload = {
       event: "stop",
@@ -6792,9 +7388,9 @@ function writeStopTrigger(options) {
       sessionId: stringField2(options.input.session_id),
       turnId: stringField2(options.input.turn_id)
     };
-    writeFileSync8(tempPath, `${JSON.stringify(payload, null, 2)}
+    writeFileSync9(tempPath, `${JSON.stringify(payload, null, 2)}
 `, "utf8");
-    renameSync5(tempPath, finalPath);
+    renameSync6(tempPath, finalPath);
     return { ok: true };
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error : new Error(String(error)) };
@@ -6802,8 +7398,8 @@ function writeStopTrigger(options) {
 }
 
 // packages/cli/src/antigravity/bundle.ts
-import { existsSync as existsSync12 } from "node:fs";
-import { join as join18 } from "node:path";
+import { existsSync as existsSync13 } from "node:fs";
+import { join as join20 } from "node:path";
 function buildAntigravityPluginManifest(version) {
   return {
     name: "locus-memory",
@@ -6953,15 +7549,15 @@ function buildAntigravitySkillMarkdown() {
 }
 function writeAntigravityPluginBundle(options) {
   const pluginDir = options.targetDir;
-  const runtimeDir = join18(pluginDir, "runtime");
+  const runtimeDir = join20(pluginDir, "runtime");
   const captureLevel = options.captureLevel ?? "redacted";
-  const manifestPath = join18(pluginDir, "plugin.json");
-  const hooksPath = join18(pluginDir, "hooks.json");
-  const hookRunnerPath = join18(pluginDir, "hooks", "locus-hook.mjs");
-  const mcpPath = join18(pluginDir, "mcp_config.json");
-  const rulesPath = join18(pluginDir, "rules", "AGENTS.md");
-  const skillPath = join18(pluginDir, "skills", "locus-memory", "SKILL.md");
-  const hadAllPluginFiles = existsSync12(manifestPath) && existsSync12(hooksPath) && existsSync12(hookRunnerPath) && existsSync12(mcpPath) && existsSync12(rulesPath) && existsSync12(skillPath) && existsSync12(join18(runtimeDir, "cli.js")) && existsSync12(join18(runtimeDir, "server.js"));
+  const manifestPath = join20(pluginDir, "plugin.json");
+  const hooksPath = join20(pluginDir, "hooks.json");
+  const hookRunnerPath = join20(pluginDir, "hooks", "locus-hook.mjs");
+  const mcpPath = join20(pluginDir, "mcp_config.json");
+  const rulesPath = join20(pluginDir, "rules", "AGENTS.md");
+  const skillPath = join20(pluginDir, "skills", "locus-memory", "SKILL.md");
+  const hadAllPluginFiles = existsSync13(manifestPath) && existsSync13(hooksPath) && existsSync13(hookRunnerPath) && existsSync13(mcpPath) && existsSync13(rulesPath) && existsSync13(skillPath) && existsSync13(join20(runtimeDir, "cli.js")) && existsSync13(join20(runtimeDir, "server.js"));
   const runtimeResult = installRuntimeFiles(runtimeDir, {
     startDir: options.startDir,
     sourceDistDir: options.sourceDistDir,
@@ -7007,7 +7603,7 @@ function writeAntigravityPluginBundle(options) {
       runtimeResult.cliPath,
       runtimeResult.serverPath,
       runtimeResult.manifestPath,
-      join18(runtimeDir, "package.json")
+      join20(runtimeDir, "package.json")
     ]
   };
 }
@@ -7079,12 +7675,12 @@ function runInstallAntigravity(options = {}) {
 }
 
 // packages/cli/src/commands/install-codex.ts
-import { existsSync as existsSync16 } from "node:fs";
-import { join as join21 } from "node:path";
+import { existsSync as existsSync17 } from "node:fs";
+import { join as join23 } from "node:path";
 
 // packages/cli/src/codex/cleanup.ts
-import { existsSync as existsSync13, readdirSync as readdirSync5, rmSync as rmSync3, statSync as statSync3 } from "node:fs";
-import { join as join19 } from "node:path";
+import { existsSync as existsSync14, readdirSync as readdirSync5, rmSync as rmSync3, statSync as statSync3 } from "node:fs";
+import { join as join21 } from "node:path";
 function cleanupInterruptedInstall(codexHome) {
   const removed = [];
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
@@ -7095,16 +7691,16 @@ function cleanupInterruptedInstall(codexHome) {
   return { removed };
 }
 function findInterruptedInstallTempFiles(codexHome) {
-  const skillDir = join19(codexHome, "skills", "locus-memory");
+  const skillDir = join21(codexHome, "skills", "locus-memory");
   const tempFiles = [];
-  if (!existsSync13(skillDir)) {
+  if (!existsSync14(skillDir)) {
     return tempFiles;
   }
   for (const entry of readdirSync5(skillDir)) {
     if (!entry.endsWith(".locus-tmp")) {
       continue;
     }
-    const path = join19(skillDir, entry);
+    const path = join21(skillDir, entry);
     if (!statSync3(path).isFile()) {
       continue;
     }
@@ -7147,13 +7743,13 @@ function buildCodexMcpRemoveArgs(name) {
 }
 
 // packages/cli/src/codex/lock.ts
-import { existsSync as existsSync14, mkdirSync as mkdirSync9, readFileSync as readFileSync14, rmSync as rmSync4, writeFileSync as writeFileSync9 } from "node:fs";
-import { join as join20 } from "node:path";
+import { existsSync as existsSync15, mkdirSync as mkdirSync10, readFileSync as readFileSync15, rmSync as rmSync4, writeFileSync as writeFileSync10 } from "node:fs";
+import { join as join22 } from "node:path";
 var defaultStaleAfterMs = 15 * 60 * 1e3;
 function acquireInstallLock(codexHome, options = {}) {
-  mkdirSync9(codexHome, { recursive: true });
-  const lockPath = join20(codexHome, ".locus-install.lock");
-  if (existsSync14(lockPath)) {
+  mkdirSync10(codexHome, { recursive: true });
+  const lockPath = join22(codexHome, ".locus-install.lock");
+  if (existsSync15(lockPath)) {
     const stale = isStaleLock(lockPath, options);
     return {
       acquired: false,
@@ -7163,7 +7759,7 @@ function acquireInstallLock(codexHome, options = {}) {
     };
   }
   try {
-    writeFileSync9(
+    writeFileSync10(
       lockPath,
       JSON.stringify(
         {
@@ -7196,7 +7792,7 @@ function isStaleLock(lockPath, options) {
   const staleAfterMs = options.staleAfterMs ?? defaultStaleAfterMs;
   const now = options.now ?? /* @__PURE__ */ new Date();
   try {
-    const lock = JSON.parse(readFileSync14(lockPath, "utf8"));
+    const lock = JSON.parse(readFileSync15(lockPath, "utf8"));
     if (!lock.createdAt) {
       return false;
     }
@@ -7209,22 +7805,22 @@ function isStaleLock(lockPath, options) {
 // packages/cli/src/codex/skill.ts
 import {
   copyFileSync as copyFileSync5,
-  existsSync as existsSync15,
-  mkdirSync as mkdirSync10,
-  readFileSync as readFileSync15,
-  renameSync as renameSync6,
-  writeFileSync as writeFileSync10
+  existsSync as existsSync16,
+  mkdirSync as mkdirSync11,
+  readFileSync as readFileSync16,
+  renameSync as renameSync7,
+  writeFileSync as writeFileSync11
 } from "node:fs";
-import { dirname as dirname9 } from "node:path";
-import { fileURLToPath as fileURLToPath6 } from "node:url";
+import { dirname as dirname10 } from "node:path";
+import { fileURLToPath as fileURLToPath7 } from "node:url";
 function installCodexSkill(options = {}) {
   const sourcePath = options.sourcePath ?? resolvePackagedCodexSkillPath();
   const targetPath = resolveCodexSkillPath(options.env, "locus-memory");
-  const sourceContent = readFileSync15(sourcePath, "utf8");
+  const sourceContent = readFileSync16(sourcePath, "utf8");
   try {
-    mkdirSync10(dirname9(targetPath), { recursive: true });
-    if (existsSync15(targetPath)) {
-      const targetContent = readFileSync15(targetPath, "utf8");
+    mkdirSync11(dirname10(targetPath), { recursive: true });
+    if (existsSync16(targetPath)) {
+      const targetContent = readFileSync16(targetPath, "utf8");
       if (targetContent === sourceContent) {
         return { action: "unchanged", path: targetPath, targetPath };
       }
@@ -7262,10 +7858,10 @@ function installCodexSkill(options = {}) {
 function resolvePackagedCodexSkillPath() {
   const candidates = [
     resolveCanonicalCodexSkillPath(),
-    fileURLToPath6(new URL("../packages/codex/skills/locus-memory/SKILL.md", import.meta.url))
+    fileURLToPath7(new URL("../packages/codex/skills/locus-memory/SKILL.md", import.meta.url))
   ];
   for (const candidate of candidates) {
-    if (existsSync15(candidate)) {
+    if (existsSync16(candidate)) {
       return candidate;
     }
   }
@@ -7279,10 +7875,10 @@ function backupSkill(targetPath, now) {
     path: backupPath
   };
 }
-function writeAtomically(targetPath, content, writeFile = writeFileSync10) {
+function writeAtomically(targetPath, content, writeFile = writeFileSync11) {
   const tempPath = `${targetPath}.locus-tmp`;
   writeFile(tempPath, content, "utf8");
-  renameSync6(tempPath, targetPath);
+  renameSync7(tempPath, targetPath);
 }
 function timestamp3(date) {
   return date.toISOString().replaceAll("-", "").replaceAll(":", "").replace(".", "");
@@ -7299,7 +7895,7 @@ function formatInstallCodexDryRun(options = {}) {
   const skillPath = resolveCodexSkillPath(env, "locus-memory");
   const runtimePackage = resolveRuntimePackageOverride(env);
   const runtimeSpecifier = buildRuntimePackageSpecifier(resolvePackageVersion(options.startDir));
-  const lockPath = join21(codexHome, ".locus-install.lock");
+  const lockPath = join23(codexHome, ".locus-install.lock");
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
   return [
     "Locus Codex install dry-run",
@@ -7310,7 +7906,7 @@ function formatInstallCodexDryRun(options = {}) {
     `Hooks path: ${resolveCodexHooksPath(env)}`,
     `Hooks: ${options.withHooks ? "requested (would install)" : "not requested"}`,
     "Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error",
-    `Install lock: ${existsSync16(lockPath) ? `present at ${lockPath}` : "none"}`,
+    `Install lock: ${existsSync17(lockPath) ? `present at ${lockPath}` : "none"}`,
     `Stale temp files: ${tempFiles.length}`
   ].join("\n");
 }
@@ -7511,12 +8107,12 @@ function quoteWindowsArg(value) {
 }
 
 // packages/cli/src/commands/uninstall-antigravity.ts
-import { existsSync as existsSync17, readFileSync as readFileSync16, rmSync as rmSync5 } from "node:fs";
-import { join as join22 } from "node:path";
+import { existsSync as existsSync18, readFileSync as readFileSync17, rmSync as rmSync5 } from "node:fs";
+import { join as join24 } from "node:path";
 function runUninstallAntigravity(options = {}) {
   const env = options.env ?? process.env;
   const pluginDir = options.targetDir?.trim() || resolveAntigravityPluginDir(env);
-  if (!existsSync17(pluginDir)) {
+  if (!existsSync18(pluginDir)) {
     return {
       exitCode: 0,
       output: [
@@ -7525,8 +8121,8 @@ function runUninstallAntigravity(options = {}) {
       ].join("\n")
     };
   }
-  const manifestPath = join22(pluginDir, "plugin.json");
-  if (!existsSync17(manifestPath)) {
+  const manifestPath = join24(pluginDir, "plugin.json");
+  if (!existsSync18(manifestPath)) {
     return {
       exitCode: 1,
       output: `Refusing to remove ${pluginDir}: missing plugin.json.`
@@ -7534,7 +8130,7 @@ function runUninstallAntigravity(options = {}) {
   }
   let manifestName;
   try {
-    const parsed = JSON.parse(readFileSync16(manifestPath, "utf8"));
+    const parsed = JSON.parse(readFileSync17(manifestPath, "utf8"));
     manifestName = parsed.name;
   } catch {
     return {
@@ -7930,8 +8526,8 @@ function isDirectEntrypoint() {
   if (!entry) {
     return false;
   }
-  const selfPath = resolve8(fileURLToPath7(import.meta.url));
-  const entryPath = resolve8(entry);
+  const selfPath = resolve9(fileURLToPath8(import.meta.url));
+  const entryPath = resolve9(entry);
   const normalizeCmp = (value) => process.platform === "win32" ? value.toLowerCase() : value;
   if (normalizeCmp(entryPath) === normalizeCmp(selfPath)) {
     return true;

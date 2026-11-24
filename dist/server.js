@@ -6887,7 +6887,7 @@ var require_dist = __commonJS({
 
 // packages/core/src/server.ts
 import { existsSync as existsSync10, readFileSync as readFileSync10 } from "node:fs";
-import { dirname as dirname7, join as join14 } from "node:path";
+import { dirname as dirname8, join as join15 } from "node:path";
 import { fileURLToPath as fileURLToPath5 } from "node:url";
 
 // packages/codex/src/bounded-snippets.ts
@@ -31611,7 +31611,7 @@ function matchGlob(name, pattern) {
 }
 function isDenylisted(filePath) {
   const normalized = filePath.replace(/\\/g, "/");
-  const basename5 = normalized.split("/").pop() ?? normalized;
+  const basename6 = normalized.split("/").pop() ?? normalized;
   for (const pattern of DENYLIST_FILES) {
     if (pattern.startsWith("**/") && pattern.endsWith("/**")) {
       const dir = pattern.slice(3, -3);
@@ -31626,7 +31626,7 @@ function isDenylisted(filePath) {
       }
       continue;
     }
-    if (matchGlob(basename5, pattern)) {
+    if (matchGlob(basename6, pattern)) {
       return true;
     }
   }
@@ -32040,6 +32040,392 @@ function log(level, message) {
     process.stderr.write(`[locus:${level}] ${message}
 `);
   }
+}
+
+// packages/core/src/memory/daily-journal.ts
+import { randomBytes } from "node:crypto";
+import { mkdirSync as mkdirSync5, renameSync as renameSync3, writeFileSync as writeFileSync3 } from "node:fs";
+import { basename as basename3, dirname as dirname4, join as join8 } from "node:path";
+
+// packages/core/src/recall/calendar.ts
+function pad2(value) {
+  return String(value).padStart(2, "0");
+}
+function dateKey(timestamp, mode) {
+  const date5 = new Date(timestamp);
+  const year = mode === "utc" ? date5.getUTCFullYear() : date5.getFullYear();
+  const month = mode === "utc" ? date5.getUTCMonth() + 1 : date5.getMonth() + 1;
+  const day = mode === "utc" ? date5.getUTCDate() : date5.getDate();
+  return `${year}-${pad2(month)}-${pad2(day)}`;
+}
+function monthKey(timestamp, mode) {
+  const date5 = new Date(timestamp);
+  const year = mode === "utc" ? date5.getUTCFullYear() : date5.getFullYear();
+  const month = mode === "utc" ? date5.getUTCMonth() + 1 : date5.getMonth() + 1;
+  return `${year}-${pad2(month)}`;
+}
+function startOfDay(timestamp, options) {
+  const mode = options?.mode ?? "local";
+  const date5 = new Date(timestamp);
+  if (mode === "utc") {
+    return Date.UTC(date5.getUTCFullYear(), date5.getUTCMonth(), date5.getUTCDate());
+  }
+  return new Date(date5.getFullYear(), date5.getMonth(), date5.getDate()).getTime();
+}
+function addDays(timestamp, days, mode) {
+  const date5 = new Date(timestamp);
+  if (mode === "utc") {
+    date5.setUTCDate(date5.getUTCDate() + days);
+  } else {
+    date5.setDate(date5.getDate() + days);
+  }
+  return date5.getTime();
+}
+function startOfMonth(timestamp, mode) {
+  const date5 = new Date(timestamp);
+  if (mode === "utc") {
+    return Date.UTC(date5.getUTCFullYear(), date5.getUTCMonth(), 1);
+  }
+  return new Date(date5.getFullYear(), date5.getMonth(), 1).getTime();
+}
+function addMonths(timestamp, months, mode) {
+  const date5 = new Date(timestamp);
+  if (mode === "utc") {
+    date5.setUTCMonth(date5.getUTCMonth() + months);
+  } else {
+    date5.setMonth(date5.getMonth() + months);
+  }
+  return date5.getTime();
+}
+function dayBucket(timestamp, options) {
+  const mode = options?.mode ?? "local";
+  const from = startOfDay(timestamp, { mode });
+  const to = addDays(from, 1, mode);
+  const key = dateKey(from, mode);
+  return { key, label: key, from, to };
+}
+function weekBucket(timestamp, options) {
+  const mode = options?.mode ?? "local";
+  const dayStart = startOfDay(timestamp, { mode });
+  const date5 = new Date(dayStart);
+  const day = mode === "utc" ? date5.getUTCDay() : date5.getDay();
+  const mondayOffset = day === 0 ? 6 : day - 1;
+  const from = addDays(dayStart, -mondayOffset, mode);
+  const to = addDays(from, 7, mode);
+  const key = `${dateKey(from, mode)}/week`;
+  return { key, label: key, from, to };
+}
+function monthBucket(timestamp, options) {
+  const mode = options?.mode ?? "local";
+  const from = startOfMonth(timestamp, mode);
+  const to = addMonths(from, 1, mode);
+  const key = monthKey(from, mode);
+  return { key, label: key, from, to };
+}
+
+// packages/core/src/memory/daily-journal.ts
+var MAX_HIGHLIGHTS = 8;
+var HIGHLIGHT_MAX_CHARS = 180;
+var DURABLE_MAX_CHARS = 220;
+var MAX_MODIFIED_FILES = 15;
+var PREVIEW_MAX_CHARS = 100;
+var HOOK_ECHO_PREFIXES = [
+  "the following system message was injected by a preinvocation hook:",
+  "[locus memory \u2014 project brief]",
+  "[locus memory \u2014 relevant recall]"
+];
+function formatLocalDateKey(timestampMs) {
+  return dayBucket(timestampMs, { mode: "local" }).key;
+}
+function resolveJournalDirFromDbPath(dbPath) {
+  return join8(dirname4(dbPath), "journal");
+}
+function extractDailyPreview(summaryMd) {
+  for (const line of summaryMd.split(/\r?\n/u)) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("- ")) {
+      continue;
+    }
+    const clean = trimmed.slice(2).replace(/^`([^`]+)`$/u, "$1").trim();
+    if (clean.length === 0) {
+      continue;
+    }
+    return clean.length <= PREVIEW_MAX_CHARS ? clean : `${clean.slice(0, PREVIEW_MAX_CHARS - 3).trimEnd()}...`;
+  }
+  return void 0;
+}
+function listRecentDailySummaries(db, projectRoot, limit = 3) {
+  const safeLimit = Math.max(0, Math.trunc(limit));
+  if (safeLimit === 0) {
+    return [];
+  }
+  const scopedRoot = normalizeProjectRootForScope(projectRoot);
+  try {
+    const rows = db.all(
+      `SELECT project_root, date_key, event_count, session_count, decision_count, summary_md, updated_at
+       FROM daily_summaries
+       WHERE project_root = ?
+       ORDER BY date_key DESC
+       LIMIT ?`,
+      [scopedRoot, safeLimit]
+    );
+    return rows.map(toDailySummaryRow);
+  } catch {
+    return [];
+  }
+}
+function loadDailySummaryByDate(db, projectRoot, dateKey2) {
+  const scopedRoot = normalizeProjectRootForScope(projectRoot);
+  try {
+    const row = db.get(
+      `SELECT project_root, date_key, event_count, session_count, decision_count, summary_md, updated_at
+       FROM daily_summaries
+       WHERE project_root = ? AND date_key = ?
+       LIMIT 1`,
+      [scopedRoot, dateKey2]
+    );
+    return row ? toDailySummaryRow(row) : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function syncDailyJournal(options) {
+  const scopedRoot = normalizeProjectRootForScope(options.projectRoot);
+  const now = options.now ?? Date.now();
+  const projectName = basename3(scopedRoot) || scopedRoot;
+  const ceScope = buildProjectScopeClause("project_root", scopedRoot);
+  const dmScope = buildProjectScopeClause("project_root", scopedRoot);
+  const ceJoinedScope = buildProjectScopeClause("ce.project_root", scopedRoot);
+  const dateKeys = options.dateKeys && options.dateKeys.length > 0 ? [...new Set(options.dateKeys)].sort() : discoverProjectDateKeys(options.db, ceScope, dmScope);
+  const syncedDates = [];
+  let journalFilesWritten = 0;
+  if (options.journalDir && dateKeys.length > 0) {
+    mkdirSync5(options.journalDir, { recursive: true });
+  }
+  for (const dateKey2 of dateKeys) {
+    const bounds = parseLocalDateKeyBounds(dateKey2);
+    if (!bounds) {
+      continue;
+    }
+    const durableRows = options.db.all(
+      `SELECT id, memory_type, summary, updated_at
+       FROM durable_memories
+       WHERE state = 'active'
+         AND ${dmScope.clause}
+         AND ((updated_at >= ? AND updated_at < ?) OR (created_at >= ? AND created_at < ?))
+       ORDER BY updated_at DESC, id DESC
+       LIMIT 30`,
+      [...dmScope.params, bounds.from, bounds.to, bounds.from, bounds.to]
+    );
+    const eventRows = options.db.all(
+      `SELECT session_id, kind, payload_json
+       FROM conversation_events
+       WHERE ${ceScope.clause}
+         AND timestamp >= ?
+         AND timestamp < ?
+       ORDER BY timestamp ASC, id ASC`,
+      [...ceScope.params, bounds.from, bounds.to]
+    );
+    if (eventRows.length === 0 && durableRows.length === 0) {
+      continue;
+    }
+    const modifiedFiles = options.db.all(
+      `SELECT ef.file_path
+         FROM event_files ef
+         JOIN conversation_events ce ON ce.event_id = ef.event_id
+         WHERE ${ceJoinedScope.clause}
+           AND ce.timestamp >= ?
+           AND ce.timestamp < ?
+         GROUP BY ef.file_path
+         ORDER BY COUNT(*) DESC, MAX(ce.timestamp) DESC
+         LIMIT ?`,
+      [...ceJoinedScope.params, bounds.from, bounds.to, MAX_MODIFIED_FILES]
+    ).map((row) => row.file_path);
+    const sessions = /* @__PURE__ */ new Set();
+    const highlights = [];
+    const seenHighlights = /* @__PURE__ */ new Set();
+    for (const row of eventRows) {
+      if (row.session_id && row.session_id.trim().length > 0) {
+        sessions.add(row.session_id);
+      }
+      if (highlights.length >= MAX_HIGHLIGHTS) {
+        continue;
+      }
+      const text = extractHighlightText(row.kind, row.payload_json);
+      if (!text) {
+        continue;
+      }
+      const key = text.toLowerCase();
+      if (seenHighlights.has(key)) {
+        continue;
+      }
+      seenHighlights.add(key);
+      highlights.push(text);
+    }
+    const decisionCount = durableRows.filter((row) => row.memory_type === "decision").length;
+    const summaryMd = buildDailyMarkdown({
+      dateKey: dateKey2,
+      projectName,
+      eventCount: eventRows.length,
+      sessionCount: sessions.size,
+      decisionCount,
+      durableRows,
+      modifiedFiles,
+      highlights
+    });
+    options.db.run(
+      `INSERT INTO daily_summaries (
+         project_root, date_key, event_count, session_count, decision_count, summary_md, updated_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(project_root, date_key) DO UPDATE SET
+         event_count = excluded.event_count,
+         session_count = excluded.session_count,
+         decision_count = excluded.decision_count,
+         summary_md = excluded.summary_md,
+         updated_at = excluded.updated_at`,
+      [scopedRoot, dateKey2, eventRows.length, sessions.size, decisionCount, summaryMd, now]
+    );
+    syncedDates.push(dateKey2);
+    if (options.journalDir) {
+      atomicWriteText(join8(options.journalDir, `${dateKey2}.md`), `${summaryMd}
+`);
+      journalFilesWritten++;
+    }
+  }
+  if (options.journalDir && syncedDates.length > 0) {
+    const allDays = listRecentDailySummaries(options.db, scopedRoot, 3650);
+    if (allDays.length > 0) {
+      const indexLines = [
+        `# Locus Memory Journal \u2014 ${projectName}`,
+        "",
+        ...allDays.map(
+          (day) => `- [${day.dateKey}](./${day.dateKey}.md) \u2014 ${day.decisionCount} decisions, ${day.eventCount} events, ${day.sessionCount} sessions`
+        )
+      ];
+      atomicWriteText(join8(options.journalDir, "INDEX.md"), `${indexLines.join("\n")}
+`);
+      journalFilesWritten++;
+    }
+  }
+  return { syncedDates, journalFilesWritten };
+}
+function toDailySummaryRow(row) {
+  return {
+    projectRoot: row.project_root,
+    dateKey: row.date_key,
+    eventCount: row.event_count,
+    sessionCount: row.session_count,
+    decisionCount: row.decision_count,
+    summaryMd: row.summary_md,
+    updatedAt: row.updated_at
+  };
+}
+function discoverProjectDateKeys(db, ceScope, dmScope) {
+  const keys = /* @__PURE__ */ new Set();
+  const ceRows = db.all(
+    `SELECT timestamp FROM conversation_events WHERE ${ceScope.clause}`,
+    ceScope.params
+  );
+  for (const row of ceRows) {
+    if (Number.isFinite(row.timestamp)) {
+      keys.add(formatLocalDateKey(row.timestamp));
+    }
+  }
+  const dmRows = db.all(
+    `SELECT created_at, updated_at FROM durable_memories WHERE state = 'active' AND ${dmScope.clause}`,
+    dmScope.params
+  );
+  for (const row of dmRows) {
+    if (Number.isFinite(row.created_at)) {
+      keys.add(formatLocalDateKey(row.created_at));
+    }
+    if (Number.isFinite(row.updated_at)) {
+      keys.add(formatLocalDateKey(row.updated_at));
+    }
+  }
+  return [...keys].sort();
+}
+function parseLocalDateKeyBounds(dateKey2) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(dateKey2);
+  if (!match) {
+    return void 0;
+  }
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const fromDate = new Date(year, month, day, 0, 0, 0, 0);
+  if (Number.isNaN(fromDate.getTime()) || fromDate.getFullYear() !== year || fromDate.getMonth() !== month || fromDate.getDate() !== day) {
+    return void 0;
+  }
+  const toDate = new Date(year, month, day + 1, 0, 0, 0, 0);
+  return { from: fromDate.getTime(), to: toDate.getTime() };
+}
+function extractHighlightText(kind, payloadJson) {
+  if (!payloadJson || kind !== "user_prompt" && kind !== "ai_response" && kind !== "session_end") {
+    return void 0;
+  }
+  let rawText;
+  try {
+    const payload = JSON.parse(payloadJson);
+    if (typeof payload.prompt === "string") {
+      rawText = payload.prompt;
+    } else if (typeof payload.response === "string") {
+      rawText = payload.response;
+    } else if (typeof payload.summary === "string") {
+      rawText = payload.summary;
+    }
+  } catch {
+    return void 0;
+  }
+  if (!rawText) {
+    return void 0;
+  }
+  const collapsed = rawText.replace(/\s+/gu, " ").trim();
+  if (!collapsed) {
+    return void 0;
+  }
+  const lower = collapsed.toLowerCase();
+  if (HOOK_ECHO_PREFIXES.some((prefix) => lower.includes(prefix))) {
+    return void 0;
+  }
+  return truncateText(collapsed, HIGHLIGHT_MAX_CHARS);
+}
+function buildDailyMarkdown(input) {
+  const lines = [
+    `# ${input.dateKey} \u2014 ${input.projectName}`,
+    `Stats: ${input.eventCount} events | ${input.sessionCount} sessions | ${input.decisionCount} decisions`
+  ];
+  if (input.durableRows.length > 0) {
+    lines.push("", "## Decisions & Durable Memory");
+    for (const row of input.durableRows) {
+      lines.push(`- [${row.memory_type}] ${truncateText(row.summary, DURABLE_MAX_CHARS)}`);
+    }
+  }
+  if (input.modifiedFiles.length > 0) {
+    lines.push("", "## Modified Files");
+    for (const filePath of input.modifiedFiles) {
+      lines.push(`- \`${filePath}\``);
+    }
+  }
+  if (input.highlights.length > 0) {
+    lines.push("", "## Highlights");
+    for (const highlight of input.highlights) {
+      lines.push(`- ${highlight}`);
+    }
+  }
+  return lines.join("\n");
+}
+function truncateText(text, maxChars) {
+  const collapsed = text.replace(/\s+/gu, " ").trim();
+  if (collapsed.length <= maxChars) {
+    return collapsed;
+  }
+  return `${collapsed.slice(0, Math.max(0, maxChars - 3)).trimEnd()}...`;
+}
+function atomicWriteText(targetPath, content) {
+  const tempPath = `${targetPath}.${randomBytes(4).toString("hex")}.tmp`;
+  writeFileSync3(tempPath, content, "utf8");
+  renameSync3(tempPath, targetPath);
 }
 
 // packages/core/src/utils.ts
@@ -33506,82 +33892,6 @@ function classifyStatus(result) {
   return "imported";
 }
 
-// packages/core/src/recall/calendar.ts
-function pad2(value) {
-  return String(value).padStart(2, "0");
-}
-function dateKey(timestamp, mode) {
-  const date5 = new Date(timestamp);
-  const year = mode === "utc" ? date5.getUTCFullYear() : date5.getFullYear();
-  const month = mode === "utc" ? date5.getUTCMonth() + 1 : date5.getMonth() + 1;
-  const day = mode === "utc" ? date5.getUTCDate() : date5.getDate();
-  return `${year}-${pad2(month)}-${pad2(day)}`;
-}
-function monthKey(timestamp, mode) {
-  const date5 = new Date(timestamp);
-  const year = mode === "utc" ? date5.getUTCFullYear() : date5.getFullYear();
-  const month = mode === "utc" ? date5.getUTCMonth() + 1 : date5.getMonth() + 1;
-  return `${year}-${pad2(month)}`;
-}
-function startOfDay(timestamp, options) {
-  const mode = options?.mode ?? "local";
-  const date5 = new Date(timestamp);
-  if (mode === "utc") {
-    return Date.UTC(date5.getUTCFullYear(), date5.getUTCMonth(), date5.getUTCDate());
-  }
-  return new Date(date5.getFullYear(), date5.getMonth(), date5.getDate()).getTime();
-}
-function addDays(timestamp, days, mode) {
-  const date5 = new Date(timestamp);
-  if (mode === "utc") {
-    date5.setUTCDate(date5.getUTCDate() + days);
-  } else {
-    date5.setDate(date5.getDate() + days);
-  }
-  return date5.getTime();
-}
-function startOfMonth(timestamp, mode) {
-  const date5 = new Date(timestamp);
-  if (mode === "utc") {
-    return Date.UTC(date5.getUTCFullYear(), date5.getUTCMonth(), 1);
-  }
-  return new Date(date5.getFullYear(), date5.getMonth(), 1).getTime();
-}
-function addMonths(timestamp, months, mode) {
-  const date5 = new Date(timestamp);
-  if (mode === "utc") {
-    date5.setUTCMonth(date5.getUTCMonth() + months);
-  } else {
-    date5.setMonth(date5.getMonth() + months);
-  }
-  return date5.getTime();
-}
-function dayBucket(timestamp, options) {
-  const mode = options?.mode ?? "local";
-  const from = startOfDay(timestamp, { mode });
-  const to = addDays(from, 1, mode);
-  const key = dateKey(from, mode);
-  return { key, label: key, from, to };
-}
-function weekBucket(timestamp, options) {
-  const mode = options?.mode ?? "local";
-  const dayStart = startOfDay(timestamp, { mode });
-  const date5 = new Date(dayStart);
-  const day = mode === "utc" ? date5.getUTCDay() : date5.getDay();
-  const mondayOffset = day === 0 ? 6 : day - 1;
-  const from = addDays(dayStart, -mondayOffset, mode);
-  const to = addDays(from, 7, mode);
-  const key = `${dateKey(from, mode)}/week`;
-  return { key, label: key, from, to };
-}
-function monthBucket(timestamp, options) {
-  const mode = options?.mode ?? "local";
-  const from = startOfMonth(timestamp, mode);
-  const to = addMonths(from, 1, mode);
-  const key = monthKey(from, mode);
-  return { key, label: key, from, to };
-}
-
 // packages/core/src/tools/search.ts
 function parseExports(json2) {
   if (!json2) return [];
@@ -34106,11 +34416,20 @@ function handleCalendar(deps, options) {
       bucket.topicKeys.add(row.topic_key);
     }
   }
+  const finalizedBuckets = Array.from(buckets.values()).sort((left, right) => left.from - right.from).slice(0, limit).map((bucket) => {
+    const finalized = finalizeBucket(bucket);
+    if (granularity !== "day") {
+      return finalized;
+    }
+    const daily = loadDailySummaryByDate(db, projectRoot, finalized.key);
+    const preview = daily ? extractDailyPreview(daily.summaryMd) : void 0;
+    return preview ? { ...finalized, summaryPreview: preview } : finalized;
+  });
   return {
     projectRoot,
     resolvedRange,
     granularity,
-    buckets: Array.from(buckets.values()).sort((left, right) => left.from - right.from).slice(0, limit).map(finalizeBucket)
+    buckets: finalizedBuckets
   };
 }
 
@@ -34194,10 +34513,25 @@ function latestCodexRolloutMtime(filePath) {
 }
 
 // packages/core/src/tools/compact.ts
+function tableExists2(db, name) {
+  const row = db.get(
+    "SELECT COUNT(*) AS cnt FROM sqlite_master WHERE type = 'table' AND name = ?",
+    [name]
+  );
+  return (row?.cnt ?? 0) > 0;
+}
+function chunkItems(items, chunkSize) {
+  const chunks = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
+}
 function handleCompact(db, params) {
   const maxAgeDays = params.maxAgeDays ?? 30;
   const keepSessions = params.keepSessions ?? 5;
-  const cutoff = Date.now() - maxAgeDays * 24 * 60 * 60 * 1e3;
+  const now = Date.now();
+  const cutoff = now - maxAgeDays * 24 * 60 * 60 * 1e3;
   const recentSessions = keepSessions > 0 ? db.all(
     `SELECT session_id AS sid FROM memories
            WHERE layer = 'episodic' AND session_id IS NOT NULL
@@ -34230,10 +34564,108 @@ function handleCompact(db, params) {
   const sessions = db.get(
     "SELECT COUNT(DISTINCT session_id) as cnt FROM memories WHERE layer = 'episodic' AND session_id IS NOT NULL"
   );
+  let deletedToolEvents = 0;
+  let dailySummariesUpserted = 0;
+  const scopedRoot = params.projectRoot ? normalizeProjectRootForScope(params.projectRoot) : void 0;
+  const scope = scopedRoot ? buildProjectScopeClause("project_root", scopedRoot) : void 0;
+  if (params.compactToolEvents !== false) {
+    const scopeWhere = scope ? `AND ${scope.clause}` : "";
+    const scopeParams = scope ? scope.params : [];
+    const recentConvSessions = keepSessions > 0 ? db.all(
+      `SELECT session_id AS sid
+               FROM conversation_events
+               WHERE session_id IS NOT NULL AND session_id != '' ${scopeWhere}
+               GROUP BY session_id
+               ORDER BY MAX(timestamp) DESC
+               LIMIT ?`,
+      [...scopeParams, keepSessions]
+    ).map((row) => row.sid) : [];
+    let toolRows;
+    if (recentConvSessions.length > 0) {
+      const placeholders = recentConvSessions.map(() => "?").join(",");
+      toolRows = db.all(
+        `SELECT id, event_id, project_root, timestamp
+         FROM conversation_events
+         WHERE kind = 'tool_use'
+           AND timestamp < ?
+           ${scopeWhere}
+           AND (session_id IS NULL OR session_id NOT IN (${placeholders}))`,
+        [cutoff, ...scopeParams, ...recentConvSessions]
+      );
+    } else {
+      toolRows = db.all(
+        `SELECT id, event_id, project_root, timestamp
+         FROM conversation_events
+         WHERE kind = 'tool_use'
+           AND timestamp < ?
+           ${scopeWhere}`,
+        [cutoff, ...scopeParams]
+      );
+    }
+    if (toolRows.length > 0) {
+      const datesByProject = /* @__PURE__ */ new Map();
+      for (const row of toolRows) {
+        const root = row.project_root ? normalizeProjectRootForScope(row.project_root) : scopedRoot;
+        if (!root) {
+          continue;
+        }
+        let dateSet = datesByProject.get(root);
+        if (!dateSet) {
+          dateSet = /* @__PURE__ */ new Set();
+          datesByProject.set(root, dateSet);
+        }
+        if (Number.isFinite(row.timestamp)) {
+          dateSet.add(formatLocalDateKey(row.timestamp));
+        }
+      }
+      if (tableExists2(db, "daily_summaries")) {
+        for (const [root, dateSet] of datesByProject.entries()) {
+          const syncResult = syncDailyJournal({
+            db,
+            projectRoot: root,
+            ...params.journalDir && scopedRoot === root ? { journalDir: params.journalDir } : {},
+            dateKeys: [...dateSet],
+            now
+          });
+          dailySummariesUpserted += syncResult.syncedDates.length;
+        }
+      }
+      const hasConversationFts = tableExists2(db, "conversation_fts");
+      const rowIds = toolRows.map((row) => row.id);
+      const eventIds = toolRows.map((row) => row.event_id);
+      for (const batch of chunkItems(eventIds, 400)) {
+        const ph = batch.map(() => "?").join(",");
+        db.run(`DELETE FROM event_files WHERE event_id IN (${ph})`, batch);
+      }
+      for (const batch of chunkItems(rowIds, 400)) {
+        const ph = batch.map(() => "?").join(",");
+        if (hasConversationFts) {
+          db.run(`DELETE FROM conversation_fts WHERE rowid IN (${ph})`, batch);
+        }
+        const delResult = db.run(`DELETE FROM conversation_events WHERE id IN (${ph})`, batch);
+        deletedToolEvents += delResult.changes;
+      }
+    }
+  }
+  const remainingConvRow = scope ? db.get(
+    `SELECT COUNT(*) AS cnt FROM conversation_events WHERE ${scope.clause}`,
+    scope.params
+  ) : db.get("SELECT COUNT(*) AS cnt FROM conversation_events");
+  let walCheckpointed = false;
+  try {
+    db.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+    walCheckpointed = true;
+  } catch {
+    walCheckpointed = false;
+  }
   return {
     deletedEntries,
     remainingEntries: remaining?.cnt ?? 0,
-    remainingSessions: sessions?.cnt ?? 0
+    remainingSessions: sessions?.cnt ?? 0,
+    deletedToolEvents,
+    remainingConversationEvents: remainingConvRow?.cnt ?? 0,
+    dailySummariesUpserted,
+    walCheckpointed
   };
 }
 
@@ -34292,7 +34724,7 @@ function handleConfig(config2, env, fts5Available = false) {
 }
 
 // packages/core/src/tools/confirmation-token.ts
-import { randomBytes } from "node:crypto";
+import { randomBytes as randomBytes2 } from "node:crypto";
 var DEFAULT_TTL_MS = 6e4;
 var ConfirmationTokenStore = class {
   tokens = /* @__PURE__ */ new Map();
@@ -34303,7 +34735,7 @@ var ConfirmationTokenStore = class {
     this.ttlMs = ttlMs;
   }
   generate(nowMs = Date.now()) {
-    const hex3 = randomBytes(4).toString("hex");
+    const hex3 = randomBytes2(4).toString("hex");
     const token = `${this.prefix}-${hex3}`;
     this.tokens.clear();
     this.tokens.set(token, { token, createdAt: nowMs });
@@ -34695,7 +35127,7 @@ function appendCodexFreshnessCheck(checks, codexDiagnostics, freshnessThresholdM
 }
 
 // packages/core/src/tools/explore.ts
-function basename3(relativePath) {
+function basename4(relativePath) {
   const slash = relativePath.lastIndexOf("/");
   return slash === -1 ? relativePath : relativePath.slice(slash + 1);
 }
@@ -34730,7 +35162,7 @@ function formatReExportName(entry) {
   return entry.names.map((n) => `${n} from ${entry.source}`).join(", ");
 }
 function formatFile(row) {
-  const name = basename3(row.relative_path);
+  const name = basename4(row.relative_path);
   const exports = parseExports2(row.exports_json);
   const imports = parseImports(row.imports_json);
   const reExports = parseReExports(row.re_exports_json);
@@ -34873,7 +35305,7 @@ function handleForget(query, deps, confirmToken) {
 
 // packages/core/src/tools/import-codex.ts
 import { readdirSync as readdirSync3, readFileSync as readFileSync6 } from "node:fs";
-import { join as join8 } from "node:path";
+import { join as join9 } from "node:path";
 function handleImportCodex(params, deps) {
   const captureMode = resolveCodexCaptureMode(deps.env);
   if (captureMode === "off") {
@@ -34993,7 +35425,7 @@ function collectNewInboxEventIds(inboxDir, before) {
         continue;
       }
       try {
-        const parsed = JSON.parse(readFileSync6(join8(inboxDir, file2), "utf-8"));
+        const parsed = JSON.parse(readFileSync6(join9(inboxDir, file2), "utf-8"));
         if (typeof parsed.event_id === "string" && parsed.event_id.length > 0) {
           eventIds.add(parsed.event_id);
         }
@@ -35009,7 +35441,7 @@ function collectNewInboxEventIds(inboxDir, before) {
 // packages/core/src/tools/project-state.ts
 import { execFileSync } from "node:child_process";
 import { existsSync as existsSync6, readFileSync as readFileSync7 } from "node:fs";
-import { join as join9 } from "node:path";
+import { join as join10 } from "node:path";
 var GIT_STATE_CACHE_MS = 5e3;
 var gitStateCache;
 function gitOutput(cwd, args) {
@@ -35043,7 +35475,7 @@ function readGitState(cwd) {
   }
 }
 function readPackageMetadata(projectRoot) {
-  const packagePath = join9(projectRoot, "package.json");
+  const packagePath = join10(projectRoot, "package.json");
   if (!existsSync6(packagePath)) {
     return {};
   }
@@ -35104,7 +35536,7 @@ function handleProjectState(deps) {
 
 // packages/core/src/tools/purge.ts
 import { readdirSync as readdirSync4, statSync as statSync5, unlinkSync as unlinkSync3 } from "node:fs";
-import { join as join10 } from "node:path";
+import { join as join11 } from "node:path";
 function getDbSizeBytes(dbPath) {
   try {
     return statSync5(dbPath).size;
@@ -35155,7 +35587,7 @@ function handlePurge(deps, confirmToken) {
       const inboxFiles = readdirSync4(deps.inboxDir).filter((f) => f.endsWith(".json"));
       for (const f of inboxFiles) {
         try {
-          unlinkSync3(join10(deps.inboxDir, f));
+          unlinkSync3(join11(deps.inboxDir, f));
         } catch {
         }
       }
@@ -36414,7 +36846,7 @@ function handleReview(deps, options = {}) {
 // packages/core/src/scanner/index.ts
 import { execFileSync as execFileSync2 } from "node:child_process";
 import { existsSync as existsSync7, readdirSync as readdirSync5, readFileSync as readFileSync8, statSync as statSync6 } from "node:fs";
-import { extname, join as join11, relative } from "node:path";
+import { extname, join as join12, relative } from "node:path";
 
 // packages/core/src/scanner/aliases.ts
 function loadPathAliases(rawPaths) {
@@ -36483,9 +36915,9 @@ var HARDCODED_IGNORE = [
 ];
 var globPatterns = HARDCODED_IGNORE.filter((entry) => entry.includes("*"));
 var plainNames = new Set(HARDCODED_IGNORE.filter((entry) => !entry.includes("*")));
-function matchesGlob(basename5, pattern) {
+function matchesGlob(basename6, pattern) {
   const suffix = pattern.slice(1);
-  return basename5.endsWith(suffix);
+  return basename6.endsWith(suffix);
 }
 function shouldIgnore(filePath) {
   const normalized = filePath.replace(/\\/g, "/");
@@ -36495,9 +36927,9 @@ function shouldIgnore(filePath) {
       return true;
     }
   }
-  const basename5 = segments[segments.length - 1] ?? "";
+  const basename6 = segments[segments.length - 1] ?? "";
   for (const pattern of globPatterns) {
-    if (matchesGlob(basename5, pattern)) {
+    if (matchesGlob(basename6, pattern)) {
       return true;
     }
   }
@@ -36822,7 +37254,7 @@ function gitExec(args, cwd) {
 }
 var defaultScanDeps = {
   isGitRepo(path) {
-    return existsSync7(join11(path, ".git"));
+    return existsSync7(join12(path, ".git"));
   },
   getHead(path) {
     try {
@@ -36862,7 +37294,7 @@ var defaultScanDeps = {
         return;
       }
       for (const entry of entries) {
-        const fullPath = join11(dir, entry);
+        const fullPath = join12(dir, entry);
         try {
           const stat = statSync6(fullPath);
           if (stat.isDirectory()) {
@@ -37000,7 +37432,7 @@ function walkDirectory(dir, basePath) {
       return;
     }
     for (const entry of entries) {
-      const fullPath = join11(current, entry);
+      const fullPath = join12(current, entry);
       try {
         const stat = statSync6(fullPath);
         if (stat.isDirectory()) {
@@ -37016,7 +37448,7 @@ function walkDirectory(dir, basePath) {
   return results;
 }
 function loadProjectAliases(projectPath) {
-  const tsconfigPath = join11(projectPath, "tsconfig.json");
+  const tsconfigPath = join12(projectPath, "tsconfig.json");
   if (!existsSync7(tsconfigPath)) return {};
   try {
     const content = readFileSync8(tsconfigPath, "utf-8");
@@ -37122,7 +37554,7 @@ async function scanProject(projectPath, db, config2, deps = defaultScanDeps) {
       skippedFiles++;
       continue;
     }
-    const fullPath = join11(projectPath, relPath);
+    const fullPath = join12(projectPath, relPath);
     let stat;
     try {
       stat = statSync6(fullPath);
@@ -37415,7 +37847,7 @@ function handleStatus(deps) {
 }
 
 // packages/core/src/workspace-pool.ts
-import { basename as basename4, dirname as dirname6, join as join13 } from "node:path";
+import { basename as basename5, dirname as dirname7, join as join14 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 
 // packages/core/src/memory/compressor.ts
@@ -37634,7 +38066,7 @@ var SemanticMemory = class {
 import { execFileSync as execFileSync3 } from "node:child_process";
 import { existsSync as existsSync8, readdirSync as readdirSync7 } from "node:fs";
 import { homedir as homedir4 } from "node:os";
-import { dirname as dirname4, join as join12, resolve as resolve5 } from "node:path";
+import { dirname as dirname5, join as join13, resolve as resolve5 } from "node:path";
 var PROJECT_MARKERS = [
   "package.json",
   "pyproject.toml",
@@ -37647,7 +38079,8 @@ var PROJECT_MARKERS = [
   "composer.json",
   "Gemfile",
   "deno.json",
-  "bun.lockb"
+  "bun.lockb",
+  ".locus.json"
 ];
 var defaultProjectRootDeps = {
   tryGitRoot(cwd) {
@@ -37693,7 +38126,7 @@ function hasAnyMarker(dir, markers, deps) {
         if (entry.endsWith(ext)) return true;
       }
     } else {
-      if (deps.fileExists(join12(dir, marker))) return true;
+      if (deps.fileExists(join13(dir, marker))) return true;
     }
   }
   return false;
@@ -37712,7 +38145,7 @@ function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
     if (!isAncestorHomeDir && hasAnyMarker(dir, PROJECT_MARKERS, deps)) {
       highestMarkerDir = dir;
     }
-    const parent = dirname4(dir);
+    const parent = dirname5(dir);
     if (parent === dir) break;
     dir = parent;
   }
@@ -37723,8 +38156,8 @@ function resolveProjectRoot(cwd, deps = defaultProjectRootDeps) {
 }
 
 // packages/core/src/storage/init.ts
-import { existsSync as existsSync9, mkdirSync as mkdirSync5, readFileSync as readFileSync9 } from "node:fs";
-import { dirname as dirname5 } from "node:path";
+import { existsSync as existsSync9, mkdirSync as mkdirSync6, readFileSync as readFileSync9 } from "node:fs";
+import { dirname as dirname6 } from "node:path";
 
 // packages/core/src/storage/migrations.ts
 function getCurrentVersion(db) {
@@ -37735,7 +38168,7 @@ function getCurrentVersion(db) {
     return 0;
   }
 }
-function tableExists2(db, name) {
+function tableExists3(db, name) {
   const row = db.get(
     "SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name = ?",
     [name]
@@ -37910,6 +38343,22 @@ function migrationV4(db) {
   );
   db.run("UPDATE schema_version SET version = ?", [4]);
 }
+function migrationV5(db) {
+  db.exec(`CREATE TABLE IF NOT EXISTS daily_summaries (
+    project_root   TEXT NOT NULL,
+    date_key       TEXT NOT NULL,
+    event_count    INTEGER NOT NULL DEFAULT 0,
+    session_count  INTEGER NOT NULL DEFAULT 0,
+    decision_count INTEGER NOT NULL DEFAULT 0,
+    summary_md     TEXT NOT NULL,
+    updated_at     INTEGER NOT NULL,
+    PRIMARY KEY (project_root, date_key)
+  )`);
+  db.exec(
+    "CREATE INDEX IF NOT EXISTS idx_daily_summaries_project_date ON daily_summaries(project_root, date_key DESC)"
+  );
+  db.run("UPDATE schema_version SET version = ?", [5]);
+}
 function extractFtsFromRow(kind, payloadJson) {
   const parts = [kind];
   if (!payloadJson) return parts.join(" ");
@@ -37944,7 +38393,7 @@ function rebuildConversationFts(db) {
 }
 function ensureFts(db, fts5) {
   if (!fts5) return;
-  if (!tableExists2(db, "memories_fts")) {
+  if (!tableExists3(db, "memories_fts")) {
     db.exec(`CREATE VIRTUAL TABLE memories_fts USING fts5(
       content,
       content=memories,
@@ -37952,7 +38401,7 @@ function ensureFts(db, fts5) {
     )`);
   }
   db.exec("INSERT INTO memories_fts(memories_fts) VALUES ('rebuild')");
-  if (!tableExists2(db, "conversation_fts")) {
+  if (!tableExists3(db, "conversation_fts")) {
     db.exec("CREATE VIRTUAL TABLE conversation_fts USING fts5(content)");
     rebuildConversationFts(db);
   } else {
@@ -37962,7 +38411,7 @@ function ensureFts(db, fts5) {
       rebuildConversationFts(db);
     }
   }
-  if (!tableExists2(db, "durable_memories_fts")) {
+  if (!tableExists3(db, "durable_memories_fts")) {
     db.exec(`CREATE VIRTUAL TABLE durable_memories_fts USING fts5(
       summary,
       content=durable_memories,
@@ -37984,6 +38433,9 @@ function runMigrations(db, fts5) {
   }
   if (currentVersion < 4) {
     migrationV4(db);
+  }
+  if (currentVersion < 5) {
+    migrationV5(db);
   }
   ensureFts(db, fts5);
 }
@@ -38048,7 +38500,7 @@ var NodeSqliteAdapter = class {
 };
 
 // packages/core/src/storage/sql-js.ts
-import { writeFileSync as writeFileSync3 } from "node:fs";
+import { writeFileSync as writeFileSync4 } from "node:fs";
 var SAVE_DEBOUNCE_MS = 5e3;
 var SqlJsAdapter = class {
   db;
@@ -38120,7 +38572,7 @@ var SqlJsAdapter = class {
   }
   saveToDisk() {
     const data = this.db.export();
-    writeFileSync3(this.dbPath, Buffer.from(data));
+    writeFileSync4(this.dbPath, Buffer.from(data));
   }
   scheduleSave() {
     if (this.saveTimer !== null) {
@@ -38144,9 +38596,9 @@ function detectFts5(db) {
   }
 }
 function ensureDir(dbPath) {
-  const dir = dirname5(dbPath);
+  const dir = dirname6(dbPath);
   if (!existsSync9(dir)) {
-    mkdirSync5(dir, { recursive: true });
+    mkdirSync6(dir, { recursive: true });
   }
 }
 async function initStorage(dbPath) {
@@ -38305,7 +38757,7 @@ var WorkspacePool = class {
   }
   async createEntry(cwd, projectRoot, projectRootMethod, dbPath) {
     const { db, backend, fts5 } = await initStorage(dbPath);
-    const inboxDir = join13(dirname6(dbPath), "inbox");
+    const inboxDir = join14(dirname7(dbPath), "inbox");
     const semantic = new SemanticMemory(db, fts5);
     const episodic = new EpisodicMemory(db);
     const _compressor = new MemoryCompressor(this.config);
@@ -38338,7 +38790,7 @@ var WorkspacePool = class {
       cwd,
       projectRoot,
       projectRootMethod,
-      projectName: basename4(projectRoot),
+      projectName: basename5(projectRoot),
       dbPath,
       inboxDir,
       db,
@@ -38367,23 +38819,23 @@ var WorkspacePool = class {
 var INGEST_DEBOUNCE_MS = 3e4;
 function resolveServerVersion() {
   try {
-    let dir = dirname7(fileURLToPath5(import.meta.url));
+    let dir = dirname8(fileURLToPath5(import.meta.url));
     for (let i = 0; i < 4; i++) {
-      const runtimeJson = join14(dir, "runtime.json");
+      const runtimeJson = join15(dir, "runtime.json");
       if (existsSync10(runtimeJson)) {
         const parsed = JSON.parse(readFileSync10(runtimeJson, "utf8"));
         if (typeof parsed.version === "string" && parsed.version.length > 0) {
           return parsed.version;
         }
       }
-      const pkgJson = join14(dir, "package.json");
+      const pkgJson = join15(dir, "package.json");
       if (existsSync10(pkgJson)) {
         const parsed = JSON.parse(readFileSync10(pkgJson, "utf8"));
         if ((parsed.name === "locus-memory" || parsed.name === "@locus/core") && typeof parsed.version === "string" && parsed.version.length > 0) {
           return parsed.version;
         }
       }
-      const parent = dirname7(dir);
+      const parent = dirname8(dir);
       if (parent === dir) break;
       dir = parent;
     }
@@ -38811,7 +39263,11 @@ function createLazyServer(options) {
     },
     async (params) => {
       const active = await pool.getOrOpenActive();
-      const result = handleCompact(active.db, params);
+      const result = handleCompact(active.db, {
+        ...params,
+        projectRoot: active.projectRoot,
+        journalDir: resolveJournalDirFromDbPath(active.dbPath)
+      });
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     }
   );

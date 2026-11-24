@@ -19,6 +19,7 @@ export const PROJECT_MARKERS: readonly string[] = [
   'Gemfile',
   'deno.json',
   'bun.lockb',
+  '.locus.json',
 ];
 
 // ─── Dependency Injection for testability ────────────────────────────────────

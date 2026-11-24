@@ -1,3 +1,4 @@
+import { extractDailyPreview, loadDailySummaryByDate } from '../memory/daily-journal.js';
 import { dayBucket, monthBucket, weekBucket } from '../recall/calendar.js';
 import { normalizeProjectRootForScope } from '../recall/project-scope.js';
 import type {
@@ -184,13 +185,24 @@ export function handleCalendar(
     }
   }
 
+  const finalizedBuckets = Array.from(buckets.values())
+    .sort((left, right) => left.from - right.from)
+    .slice(0, limit)
+    .map((bucket) => {
+      const finalized = finalizeBucket(bucket);
+      if (granularity !== 'day') {
+        return finalized;
+      }
+
+      const daily = loadDailySummaryByDate(db, projectRoot, finalized.key);
+      const preview = daily ? extractDailyPreview(daily.summaryMd) : undefined;
+      return preview ? { ...finalized, summaryPreview: preview } : finalized;
+    });
+
   return {
     projectRoot,
     resolvedRange,
     granularity,
-    buckets: Array.from(buckets.values())
-      .sort((left, right) => left.from - right.from)
-      .slice(0, limit)
-      .map(finalizeBucket),
+    buckets: finalizedBuckets,
   };
 }

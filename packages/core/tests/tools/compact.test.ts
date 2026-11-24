@@ -181,4 +181,129 @@ describe('handleCompact', () => {
     expect(durableRow?.cnt ?? 0).toBe(1);
     expect(durableRow?.stale_count ?? 0).toBe(1);
   });
+
+  it('compacts old tool_use rows after syncing daily_summaries while keeping prompts, durable memories, and recent sessions', () => {
+    const now = Date.now();
+    const oldTime = now - 45 * 24 * 60 * 60 * 1000;
+    const ftsAdapter = createAdapter(tempDir);
+    try {
+      runMigrations(ftsAdapter, true);
+      const projectRoot = 'c:/repo/compact-demo';
+
+      ftsAdapter.run(
+        `INSERT INTO conversation_events
+         (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          'evt-old-tool',
+          'codex',
+          null,
+          projectRoot,
+          'sess-old',
+          oldTime,
+          'tool_use',
+          JSON.stringify({ tool: 'apply_patch', files: ['src/app.ts'], status: 'success' }),
+          'high',
+          '[]',
+          oldTime,
+        ],
+      );
+      const oldToolRowId = ftsAdapter.get<{ id: number }>(
+        'SELECT id FROM conversation_events WHERE event_id = ?',
+        ['evt-old-tool'],
+      )?.id;
+      ftsAdapter.run('INSERT INTO conversation_fts(rowid, content) VALUES (?, ?)', [
+        oldToolRowId,
+        'tool_use apply_patch src/app.ts',
+      ]);
+      ftsAdapter.run('INSERT INTO event_files (event_id, file_path) VALUES (?, ?)', [
+        'evt-old-tool',
+        'src/app.ts',
+      ]);
+
+      ftsAdapter.run(
+        `INSERT INTO conversation_events
+         (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          'evt-old-prompt',
+          'codex',
+          null,
+          projectRoot,
+          'sess-old',
+          oldTime + 1000,
+          'user_prompt',
+          JSON.stringify({ prompt: 'Keep durable narrative prompt forever.' }),
+          'high',
+          '[]',
+          oldTime + 1000,
+        ],
+      );
+
+      ftsAdapter.run(
+        `INSERT INTO conversation_events
+         (event_id, source, source_event_id, project_root, session_id, timestamp, kind, payload_json, significance, tags_json, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          'evt-recent-tool',
+          'codex',
+          null,
+          projectRoot,
+          'sess-recent',
+          now - 1000,
+          'tool_use',
+          JSON.stringify({ tool: 'exec', status: 'success' }),
+          'medium',
+          '[]',
+          now - 1000,
+        ],
+      );
+
+      const res = handleCompact(ftsAdapter, {
+        maxAgeDays: 30,
+        keepSessions: 1,
+        projectRoot,
+        journalDir: join(tempDir, 'journal'),
+      });
+
+      expect(res.deletedToolEvents).toBe(1);
+      expect(res.remainingConversationEvents).toBe(2);
+      expect(res.dailySummariesUpserted).toBe(1);
+      expect(typeof res.walCheckpointed).toBe('boolean');
+
+      const remainingIds = ftsAdapter
+        .all<{ event_id: string }>(
+          'SELECT event_id FROM conversation_events ORDER BY timestamp ASC',
+        )
+        .map((r) => r.event_id);
+      expect(remainingIds).toEqual(['evt-old-prompt', 'evt-recent-tool']);
+
+      const orphanedFiles = ftsAdapter.get<{ cnt: number }>(
+        'SELECT COUNT(*) AS cnt FROM event_files WHERE event_id = ?',
+        ['evt-old-tool'],
+      );
+      expect(orphanedFiles?.cnt).toBe(0);
+
+      const ftsMatches = ftsAdapter.all<{ rowid: number }>(
+        "SELECT rowid FROM conversation_fts WHERE conversation_fts MATCH 'apply_patch'",
+      );
+      expect(ftsMatches).toEqual([]);
+
+      const dailyCount = ftsAdapter.get<{ cnt: number }>(
+        'SELECT COUNT(*) AS cnt FROM daily_summaries WHERE project_root = ?',
+        [projectRoot],
+      );
+      expect(dailyCount?.cnt).toBe(1);
+
+      const skippedToolCompact = handleCompact(ftsAdapter, {
+        maxAgeDays: 0,
+        keepSessions: 0,
+        projectRoot,
+        compactToolEvents: false,
+      });
+      expect(skippedToolCompact.deletedToolEvents).toBe(0);
+    } finally {
+      ftsAdapter.close();
+    }
+  });
 });

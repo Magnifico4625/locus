@@ -9,6 +9,7 @@ import { RootsListChangedNotificationSchema } from '@modelcontextprotocol/sdk/ty
 import { z } from 'zod';
 import { processInbox } from './ingest/pipeline.js';
 import { log, setLogLevel } from './logger.js';
+import { resolveJournalDirFromDbPath } from './memory/daily-journal.js';
 import { runDurableExtraction } from './memory/durable-runner.js';
 import type { EpisodicMemory } from './memory/episodic.js';
 import type { SemanticMemory } from './memory/semantic.js';
@@ -619,7 +620,11 @@ export function createLazyServer(options?: CreateServerOptions): LazyServerConte
     },
     async (params) => {
       const active = await pool.getOrOpenActive();
-      const result = handleCompact(active.db, params);
+      const result = handleCompact(active.db, {
+        ...params,
+        projectRoot: active.projectRoot,
+        journalDir: resolveJournalDirFromDbPath(active.dbPath),
+      });
       return { content: [{ type: 'text' as const, text: JSON.stringify(result, null, 2) }] };
     },
   );

@@ -7,9 +7,14 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStorage, resolveProjectRoot } from '@locus/core';
+import {
+  formatLocalDateKey,
+  initStorage,
+  resolveJournalDirFromDbPath,
+  resolveProjectRoot,
+} from '@locus/core';
 import { resolveDbPath, resolveInboxDir } from '@locus/shared-runtime';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readAntigravitySessionState } from '../src/antigravity/session-state.js';
@@ -518,5 +523,111 @@ describe('antigravity lifecycle hooks', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('silently ignores workspace-less, home, agent-config, and non-project paths without creating storage', async () => {
+    const { root, storageRoot, env } = setupSandbox();
+    const nonProjectDir = join(root, 'plain-dir');
+    mkdirSync(nonProjectDir, { recursive: true });
+
+    const disallowedInputs = [
+      { conversationId: 'conv-missing-ws', lastUserInput: 'hello without workspace' },
+      {
+        conversationId: 'conv-home-ws',
+        cwd: homedir(),
+        lastUserInput: 'Decision: do not capture home',
+      },
+      {
+        conversationId: 'conv-plugin-ws',
+        cwd: join(homedir(), '.gemini', 'config', 'plugins', 'locus-memory'),
+        lastUserInput: 'BugHunter session leak check',
+      },
+      {
+        conversationId: 'conv-plain-ws',
+        workspacePaths: [nonProjectDir],
+        lastUserInput: 'random non-project dir check',
+      },
+    ];
+
+    for (const payload of disallowedInputs) {
+      const res = createIo();
+      expect(
+        await runCli(['hook', 'antigravity', 'pre-invocation'], res.io, {
+          env,
+          stdin: JSON.stringify(payload),
+        }),
+      ).toBe(0);
+      expect(JSON.parse(res.stdout.join('\n'))).toEqual({});
+    }
+
+    expect(existsSync(storageRoot)).toBe(false);
+  });
+
+  it('strips PreInvocation hook echo text from transcripts and writes daily journal files on Stop', async () => {
+    const { root, projectDir, env } = setupSandbox();
+    const transcriptPath = join(root, 'transcript-echo-journal.jsonl');
+    const canonicalRoot = resolveProjectRoot(projectDir).root;
+    const nowIso = '2026-11-24T09:15:00Z';
+    const expectedDateKey = formatLocalDateKey(Date.parse(nowIso));
+
+    writeFileSync(
+      transcriptPath,
+      `${[
+        JSON.stringify({
+          step_index: 0,
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          status: 'DONE',
+          created_at: nowIso,
+          content:
+            'The following system message was injected by a PreInvocation hook:\n[Locus Memory — Relevant Recall]\n- [general] should never be stored',
+        }),
+        JSON.stringify({
+          step_index: 1,
+          source: 'USER_EXPLICIT',
+          type: 'USER_INPUT',
+          status: 'DONE',
+          created_at: nowIso,
+          content:
+            '<USER_REQUEST>\nDecision: enforce strict project workspace isolation and daily journals.\n</USER_REQUEST>\n<SYSTEM_MESSAGE>The following system message was injected by a PreInvocation hook: leaked</SYSTEM_MESSAGE>',
+        }),
+      ].join('\n')}\n`,
+      'utf8',
+    );
+
+    const stopIo = createIo();
+    expect(
+      await runCli(['hook', 'antigravity', 'stop'], stopIo.io, {
+        env,
+        stdin: JSON.stringify({
+          conversationId: 'conv-journal-ag',
+          workspacePaths: [projectDir],
+          transcriptPath,
+        }),
+      }),
+    ).toBe(0);
+
+    const dbPath = resolveDbPath(canonicalRoot);
+    const { db } = await initStorage(dbPath);
+    try {
+      const rows = db.all<{ payload_json: string | null }>(
+        'SELECT payload_json FROM conversation_events',
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.payload_json).toContain('strict project workspace isolation');
+      expect(JSON.stringify(rows)).not.toContain('PreInvocation hook');
+    } finally {
+      db.close();
+    }
+
+    const journalDir = resolveJournalDirFromDbPath(dbPath);
+    const actualFiles = readdirSync(journalDir);
+    expect(actualFiles).toContain('INDEX.md');
+    expect(actualFiles.some((name) => /^\d{4}-\d{2}-\d{2}\.md$/u.test(name))).toBe(true);
+    const todayOrSyncedFile =
+      actualFiles.find((name) => name !== 'INDEX.md') ?? `${expectedDateKey}.md`;
+    expect(readFileSync(join(journalDir, todayOrSyncedFile), 'utf8')).toContain(
+      'enforce strict project workspace isolation and daily journals.',
+    );
   });
 });

@@ -30,7 +30,7 @@ describe('runMigrations', () => {
     const { runMigrations } = await import('../../src/storage/migrations.js');
     runMigrations(adapter, false);
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(4);
+    expect(row?.version).toBe(5);
   });
 
   it('creates files table', async () => {
@@ -92,7 +92,7 @@ describe('runMigrations', () => {
     runMigrations(adapter, false);
     expect(() => runMigrations(adapter, false)).not.toThrow();
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(4);
+    expect(row?.version).toBe(5);
   });
 
   it('files table has expected columns', async () => {
@@ -158,7 +158,7 @@ describe('migrationV2', () => {
     const { runMigrations } = await import('../../src/storage/migrations.js');
     runMigrations(adapter, false);
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(4);
+    expect(row?.version).toBe(5);
   });
 
   it('creates conversation_events table', async () => {
@@ -300,7 +300,7 @@ describe('migrationV2', () => {
     runMigrations(adapter, false);
     expect(() => runMigrations(adapter, false)).not.toThrow();
     const row = adapter.get<{ version: number }>('SELECT version FROM schema_version');
-    expect(row?.version).toBe(4);
+    expect(row?.version).toBe(5);
   });
 
   it('preserves existing v1 data after v2 migration', async () => {
@@ -442,5 +442,34 @@ describe('migrationV2', () => {
     expect(tableNames).toContain('conversation_events');
     expect(tableNames).toContain('ingest_log');
     expect(tableNames).toContain('durable_memories');
+    expect(tableNames).toContain('daily_summaries');
+  });
+
+  it('creates daily_summaries table and upgrades cleanly from v4 to v5', async () => {
+    const { runMigrations } = await import('../../src/storage/migrations.js');
+    runMigrations(adapter, false);
+
+    adapter.exec('DROP TABLE daily_summaries');
+    adapter.run('UPDATE schema_version SET version = ?', [4]);
+    runMigrations(adapter, false);
+
+    const versionRow = adapter.get<{ version: number }>('SELECT version FROM schema_version');
+    expect(versionRow?.version).toBe(5);
+
+    const columns = adapter.all<{ name: string }>("PRAGMA table_info('daily_summaries')");
+    expect(columns.map((c) => c.name)).toEqual([
+      'project_root',
+      'date_key',
+      'event_count',
+      'session_count',
+      'decision_count',
+      'summary_md',
+      'updated_at',
+    ]);
+
+    const indexes = adapter.all<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='daily_summaries'",
+    );
+    expect(indexes.some((row) => row.name === 'idx_daily_summaries_project_date')).toBe(true);
   });
 });

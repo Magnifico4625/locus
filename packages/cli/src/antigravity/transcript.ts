@@ -24,20 +24,31 @@ const USER_REQUEST_BLOCK_RE = /<USER_REQUEST>([\s\S]*?)<\/USER_REQUEST>/gi;
 const SYSTEM_ENVELOPE_BLOCK_RE =
   /<(?:ADDITIONAL_METADATA|SYSTEM_MESSAGE|CONTEXT_SUMMARY)>[\s\S]*?<\/(?:ADDITIONAL_METADATA|SYSTEM_MESSAGE|CONTEXT_SUMMARY)>/gi;
 const SYSTEM_MESSAGE_BLOCK_RE = /<SYSTEM_MESSAGE>[\s\S]*?<\/SYSTEM_MESSAGE>/gi;
+const HOOK_ECHO_PATTERNS: readonly RegExp[] = [
+  /The following system message was injected by a (?:PreInvocation|SessionStart|UserPromptSubmit) hook:[\s\S]*/gi,
+  /\[Locus Memory — (?:Project Brief|Relevant Recall)\][\s\S]*/gi,
+];
+
+export function stripAntigravityHookEchoes(text: string): string {
+  let cleaned = text;
+  for (const pattern of HOOK_ECHO_PATTERNS) {
+    cleaned = cleaned.replace(pattern, ' ');
+  }
+  return cleaned.trim();
+}
 
 export function cleanAntigravityUserInput(raw: string): string {
   const extracted = [...raw.matchAll(USER_REQUEST_BLOCK_RE)]
-    .map((match) => (match[1] ?? '').trim())
+    .map((match) => stripAntigravityHookEchoes((match[1] ?? '').trim()))
     .filter((segment) => segment.length > 0);
 
   if (extracted.length > 0) {
     return extracted.join('\n').trim();
   }
 
-  return raw
-    .replace(SYSTEM_ENVELOPE_BLOCK_RE, ' ')
-    .replace(/<\/?USER_REQUEST>/gi, ' ')
-    .trim();
+  return stripAntigravityHookEchoes(
+    raw.replace(SYSTEM_ENVELOPE_BLOCK_RE, ' ').replace(/<\/?USER_REQUEST>/gi, ' '),
+  );
 }
 
 export function antigravityTranscriptCursorKey(conversationId: string): string {
@@ -157,8 +168,10 @@ export function parseAntigravityTranscriptEvents(
       record.status === 'DONE'
     ) {
       // Intentionally ignore `thinking` and strip any injected system wrappers before redacting.
-      const cleaned = record.content.replace(SYSTEM_MESSAGE_BLOCK_RE, ' ').trim();
-      if (!cleaned || cleaned.startsWith('[Locus Memory —')) {
+      const cleaned = stripAntigravityHookEchoes(
+        record.content.replace(SYSTEM_MESSAGE_BLOCK_RE, ' '),
+      );
+      if (!cleaned) {
         continue;
       }
 

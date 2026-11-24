@@ -198,6 +198,7 @@ export interface MemoryDateBucket {
   sessionCount: number;
   durableCount: number;
   topicKeys: string[];
+  summaryPreview?: string;
 }
 
 export interface MemoryCalendarOptions {

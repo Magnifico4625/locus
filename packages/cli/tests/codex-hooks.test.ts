@@ -7,9 +7,9 @@ import {
   rmSync,
   writeFileSync,
 } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { initStorage, resolveProjectRoot } from '@locus/core';
+import { initStorage, resolveJournalDirFromDbPath, resolveProjectRoot } from '@locus/core';
 import { resolveDbPath, resolveInboxDir } from '@locus/shared-runtime';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
@@ -868,5 +868,81 @@ describe('codex hook config generation', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('acts as silent no-op for missing, home, .codex, and non-project folders without creating storage or triggers', async () => {
+    const { root, codexHome, storageRoot, env } = createSandbox();
+    const nonProjectDir = join(root, 'plain-dir');
+    mkdirSync(nonProjectDir, { recursive: true });
+
+    const disallowedPayloads = [
+      { hook_event_name: 'Stop', session_id: 'no-ws', turn_id: 't1' },
+      { hook_event_name: 'Stop', session_id: 'home-ws', turn_id: 't2', cwd: homedir() },
+      {
+        hook_event_name: 'UserPromptSubmit',
+        session_id: 'codex-ws',
+        cwd: join(homedir(), '.codex'),
+        prompt: 'Decision: must not capture ~/.codex',
+      },
+      {
+        hook_event_name: 'UserPromptSubmit',
+        session_id: 'plain-ws',
+        cwd: nonProjectDir,
+        prompt: 'Decision: must not capture folder without markers',
+      },
+    ];
+
+    for (const payload of disallowedPayloads) {
+      const event = payload.hook_event_name === 'Stop' ? 'stop' : 'user-prompt-submit';
+      const res = createIo();
+      expect(
+        await runCli(['hook', 'codex', event], res.io, {
+          env,
+          stdin: JSON.stringify(payload),
+        }),
+      ).toBe(0);
+      expect(JSON.parse(res.stdout.join('\n'))).toEqual({ continue: true, suppressOutput: true });
+    }
+
+    expect(existsSync(storageRoot)).toBe(false);
+    expect(existsSync(join(codexHome, 'locus', 'hook-triggers'))).toBe(false);
+  });
+
+  it('writes daily journal Markdown files alongside locus.db on Codex Stop', async () => {
+    const { projectDir, env } = createSandbox();
+    const canonicalRoot = resolveProjectRoot(projectDir).root;
+
+    expect(
+      await runCli(['hook', 'codex', 'user-prompt-submit'], createIo().io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'UserPromptSubmit',
+          session_id: 'sess-journal-codex',
+          cwd: projectDir,
+          prompt: 'Decision: keep Markdown journal synced atomically beside SQLite.',
+        }),
+      }),
+    ).toBe(0);
+
+    expect(
+      await runCli(['hook', 'codex', 'stop'], createIo().io, {
+        env,
+        stdin: JSON.stringify({
+          hook_event_name: 'Stop',
+          session_id: 'sess-journal-codex',
+          turn_id: 'turn-journal-codex',
+          cwd: projectDir,
+        }),
+      }),
+    ).toBe(0);
+
+    const dbPath = resolveDbPath(canonicalRoot);
+    const journalDir = resolveJournalDirFromDbPath(dbPath);
+    expect(existsSync(join(journalDir, 'INDEX.md'))).toBe(true);
+    const mdFiles = readdirSync(journalDir).filter((file) => /^\d{4}-\d{2}-\d{2}\.md$/u.test(file));
+    expect(mdFiles).toHaveLength(1);
+    const dayContent = readFileSync(join(journalDir, mdFiles[0] ?? ''), 'utf8');
+    expect(dayContent).toContain('keep Markdown journal synced atomically beside SQLite.');
+    expect(readdirSync(journalDir).some((file) => file.endsWith('.tmp'))).toBe(false);
   });
 });

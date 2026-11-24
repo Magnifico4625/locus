@@ -3,13 +3,15 @@ import {
   buildPromptRecallBrief,
   buildSessionStartBrief,
   type CaptureLevel,
+  formatLocalDateKey,
   type InboxEvent,
   initStorage,
   isDenylisted,
   isNoisyPrompt,
   processInbox,
-  resolveProjectRoot,
+  resolveJournalDirFromDbPath,
   runDurableExtraction,
+  syncDailyJournal,
   writeInboxEvent,
 } from '@locus/core';
 import { resolveDbPath, resolveInboxDir } from '@locus/shared-runtime';
@@ -24,6 +26,7 @@ import {
   parseAntigravityTranscriptEvents,
 } from '../antigravity/transcript.js';
 import { normalizeCaptureLevel, withScopedEnv } from '../env-scope.js';
+import { evaluateHookWorkspace } from '../workspace-gate.js';
 
 export type AntigravityHookEvent = 'session-start' | 'pre-invocation' | 'post-tool-use' | 'stop';
 
@@ -89,12 +92,7 @@ function parseHookInput(
   }
 }
 
-function resolveWorkspaceRawCwd(input: Record<string, unknown>): string {
-  const cwd = stringField(input.cwd);
-  if (cwd) {
-    return cwd;
-  }
-
+function resolveWorkspaceRawCwd(input: Record<string, unknown>): string | undefined {
   if (Array.isArray(input.workspacePaths)) {
     for (const item of input.workspacePaths) {
       const candidate = stringField(item);
@@ -104,7 +102,7 @@ function resolveWorkspaceRawCwd(input: Record<string, unknown>): string {
     }
   }
 
-  return process.cwd();
+  return stringField(input.cwd);
 }
 
 function deterministicEventId(key: string): string {
@@ -201,13 +199,22 @@ async function handleSessionStart(context: {
   const { db, fts5 } = await initStorage(dbPath);
   try {
     try {
-      processInbox(inboxDir, db, {
+      const ingestMetrics = processInbox(inboxDir, db, {
         batchLimit: 100,
         captureLevel: context.captureLevel,
         fts5Available: fts5,
         projectRoot: context.projectRoot,
       });
       runDurableExtraction(db);
+      if (ingestMetrics.processed > 0) {
+        syncDailyJournal({
+          db,
+          projectRoot: context.projectRoot,
+          journalDir: resolveJournalDirFromDbPath(dbPath),
+          dateKeys: [formatLocalDateKey(context.nowMs)],
+          now: context.nowMs,
+        });
+      }
     } catch {
       // Best-effort pre-brief ingest
     }
@@ -420,6 +427,17 @@ async function handleStop(context: {
       projectRoot: context.projectRoot,
     });
     runDurableExtraction(db);
+    try {
+      syncDailyJournal({
+        db,
+        projectRoot: context.projectRoot,
+        journalDir: resolveJournalDirFromDbPath(dbPath),
+        dateKeys: [formatLocalDateKey(context.nowMs)],
+        now: context.nowMs,
+      });
+    } catch {
+      // Best-effort daily journal sync on Stop
+    }
 
     return { exitCode: 0, stdout: '{}' };
   } finally {
@@ -466,7 +484,12 @@ export async function runAntigravityHook(
       const input = parsed.value;
       const conversationId = stringField(input.conversationId) ?? 'default';
       const rawCwd = resolveWorkspaceRawCwd(input);
-      const { root: projectRoot } = resolveProjectRoot(rawCwd);
+      const gate = evaluateHookWorkspace({ rawCwd, env: effectiveEnv });
+      if (!gate.allowed) {
+        return { exitCode: 0, stdout: '{}' };
+      }
+
+      const projectRoot = gate.projectRoot;
       const captureLevel = resolveAntigravityCaptureLevel(effectiveEnv);
 
       // Ensure state directory path resolves cleanly even when LOCUS_HOME is customized

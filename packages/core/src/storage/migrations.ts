@@ -217,6 +217,25 @@ function migrationV4(db: DatabaseAdapter): void {
   db.run('UPDATE schema_version SET version = ?', [4]);
 }
 
+function migrationV5(db: DatabaseAdapter): void {
+  db.exec(`CREATE TABLE IF NOT EXISTS daily_summaries (
+    project_root   TEXT NOT NULL,
+    date_key       TEXT NOT NULL,
+    event_count    INTEGER NOT NULL DEFAULT 0,
+    session_count  INTEGER NOT NULL DEFAULT 0,
+    decision_count INTEGER NOT NULL DEFAULT 0,
+    summary_md     TEXT NOT NULL,
+    updated_at     INTEGER NOT NULL,
+    PRIMARY KEY (project_root, date_key)
+  )`);
+
+  db.exec(
+    'CREATE INDEX IF NOT EXISTS idx_daily_summaries_project_date ON daily_summaries(project_root, date_key DESC)',
+  );
+
+  db.run('UPDATE schema_version SET version = ?', [5]);
+}
+
 // ─── FTS repair ──────────────────────────────────────────────────────────────
 
 interface ConversationRow {
@@ -337,6 +356,10 @@ export function runMigrations(db: DatabaseAdapter, fts5: boolean): void {
 
   if (currentVersion < 4) {
     migrationV4(db);
+  }
+
+  if (currentVersion < 5) {
+    migrationV5(db);
   }
 
   // Always ensure FTS tables exist and are populated (fixes migration gap)

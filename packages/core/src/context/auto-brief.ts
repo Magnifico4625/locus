@@ -1,4 +1,5 @@
 import { basename } from 'node:path';
+import { extractDailyPreview, listRecentDailySummaries } from '../memory/daily-journal.js';
 import { runRecallEngine } from '../recall/engine.js';
 import { buildProjectScopeClause, normalizeProjectRootForScope } from '../recall/project-scope.js';
 import { handleProjectState, type ProjectGitState } from '../tools/project-state.js';
@@ -318,12 +319,15 @@ export function buildSessionStartBrief(
     )
     .map((row) => row.file_path);
 
+  const recentDays = listRecentDailySummaries(deps.db, deps.projectRoot, 3);
+
   const hasContent =
     decisions.length > 0 ||
     semanticFallback.length > 0 ||
     constraintsAndPrefs.length > 0 ||
     nextSteps.length > 0 ||
-    state.latestConversationTimestamp !== undefined;
+    state.latestConversationTimestamp !== undefined ||
+    recentDays.length > 0;
 
   if (!hasContent) {
     return emptyBrief('session_start', 'empty_memory');
@@ -392,6 +396,14 @@ export function buildSessionStartBrief(
 
   if (recentFiles.length > 0) {
     appendLineWithinBudget(lines, `Recent Files: ${recentFiles.join(', ')}`, maxTokens);
+  }
+
+  if (recentDays.length > 0) {
+    appendSectionItems(lines, 'Recent Days:', recentDays, maxTokens, (day) => {
+      const preview = extractDailyPreview(day.summaryMd);
+      const base = `${day.dateKey}: ${day.decisionCount} decisions, ${day.eventCount} events`;
+      return preview ? `${base} (${preview})` : base;
+    });
   }
 
   const text = lines.join('\n');

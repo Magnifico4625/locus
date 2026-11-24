@@ -8,6 +8,17 @@ export { buildPromptRecallBrief, buildSessionStartBrief, isNoisyPrompt } from '.
 export { writeInboxEvent } from './ingest/inbox-writer.js';
 export type { ProcessInboxOptions } from './ingest/pipeline.js';
 export { processInbox } from './ingest/pipeline.js';
+export type {
+  DailySummaryRow,
+  SyncDailyJournalOptions,
+  SyncDailyJournalResult,
+} from './memory/daily-journal.js';
+export {
+  formatLocalDateKey,
+  listRecentDailySummaries,
+  resolveJournalDirFromDbPath,
+  syncDailyJournal,
+} from './memory/daily-journal.js';
 export type { CreateDurableMemoryInput, ProjectScopedListOptions } from './memory/durable.js';
 export { DurableMemoryStore } from './memory/durable.js';
 export type { DurableExtractionMetrics } from './memory/durable-runner.js';

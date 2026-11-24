@@ -278,8 +278,8 @@ describe('resolveProjectRoot', () => {
   // ── Constants ─────────────────────────────────────────────────────────
 
   describe('PROJECT_MARKERS', () => {
-    it('has 12 entries matching Contract 7', () => {
-      expect(PROJECT_MARKERS).toHaveLength(12);
+    it('has 13 entries matching Contract 7 + .locus.json marker', () => {
+      expect(PROJECT_MARKERS).toHaveLength(13);
       expect(PROJECT_MARKERS).toContain('package.json');
       expect(PROJECT_MARKERS).toContain('pyproject.toml');
       expect(PROJECT_MARKERS).toContain('Cargo.toml');
@@ -292,6 +292,7 @@ describe('resolveProjectRoot', () => {
       expect(PROJECT_MARKERS).toContain('Gemfile');
       expect(PROJECT_MARKERS).toContain('deno.json');
       expect(PROJECT_MARKERS).toContain('bun.lockb');
+      expect(PROJECT_MARKERS).toContain('.locus.json');
     });
   });
 });
