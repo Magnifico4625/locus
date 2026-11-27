@@ -76,8 +76,17 @@ export interface DshToolResult {
   isError?: boolean;
 }
 
+export interface DshSystemPromptContext {
+  agent?: DshAgent;
+}
+
 export interface DshSystemPromptService {
-  section(section: { name: string; order: number; text: string; interpolate?: boolean }): void;
+  section(section: {
+    name: string;
+    order: number;
+    text: string | ((context?: DshSystemPromptContext) => string);
+    interpolate?: boolean;
+  }): void;
 }
 
 export interface DshWorkingDirectoryService {

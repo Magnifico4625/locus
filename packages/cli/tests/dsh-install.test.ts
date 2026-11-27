@@ -1,10 +1,12 @@
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -281,5 +283,51 @@ describe('DeepSeek Harness (dsh) plugin install / doctor / uninstall CLI', () =>
     ).toBe(1);
     expect(refused.stdout.join('\n')).toContain('Refusing to remove foreign plugin');
     expect(existsSync(foreignDir)).toBe(true);
+  });
+
+  it('replaces an existing node_modules symlink/junction without touching the original link target', async () => {
+    const dshHome = makeTempDir();
+    const locusHome = makeTempDir();
+    const externalBundleDir = makeTempDir('locus-dsh-link-src-');
+    const distDir = createFakeDist();
+    const env = { DSH_HOME: dshHome, LOCUS_HOME: locusHome };
+    const { profileDir } = seedDshProfile(dshHome, 'desktop');
+
+    writeFileSync(join(externalBundleDir, 'sentinel.txt'), 'keep original target intact\n', 'utf8');
+    const manifestPath = join(profileDir, 'package.json');
+    const current = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      name: string;
+      private: boolean;
+      dependencies: Record<string, string>;
+      dsh: { profile: { bundles: string[] } };
+    };
+    current.dependencies['locus-memory-dsh'] = `link:${externalBundleDir.replace(/\\/g, '/')}`;
+    current.dsh.profile.bundles.push('locus-memory-dsh');
+    writeFileSync(manifestPath, `${JSON.stringify(current, null, 2)}\n`, 'utf8');
+
+    const profileNodeModules = join(profileDir, 'node_modules');
+    const profileLink = join(profileNodeModules, 'locus-memory-dsh');
+    mkdirSync(profileNodeModules, { recursive: true });
+    symlinkSync(externalBundleDir, profileLink, process.platform === 'win32' ? 'junction' : 'dir');
+    expect(lstatSync(profileLink).isSymbolicLink()).toBe(true);
+
+    const io = createIo();
+    expect(
+      await runCli(['install', 'dsh', '--yes'], io.io, {
+        env,
+        sourceDistDir: distDir,
+        startDir: import.meta.dirname,
+      }),
+    ).toBe(0);
+
+    expect(lstatSync(profileLink).isSymbolicLink()).toBe(false);
+    expect(existsSync(join(externalBundleDir, 'sentinel.txt'))).toBe(true);
+    expect(readFileSync(join(externalBundleDir, 'sentinel.txt'), 'utf8')).toBe(
+      'keep original target intact\n',
+    );
+    const updated = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+      dependencies: Record<string, string>;
+    };
+    expect(updated.dependencies['locus-memory-dsh']).toMatch(/^file:/);
   });
 });

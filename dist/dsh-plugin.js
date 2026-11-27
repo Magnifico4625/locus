@@ -4603,7 +4603,21 @@ function applyLocusDshPlugin(ctx, config = {}, runtime = {}) {
     name: "locus-memory:instructions",
     order: SYSTEM_SECTION_ORDER,
     interpolate: false,
-    text: LOCUS_SYSTEM_SECTION
+    text: (assemblyContext) => {
+      try {
+        const session = assemblyContext?.agent?.session;
+        if (!session) {
+          return "";
+        }
+        const gate = evaluateHookWorkspace({
+          rawCwd: resolveSessionRawCwd(ctx, session),
+          env
+        });
+        return gate.allowed ? LOCUS_SYSTEM_SECTION : "";
+      } catch {
+        return "";
+      }
+    }
   });
   if (config.enableMcp !== false && typeof ctx.inject === "function") {
     const serverPath = stringField(config.serverPath) ?? runtime.defaultServerPath ?? resolveDefaultServerPath();

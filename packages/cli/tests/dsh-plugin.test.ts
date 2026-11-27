@@ -17,6 +17,7 @@ import type {
   DshPreStepDecision,
   DshSession,
   DshSessionEvent,
+  DshSystemPromptContext,
   DshToolExec,
   DshToolResult,
 } from '../src/dsh/plugin-types.js';
@@ -42,7 +43,12 @@ interface MockHarnessOptions {
 }
 
 function createMockDshContext(options: MockHarnessOptions = {}) {
-  const sections: Array<{ name: string; order: number; text: string; interpolate?: boolean }> = [];
+  const sections: Array<{
+    name: string;
+    order: number;
+    text: string | ((context?: DshSystemPromptContext) => string);
+    interpolate?: boolean;
+  }> = [];
   const warnings: string[] = [];
   const registeredMcps: Array<{ name: string; entry: DshMcpServerEntry }> = [];
   const preStepListeners: Array<
@@ -231,6 +237,37 @@ describe('DeepSeek Harness Cordis plugin (locus-memory-dsh)', () => {
       },
     );
     expect(duplicate.warnings.some((w) => w.includes('already configured'))).toBe(true);
+  });
+
+  it('gates locus-memory:instructions systemPrompt section dynamically by workspace gate', () => {
+    const root = makeTempDir();
+    const allowedDir = join(root, 'valid-project');
+    const deniedDir = join(root, 'markerless-chat');
+    mkdirSync(allowedDir, { recursive: true });
+    mkdirSync(deniedDir, { recursive: true });
+    writeFileSync(join(allowedDir, '.locus.json'), '{}\n', 'utf8');
+
+    const harness = createMockDshContext({ hasMcpManager: false });
+    applyLocusDshPlugin(
+      harness.ctx,
+      { enableMcp: false },
+      { env: { LOCUS_HOME: join(root, '.locus'), LOCUS_ALLOW_TEMP_WORKSPACE: '1' } },
+    );
+
+    const section = harness.sections[0];
+    expect(section).toBeDefined();
+    expect(typeof section?.text).toBe('function');
+    const resolveSection =
+      typeof section?.text === 'function' ? section.text : () => String(section?.text ?? '');
+
+    expect(
+      resolveSection({ agent: { session: { id: 's-ok', header: { cwd: allowedDir } } } }),
+    ).toContain('# Locus Persistent Memory');
+    expect(resolveSection({ agent: { session: { id: 's-no', header: { cwd: deniedDir } } } })).toBe(
+      '',
+    );
+    expect(resolveSection({})).toBe('');
+    expect(resolveSection(undefined)).toBe('');
   });
 
   it('denies markerless directories and ~/.dsh without creating any storage files', async () => {

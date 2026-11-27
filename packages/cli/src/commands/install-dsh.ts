@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, lstatSync, readFileSync, rmdirSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CaptureLevel } from '@locus/core';
 import { writeDshPluginBundle } from '../dsh/bundle.js';
@@ -46,6 +46,23 @@ export function createTimestampedFileBackup(filePath: string, now: Date = new Da
 
 function toFileDependencySpec(dirPath: string): string {
   return `file:${dirPath.replace(/\\/g, '/')}`;
+}
+
+function removeSymlinkIfPresent(targetPath: string): void {
+  try {
+    const stats = lstatSync(targetPath);
+    if (!stats.isSymbolicLink()) {
+      return;
+    }
+  } catch {
+    return;
+  }
+
+  try {
+    unlinkSync(targetPath);
+  } catch {
+    rmdirSync(targetPath);
+  }
 }
 
 export function formatInstallDshDryRun(options: InstallDshDryRunOptions = {}): string {
@@ -168,6 +185,7 @@ export function runInstallDsh(options: InstallDshOptions = {}): {
     now: options.now,
   });
 
+  removeSymlinkIfPresent(profilePluginDir);
   const profileBundleResult = writeDshPluginBundle({
     targetDir: profilePluginDir,
     startDir: options.startDir,

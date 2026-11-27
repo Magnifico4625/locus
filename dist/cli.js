@@ -8254,7 +8254,7 @@ function formatRuntimeCommand(runtimeSpecifier, runtimePackage) {
 }
 
 // packages/cli/src/commands/install-dsh.ts
-import { copyFileSync as copyFileSync6, existsSync as existsSync21, readFileSync as readFileSync19 } from "node:fs";
+import { copyFileSync as copyFileSync6, existsSync as existsSync21, lstatSync, readFileSync as readFileSync19, rmdirSync, unlinkSync as unlinkSync2 } from "node:fs";
 import { join as join27 } from "node:path";
 
 // packages/cli/src/dsh/bundle.ts
@@ -8448,6 +8448,21 @@ function createTimestampedFileBackup(filePath, now = /* @__PURE__ */ new Date())
 function toFileDependencySpec(dirPath) {
   return `file:${dirPath.replace(/\\/g, "/")}`;
 }
+function removeSymlinkIfPresent(targetPath) {
+  try {
+    const stats = lstatSync(targetPath);
+    if (!stats.isSymbolicLink()) {
+      return;
+    }
+  } catch {
+    return;
+  }
+  try {
+    unlinkSync2(targetPath);
+  } catch {
+    rmdirSync(targetPath);
+  }
+}
 function formatInstallDshDryRun(options = {}) {
   const env = options.env ?? process.env;
   const captureLevel = options.captureLevel ?? "redacted";
@@ -8552,6 +8567,7 @@ function runInstallDsh(options = {}) {
     enableMcp,
     now: options.now
   });
+  removeSymlinkIfPresent(profilePluginDir);
   const profileBundleResult = writeDshPluginBundle({
     targetDir: profilePluginDir,
     startDir: options.startDir,
