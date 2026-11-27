@@ -44,8 +44,8 @@ The installer configures Codex with the package runtime and `redacted` capture d
 
 Optional repo-local plugin packaging also exists in this repository:
 
-- plugin bundle: [plugins/locus-memory](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/plugins/locus-memory)
-- repo marketplace: [.agents/plugins/marketplace.json](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/.agents/plugins/marketplace.json)
+- plugin bundle: [plugins/locus-memory](../plugins/locus-memory)
+- repo marketplace: [.agents/plugins/marketplace.json](../.agents/plugins/marketplace.json)
 - sync helper: `npm run sync:codex-plugin`
 
 Treat that plugin bundle as an extra local onboarding path. Manual MCP setup stays the stable documented fallback.
@@ -55,7 +55,7 @@ Equivalent package-runtime config in `~/.codex/config.toml`:
 ```toml
 [mcp_servers.locus]
 command = "npx"
-args = ["-y", "locus-memory@3.7.0", "mcp"]
+args = ["-y", "locus-memory@4.0.0", "mcp"]
 cwd = "/home/<you>/.codex"
 
 [mcp_servers.locus.env]
@@ -69,7 +69,7 @@ On Windows, use `npx.cmd`:
 ```toml
 [mcp_servers.locus]
 command = "npx.cmd"
-args = ["-y", "locus-memory@3.7.0", "mcp"]
+args = ["-y", "locus-memory@4.0.0", "mcp"]
 cwd = "C:\\Users\\<you>\\.codex"
 ```
 

@@ -1,6 +1,6 @@
 {
   "name": "locus-memory",
-  "version": "3.7.0",
+  "version": "4.0.0",
   "description": "Persistent project-aware memory for AI coding tools. Built on MCP. Knows your project, remembers your decisions, costs almost nothing.",
   "type": "module",
   "private": false,
@@ -22,7 +22,7 @@
     "plugins/locus-memory/.codex-plugin/plugin.json",
     "plugins/locus-memory/hooks.json",
     "plugins/locus-memory/skills/locus-memory/SKILL.md",
-    "docs/releases/v3.7.0.md",
+    "docs/releases/v4.0.0.md",
     "LICENSE",
     "README.md"
   ],

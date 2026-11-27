@@ -7498,10 +7498,10 @@ function normalizePathForIdentity(pathValue) {
       value = fileURLToPath(value);
     } catch {
       value = value.replace(/^file:\/\/(?:localhost)?/i, "");
-      if (/^\/[a-zA-Z]:[\\/]/.test(value)) {
-        value = value.slice(1);
-      }
     }
+  }
+  if (/^\/[a-zA-Z]:[\\/]/.test(value)) {
+    value = value.slice(1);
   }
   let isUnc = false;
   if (/^(?:\\\\\?\\|\/\/\?\/)UNC[\\/]/i.test(value)) {
@@ -38637,7 +38637,8 @@ function rootUriToLocalPath(uri) {
     return void 0;
   }
   try {
-    return fileURLToPath4(trimmed);
+    const converted = fileURLToPath4(trimmed);
+    return /^\/[a-zA-Z]:[\\/]/u.test(converted) ? converted.slice(1) : converted;
   } catch {
     try {
       const parsed = new URL(trimmed);
@@ -38841,7 +38842,7 @@ function resolveServerVersion() {
     }
   } catch {
   }
-  return "3.7.0";
+  return "4.0.0";
 }
 function createLazyServer(options) {
   const cwd = options?.cwd ?? process.cwd();

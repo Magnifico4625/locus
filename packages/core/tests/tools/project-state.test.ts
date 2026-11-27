@@ -42,7 +42,7 @@ describe('handleProjectState', () => {
     mkdirSync(repo, { recursive: true });
     writeFileSync(
       join(repo, 'package.json'),
-      JSON.stringify({ name: 'locus-memory', version: '3.7.0' }),
+      JSON.stringify({ name: 'locus-memory', version: '4.0.0' }),
       'utf8',
     );
     db = createAdapter(dir);
@@ -82,7 +82,7 @@ describe('handleProjectState', () => {
       projectRoot: normalizeProjectRootForScope(repo),
       projectHash: expect.stringMatching(/^[a-f0-9]{16}$/),
       packageName: 'locus-memory',
-      packageVersion: '3.7.0',
+      packageVersion: '4.0.0',
       activeDurableCount: 0,
       latestConversationTimestamp: ts,
       latestConversationIso: '2026-05-30T10:00:00.000Z',

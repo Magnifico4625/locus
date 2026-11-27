@@ -49,6 +49,8 @@ npx -y locus-memory@latest uninstall codex --yes
 
 The installer adds the Locus MCP server, installs the Codex skill, sets practical `redacted` capture defaults, and pins the recurring MCP runtime to the installed package version.
 
+> **Release `v4.0.0` note:** `v4.0.0` is published on [GitHub Releases](https://github.com/Magnifico4625/locus/releases/tag/v4.0.0) with `locus-memory-4.0.0.tgz` attached; publishing `locus-memory@4.0.0` to npm is pending, so use the GitHub Release tarball or a local checkout (`npm run build`) for `v4.0.0` features until npm `latest` is updated.
+
 ### Zero-Call Desktop Plugins (Codex, Antigravity, DeepSeek Harness)
 
 For automatic `SessionStart` / prompt-turn memory briefs and background capture without explicit MCP calls on every turn:
@@ -74,13 +76,13 @@ For DeepSeek Harness Desktop UI, you can also install the standalone bundle dire
 - **Daily Memory Journal:** Turn capture automatically maintains `daily_summaries` in SQLite plus Markdown notes under `journal/YYYY-MM-DD.md` and `journal/INDEX.md`.
 - **Bounded Compaction:** `memory_compact` prunes old raw `tool_use` rows after syncing daily summaries and runs `PRAGMA wal_checkpoint(TRUNCATE)` while keeping durable decisions and conversation history intact.
 
-## New In v3.7
+## New In v4.0
 
-**New in v3.7 / Track D:** Codex memory reliability. `memory_recall`, `memory_search`, and `memory_timeline` are scoped to the current project, date-aware recall reports searched buckets, `memory_calendar` gives day/week/month activity discovery, and `memory_project_state` summarizes current package/git/memory state before the agent relies on old context.
+**New in v4.0 — Multi-Platform Zero-Call Desktop Plugins:** Locus now ships automatic `SessionStart` Project Briefs, targeted prompt-turn recall injection, and background capture across **Codex CLI/Desktop** (`install codex --with-hooks`), **Antigravity Desktop** (`install antigravity`), and **DeepSeek Harness Desktop (`dsh`)** (`install dsh`, Cordis plugin `locus-memory-dsh`). Every surface shares the same SQLite core, Strict Workspace Gate (`.locus.json` / `~/.locus/config.json`), self-injection echo filter, Markdown Daily Memory Journal (`journal/YYYY-MM-DD.md` + `INDEX.md`), and bounded `memory_compact` with `PRAGMA wal_checkpoint(TRUNCATE)`.
 
-Track C richer recall is still carried forward: `memory_recall` can summarize imported redacted Codex sessions, durable decisions, explicit `memory_remember` entries, rejected alternatives, validation facts, user style, and dated questions such as "what did we do yesterday?". If several matches are plausible, Locus returns `candidateGroups` so the agent can ask a focused clarification instead of guessing.
+Track C & Track D Codex memory reliability (`memory_recall` project isolation, date buckets, `memory_calendar`, `memory_project_state`, rejected alternatives, validation facts, `candidateGroups`) are all carried forward in `v4.0.0`.
 
-Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and the Track D marker acceptance validates the desktop MCP path when `LOCUS_CODEX_SURFACE=desktop` is set. Extension parity still depends on target-surface testing.
+Codex CLI and Codex Desktop zero-call hooks are live-verified. Codex Desktop uses the same MCP model where exposed by the upstream surface, and the Track D marker acceptance validates the desktop MCP path when `LOCUS_CODEX_SURFACE=desktop` is set. Extension parity still depends on target-surface testing.
 
 ## Why Choose Locus
 
@@ -177,7 +179,7 @@ codex mcp add locus -- node /path/to/locus/dist/server.js
 - Codex VS Code extension notes: [docs/codex-vscode-extension.md](docs/codex-vscode-extension.md)
 - Multi-platform desktop plugins roadmap: [docs/roadmap/v4-multi-platform-plugins.md](docs/roadmap/v4-multi-platform-plugins.md)
 - Future roadmap: [docs/roadmap/codex-next.md](docs/roadmap/codex-next.md)
-- Release notes: [docs/releases/v3.7.0.md](docs/releases/v3.7.0.md)
+- Release notes: [docs/releases/v4.0.0.md](docs/releases/v4.0.0.md)
 - Full comparison: [docs/comparison.md](docs/comparison.md)
 
 ## Development

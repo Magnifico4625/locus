@@ -52,8 +52,8 @@ This writes `packages/codex/skills/locus-memory/SKILL.md` into `$CODEX_HOME/skil
 
 The repo also contains a local plugin bundle:
 
-- plugin bundle: [plugins/locus-memory](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/plugins/locus-memory)
-- repo marketplace: [.agents/plugins/marketplace.json](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/.agents/plugins/marketplace.json)
+- plugin bundle: [plugins/locus-memory](../../plugins/locus-memory)
+- repo marketplace: [.agents/plugins/marketplace.json](../../.agents/plugins/marketplace.json)
 - generated public marketplace bundle: `dist/marketplace/`
 
 To keep the plugin bundle aligned with the canonical skill:
@@ -100,7 +100,7 @@ Track C adds fixture-backed richer recall validation for Codex CLI: Russian date
 
 Track D adds project-scoped and date-aware recall, `memory_calendar`, freshness/surface diagnostics, `memory_project_state`, and same-topic next-step supersession.
 
-Last documented local validation target: Codex CLI `0.138.0` from PATH and Codex Desktop-bundled CLI `0.137.0-alpha.4` with `CODEX_HOME=C:\Users\Admin\.codex` as of June 9, 2026. Track D local smoke confirmed `codex mcp get locus` points at this repo's `dist/server.js`; the active Desktop MCP session still required a reload before new tools such as `memory_calendar` and `memory_project_state` appeared in the live tool registry. Registry-hosted `locus-memory@3.7.0` validation passed after publish: `npx --yes locus-memory@3.7.0 --version` returned `3.7.0`, `install codex --yes` completed in an isolated `CODEX_HOME`, and `codex mcp get locus` pointed at `npx.cmd -y locus-memory@3.7.0 mcp`.
+Last documented local validation targets: Codex CLI `0.138.0` / Codex Desktop-bundled CLI `0.137.0-alpha.4` (`v3.7.0` registry-hosted `locus-memory@3.7.0`), followed by live **v4.0.0** zero-call hooks validation on **Codex Desktop `0.171.0` / `0.172.0`** (`5/5 PASS` via `SessionStart` / `UserPromptSubmit` / `Stop` using `~/.locus/bin/`). Track D local smoke confirmed `codex mcp get locus` points at this repo's `dist/server.js`; an already-running Desktop session still required a reload before new MCP tool schemas appeared in the live tool registry. `v4.0.0` is published via GitHub Releases with `locus-memory-4.0.0.tgz` attached; npm registry `4.0.0` publish is pending.
 
 Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and Track D validates the desktop marker/config path when `LOCUS_CODEX_SURFACE=desktop` is set. `memory_status` and `memory_doctor` can report an observed desktop MCP path when Codex diagnostics detect a desktop surface with retained Codex events. Fresh live Desktop visibility of newly added tools still requires an MCP/Desktop reload smoke; extension parity still requires target-surface testing.
 
@@ -148,7 +148,7 @@ This workflow is optimized and validated for Codex CLI. Codex Desktop marker/con
 
 For the extension-specific setup, reload, and troubleshooting flow, use the dedicated guide:
 
-- [Codex VS Code Extension](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-vscode-extension.md)
+- [Codex VS Code Extension](../../docs/codex-vscode-extension.md)
 
 ### Diagnosis workflow
 
@@ -239,10 +239,10 @@ Redaction is best-effort by design: obvious API keys, bearer tokens, and similar
 
 Codex hooks are optional. If hook support is enabled in a future Codex surface, Locus should treat hooks as a freshness trigger only; canonical recall remains based on JSONL transcript import plus the shared inbox/core ingest path.
 
-See [Codex Acceptance Matrix](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/codex-acceptance-matrix.md) for the current CLI, desktop/extension, manual fallback, and capture-mode validation status.
+See [Codex Acceptance Matrix](../../docs/codex-acceptance-matrix.md) for the current CLI, desktop/extension, manual fallback, and capture-mode validation status.
 
 ## What's Coming
 
-- Codex desktop / extension validation for the registry-hosted runtime
-- optional Codex hook freshness trigger if upstream plugin hooks stabilize
+- npm registry publication for `locus-memory@4.0.0` (currently shipped via GitHub Release tarball)
+- Codex VS Code extension validation for the package runtime
 - dashboard and secondary IDE adapter work after the Codex-first path is strong

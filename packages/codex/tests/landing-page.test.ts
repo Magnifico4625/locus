@@ -14,10 +14,10 @@ describe('GitHub Pages landing page', () => {
     expect(existsSync(indexPath)).toBe(true);
   });
 
-  it('describes the current v3.7.0 product state honestly', () => {
+  it('describes the current v4.0.0 product state honestly', () => {
     const html = readFileSync(indexPath, 'utf-8');
 
-    expect(html).toContain('v3.7.0');
+    expect(html).toContain('v4.0.0');
     expect(html).toContain('Track D');
     expect(html).toContain('one-command install');
     expect(html).toContain('npx -y locus-memory@latest install codex');
@@ -29,6 +29,8 @@ describe('GitHub Pages landing page', () => {
     expect(html).toContain('memory_recall');
     expect(html).toContain('memory reliability');
     expect(html).toContain('Codex');
+    expect(html).toContain('Antigravity');
+    expect(html).toContain('DeepSeek Harness');
     expect(html).toContain('Claude Code');
     expect(html).not.toContain('v3.1.0 is out');
     expect(html).not.toContain('desktop / extension parity is validated');
@@ -55,16 +57,18 @@ describe('GitHub Pages landing page', () => {
     const configExample = readRepoFile('packages/codex/config/config.toml.example');
     const acceptanceMatrix = readRepoFile('docs/codex-acceptance-matrix.md');
     const roadmap = readRepoFile('docs/roadmap/codex-next.md');
-    const releaseNotes = readRepoFile('docs/releases/v3.7.0.md');
+    const releaseNotes = readRepoFile('docs/releases/v4.0.0.md');
 
     expect(readme).toContain('npx -y locus-memory@latest install codex');
     expect(readme).toContain('Manual MCP fallback');
     expect(readme).toContain('codex mcp add locus -- node /path/to/locus/dist/server.js');
-    expect(readme).toContain('New in v3.7');
+    expect(readme).toContain('New in v4.0');
     expect(readme).toContain('Track D');
     expect(readme).toContain('candidateGroups');
     expect(readme).toContain('memory_calendar');
     expect(readme).toContain('memory_project_state');
+    expect(readme).toContain('Antigravity');
+    expect(readme).toContain('DeepSeek Harness');
     expect(readme).toContain('full` is maximum recall');
     expect(readme).not.toContain('desktop/extension parity is validated');
 
@@ -77,7 +81,7 @@ describe('GitHub Pages landing page', () => {
     expect(codexReadme).toContain('candidateGroups');
     expect(codexReadme).toContain('Codex hooks are optional');
 
-    expect(configExample).toContain('locus-memory@3.7.0');
+    expect(configExample).toContain('locus-memory@4.0.0');
     expect(configExample).toContain('npx.cmd');
     expect(configExample).not.toContain('args = ["-y", "locus-memory@latest", "mcp"]');
     expect(configExample).not.toContain('coming soon');
@@ -92,11 +96,14 @@ describe('GitHub Pages landing page', () => {
     expect(roadmap).toContain('Track D');
     expect(roadmap).toContain('shipped in `v3.6.0`');
     expect(roadmap).toContain('v3.7.0');
+    expect(roadmap).toContain('v4.0.0');
 
-    expect(releaseNotes).toContain('Locus v3.7.0 Release Notes');
+    expect(releaseNotes).toContain('Locus v4.0.0 Release Notes');
     expect(releaseNotes).toContain('Track D');
     expect(releaseNotes).toContain('memory_calendar');
     expect(releaseNotes).toContain('memory_project_state');
+    expect(releaseNotes).toContain('Antigravity');
+    expect(releaseNotes).toContain('DeepSeek Harness');
     expect(releaseNotes).toContain('Known Boundaries');
     expect(releaseNotes).toContain('live Desktop sessions may need a reload');
   });

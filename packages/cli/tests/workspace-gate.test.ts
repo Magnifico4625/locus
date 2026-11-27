@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { evaluateHookWorkspace } from '../src/workspace-gate.js';
+import { evaluateHookWorkspace, normalizeWorkspacePath } from '../src/workspace-gate.js';
 
 const tempDirs: string[] = [];
 
@@ -77,6 +77,8 @@ describe('evaluateHookWorkspace', () => {
       allowed: false,
       reason: 'denied_system_path',
     });
+    expect(normalizeWorkspacePath('C:\\Windows\\System32')).toBe('C:/Windows/System32');
+    expect(normalizeWorkspacePath('/C:/Windows/System32')).toBe('C:/Windows/System32');
   });
 
   it('rejects temp directories by default and non-project folders without markers', () => {

@@ -397,7 +397,7 @@ describe('codex hook command', () => {
 
 describe('codex hook config generation', () => {
   it('generates lifecycle hooks for SessionStart, UserPromptSubmit, PostToolUse, and Stop', () => {
-    const config = buildCodexHooksConfig({ version: '3.7.0' });
+    const config = buildCodexHooksConfig({ version: '4.0.0' });
 
     expect(Object.keys(config.hooks).sort()).toEqual([
       'PostToolUse',
@@ -413,22 +413,22 @@ describe('codex hook config generation', () => {
         type: 'command',
         timeout: 3,
       });
-      expect(config.hooks[event]?.[0]?.hooks[0]?.command).toContain('locus-memory@3.7.0');
+      expect(config.hooks[event]?.[0]?.hooks[0]?.command).toContain('locus-memory@4.0.0');
       expect(config.hooks[event]?.[0]?.hooks[0]?.command).not.toContain('@latest');
     }
   });
 
   it('produces versionless identical hooks.json across versions when runtimeCliPath is supplied (trusted_hash stability)', () => {
     const cliPath = 'C:\\Users\\Admin\\.locus\\bin\\cli.js';
-    const v370 = renderCodexHooksJson(
-      buildCodexHooksConfig({ version: '3.7.0', runtimeCliPath: cliPath }),
-    );
     const v400 = renderCodexHooksJson(
       buildCodexHooksConfig({ version: '4.0.0', runtimeCliPath: cliPath }),
     );
+    const v410 = renderCodexHooksJson(
+      buildCodexHooksConfig({ version: '4.1.0', runtimeCliPath: cliPath }),
+    );
 
-    expect(v370).toBe(v400);
-    const parsed = JSON.parse(v370) as {
+    expect(v400).toBe(v410);
+    const parsed = JSON.parse(v400) as {
       hooks: Record<string, Array<{ hooks: Array<{ command: string }> }>>;
     };
     expect(parsed.hooks.SessionStart?.[0]?.hooks[0]?.command).toBe(
@@ -444,19 +444,19 @@ describe('codex hook config generation', () => {
   });
 
   it('uses event-specific hook command arguments', () => {
-    const config = buildCodexHooksConfig({ version: '3.7.0', platform: 'linux' });
+    const config = buildCodexHooksConfig({ version: '4.0.0', platform: 'linux' });
 
     expect(config.hooks.SessionStart?.[0]?.hooks[0]?.command).toBe(
-      'npx -y locus-memory@3.7.0 hook codex session-start',
+      'npx -y locus-memory@4.0.0 hook codex session-start',
     );
     expect(config.hooks.UserPromptSubmit?.[0]?.hooks[0]?.command).toBe(
-      'npx -y locus-memory@3.7.0 hook codex user-prompt-submit',
+      'npx -y locus-memory@4.0.0 hook codex user-prompt-submit',
     );
     expect(config.hooks.PostToolUse?.[0]?.hooks[0]?.command).toBe(
-      'npx -y locus-memory@3.7.0 hook codex post-tool-use',
+      'npx -y locus-memory@4.0.0 hook codex post-tool-use',
     );
     expect(config.hooks.Stop?.[0]?.hooks[0]?.command).toBe(
-      'npx -y locus-memory@3.7.0 hook codex stop',
+      'npx -y locus-memory@4.0.0 hook codex stop',
     );
   });
 
@@ -470,9 +470,9 @@ describe('codex hook config generation', () => {
   });
 
   it('renders deterministic pretty JSON for hooks.json', () => {
-    const json = renderCodexHooksJson(buildCodexHooksConfig({ version: '3.7.0' }));
+    const json = renderCodexHooksJson(buildCodexHooksConfig({ version: '4.0.0' }));
 
-    expect(JSON.parse(json)).toEqual(buildCodexHooksConfig({ version: '3.7.0' }));
+    expect(JSON.parse(json)).toEqual(buildCodexHooksConfig({ version: '4.0.0' }));
     expect(json).toMatch(/^\{\n {2}"hooks":/u);
     expect(json.endsWith('\n')).toBe(true);
   });
@@ -483,7 +483,7 @@ describe('codex hook config generation', () => {
       join(codexHome, 'hooks.json'),
       renderCodexHooksJson(
         buildCodexHooksConfig({
-          version: '3.7.0',
+          version: '4.0.0',
           binaryPath: 'C:\\Program Files\\Locus\\locus-memory.cmd',
         }),
       ),
@@ -496,7 +496,7 @@ describe('codex hook config generation', () => {
       join(codexHome, 'hooks.json'),
       renderCodexHooksJson(
         buildCodexHooksConfig({
-          version: '3.7.0',
+          version: '4.0.0',
           runtimeCliPath: 'C:\\Users\\Admin\\.locus\\bin\\cli.js',
         }),
       ),
@@ -518,7 +518,7 @@ describe('codex hook config generation', () => {
                 {
                   type: 'command',
                   command: 'node noop.js',
-                  statusMessage: 'mentions locus-memory@3.7.0 hook codex stop only in text',
+                  statusMessage: 'mentions locus-memory@4.0.0 hook codex stop only in text',
                 },
               ],
             },

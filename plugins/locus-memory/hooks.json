@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y locus-memory@3.7.0 hook codex session-start",
+            "command": "npx -y locus-memory@4.0.0 hook codex session-start",
             "timeout": 10,
             "statusMessage": "Preparing Locus recall freshness"
           }
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y locus-memory@3.7.0 hook codex user-prompt-submit",
+            "command": "npx -y locus-memory@4.0.0 hook codex user-prompt-submit",
             "timeout": 10,
             "statusMessage": "Notifying Locus about a new prompt"
           }
@@ -31,7 +31,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y locus-memory@3.7.0 hook codex post-tool-use",
+            "command": "npx -y locus-memory@4.0.0 hook codex post-tool-use",
             "timeout": 10,
             "statusMessage": "Recording Locus tool activity"
           }
@@ -43,7 +43,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "npx -y locus-memory@3.7.0 hook codex stop",
+            "command": "npx -y locus-memory@4.0.0 hook codex stop",
             "timeout": 10,
             "statusMessage": "Notifying Locus that the turn stopped"
           }

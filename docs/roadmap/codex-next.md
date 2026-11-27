@@ -1,9 +1,9 @@
 # Codex Next Roadmap
 
 **Date:** 2026-04-16  
-**Last updated:** 2026-05-30
+**Last updated:** 2026-11-27
 **Starting point:** `v3.3.0` released and marked stable  
-**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B is published to npm through `locus-memory@3.5.3`. Track C richer recall shipped in `v3.6.0`, with `v3.6.1` as a focused Codex installer hotfix that keeps one-command installs on `$CODEX_HOME/memory/`. Track D is prepared as `v3.7.0`: project isolation, temporal recall, freshness guarantees, ranking, and project-state summaries before dashboard work.
+**Primary focus:** Track A shipped publicly in `v3.4.0`. Track B shipped through `locus-memory@3.5.3`. Track C richer recall shipped in `v3.6.0` (with `v3.6.1` keeping `$CODEX_HOME/memory/`). Track D memory reliability shipped in `v3.7.0`. **`v4.0.0`** shipped zero-call desktop plugins across Codex CLI/Desktop, Antigravity Desktop, and DeepSeek Harness Desktop (`dsh`), with Strict Workspace Gate, Daily Memory Journal, and bounded `memory_compact`.
 
 ---
 
@@ -11,7 +11,7 @@
 
 This document tracks the **next Codex-focused product work after `v3.3.0`**.
 
-Unlike [codex.md](C:/Users/Admin/gemini-project/ClaudeMagnificoMem/docs/roadmap/codex.md), which records the roadmap that shipped through the `v3.3.0` release, this file is forward-looking. It is intentionally organized as **product tracks**, not as one long linear phase chain.
+Unlike [codex.md](./codex.md), which records the roadmap that shipped through the `v3.3.0` release, this file is forward-looking. It is intentionally organized as **product tracks**, not as one long linear phase chain.
 
 ---
 
@@ -478,7 +478,8 @@ This is a planning suggestion, not a hard contract.
 | `v3.6.0` | Track C richer Codex conversational recall (`redacted` / `full`) and stronger capture/privacy UX |
 | `v3.6.1` | Codex one-command install hotfix: generated MCP env includes `CODEX_HOME`, keeping storage under `$CODEX_HOME/memory/` |
 | `v3.7.0` | Codex memory reliability: project isolation, temporal recall, freshness, ranking, project-state summaries, and Codex Desktop validation evidence |
-| `v4.0` | HTML dashboard + broader product-grade memory visibility after recall is dependable |
+| `v4.0.0` | Multi-platform zero-call desktop plugins (Codex hooks, Antigravity Desktop native bundle, DeepSeek Harness Cordis plugin), Strict Workspace Gate, Daily Memory Journal, bounded `memory_compact` |
+| `v4.1+` | npm `4.0.0` publish, OpenCode Desktop plugin (deferred), HTML dashboard, evidence anchors, and secondary IDE adapters |
 
 Secondary IDE adapters should be scheduled only when they do not block the Codex-first path above.
 
@@ -486,14 +487,9 @@ Secondary IDE adapters should be scheduled only when they do not block the Codex
 
 ## Immediate Next Candidates
 
-1. Prepare the `v3.7.0` release path:
-   - local `npm pack` smoke is complete: `locus-memory-3.7.0.tgz` contains the intended runtime files, plugin manifest, skill, config, docs, and `3.7.0` metadata
-   - local tarball `install codex --yes` smoke is complete with `LOCUS_CODEX_RUNTIME_PACKAGE=<tgz>` and isolated `CODEX_HOME`
-   - post-publish registry smoke is complete: `npx --yes locus-memory@3.7.0 --version` returned `3.7.0`, `install codex --yes` completed, and `codex mcp get locus` points at `npx.cmd -y locus-memory@3.7.0 mcp`
-   - verify `codex mcp get locus` from the intended long-lived Codex CLI/Desktop environment after reload
-   - reload Desktop and confirm the live registry exposes `memory_calendar` and `memory_project_state`
-2. Improve Track D follow-ups without broadening the release claim:
+1. Publish `locus-memory@4.0.0` to npm when maintainer credentials are ready (GitHub Release `v4.0.0` with `locus-memory-4.0.0.tgz` ships first), and run post-publish registry `npx -y locus-memory@4.0.0` smoke.
+2. Improve Track D follow-ups without broadening existing claims:
    - richer evidence-anchor display for commits, files, docs, command results, timestamps, and sessions
    - user-configurable topic namespace filters only if project-root isolation proves insufficient
    - broader stale or historical lifecycle automation after project-scoped durable state has more mileage
-3. Revisit dashboard scope after the memory reliability track is demonstrably better in a reloaded Desktop session.
+3. HTML dashboard UX (`v4.1+`) and deferred OpenCode Desktop in-process adapter ([opencode-integration-plan.md](../plans/opencode-integration-plan.md)).

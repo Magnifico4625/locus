@@ -1,9 +1,9 @@
 # Locus v4 — Multi-Platform Zero-Call Desktop Plugins Roadmap & Working Contract
 
 **Date:** 2026-11-22  
-**Baseline:** `v4-plugins-baseline` (`9c006ac`, `codex/v3.7.0-publish` / `v3.7.0` + `opencode.md`)  
-**Worktree:** `C:\Users\Admin\gemini-project\ClaudeMagnificoMem-v4-plugins`  
-**Branch:** `feat/v4-multi-platform-plugins`
+**Status:** Shipped in `v4.0.0` on `main` (Steps 0, 1, 2, 2.5, 3 live-verified; Step 4 OpenCode deferred — see [opencode-integration-plan.md](../plans/opencode-integration-plan.md))  
+**Baseline:** `v4-plugins-baseline` (`9c006ac`, `codex/v3.7.0-publish` / `v3.7.0` + `opencode.md`, moved to `docs/plans/opencode-integration-plan.md`)  
+**Branch:** `main` (integrated via `--ff-only` from `feat/v4-multi-platform-plugins`)
 
 ---
 

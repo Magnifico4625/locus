@@ -39,6 +39,8 @@ npx -y locus-memory@latest uninstall codex --yes
 
 Команда установки добавляет MCP-сервер Locus, устанавливает Codex skill, включает практичный `redacted` режим и закрепляет runtime-команду на установленную версию пакета.
 
+> **Статус релиза `v4.0.0`:** версия `v4.0.0` опубликована в [GitHub Releases](https://github.com/Magnifico4625/locus/releases/tag/v4.0.0) с прикреплённым архивом `locus-memory-4.0.0.tgz`; публикация `locus-memory@4.0.0` в npm ожидает ручного `npm publish`, поэтому до обновления npm используйте `.tgz` из GitHub Release или локальную сборку (`npm run build`).
+
 ### Zero-call десктопные плагины (Codex, Antigravity, DeepSeek Harness)
 
 Для автоматической инъекции контекста на старте/ходе и фонового захвата памяти без ручных вызовов MCP:
@@ -62,13 +64,11 @@ npx -y locus-memory@latest uninstall dsh --yes
 - **Дневник памяти по датам:** автоматически поддерживаются `daily_summaries` в SQLite и Markdown-файлы `journal/YYYY-MM-DD.md` + `journal/INDEX.md`, а `memory_compact` сжимает старые сырые `tool_use` с `PRAGMA wal_checkpoint(TRUNCATE)`.
 - Дорожная карта десктопных плагинов: [roadmap/v4-multi-platform-plugins.md](roadmap/v4-multi-platform-plugins.md).
 
-## Что нового в v3.7
+## Что нового в v4.0
 
-Track D добавляет надежность памяти для Codex: project-scoped recall, date buckets, `memory_calendar` для вопросов по периодам и `memory_project_state` для текущего состояния проекта.
+**Мультиплатформенные zero-call плагины (`v4.0.0`):** единый локальный SQLite/MCP движок теперь автоматически работает без ручных tool-вызовов на каждом ходе сразу на трёх десктопных поверхностях: **Codex CLI / Desktop** (`install codex --with-hooks`), **Antigravity Desktop** (`install antigravity`) и **DeepSeek Harness Desktop (`dsh`)** (`install dsh`, Cordis-плагин `locus-memory-dsh`). Добавлены строгий **Workspace Gate** (`.locus.json` / `~/.locus/config.json`), защита от самоинъекции в память, **Дневник памяти** (`daily_summaries` + `journal/YYYY-MM-DD.md` + `INDEX.md`) и `memory_compact` со сжатием старых `tool_use` и `PRAGMA wal_checkpoint(TRUNCATE)`.
 
-`memory_recall` также лучше отвечает на вопросы о прошлой работе: "что мы делали вчера?", "почему отказались от варианта X?", "какой у меня стиль?", "что осталось сделать?". Он использует redacted Codex-сессии, durable memories, `memory_remember`, rejected alternatives, validation facts и dated recall.
-
-Если найдено несколько похожих контекстов, Locus возвращает `candidateGroups`, чтобы агент задал уточняющий вопрос, а не выдумывал ответ.
+Вся надёжность памяти Track C/D сохранена: project-scoped recall, date buckets, `memory_calendar`, `memory_project_state`, `candidateGroups`, rejected alternatives и validation facts. Подробности: [releases/v4.0.0.md](releases/v4.0.0.md).
 
 ## Почему Locus
 

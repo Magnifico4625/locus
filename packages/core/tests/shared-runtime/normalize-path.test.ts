@@ -64,6 +64,7 @@ describe('normalizePathForIdentity (shared-runtime)', () => {
     if (!normalizePathForIdentity) return;
 
     expect(normalizePathForIdentity('file:///C:/Users/Admin/repo')).toBe('c:/users/admin/repo');
+    expect(normalizePathForIdentity('/C:/Users/Admin/repo')).toBe('c:/users/admin/repo');
     expect(normalizePathForIdentity('C:\\Users\\Admin\\repo\\')).toBe(
       normalizePathForIdentity('C:/Users/Admin/repo'),
     );

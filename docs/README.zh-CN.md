@@ -39,13 +39,36 @@ npx -y locus-memory@latest uninstall codex --yes
 
 安装器会配置 Locus MCP server，安装 Codex skill，启用实用的 `redacted` capture 默认值，并把运行时命令固定到已安装的包版本。
 
-## v3.7 新功能
+> **发布说明（`v4.0.0`）：** `v4.0.0` 已在 [GitHub Releases](https://github.com/Magnifico4625/locus/releases/tag/v4.0.0) 发布并附带 `locus-memory-4.0.0.tgz`；npm 仓库的 `locus-memory@4.0.0` 仍待发布，在 npm 更新前可使用 GitHub Release 压缩包或本地源码构建（`npm run build`）。
 
-Track D 增强了 Codex 记忆可靠性：项目级 recall、日期 buckets、用于时间段问题的 `memory_calendar`，以及用于当前项目状态的 `memory_project_state`。
+### Zero-Call 桌面插件（Codex、Antigravity、DeepSeek Harness）
 
-`memory_recall` 现在也可以更好地回答关于过去工作的自然语言问题，例如 “昨天做了什么？”、“为什么放弃这个方案？”、“我的代码风格是什么？”、“下一步是什么？”。
+支持在会话启动与对话轮次中自动注入上下文摘要并在后台捕获记录，无需每轮显式调用 MCP 工具：
 
-它会结合 redacted Codex 会话、durable memories、`memory_remember`、rejected alternatives、validation facts 和时间范围问题。若存在多个可能答案，Locus 会返回 `candidateGroups`，让代理先向用户澄清，而不是猜测。
+```bash
+# Codex CLI / Desktop：zero-call hooks 与 ~/.locus/bin/ 本地运行时
+npx -y locus-memory@latest install codex --with-hooks --yes
+
+# Antigravity Desktop：原生插件包（~/.gemini/config/plugins/locus-memory/）
+npx -y locus-memory@latest install antigravity --yes
+npx -y locus-memory@latest doctor antigravity
+npx -y locus-memory@latest uninstall antigravity --yes
+
+# DeepSeek Harness Desktop (`dsh`)：进程内 Cordis 插件（locus-memory-dsh）
+npx -y locus-memory@latest install dsh --yes
+npx -y locus-memory@latest doctor dsh
+npx -y locus-memory@latest uninstall dsh --yes
+```
+
+- **Strict Workspace Gate：** 忽略主目录、临时目录、客户端配置目录以及没有项目标记的普通文件夹（可用空 `.locus.json` 或 `~/.locus/config.json` 显式开启）。
+- **每日记忆日志（Daily Memory Journal）：** 自动维护 SQLite `daily_summaries` 与 Markdown `journal/YYYY-MM-DD.md`、`journal/INDEX.md`，并通过 `memory_compact` 配合 `PRAGMA wal_checkpoint(TRUNCATE)` 清理过期原始 `tool_use` 记录。
+- 多平台插件路线图：[roadmap/v4-multi-platform-plugins.md](roadmap/v4-multi-platform-plugins.md)。
+
+## v4.0 新功能
+
+`v4.0.0` 将共享的本地 SQLite/MCP 内核扩展为多平台 zero-call 桌面记忆层：同时支持 **Codex CLI / Desktop**、**Antigravity Desktop** 与 **DeepSeek Harness Desktop (`dsh`)**，并带来严格的 Workspace Gate、防自注入回环过滤、每日 Markdown 记忆日志以及有界 `memory_compact`。
+
+同时完整保留 Track C 与 Track D 的 Codex 记忆可靠性能力：项目隔离 recall、日期 buckets、`memory_calendar`、`memory_project_state`、rejected alternatives、validation facts 以及多候选澄清字段 `candidateGroups`。详情见 [releases/v4.0.0.md](releases/v4.0.0.md)。
 
 ## 为什么选择 Locus
 
@@ -102,9 +125,11 @@ Locus 不试图成为完整 agent runtime 或云端记忆平台。它的定位�
 
 | 客户端 | 状态 |
 | --- | --- |
-| Codex CLI | 主要验证路径 |
+| Codex CLI / Desktop | 主要验证路径（MCP + 可选 zero-call hooks 已通过实测验证） |
+| Antigravity Desktop | 原生插件包与 zero-call hooks 已通过实测验证 |
+| DeepSeek Harness Desktop (`dsh`) | 进程内 Cordis 插件（`locus-memory-dsh`）已通过实测验证 |
 | Claude Code | 通过 hooks 和 shared runtime 支持 |
-| Codex desktop / extension | 使用相同 MCP 模型，但 parity 仍未完全验证 |
+| Codex extension | 使用相同 MCP 模型，仍需针对扩展端进行 parity 验证 |
 | Cursor / Windsurf / Cline / Zed | MCP tools 可用；被动会话 adapters 是未来工作 |
 
 ## 开发

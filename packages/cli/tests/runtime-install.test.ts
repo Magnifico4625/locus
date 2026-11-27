@@ -45,7 +45,7 @@ describe('installLocalCliRuntime', () => {
     });
 
     expect(first.action).toBe('installed');
-    expect(first.version).toBe('3.7.0');
+    expect(first.version).toBe('4.0.0');
     expect(existsSync(first.cliPath)).toBe(true);
     expect(existsSync(first.serverPath)).toBe(true);
     expect(existsSync(first.manifestPath)).toBe(true);
@@ -59,12 +59,12 @@ describe('installLocalCliRuntime', () => {
       serverPath: string;
     };
     expect(manifest).toEqual({
-      version: '3.7.0',
+      version: '4.0.0',
       installedAt: '2026-06-20T10:00:00.000Z',
       cliPath: first.cliPath,
       serverPath: first.serverPath,
     });
-    expect(resolvePackageVersion(first.binDir)).toBe('3.7.0');
+    expect(resolvePackageVersion(first.binDir)).toBe('4.0.0');
 
     const second = installLocalCliRuntime({
       env: { LOCUS_HOME: locusHome },

@@ -49,7 +49,8 @@ export function rootUriToLocalPath(uri: string): string | undefined {
   }
 
   try {
-    return fileURLToPath(trimmed);
+    const converted = fileURLToPath(trimmed);
+    return /^\/[a-zA-Z]:[\\/]/u.test(converted) ? converted.slice(1) : converted;
   } catch {
     try {
       const parsed = new URL(trimmed);

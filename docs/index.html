@@ -88,7 +88,7 @@
               class="inline-flex items-center gap-2 rounded-full border border-locus-border bg-locus-surface px-3 py-1 text-xs font-mono text-zinc-400 mb-8"
             >
               <span class="w-2 h-2 rounded-full bg-locus-accent animate-pulse"></span>
-              v3.7.0 release • Track D memory reliability for Codex
+              v4.0.0 release • Zero-call desktop plugins &amp; Track D memory reliability
             </div>
 
             <h1 class="text-5xl md:text-7xl font-bold tracking-tight leading-[1.02] max-w-4xl">
@@ -99,9 +99,9 @@
             </h1>
 
             <p class="mt-6 max-w-2xl text-lg md:text-xl text-zinc-400 leading-relaxed">
-              Locus gives Codex and Claude Code a local memory layer for project structure,
-              durable decisions, searchable history, summary-first memory_recall, and diagnostics. Built on MCP. Safe-by-default.
-              Designed so your agent stops starting from zero.
+              Locus gives Codex, Antigravity Desktop, DeepSeek Harness, and Claude Code a local memory
+              layer with zero-call Project Briefs, Workspace Gate isolation, Daily Memory Journal,
+              summary-first memory_recall, and diagnostics. Built on MCP. Safe-by-default.
             </p>
 
             <div class="mt-10 flex flex-col sm:flex-row gap-4">
@@ -143,8 +143,9 @@
             <div class="mt-8 flex flex-wrap gap-3 text-xs font-mono text-zinc-500">
               <a href="README.ru.md" class="rounded-full border border-zinc-800 px-3 py-1 hover:border-locus-accent hover:text-white transition-colors">Русский</a>
               <a href="README.zh-CN.md" class="rounded-full border border-zinc-800 px-3 py-1 hover:border-locus-accent hover:text-white transition-colors">简体中文</a>
-              <span class="rounded-full border border-zinc-800 px-3 py-1">Codex CLI</span>
-              <span class="rounded-full border border-zinc-800 px-3 py-1">Codex desktop / extension</span>
+              <span class="rounded-full border border-zinc-800 px-3 py-1">Codex CLI / Desktop</span>
+              <span class="rounded-full border border-zinc-800 px-3 py-1">Antigravity Desktop</span>
+              <span class="rounded-full border border-zinc-800 px-3 py-1">DeepSeek Harness</span>
               <span class="rounded-full border border-zinc-800 px-3 py-1">Claude Code</span>
               <span class="rounded-full border border-zinc-800 px-3 py-1">MCP server</span>
             </div>
@@ -260,8 +261,9 @@
           <div class="max-w-2xl mb-12">
             <h2 class="text-3xl md:text-4xl font-semibold tracking-tight">What ships today</h2>
             <p class="mt-4 text-zinc-400 leading-relaxed">
-              Locus is already a real product line for Codex, not a future promise. The current release
-              focuses on Track C richer recall, diagnostics, and one-command install.
+              Locus v4.0.0 ships live-verified zero-call desktop plugins for Codex, Antigravity Desktop,
+              and DeepSeek Harness (`dsh`), plus Track C/D richer recall, calendar discovery, and
+              one-command install.
             </p>
           </div>
 
@@ -270,11 +272,12 @@
               <div class="feature-icon">
                 <i data-lucide="brain-circuit" class="w-5 h-5 text-locus-accent"></i>
               </div>
-              <h3 class="mt-6 text-xl font-semibold">Codex memory that survives the next session</h3>
+              <h3 class="mt-6 text-xl font-semibold">Zero-call desktop plugins &amp; Track D memory reliability</h3>
               <p class="mt-3 text-sm leading-7 text-zinc-400 max-w-xl">
-                Track C validates redacted Codex recall through `memory_recall`: dated Russian questions,
-                capture decisions, rejected alternatives, user style, npm errors, next steps, and validation
-                facts pass through import, durable memory, and recall.
+                Automatic SessionStart Project Briefs, targeted prompt-turn recall injection, Workspace
+                Gate protection, and Markdown Daily Memory Journals work across Codex Desktop, Antigravity
+                Desktop, and DeepSeek Harness (`locus-memory-dsh`) — alongside `memory_recall`,
+                `memory_calendar`, and `memory_project_state`.
               </p>
             </article>
 
@@ -359,7 +362,10 @@
             </div>
             <ul class="mt-6 space-y-4 text-sm leading-7 text-zinc-300">
               <li>
-                <strong class="text-white">Primary:</strong> Codex CLI and Codex desktop / extension
+                <strong class="text-white">Primary:</strong> Codex CLI and Codex desktop
+              </li>
+              <li>
+                <strong class="text-white">Desktop plugins:</strong> Codex hooks, Antigravity Desktop native bundle, DeepSeek Harness Cordis plugin (live-verified)
               </li>
               <li>
                 <strong class="text-white">Supported:</strong> Claude Code
@@ -368,21 +374,23 @@
                 <strong class="text-white">Secondary:</strong> Cursor, Windsurf, Cline, Zed through generic MCP now and adapter work later
               </li>
               <li>
-                <strong class="text-white">Current release:</strong> `v3.7.0`
+                <strong class="text-white">Current release:</strong> `v4.0.0`
               </li>
               <li>
-                <strong class="text-white">Package smoke:</strong> local tarball and registry `locus-memory@3.7.0` install validation passed
+                <strong class="text-white">Package smoke:</strong> local tarball `locus-memory-4.0.0.tgz` validation passed (attached to GitHub Release; npm registry publish pending)
               </li>
               <li>
-                <strong class="text-white">Next themes:</strong> Desktop reload validation, evidence anchors, dashboard UX
+                <strong class="text-white">Next themes:</strong> npm `4.0.0` publish, OpenCode adapter (deferred), evidence anchors, HTML dashboard
               </li>
             </ul>
 
             <div class="mt-8 rounded-xl border border-zinc-800 bg-black/30 p-5">
               <div class="text-xs font-mono text-zinc-500">honest roadmap note</div>
               <p class="mt-3 text-sm leading-7 text-zinc-400">
-                Practical Codex conversational recall ships in `redacted` mode. Codex CLI is validated;
-                Desktop MCP marker acceptance is covered by Track D, but active Desktop sessions may need a reload before newly added tools appear. Extension parity remains target-surface work.
+                `v4.0.0` is published via GitHub Releases with `locus-memory-4.0.0.tgz`; npm `latest`
+                remains `3.7.0` until `npm publish` is run. Codex CLI, Codex Desktop zero-call hooks,
+                Antigravity Desktop, and DeepSeek Harness Desktop are live-verified; active Desktop MCP
+                sessions may still need a reload for new tools, and extension parity stays pending.
               </p>
             </div>
           </aside>
@@ -411,13 +419,13 @@
                 Open GitHub Repository
               </a>
               <a
-                href="https://github.com/Magnifico4625/locus/releases/tag/v3.7.0"
+                href="https://github.com/Magnifico4625/locus/releases/tag/v4.0.0"
                 target="_blank"
                 rel="noreferrer"
                 class="inline-flex items-center justify-center gap-2 rounded-md border border-locus-border px-6 py-3.5 font-medium text-zinc-200 hover:border-zinc-500 hover:text-white transition-colors"
               >
                 <i data-lucide="badge-check" class="w-5 h-5"></i>
-                Read v3.7.0 Release
+                Read v4.0.0 Release
               </a>
             </div>
           </div>

@@ -207,10 +207,10 @@ function normalizePathForIdentity(pathValue) {
       value = fileURLToPath(value);
     } catch {
       value = value.replace(/^file:\/\/(?:localhost)?/i, "");
-      if (/^\/[a-zA-Z]:[\\/]/.test(value)) {
-        value = value.slice(1);
-      }
     }
+  }
+  if (/^\/[a-zA-Z]:[\\/]/.test(value)) {
+    value = value.slice(1);
   }
   let isUnc = false;
   if (/^(?:\\\\\?\\|\/\/\?\/)UNC[\\/]/i.test(value)) {
@@ -5266,7 +5266,7 @@ function parseAntigravityTranscriptEvents(options) {
 // packages/cli/src/workspace-gate.ts
 import { existsSync as existsSync11, readFileSync as readFileSync12 } from "node:fs";
 import { homedir as homedir6, tmpdir } from "node:os";
-import { join as join15, resolve as resolve4 } from "node:path";
+import { join as join15, posix, resolve as resolve4 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
 var DENIED_HOME_SUBDIRS = [".gemini", ".codex", ".locus", ".claude", ".config", ".dsh"];
 var DENIED_WIN_SYSTEM_PREFIXES = [
@@ -5295,6 +5295,16 @@ function normalizeWorkspacePath(raw) {
     } catch {
       return void 0;
     }
+  }
+  if (/^\/[a-zA-Z]:(?:[\\/]|$)/u.test(candidate)) {
+    candidate = candidate.slice(1);
+  }
+  if (/^[a-zA-Z]:(?:[\\/]|$)/u.test(candidate)) {
+    const drive = candidate.slice(0, 2);
+    const rest = candidate.slice(2).replace(/\\/g, "/");
+    const normalizedRest = posix.normalize(rest.startsWith("/") ? rest : `/${rest}`);
+    const joined = `${drive}${normalizedRest}`;
+    return joined === `${drive}/` ? joined : joined.replace(/\/+$/u, "");
   }
   const normalized = resolve4(candidate).replace(/\\/g, "/");
   if (normalized === "/" || /^[a-z]:\/$/iu.test(normalized)) {

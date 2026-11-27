@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, posix, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type ProjectRootMethod, resolveProjectRoot } from '@locus/core';
 import { resolveLocusHome } from '@locus/shared-runtime';
@@ -68,6 +68,18 @@ export function normalizeWorkspacePath(raw: string): string | undefined {
     } catch {
       return undefined;
     }
+  }
+
+  if (/^\/[a-zA-Z]:(?:[\\/]|$)/u.test(candidate)) {
+    candidate = candidate.slice(1);
+  }
+
+  if (/^[a-zA-Z]:(?:[\\/]|$)/u.test(candidate)) {
+    const drive = candidate.slice(0, 2);
+    const rest = candidate.slice(2).replace(/\\/g, '/');
+    const normalizedRest = posix.normalize(rest.startsWith('/') ? rest : `/${rest}`);
+    const joined = `${drive}${normalizedRest}`;
+    return joined === `${drive}/` ? joined : joined.replace(/\/+$/u, '');
   }
 
   const normalized = resolve(candidate).replace(/\\/g, '/');

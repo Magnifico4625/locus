@@ -18,10 +18,11 @@ export function normalizePathForIdentity(pathValue) {
       value = fileURLToPath(value);
     } catch {
       value = value.replace(/^file:\/\/(?:localhost)?/i, '');
-      if (/^\/[a-zA-Z]:[\\/]/.test(value)) {
-        value = value.slice(1);
-      }
     }
+  }
+
+  if (/^\/[a-zA-Z]:[\\/]/.test(value)) {
+    value = value.slice(1);
   }
 
   let isUnc = false;
