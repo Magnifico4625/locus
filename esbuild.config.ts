@@ -1,17 +1,22 @@
 import * as esbuild from 'esbuild';
 
-const commonOptions = {
+const libraryOptions = {
   bundle: true,
   platform: 'node',
-  target: 'node20',
+  target: 'node22',
   format: 'esm',
   sourcemap: true,
   minify: false,
   external: ['node:*', 'sql.js'],
+  logLevel: 'info',
+} satisfies esbuild.BuildOptions;
+
+const commonOptions = {
+  ...libraryOptions,
+  target: 'node20',
   banner: {
     js: '#!/usr/bin/env node',
   },
-  logLevel: 'info',
 } satisfies esbuild.BuildOptions;
 
 await Promise.all([
@@ -24,5 +29,10 @@ await Promise.all([
     ...commonOptions,
     entryPoints: ['packages/cli/src/index.ts'],
     outfile: 'dist/cli.js',
+  }),
+  esbuild.build({
+    ...libraryOptions,
+    entryPoints: ['packages/cli/src/dsh/plugin.ts'],
+    outfile: 'dist/dsh-plugin.js',
   }),
 ]);

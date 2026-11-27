@@ -13,8 +13,8 @@ Turn Locus into a zero-call persistent memory plugin layer across 4 primary desk
 
 1. **Antigravity Desktop** — Subprocess hooks (`SessionStart`, `PreInvocation` via `injectSteps`, `PostToolUse`, `Stop` via `transcriptPath`) + native plugin bundle (`plugin.json`, root `hooks.json`, `rules/AGENTS.md`, `skills/`, `mcp_config.json`).
 2. **Codex Desktop** — Subprocess hooks (`SessionStart`, `UserPromptSubmit` via `hookSpecificOutput.additionalContext`, `PostToolUse`, `Stop` incremental rollout JSONL import) + `.codex-plugin/plugin.json` (`"hooks": "./hooks.json"`) with a stable versionless local runtime command so `trusted_hash` survives updates.
-3. **OpenCode Desktop** — In-process ESM plugin (`experimental.chat.messages.transform`, `experimental.session.compacting`, `config` skill path registration, and real-time event capture via `chat.message`, `tool.execute.after`, `event`).
-4. **DeepSeek Harness Desktop (`dsh`)** — In-process Cordis microkernel plugin (`cordis.patch.yml`, dynamic `ctx.systemPrompt.section` assembly, and event capture via `tools/post-execute`, `agent/turn-stopping`, `sessionProjections`).
+3. **DeepSeek Harness Desktop (`dsh`)** — In-process Cordis microkernel plugin (`locus-memory-dsh`, `dsh.bundle.patch`, dynamic `ctx.systemPrompt.section` + `agent/pre-step` `<system-reminder>` assembly, optional `ctx.mcpManager.register`, and event capture via `session/event` & `tools/result`).
+4. **OpenCode Desktop (deferred)** — In-process ESM plugin (`experimental.chat.messages.transform`, `experimental.session.compacting`, `config` skill path registration, and real-time event capture via `chat.message`, `tool.execute.after`, `event`).
 
 ### Two-Class Adapter Architecture
 
@@ -64,5 +64,6 @@ To protect the working `v3.7.0` setup and live memory databases while developing
 | Step 0 | `v4-step0-core` | Shared Core: Windows path normalization (`\\?\`, `file://`, trailing slash), multi-client `detect-client`, `resolveLocusHome` / `resolveRuntimeBinDir`, multi-source `runDurableExtraction`, `node:sqlite` `SQLITE_BUSY` retry, Zero-Call `Context Brief Engine` (`auto-brief.ts`), `@locus/core` library barrel, `WorkspacePool` + MCP `roots/list`, CLI `context` & `sync-runtime` commands |
 | Step 1 | `v4-step1-antigravity` | Antigravity Desktop native plugin bundle (`plugin.json`, root `hooks.json`, `rules/AGENTS.md`, `skills/`, `mcp_config.json`) + `Stop` incremental `transcriptPath` ingestion + live verification |
 | Step 2 | `v4-step2-codex-hooks` | Codex Desktop live hooks (`hooks.json` referenced from `.codex-plugin/plugin.json`, stable local runtime command preserving `trusted_hash`, real `SessionStart`/`UserPromptSubmit` `additionalContext`, real `Stop` rollout JSONL import) + live verification |
-| Step 3 | `v4-step3-opencode` | OpenCode Desktop in-process ESM plugin (`experimental.chat.messages.transform` + `compacting` + real-time capture + `config` skills) + live verification |
-| Step 4 | `v4-step4-dsh` | DeepSeek Harness Desktop in-process Cordis plugin (`cordis.patch.yml`, dynamic `ctx.systemPrompt.section`, session event capture) + live verification |
+| Step 2.5 | `v4-step2.5-workspace-and-journal` | Strict Workspace Gate (`~/.locus/config.json`, deny home/temp/agent config dirs and markerless folders), hook self-injection filter, Daily Memory Library (`daily_summaries` + `journal/YYYY-MM-DD.md`), raw `tool_use` compaction + `WAL` truncate |
+| Step 3 | `v4-step3-dsh` | DeepSeek Harness Desktop (`dsh`) in-process Cordis plugin (`locus-memory-dsh`, `dsh.bundle.patch`, `agent/pre-step` `<system-reminder>` injection, `session/event` + `tools/result` capture, `turn/end` flush, optional `mcpManager.register('locus')`, `install`/`doctor`/`uninstall dsh`) |
+| Step 4 (deferred) | `v4-step4-opencode` | OpenCode Desktop in-process ESM plugin (`experimental.chat.messages.transform` + `compacting` + real-time capture + `config` skills) — deferred per user priority decision |

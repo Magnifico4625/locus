@@ -4,7 +4,7 @@ import { basename, dirname, join } from 'node:path';
 import { resolveLocusHome } from '@locus/shared-runtime';
 import { writeFileAtomically } from './runtime-install.js';
 
-export type HookSessionClient = 'antigravity' | 'codex';
+export type HookSessionClient = 'antigravity' | 'codex' | 'dsh';
 
 export interface HookSessionState {
   sessionId: string;

@@ -39,7 +39,7 @@ export interface EvaluateHookWorkspaceOptions {
   platform?: NodeJS.Platform;
 }
 
-const DENIED_HOME_SUBDIRS = ['.gemini', '.codex', '.locus', '.claude', '.config'] as const;
+const DENIED_HOME_SUBDIRS = ['.gemini', '.codex', '.locus', '.claude', '.config', '.dsh'] as const;
 const DENIED_WIN_SYSTEM_PREFIXES = [
   'c:/windows',
   'c:/program files',

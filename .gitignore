@@ -5,6 +5,7 @@ node_modules/
 # Package-level dist/ remains ignored (intermediate tsc output)
 dist/marketplace/
 dist/antigravity-plugin/
+dist/dsh-plugin/
 packages/*/dist/
 
 # Test coverage

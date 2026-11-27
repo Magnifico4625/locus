@@ -4672,24 +4672,223 @@ function codexSupportsHooks(featuresList) {
   return /^hooks\s+\S+\s+true\s*$/imu.test(featuresList);
 }
 
+// packages/cli/src/commands/doctor-dsh.ts
+import { existsSync as existsSync8, readFileSync as readFileSync8 } from "node:fs";
+import { join as join12 } from "node:path";
+
+// packages/cli/src/dsh/paths.ts
+import { existsSync as existsSync7 } from "node:fs";
+import { homedir as homedir5 } from "node:os";
+import { join as join11 } from "node:path";
+var DSH_PLUGIN_PACKAGE_NAME = "locus-memory-dsh";
+var DSH_DEFAULT_PROFILE = "desktop";
+function expandLeadingTilde(value) {
+  if (value === "~") {
+    return homedir5();
+  }
+  if (value.startsWith("~/") || value.startsWith("~\\")) {
+    return join11(homedir5(), value.slice(2));
+  }
+  return value;
+}
+function validateDshProfileName(profile) {
+  const trimmed = profile.trim();
+  if (trimmed.length === 0 || trimmed.includes("/") || trimmed.includes("\\") || trimmed === "." || trimmed === ".." || trimmed === "node_modules") {
+    throw new Error(`Invalid DeepSeek Harness profile name: ${JSON.stringify(profile)}`);
+  }
+  return trimmed;
+}
+function resolveDshHome(env = process.env) {
+  const override = env.DSH_HOME?.trim();
+  if (override) {
+    return expandLeadingTilde(override);
+  }
+  return join11(homedir5(), ".dsh");
+}
+function resolveDshProfileDir(profile = DSH_DEFAULT_PROFILE, env = process.env) {
+  const safeProfile = validateDshProfileName(profile);
+  return join11(resolveDshHome(env), "profiles", safeProfile);
+}
+function resolveDshCanonicalPluginDir(env = process.env) {
+  return join11(resolveLocusHome(env), "plugins", "dsh", DSH_PLUGIN_PACKAGE_NAME);
+}
+function resolveDshProfilePluginDir(profile = DSH_DEFAULT_PROFILE, env = process.env) {
+  return join11(resolveDshProfileDir(profile, env), "node_modules", DSH_PLUGIN_PACKAGE_NAME);
+}
+
+// packages/cli/src/commands/doctor-dsh.ts
+function readJsonRecord2(filePath) {
+  if (!existsSync8(filePath)) {
+    return void 0;
+  }
+  try {
+    const parsed = JSON.parse(readFileSync8(filePath, "utf8"));
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : void 0;
+  } catch {
+    return void 0;
+  }
+}
+function inspectBundleFiles(pluginDir) {
+  const issues = [];
+  const manifest = readJsonRecord2(join12(pluginDir, "package.json"));
+  const version = typeof manifest?.version === "string" ? manifest.version : "unknown";
+  if (!manifest || manifest.name !== DSH_PLUGIN_PACKAGE_NAME) {
+    issues.push(`package.json missing or invalid name (expected ${DSH_PLUGIN_PACKAGE_NAME})`);
+  }
+  const dshMeta = manifest && typeof manifest.dsh === "object" && manifest.dsh !== null ? manifest.dsh : void 0;
+  const bundleMeta = dshMeta && typeof dshMeta.bundle === "object" && dshMeta.bundle !== null ? dshMeta.bundle : void 0;
+  if (bundleMeta?.patch !== "./cordis.patch.yml") {
+    issues.push('package.json missing dsh.bundle.patch = "./cordis.patch.yml"');
+  }
+  const patchPath = join12(pluginDir, "cordis.patch.yml");
+  if (!existsSync8(patchPath)) {
+    issues.push("cordis.patch.yml missing");
+  } else {
+    const patchText = readFileSync8(patchPath, "utf8");
+    if (!patchText.includes("id: locus-memory") || !patchText.includes(DSH_PLUGIN_PACKAGE_NAME)) {
+      issues.push("cordis.patch.yml missing locus-memory entry");
+    }
+  }
+  if (!existsSync8(join12(pluginDir, "lib", "index.js"))) {
+    issues.push("lib/index.js missing");
+  }
+  const skillPath = join12(pluginDir, "skills", "locus-memory", "SKILL.md");
+  if (!existsSync8(skillPath) || !readFileSync8(skillPath, "utf8").trimStart().startsWith("---")) {
+    issues.push("skills/locus-memory/SKILL.md missing or missing YAML frontmatter");
+  }
+  const runtimeDir = join12(pluginDir, "runtime");
+  for (const runtimeFile of ["server.js", "package.json", "runtime.json"]) {
+    if (!existsSync8(join12(runtimeDir, runtimeFile))) {
+      issues.push(`runtime/${runtimeFile} missing`);
+    }
+  }
+  return { issues, version };
+}
+function formatDoctorDsh(options = {}) {
+  const env = options.env ?? process.env;
+  const customTarget = options.targetDir?.trim();
+  if (customTarget) {
+    if (!existsSync8(customTarget)) {
+      return {
+        exitCode: 1,
+        output: [
+          "Locus DeepSeek Harness (dsh) doctor",
+          `Plugin dir: ${customTarget}`,
+          "Status: missing (run `locus-memory install dsh --target <dir> --yes`)"
+        ].join("\n")
+      };
+    }
+    const { issues: issues2, version: version2 } = inspectBundleFiles(customTarget);
+    const healthy2 = issues2.length === 0;
+    const lines2 = [
+      "Locus DeepSeek Harness (dsh) doctor",
+      `Node version: ${process.version}`,
+      `Plugin dir: ${customTarget}`,
+      `Version: ${version2}`,
+      `Status: ${healthy2 ? "ok" : "broken"}`
+    ];
+    if (!healthy2) {
+      lines2.push(`Issues (${issues2.length}):`);
+      for (const issue of issues2) {
+        lines2.push(`  - ${issue}`);
+      }
+    }
+    return {
+      exitCode: healthy2 ? 0 : 1,
+      output: lines2.join("\n")
+    };
+  }
+  const profile = validateDshProfileName(options.profile ?? DSH_DEFAULT_PROFILE);
+  const profileDir = resolveDshProfileDir(profile, env);
+  const profileManifestPath = join12(profileDir, "package.json");
+  const profilePluginDir = resolveDshProfilePluginDir(profile, env);
+  const canonicalDir = resolveDshCanonicalPluginDir(env);
+  if (!existsSync8(profileManifestPath)) {
+    return {
+      exitCode: 1,
+      output: [
+        "Locus DeepSeek Harness (dsh) doctor",
+        `Profile: ${profile} (${profileDir})`,
+        `Status: missing (profile manifest not found at ${profileManifestPath})`
+      ].join("\n")
+    };
+  }
+  const profileManifest = readJsonRecord2(profileManifestPath);
+  const deps = profileManifest && typeof profileManifest.dependencies === "object" && profileManifest.dependencies !== null ? profileManifest.dependencies : void 0;
+  const dshField = profileManifest && typeof profileManifest.dsh === "object" && profileManifest.dsh !== null ? profileManifest.dsh : void 0;
+  const profileField = dshField && typeof dshField.profile === "object" && dshField.profile !== null ? dshField.profile : void 0;
+  const bundles = Array.isArray(profileField?.bundles) ? profileField.bundles : [];
+  const hasBundleRegistration = bundles.includes(DSH_PLUGIN_PACKAGE_NAME);
+  const hasDependencyRegistration = typeof deps?.[DSH_PLUGIN_PACKAGE_NAME] === "string";
+  if (!existsSync8(profilePluginDir) && !hasBundleRegistration && !hasDependencyRegistration) {
+    return {
+      exitCode: 1,
+      output: [
+        "Locus DeepSeek Harness (dsh) doctor",
+        `Profile: ${profile} (${profileDir})`,
+        `Plugin dir: ${profilePluginDir}`,
+        "Status: missing (run `locus-memory install dsh --yes`)"
+      ].join("\n")
+    };
+  }
+  const issues = [];
+  if (!hasDependencyRegistration) {
+    issues.push(`profile package.json missing dependencies["${DSH_PLUGIN_PACKAGE_NAME}"]`);
+  }
+  if (!hasBundleRegistration) {
+    issues.push(`profile package.json missing "${DSH_PLUGIN_PACKAGE_NAME}" in dsh.profile.bundles`);
+  }
+  if (!existsSync8(canonicalDir)) {
+    issues.push(`canonical bundle dir missing at ${canonicalDir}`);
+  }
+  let version = "unknown";
+  if (!existsSync8(profilePluginDir)) {
+    issues.push(`profile bundle directory missing at ${profilePluginDir}`);
+  } else {
+    const inspected = inspectBundleFiles(profilePluginDir);
+    version = inspected.version;
+    issues.push(...inspected.issues);
+  }
+  const healthy = issues.length === 0;
+  const lines = [
+    "Locus DeepSeek Harness (dsh) doctor",
+    `Node version: ${process.version}`,
+    `Profile: ${profile} (${profileDir})`,
+    `Plugin dir: ${profilePluginDir}`,
+    `Canonical dir: ${canonicalDir}`,
+    `Version: ${version}`,
+    `Status: ${healthy ? "ok" : "broken"}`
+  ];
+  if (!healthy) {
+    lines.push(`Issues (${issues.length}):`);
+    for (const issue of issues) {
+      lines.push(`  - ${issue}`);
+    }
+  }
+  return {
+    exitCode: healthy ? 0 : 1,
+    output: lines.join("\n")
+  };
+}
+
 // packages/cli/src/commands/hook-antigravity.ts
 import { createHash as createHash5 } from "node:crypto";
 
 // packages/cli/src/hook-session-state.ts
 import { createHash as createHash3 } from "node:crypto";
-import { existsSync as existsSync8, readdirSync as readdirSync3, readFileSync as readFileSync9, rmSync, statSync } from "node:fs";
-import { basename as basename3, dirname as dirname7, join as join12 } from "node:path";
+import { existsSync as existsSync10, readdirSync as readdirSync3, readFileSync as readFileSync10, rmSync, statSync } from "node:fs";
+import { basename as basename3, dirname as dirname7, join as join14 } from "node:path";
 
 // packages/cli/src/runtime-install.ts
-import { existsSync as existsSync7, mkdirSync as mkdirSync5, readFileSync as readFileSync8, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
-import { dirname as dirname6, join as join11 } from "node:path";
+import { existsSync as existsSync9, mkdirSync as mkdirSync5, readFileSync as readFileSync9, renameSync as renameSync4, writeFileSync as writeFileSync6 } from "node:fs";
+import { dirname as dirname6, join as join13 } from "node:path";
 import { fileURLToPath as fileURLToPath3 } from "node:url";
 function resolveDefaultSourceDistDir(startDir) {
   const currentDir = dirname6(fileURLToPath3(import.meta.url));
-  if (existsSync7(join11(currentDir, "cli.js")) && existsSync7(join11(currentDir, "server.js"))) {
+  if (existsSync9(join13(currentDir, "cli.js")) && existsSync9(join13(currentDir, "server.js"))) {
     return currentDir;
   }
-  return join11(findPackageRoot(startDir), "dist");
+  return join13(findPackageRoot(startDir), "dist");
 }
 function writeFileAtomically(targetPath, content) {
   mkdirSync5(dirname6(targetPath), { recursive: true });
@@ -4698,9 +4897,9 @@ function writeFileAtomically(targetPath, content) {
   renameSync4(tempPath, targetPath);
 }
 function syncTextAtomically(targetPath, content) {
-  if (existsSync7(targetPath)) {
+  if (existsSync9(targetPath)) {
     try {
-      if (readFileSync8(targetPath, "utf8") === content) {
+      if (readFileSync9(targetPath, "utf8") === content) {
         return false;
       }
     } catch {
@@ -4710,10 +4909,10 @@ function syncTextAtomically(targetPath, content) {
   return true;
 }
 function syncFileAtomically(sourcePath, targetPath) {
-  const nextBytes = readFileSync8(sourcePath);
-  if (existsSync7(targetPath)) {
+  const nextBytes = readFileSync9(sourcePath);
+  if (existsSync9(targetPath)) {
     try {
-      const currentBytes = readFileSync8(targetPath);
+      const currentBytes = readFileSync9(targetPath);
       if (nextBytes.equals(currentBytes)) {
         return false;
       }
@@ -4724,30 +4923,30 @@ function syncFileAtomically(sourcePath, targetPath) {
   return true;
 }
 function readExistingManifest(manifestPath) {
-  if (!existsSync7(manifestPath)) {
+  if (!existsSync9(manifestPath)) {
     return void 0;
   }
   try {
-    return JSON.parse(readFileSync8(manifestPath, "utf8"));
+    return JSON.parse(readFileSync9(manifestPath, "utf8"));
   } catch {
     return void 0;
   }
 }
 function installRuntimeFiles(targetDir, options = {}) {
   const sourceDistDir = options.sourceDistDir ?? resolveDefaultSourceDistDir(options.startDir);
-  const sourceCliPath = join11(sourceDistDir, "cli.js");
-  const sourceServerPath = join11(sourceDistDir, "server.js");
-  if (!existsSync7(sourceCliPath) || !existsSync7(sourceServerPath)) {
+  const sourceCliPath = join13(sourceDistDir, "cli.js");
+  const sourceServerPath = join13(sourceDistDir, "server.js");
+  if (!existsSync9(sourceCliPath) || !existsSync9(sourceServerPath)) {
     throw new Error(
       `Missing built runtime artifacts in ${sourceDistDir} (expected cli.js and server.js). Run npm run build first.`
     );
   }
-  const cliPath = join11(targetDir, "cli.js");
-  const serverPath = join11(targetDir, "server.js");
-  const manifestPath = join11(targetDir, "runtime.json");
-  const packageJsonPath = join11(targetDir, "package.json");
+  const cliPath = join13(targetDir, "cli.js");
+  const serverPath = join13(targetDir, "server.js");
+  const manifestPath = join13(targetDir, "runtime.json");
+  const packageJsonPath = join13(targetDir, "package.json");
   const version = resolvePackageVersion(options.startDir);
-  const hadAllTargets = existsSync7(cliPath) && existsSync7(serverPath) && existsSync7(manifestPath) && existsSync7(packageJsonPath);
+  const hadAllTargets = existsSync9(cliPath) && existsSync9(serverPath) && existsSync9(manifestPath) && existsSync9(packageJsonPath);
   const existingManifest = readExistingManifest(manifestPath);
   mkdirSync5(targetDir, { recursive: true });
   const cliChanged = syncFileAtomically(sourceCliPath, cliPath);
@@ -4795,7 +4994,7 @@ var MAX_TRACKED_IDS = 200;
 var STATE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
 function resolveHookSessionStatePath(client, sessionId, env = process.env) {
   const hash = createHash3("sha256").update(sessionId).digest("hex").slice(0, 24);
-  return join12(resolveLocusHome(env), "state", client, `${hash}.json`);
+  return join14(resolveLocusHome(env), "state", client, `${hash}.json`);
 }
 function emptySessionState(sessionId) {
   return {
@@ -4832,11 +5031,11 @@ function hashPrompt(prompt) {
 }
 function readHookSessionState(client, sessionId, env = process.env) {
   const filePath = resolveHookSessionStatePath(client, sessionId, env);
-  if (!existsSync8(filePath)) {
+  if (!existsSync10(filePath)) {
     return emptySessionState(sessionId);
   }
   try {
-    const parsed = JSON.parse(readFileSync9(filePath, "utf8"));
+    const parsed = JSON.parse(readFileSync10(filePath, "utf8"));
     return {
       sessionId,
       sessionStartInjected: parsed.sessionStartInjected === true,
@@ -4873,7 +5072,7 @@ function pruneStaleSessionStateFiles(stateDir, currentFileName, nowMs) {
       if (entry === currentFileName || !entry.endsWith(".json")) {
         continue;
       }
-      const entryPath = join12(stateDir, entry);
+      const entryPath = join14(stateDir, entry);
       try {
         const stats = statSync(entryPath);
         if (stats.mtimeMs < cutoff) {
@@ -4917,7 +5116,7 @@ function writeAntigravitySessionState(state, env = process.env) {
 
 // packages/cli/src/antigravity/transcript.ts
 import { createHash as createHash4 } from "node:crypto";
-import { readFileSync as readFileSync10 } from "node:fs";
+import { readFileSync as readFileSync11 } from "node:fs";
 var ANTIGRAVITY_TRANSCRIPT_CURSOR_PREFIX = "antigravity.transcript.";
 var REDACTED_MAX_CHARS = 600;
 var FULL_MAX_CHARS = 4e3;
@@ -4967,7 +5166,7 @@ function parseAntigravityTranscriptEvents(options) {
   let maxStepIndex = afterStepIndex;
   let raw;
   try {
-    raw = readFileSync10(options.transcriptPath, "utf8");
+    raw = readFileSync11(options.transcriptPath, "utf8");
   } catch {
     return { events: [], maxStepIndex };
   }
@@ -5065,11 +5264,11 @@ function parseAntigravityTranscriptEvents(options) {
 }
 
 // packages/cli/src/workspace-gate.ts
-import { existsSync as existsSync9, readFileSync as readFileSync11 } from "node:fs";
-import { homedir as homedir5, tmpdir } from "node:os";
-import { join as join13, resolve as resolve4 } from "node:path";
+import { existsSync as existsSync11, readFileSync as readFileSync12 } from "node:fs";
+import { homedir as homedir6, tmpdir } from "node:os";
+import { join as join15, resolve as resolve4 } from "node:path";
 import { fileURLToPath as fileURLToPath4 } from "node:url";
-var DENIED_HOME_SUBDIRS = [".gemini", ".codex", ".locus", ".claude", ".config"];
+var DENIED_HOME_SUBDIRS = [".gemini", ".codex", ".locus", ".claude", ".config", ".dsh"];
 var DENIED_WIN_SYSTEM_PREFIXES = [
   "c:/windows",
   "c:/program files",
@@ -5135,20 +5334,20 @@ function readStringArray(value) {
 function resolveLocusWorkspaceConfigPath(env = process.env, customHomeDir) {
   const configuredHome = env.LOCUS_HOME?.trim();
   if (configuredHome) {
-    return join13(resolveLocusHome(env), "config.json");
+    return join15(resolveLocusHome(env), "config.json");
   }
   if (customHomeDir) {
-    return join13(customHomeDir, ".locus", "config.json");
+    return join15(customHomeDir, ".locus", "config.json");
   }
-  return join13(resolveLocusHome(env), "config.json");
+  return join15(resolveLocusHome(env), "config.json");
 }
 function readLocusWorkspaceConfig(env = process.env, customHomeDir) {
   const configPath = resolveLocusWorkspaceConfigPath(env, customHomeDir);
-  if (!existsSync9(configPath)) {
+  if (!existsSync11(configPath)) {
     return { mode: "auto", includePaths: [], excludePaths: [] };
   }
   try {
-    const parsed = JSON.parse(readFileSync11(configPath, "utf8"));
+    const parsed = JSON.parse(readFileSync12(configPath, "utf8"));
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       return { mode: "auto", includePaths: [], excludePaths: [] };
     }
@@ -5171,12 +5370,12 @@ function isDeniedAgentOrSystemPath(normalizedPath, normalizedHome, platform) {
       return "home_directory";
     }
     for (const subdir of DENIED_HOME_SUBDIRS) {
-      const denied = normalizeWorkspacePath(join13(normalizedHome, subdir));
+      const denied = normalizeWorkspacePath(join15(normalizedHome, subdir));
       if (denied && isSameOrChild(normalizedPath, denied, platform)) {
         return "denied_system_path";
       }
     }
-    const appData = normalizeWorkspacePath(join13(normalizedHome, "AppData"));
+    const appData = normalizeWorkspacePath(join15(normalizedHome, "AppData"));
     if (appData && isSameOrChild(normalizedPath, appData, platform)) {
       return "denied_system_path";
     }
@@ -5199,7 +5398,7 @@ function collectTempDirs(options, env, normalizedHome) {
     env.TEMP,
     env.TMP,
     env.TMPDIR,
-    normalizedHome ? join13(normalizedHome, "AppData", "Local", "Temp") : void 0
+    normalizedHome ? join15(normalizedHome, "AppData", "Local", "Temp") : void 0
   ];
   const normalizedSet = /* @__PURE__ */ new Set();
   for (const entry of candidates) {
@@ -5221,7 +5420,7 @@ function evaluateHookWorkspace(options) {
   if (!candidatePath) {
     return { allowed: false, reason: "missing_workspace" };
   }
-  const rawHome = options.homeDir ?? homedir5();
+  const rawHome = options.homeDir ?? homedir6();
   const normalizedHome = normalizeWorkspacePath(rawHome);
   const config = readLocusWorkspaceConfig(env, options.homeDir);
   if (config.excludePaths?.some((excluded) => isSameOrChild(candidatePath, excluded, platform))) {
@@ -5684,7 +5883,7 @@ async function runAntigravityHook(options) {
 // packages/cli/src/commands/hook-codex.ts
 import { createHash as createHash7, randomBytes as randomBytes2 } from "node:crypto";
 import { mkdirSync as mkdirSync9, renameSync as renameSync6, writeFileSync as writeFileSync9 } from "node:fs";
-import { join as join19 } from "node:path";
+import { join as join21 } from "node:path";
 
 // packages/codex/src/bounded-snippets.ts
 var USER_CHAR_LIMIT = 280;
@@ -6174,7 +6373,7 @@ function createCodexEventId(sourceEventId) {
 }
 
 // packages/codex/src/importer.ts
-import { readFileSync as readFileSync12, statSync as statSync2 } from "node:fs";
+import { readFileSync as readFileSync13, statSync as statSync2 } from "node:fs";
 
 // packages/codex/src/inbox-event.ts
 function toInboxEvent(normalizedEvent, captureMode) {
@@ -6290,13 +6489,13 @@ function arrayPayload(value) {
 }
 
 // packages/codex/src/inbox-writer.ts
-import { existsSync as existsSync10, mkdirSync as mkdirSync6, renameSync as renameSync5, writeFileSync as writeFileSync7 } from "node:fs";
-import { join as join14 } from "node:path";
+import { existsSync as existsSync12, mkdirSync as mkdirSync6, renameSync as renameSync5, writeFileSync as writeFileSync7 } from "node:fs";
+import { join as join16 } from "node:path";
 function writeCodexInboxEvent(inboxDir, event) {
   mkdirSync6(inboxDir, { recursive: true });
   const filename = `${event.timestamp}-${event.event_id.slice(0, 8)}.json`;
-  const finalPath = join14(inboxDir, filename);
-  if (existsSync10(finalPath)) {
+  const finalPath = join16(inboxDir, filename);
+  if (existsSync12(finalPath)) {
     return { status: "duplicate_pending", filename };
   }
   const tmpPath = `${finalPath}.tmp`;
@@ -6658,34 +6857,34 @@ function durationMsValue(value) {
 }
 
 // packages/codex/src/paths.ts
-import { homedir as homedir6 } from "node:os";
-import { join as join15, resolve as resolve5 } from "node:path";
+import { homedir as homedir7 } from "node:os";
+import { join as join17, resolve as resolve5 } from "node:path";
 function resolveCodexHome2(env = process.env) {
   const configured = env.CODEX_HOME;
   if (configured && configured.trim().length > 0) {
     return resolve5(expandTilde3(configured));
   }
-  return join15(homedir6(), ".codex");
+  return join17(homedir7(), ".codex");
 }
 function resolveCodexSessionsDir(options = {}) {
   if (options.sessionsDir && options.sessionsDir.trim().length > 0) {
     return resolve5(expandTilde3(options.sessionsDir));
   }
-  return join15(resolveCodexHome2(options.env), "sessions");
+  return join17(resolveCodexHome2(options.env), "sessions");
 }
 function expandTilde3(pathValue) {
   if (pathValue === "~") {
-    return homedir6();
+    return homedir7();
   }
   if (pathValue.startsWith("~/") || pathValue.startsWith("~\\")) {
-    return join15(homedir6(), pathValue.slice(2));
+    return join17(homedir7(), pathValue.slice(2));
   }
   return pathValue;
 }
 
 // packages/codex/src/session-files.ts
 import { readdirSync as readdirSync4 } from "node:fs";
-import { basename as basename5, join as join16, resolve as resolve6 } from "node:path";
+import { basename as basename5, join as join18, resolve as resolve6 } from "node:path";
 function findCodexRolloutFiles(sessionsDir) {
   return collectRolloutFiles(resolve6(sessionsDir)).sort();
 }
@@ -6698,7 +6897,7 @@ function collectRolloutFiles(dir) {
   }
   const files = [];
   for (const entry of entries) {
-    const fullPath = join16(dir, entry.name);
+    const fullPath = join18(dir, entry.name);
     if (entry.isDirectory()) {
       files.push(...collectRolloutFiles(fullPath));
       continue;
@@ -6738,7 +6937,7 @@ function importCodexSessionsToInbox(options) {
     }
     let raw;
     try {
-      raw = readFileSync12(filePath, "utf-8");
+      raw = readFileSync13(filePath, "utf-8");
     } catch {
       metrics.errors++;
       continue;
@@ -6852,14 +7051,14 @@ function canonicalImportProjectRoot(eventRoot, requestedRoot) {
 }
 
 // packages/codex/src/plugin-sync.ts
-import { copyFileSync as copyFileSync3, existsSync as existsSync11, mkdirSync as mkdirSync7, readFileSync as readFileSync13, rmSync as rmSync2, writeFileSync as writeFileSync8 } from "node:fs";
-import { dirname as dirname8, join as join17, resolve as resolve7 } from "node:path";
+import { copyFileSync as copyFileSync3, existsSync as existsSync13, mkdirSync as mkdirSync7, readFileSync as readFileSync14, rmSync as rmSync2, writeFileSync as writeFileSync8 } from "node:fs";
+import { dirname as dirname8, join as join19, resolve as resolve7 } from "node:path";
 import { fileURLToPath as fileURLToPath5 } from "node:url";
 
 // packages/codex/src/skill-sync.ts
-import { copyFileSync as copyFileSync4, existsSync as existsSync12, mkdirSync as mkdirSync8, readFileSync as readFileSync14 } from "node:fs";
-import { homedir as homedir7 } from "node:os";
-import { dirname as dirname9, join as join18, resolve as resolve8 } from "node:path";
+import { copyFileSync as copyFileSync4, existsSync as existsSync14, mkdirSync as mkdirSync8, readFileSync as readFileSync15 } from "node:fs";
+import { homedir as homedir8 } from "node:os";
+import { dirname as dirname9, join as join20, resolve as resolve8 } from "node:path";
 import { fileURLToPath as fileURLToPath6 } from "node:url";
 function resolveCanonicalCodexSkillPath() {
   return resolve8(fileURLToPath6(new URL("../skills/locus-memory/SKILL.md", import.meta.url)));
@@ -7377,10 +7576,10 @@ async function runCodexHook(options) {
 }
 function writeStopTrigger(options) {
   try {
-    const triggerDir = join19(resolveCodexHome(options.env), "locus", "hook-triggers");
+    const triggerDir = join21(resolveCodexHome(options.env), "locus", "hook-triggers");
     mkdirSync9(triggerDir, { recursive: true });
     const id = `${options.now.getTime()}-${randomBytes2(4).toString("hex")}`;
-    const finalPath = join19(triggerDir, `stop-${id}.json`);
+    const finalPath = join21(triggerDir, `stop-${id}.json`);
     const tempPath = `${finalPath}.tmp`;
     const payload = {
       event: "stop",
@@ -7398,8 +7597,8 @@ function writeStopTrigger(options) {
 }
 
 // packages/cli/src/antigravity/bundle.ts
-import { existsSync as existsSync13 } from "node:fs";
-import { join as join20 } from "node:path";
+import { existsSync as existsSync15 } from "node:fs";
+import { join as join22 } from "node:path";
 function buildAntigravityPluginManifest(version) {
   return {
     name: "locus-memory",
@@ -7549,15 +7748,15 @@ function buildAntigravitySkillMarkdown() {
 }
 function writeAntigravityPluginBundle(options) {
   const pluginDir = options.targetDir;
-  const runtimeDir = join20(pluginDir, "runtime");
+  const runtimeDir = join22(pluginDir, "runtime");
   const captureLevel = options.captureLevel ?? "redacted";
-  const manifestPath = join20(pluginDir, "plugin.json");
-  const hooksPath = join20(pluginDir, "hooks.json");
-  const hookRunnerPath = join20(pluginDir, "hooks", "locus-hook.mjs");
-  const mcpPath = join20(pluginDir, "mcp_config.json");
-  const rulesPath = join20(pluginDir, "rules", "AGENTS.md");
-  const skillPath = join20(pluginDir, "skills", "locus-memory", "SKILL.md");
-  const hadAllPluginFiles = existsSync13(manifestPath) && existsSync13(hooksPath) && existsSync13(hookRunnerPath) && existsSync13(mcpPath) && existsSync13(rulesPath) && existsSync13(skillPath) && existsSync13(join20(runtimeDir, "cli.js")) && existsSync13(join20(runtimeDir, "server.js"));
+  const manifestPath = join22(pluginDir, "plugin.json");
+  const hooksPath = join22(pluginDir, "hooks.json");
+  const hookRunnerPath = join22(pluginDir, "hooks", "locus-hook.mjs");
+  const mcpPath = join22(pluginDir, "mcp_config.json");
+  const rulesPath = join22(pluginDir, "rules", "AGENTS.md");
+  const skillPath = join22(pluginDir, "skills", "locus-memory", "SKILL.md");
+  const hadAllPluginFiles = existsSync15(manifestPath) && existsSync15(hooksPath) && existsSync15(hookRunnerPath) && existsSync15(mcpPath) && existsSync15(rulesPath) && existsSync15(skillPath) && existsSync15(join22(runtimeDir, "cli.js")) && existsSync15(join22(runtimeDir, "server.js"));
   const runtimeResult = installRuntimeFiles(runtimeDir, {
     startDir: options.startDir,
     sourceDistDir: options.sourceDistDir,
@@ -7603,7 +7802,7 @@ function writeAntigravityPluginBundle(options) {
       runtimeResult.cliPath,
       runtimeResult.serverPath,
       runtimeResult.manifestPath,
-      join20(runtimeDir, "package.json")
+      join22(runtimeDir, "package.json")
     ]
   };
 }
@@ -7675,12 +7874,12 @@ function runInstallAntigravity(options = {}) {
 }
 
 // packages/cli/src/commands/install-codex.ts
-import { existsSync as existsSync17 } from "node:fs";
-import { join as join23 } from "node:path";
+import { existsSync as existsSync19 } from "node:fs";
+import { join as join25 } from "node:path";
 
 // packages/cli/src/codex/cleanup.ts
-import { existsSync as existsSync14, readdirSync as readdirSync5, rmSync as rmSync3, statSync as statSync3 } from "node:fs";
-import { join as join21 } from "node:path";
+import { existsSync as existsSync16, readdirSync as readdirSync5, rmSync as rmSync3, statSync as statSync3 } from "node:fs";
+import { join as join23 } from "node:path";
 function cleanupInterruptedInstall(codexHome) {
   const removed = [];
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
@@ -7691,16 +7890,16 @@ function cleanupInterruptedInstall(codexHome) {
   return { removed };
 }
 function findInterruptedInstallTempFiles(codexHome) {
-  const skillDir = join21(codexHome, "skills", "locus-memory");
+  const skillDir = join23(codexHome, "skills", "locus-memory");
   const tempFiles = [];
-  if (!existsSync14(skillDir)) {
+  if (!existsSync16(skillDir)) {
     return tempFiles;
   }
   for (const entry of readdirSync5(skillDir)) {
     if (!entry.endsWith(".locus-tmp")) {
       continue;
     }
-    const path = join21(skillDir, entry);
+    const path = join23(skillDir, entry);
     if (!statSync3(path).isFile()) {
       continue;
     }
@@ -7743,13 +7942,13 @@ function buildCodexMcpRemoveArgs(name) {
 }
 
 // packages/cli/src/codex/lock.ts
-import { existsSync as existsSync15, mkdirSync as mkdirSync10, readFileSync as readFileSync15, rmSync as rmSync4, writeFileSync as writeFileSync10 } from "node:fs";
-import { join as join22 } from "node:path";
+import { existsSync as existsSync17, mkdirSync as mkdirSync10, readFileSync as readFileSync16, rmSync as rmSync4, writeFileSync as writeFileSync10 } from "node:fs";
+import { join as join24 } from "node:path";
 var defaultStaleAfterMs = 15 * 60 * 1e3;
 function acquireInstallLock(codexHome, options = {}) {
   mkdirSync10(codexHome, { recursive: true });
-  const lockPath = join22(codexHome, ".locus-install.lock");
-  if (existsSync15(lockPath)) {
+  const lockPath = join24(codexHome, ".locus-install.lock");
+  if (existsSync17(lockPath)) {
     const stale = isStaleLock(lockPath, options);
     return {
       acquired: false,
@@ -7792,7 +7991,7 @@ function isStaleLock(lockPath, options) {
   const staleAfterMs = options.staleAfterMs ?? defaultStaleAfterMs;
   const now = options.now ?? /* @__PURE__ */ new Date();
   try {
-    const lock = JSON.parse(readFileSync15(lockPath, "utf8"));
+    const lock = JSON.parse(readFileSync16(lockPath, "utf8"));
     if (!lock.createdAt) {
       return false;
     }
@@ -7805,9 +8004,9 @@ function isStaleLock(lockPath, options) {
 // packages/cli/src/codex/skill.ts
 import {
   copyFileSync as copyFileSync5,
-  existsSync as existsSync16,
+  existsSync as existsSync18,
   mkdirSync as mkdirSync11,
-  readFileSync as readFileSync16,
+  readFileSync as readFileSync17,
   renameSync as renameSync7,
   writeFileSync as writeFileSync11
 } from "node:fs";
@@ -7816,11 +8015,11 @@ import { fileURLToPath as fileURLToPath7 } from "node:url";
 function installCodexSkill(options = {}) {
   const sourcePath = options.sourcePath ?? resolvePackagedCodexSkillPath();
   const targetPath = resolveCodexSkillPath(options.env, "locus-memory");
-  const sourceContent = readFileSync16(sourcePath, "utf8");
+  const sourceContent = readFileSync17(sourcePath, "utf8");
   try {
     mkdirSync11(dirname10(targetPath), { recursive: true });
-    if (existsSync16(targetPath)) {
-      const targetContent = readFileSync16(targetPath, "utf8");
+    if (existsSync18(targetPath)) {
+      const targetContent = readFileSync17(targetPath, "utf8");
       if (targetContent === sourceContent) {
         return { action: "unchanged", path: targetPath, targetPath };
       }
@@ -7861,7 +8060,7 @@ function resolvePackagedCodexSkillPath() {
     fileURLToPath7(new URL("../packages/codex/skills/locus-memory/SKILL.md", import.meta.url))
   ];
   for (const candidate of candidates) {
-    if (existsSync16(candidate)) {
+    if (existsSync18(candidate)) {
       return candidate;
     }
   }
@@ -7895,7 +8094,7 @@ function formatInstallCodexDryRun(options = {}) {
   const skillPath = resolveCodexSkillPath(env, "locus-memory");
   const runtimePackage = resolveRuntimePackageOverride(env);
   const runtimeSpecifier = buildRuntimePackageSpecifier(resolvePackageVersion(options.startDir));
-  const lockPath = join23(codexHome, ".locus-install.lock");
+  const lockPath = join25(codexHome, ".locus-install.lock");
   const tempFiles = findInterruptedInstallTempFiles(codexHome);
   return [
     "Locus Codex install dry-run",
@@ -7906,7 +8105,7 @@ function formatInstallCodexDryRun(options = {}) {
     `Hooks path: ${resolveCodexHooksPath(env)}`,
     `Hooks: ${options.withHooks ? "requested (would install)" : "not requested"}`,
     "Default env: LOCUS_CODEX_CAPTURE=redacted LOCUS_CAPTURE_LEVEL=redacted LOCUS_LOG=error",
-    `Install lock: ${existsSync17(lockPath) ? `present at ${lockPath}` : "none"}`,
+    `Install lock: ${existsSync19(lockPath) ? `present at ${lockPath}` : "none"}`,
     `Stale temp files: ${tempFiles.length}`
   ].join("\n");
 }
@@ -8054,6 +8253,367 @@ function formatRuntimeCommand(runtimeSpecifier, runtimePackage) {
   return `npx -y ${runtimeSpecifier} mcp`;
 }
 
+// packages/cli/src/commands/install-dsh.ts
+import { copyFileSync as copyFileSync6, existsSync as existsSync21, readFileSync as readFileSync19 } from "node:fs";
+import { join as join27 } from "node:path";
+
+// packages/cli/src/dsh/bundle.ts
+import { existsSync as existsSync20, readFileSync as readFileSync18 } from "node:fs";
+import { join as join26 } from "node:path";
+function readExistingPluginPath(manifestPath) {
+  if (!existsSync20(manifestPath)) {
+    return void 0;
+  }
+  try {
+    const parsed = JSON.parse(readFileSync18(manifestPath, "utf8"));
+    return typeof parsed.pluginPath === "string" ? parsed.pluginPath : void 0;
+  } catch {
+    return void 0;
+  }
+}
+var BUNDLED_SKILL_DIR_JS = "!!js process.getBuiltinModule('node:path').join(process.getBuiltinModule('node:path').dirname(process.getBuiltinModule('node:module').createRequire(baseUrl).resolve('locus-memory-dsh/package.json')), 'skills')";
+function buildDshPluginPackageJson(version) {
+  return {
+    name: DSH_PLUGIN_PACKAGE_NAME,
+    version,
+    description: "Persistent project-aware memory for DeepSeek Harness Desktop with zero-call context injection, real-time capture, daily journal, and local SQLite MCP recall.",
+    type: "module",
+    main: "./lib/index.js",
+    exports: {
+      ".": "./lib/index.js",
+      "./package.json": "./package.json"
+    },
+    files: ["lib", "runtime", "skills", "cordis.patch.yml", "package.json"],
+    keywords: ["dsh-plugin", "deepseek-harness", "cordis", "agent-skill", "memory", "mcp"],
+    engines: {
+      node: ">=22.0.0"
+    },
+    license: "MIT",
+    dsh: {
+      bundle: {
+        patch: "./cordis.patch.yml"
+      }
+    }
+  };
+}
+function buildDshCordisPatchYaml(options = {}) {
+  const captureLevel = options.captureLevel ?? "redacted";
+  const enableMcp = options.enableMcp !== false;
+  return [
+    "- insert:",
+    "    - id: locus-memory",
+    `      name: ${DSH_PLUGIN_PACKAGE_NAME}`,
+    "      config:",
+    `        captureLevel: ${captureLevel}`,
+    `        enableMcp: ${enableMcp ? "true" : "false"}`,
+    "    - id: locus-memory-skill",
+    "      name: '@deepseek-ai/dsh-skill-filesystem'",
+    "      config:",
+    "        providerName: locus-memory",
+    "        includeDefaultRoots: false",
+    `        bundledSkillDir: ${BUNDLED_SKILL_DIR_JS}`,
+    ""
+  ].join("\n");
+}
+function buildDshSkillMarkdown() {
+  return [
+    "---",
+    "name: locus-memory",
+    "description: >",
+    "  Persistent local SQLite project memory for DeepSeek Harness Desktop. Zero-call Cordis",
+    "  hooks inject bounded project briefs and prompt recall automatically before turns; invoke",
+    "  deep MCP tools for date queries, saving decisions, project state, and memory cleanup.",
+    "---",
+    "",
+    "# Locus Memory (DeepSeek Harness Desktop)",
+    "",
+    "Locus stores workspace-scoped persistent memory locally in SQLite with secret redaction, FTS5 search, and a daily chronological journal (`journal/YYYY-MM-DD.md` + `INDEX.md`).",
+    "",
+    "## Zero-Call Cordis Lifecycle",
+    "",
+    "- **Pre-step context (`agent/pre-step`)**: injects `[Locus Memory \u2014 Project Brief]` (project state, active decisions, constraints, recent files, `Recent Days:`) and `[Locus Memory \u2014 Relevant Recall]` automatically as `<system-reminder>` context.",
+    "- **Real-time capture (`session/event`, `tools/result`)**: captures verified human prompts, assistant text responses (excluding reasoning traces), and mutating/failing tool executions into the local project inbox.",
+    "- **Turn end flush (`turn/end`)**: processes inbox events, extracts durable decisions/constraints, updates daily summaries, and closes the SQLite handle cleanly.",
+    "",
+    "## Deep MCP Tools (`locus` server)",
+    "",
+    "1. `memory_recall` -- Summary-first recall across decisions, sessions, and project events.",
+    "2. `memory_calendar` -- Day/week/month activity buckets with `summaryPreview`.",
+    "3. `memory_project_state` -- Live package/git identity, memory freshness, and open next steps.",
+    "4. `memory_search` -- Full-text FTS5 search across files, decisions, and events.",
+    "5. `memory_remember` -- Explicitly persist key architectural choices and conventions.",
+    "6. `memory_review` / `memory_forget` -- Inspect durable facts and forget outdated entries.",
+    "7. `memory_timeline` / `memory_explore` / `memory_scan` / `memory_status` / `memory_compact` -- Chronology, structure, diagnostics, and raw tool-use compaction.",
+    "",
+    "## Capture Modes & Privacy",
+    "",
+    "- `metadata`: structural tool/file activity and diagnostics only; no prompt or response text capture.",
+    "- `redacted` (default): bounded redacted snippets (up to 600 chars) with secret/denylist filtering.",
+    "- `full`: up to 4000 chars of redacted prompt/response text stored locally. Maximum recall carries higher local privacy exposure and is never risk-free.",
+    ""
+  ].join("\n");
+}
+function writeDshPluginBundle(options) {
+  const pluginDir = options.targetDir;
+  const runtimeDir = join26(pluginDir, "runtime");
+  const captureLevel = options.captureLevel ?? "redacted";
+  const enableMcp = options.enableMcp !== false;
+  const sourceDistDir = options.sourceDistDir ?? resolveDefaultSourceDistDir(options.startDir);
+  const sourcePluginPath = join26(sourceDistDir, "dsh-plugin.js");
+  const sourceServerPath = join26(sourceDistDir, "server.js");
+  const sourceCliPath = join26(sourceDistDir, "cli.js");
+  if (!existsSync20(sourcePluginPath) || !existsSync20(sourceServerPath) || !existsSync20(sourceCliPath)) {
+    throw new Error(
+      `Missing built DSH runtime artifacts in ${sourceDistDir} (expected cli.js, server.js, and dsh-plugin.js). Run npm run build first.`
+    );
+  }
+  const packageJsonPath = join26(pluginDir, "package.json");
+  const patchPath = join26(pluginDir, "cordis.patch.yml");
+  const entryPath = join26(pluginDir, "lib", "index.js");
+  const skillPath = join26(pluginDir, "skills", "locus-memory", "SKILL.md");
+  const runtimeServerPath = join26(runtimeDir, "server.js");
+  const runtimePackagePath = join26(runtimeDir, "package.json");
+  const runtimeManifestPath = join26(runtimeDir, "runtime.json");
+  const hadAllPluginFiles = existsSync20(packageJsonPath) && existsSync20(patchPath) && existsSync20(entryPath) && existsSync20(skillPath) && existsSync20(runtimeServerPath) && existsSync20(runtimePackagePath) && existsSync20(runtimeManifestPath);
+  const existingPluginPath = readExistingPluginPath(runtimeManifestPath);
+  const installedRuntime = installRuntimeFiles(runtimeDir, {
+    startDir: options.startDir,
+    sourceDistDir,
+    now: options.now
+  });
+  const version = options.version ?? installedRuntime.version;
+  const pluginChanged = syncFileAtomically(sourcePluginPath, entryPath);
+  const manifestNeedsUpdate = pluginChanged || installedRuntime.action !== "unchanged" || existingPluginPath !== entryPath;
+  const dshRuntimeManifest = {
+    version,
+    installedAt: (options.now ?? /* @__PURE__ */ new Date()).toISOString(),
+    cliPath: installedRuntime.cliPath,
+    pluginPath: entryPath,
+    serverPath: runtimeServerPath
+  };
+  if (manifestNeedsUpdate) {
+    writeFileAtomically(runtimeManifestPath, `${JSON.stringify(dshRuntimeManifest, null, 2)}
+`);
+  }
+  const changedFlags = [
+    syncTextAtomically(
+      packageJsonPath,
+      `${JSON.stringify(buildDshPluginPackageJson(version), null, 2)}
+`
+    ),
+    syncTextAtomically(patchPath, buildDshCordisPatchYaml({ captureLevel, enableMcp })),
+    syncTextAtomically(skillPath, buildDshSkillMarkdown()),
+    pluginChanged,
+    manifestNeedsUpdate
+  ];
+  const anyChanged = changedFlags.some(Boolean) || installedRuntime.action !== "unchanged";
+  let action = "unchanged";
+  if (!hadAllPluginFiles) {
+    action = "installed";
+  } else if (anyChanged) {
+    action = "updated";
+  }
+  return {
+    action,
+    pluginDir,
+    version,
+    runtimeDir,
+    files: [
+      packageJsonPath,
+      patchPath,
+      entryPath,
+      skillPath,
+      runtimeServerPath,
+      runtimePackagePath,
+      runtimeManifestPath
+    ]
+  };
+}
+
+// packages/cli/src/commands/install-dsh.ts
+function isPlainObject3(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function createTimestampedFileBackup(filePath, now = /* @__PURE__ */ new Date()) {
+  const base = `${filePath}.bak-${now.getTime()}`;
+  let candidate = base;
+  let counter = 0;
+  while (existsSync21(candidate)) {
+    counter++;
+    candidate = `${base}-${counter}`;
+  }
+  copyFileSync6(filePath, candidate);
+  return candidate;
+}
+function toFileDependencySpec(dirPath) {
+  return `file:${dirPath.replace(/\\/g, "/")}`;
+}
+function formatInstallDshDryRun(options = {}) {
+  const env = options.env ?? process.env;
+  const captureLevel = options.captureLevel ?? "redacted";
+  const enableMcp = options.enableMcp !== false;
+  const version = resolvePackageVersion(options.startDir);
+  const customTarget = options.targetDir?.trim();
+  if (customTarget) {
+    return [
+      "Locus DeepSeek Harness (dsh) install dry-run (custom target)",
+      `Version: ${version}`,
+      `Target plugin dir: ${customTarget}`,
+      `Capture level: ${captureLevel}`,
+      `Auto MCP registration: ${enableMcp ? "enabled" : "disabled"}`,
+      "Planned bundle files:",
+      "  - package.json (dsh.bundle.patch -> ./cordis.patch.yml)",
+      "  - cordis.patch.yml (locus-memory + @deepseek-ai/dsh-skill-filesystem)",
+      "  - lib/index.js",
+      "  - skills/locus-memory/SKILL.md",
+      "  - runtime/server.js, runtime/cli.js, runtime/package.json, runtime/runtime.json",
+      "DSH home & ~/.locus/bin: untouched (custom --target)"
+    ].join("\n");
+  }
+  const profile = validateDshProfileName(options.profile ?? DSH_DEFAULT_PROFILE);
+  const profileDir = resolveDshProfileDir(profile, env);
+  const canonicalDir = resolveDshCanonicalPluginDir(env);
+  const profilePluginDir = resolveDshProfilePluginDir(profile, env);
+  return [
+    "Locus DeepSeek Harness (dsh) install dry-run",
+    `Version: ${version}`,
+    `DSH home: ${resolveDshHome(env)}`,
+    `Profile: ${profile} (${profileDir})`,
+    `Canonical bundle dir: ${canonicalDir}`,
+    `Profile node_modules copy: ${profilePluginDir}`,
+    `Capture level: ${captureLevel}`,
+    `Auto MCP registration: ${enableMcp ? "enabled" : "disabled"}`,
+    "Planned manifest update:",
+    `  - ${join27(profileDir, "package.json")}: add dependencies["${DSH_PLUGIN_PACKAGE_NAME}"] and dsh.profile.bundles += "${DSH_PLUGIN_PACKAGE_NAME}" (with timestamped backup)`,
+    "User cordis.patch.yml: untouched"
+  ].join("\n");
+}
+function runInstallDsh(options = {}) {
+  const env = options.env ?? process.env;
+  const captureLevel = options.captureLevel ?? "redacted";
+  const enableMcp = options.enableMcp !== false;
+  const customTarget = options.targetDir?.trim();
+  if (customTarget) {
+    const bundleResult = writeDshPluginBundle({
+      targetDir: customTarget,
+      startDir: options.startDir,
+      sourceDistDir: options.sourceDistDir,
+      captureLevel,
+      enableMcp,
+      now: options.now
+    });
+    return {
+      exitCode: 0,
+      output: [
+        `Locus DeepSeek Harness plugin ${bundleResult.action} (${bundleResult.version})`,
+        `Plugin dir: ${bundleResult.pluginDir}`,
+        `Runtime dir: ${bundleResult.runtimeDir}`,
+        `Capture level: ${captureLevel}`,
+        `Auto MCP registration: ${enableMcp ? "enabled" : "disabled"}`,
+        "Shared local runtime: skipped (custom --target)"
+      ].join("\n")
+    };
+  }
+  const profile = validateDshProfileName(options.profile ?? DSH_DEFAULT_PROFILE);
+  const profileDir = resolveDshProfileDir(profile, env);
+  const profileManifestPath = join27(profileDir, "package.json");
+  if (!existsSync21(profileManifestPath)) {
+    return {
+      exitCode: 1,
+      output: [
+        `DeepSeek Harness profile "${profile}" was not found at ${profileDir}.`,
+        `Missing manifest: ${profileManifestPath}.`,
+        "Open DeepSeek Harness once (or initialize the profile) before running `locus-memory install dsh`."
+      ].join("\n")
+    };
+  }
+  let parsedManifest;
+  try {
+    parsedManifest = JSON.parse(readFileSync19(profileManifestPath, "utf8"));
+  } catch (error) {
+    return {
+      exitCode: 1,
+      output: `Failed to parse ${profileManifestPath}: ${error instanceof Error ? error.message : String(error)}`
+    };
+  }
+  if (!isPlainObject3(parsedManifest)) {
+    return {
+      exitCode: 1,
+      output: `Invalid profile manifest at ${profileManifestPath}: expected a JSON object.`
+    };
+  }
+  const canonicalDir = resolveDshCanonicalPluginDir(env);
+  const profilePluginDir = resolveDshProfilePluginDir(profile, env);
+  const canonicalResult = writeDshPluginBundle({
+    targetDir: canonicalDir,
+    startDir: options.startDir,
+    sourceDistDir: options.sourceDistDir,
+    captureLevel,
+    enableMcp,
+    now: options.now
+  });
+  const profileBundleResult = writeDshPluginBundle({
+    targetDir: profilePluginDir,
+    startDir: options.startDir,
+    sourceDistDir: options.sourceDistDir,
+    captureLevel,
+    enableMcp,
+    now: options.now
+  });
+  const dependencies = isPlainObject3(parsedManifest.dependencies) ? { ...parsedManifest.dependencies } : {};
+  const dshField = isPlainObject3(parsedManifest.dsh) ? { ...parsedManifest.dsh } : {};
+  const profileField = isPlainObject3(dshField.profile) ? { ...dshField.profile } : {};
+  const existingBundles = Array.isArray(profileField.bundles) ? profileField.bundles.filter((item) => typeof item === "string") : [];
+  const depSpec = toFileDependencySpec(canonicalDir);
+  const nextBundles = existingBundles.includes(DSH_PLUGIN_PACKAGE_NAME) ? existingBundles : [...existingBundles, DSH_PLUGIN_PACKAGE_NAME];
+  const needsManifestUpdate = dependencies[DSH_PLUGIN_PACKAGE_NAME] !== depSpec || nextBundles.length !== existingBundles.length;
+  let backupPath;
+  let manifestAction = "unchanged";
+  if (needsManifestUpdate) {
+    backupPath = createTimestampedFileBackup(profileManifestPath, options.now);
+    const nextManifest = {
+      ...parsedManifest,
+      dependencies: {
+        ...dependencies,
+        [DSH_PLUGIN_PACKAGE_NAME]: depSpec
+      },
+      dsh: {
+        ...dshField,
+        profile: {
+          ...profileField,
+          bundles: nextBundles
+        }
+      }
+    };
+    syncTextAtomically(profileManifestPath, `${JSON.stringify(nextManifest, null, 2)}
+`);
+    manifestAction = "updated";
+  }
+  const localRuntimeResult = installLocalCliRuntime({
+    env,
+    startDir: options.startDir,
+    sourceDistDir: options.sourceDistDir,
+    now: options.now
+  });
+  const lines = [
+    `Locus DeepSeek Harness plugin ${profileBundleResult.action} (${profileBundleResult.version})`,
+    `Profile: ${profile} (${profileDir})`,
+    `Canonical bundle (${canonicalResult.action}): ${canonicalResult.pluginDir}`,
+    `Profile bundle copy (${profileBundleResult.action}): ${profileBundleResult.pluginDir}`,
+    `Profile manifest (${manifestAction}): ${profileManifestPath}`,
+    ...backupPath ? [`Backup: ${backupPath}`] : [],
+    `Capture level: ${captureLevel}`,
+    `Auto MCP registration: ${enableMcp ? "enabled" : "disabled"}`,
+    `Shared local runtime (${localRuntimeResult.action}): ${localRuntimeResult.binDir}`,
+    "User cordis.patch.yml: untouched",
+    "Restart DeepSeek Harness if it is already running to load the updated Cordis plugin."
+  ];
+  return {
+    exitCode: 0,
+    output: lines.join("\n")
+  };
+}
+
 // packages/cli/src/commands/mcp.ts
 async function runMcp() {
   await import(new URL("./server.js", import.meta.url).href);
@@ -8107,12 +8667,12 @@ function quoteWindowsArg(value) {
 }
 
 // packages/cli/src/commands/uninstall-antigravity.ts
-import { existsSync as existsSync18, readFileSync as readFileSync17, rmSync as rmSync5 } from "node:fs";
-import { join as join24 } from "node:path";
+import { existsSync as existsSync22, readFileSync as readFileSync20, rmSync as rmSync5 } from "node:fs";
+import { join as join28 } from "node:path";
 function runUninstallAntigravity(options = {}) {
   const env = options.env ?? process.env;
   const pluginDir = options.targetDir?.trim() || resolveAntigravityPluginDir(env);
-  if (!existsSync18(pluginDir)) {
+  if (!existsSync22(pluginDir)) {
     return {
       exitCode: 0,
       output: [
@@ -8121,8 +8681,8 @@ function runUninstallAntigravity(options = {}) {
       ].join("\n")
     };
   }
-  const manifestPath = join24(pluginDir, "plugin.json");
-  if (!existsSync18(manifestPath)) {
+  const manifestPath = join28(pluginDir, "plugin.json");
+  if (!existsSync22(manifestPath)) {
     return {
       exitCode: 1,
       output: `Refusing to remove ${pluginDir}: missing plugin.json.`
@@ -8130,7 +8690,7 @@ function runUninstallAntigravity(options = {}) {
   }
   let manifestName;
   try {
-    const parsed = JSON.parse(readFileSync17(manifestPath, "utf8"));
+    const parsed = JSON.parse(readFileSync20(manifestPath, "utf8"));
     manifestName = parsed.name;
   } catch {
     return {
@@ -8182,6 +8742,142 @@ async function runUninstallCodex(options) {
   return { exitCode: 0, output: lines.join("\n") };
 }
 
+// packages/cli/src/commands/uninstall-dsh.ts
+import { existsSync as existsSync23, readFileSync as readFileSync21, rmSync as rmSync6 } from "node:fs";
+import { join as join29 } from "node:path";
+function isPlainObject4(value) {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+function removeVerifiedPluginDir(pluginDir) {
+  if (!existsSync23(pluginDir)) {
+    return { status: "absent" };
+  }
+  const manifestPath = join29(pluginDir, "package.json");
+  if (!existsSync23(manifestPath)) {
+    return {
+      status: "error",
+      message: `Refusing to remove ${pluginDir}: missing package.json.`
+    };
+  }
+  let pkgName;
+  try {
+    const parsed = JSON.parse(readFileSync21(manifestPath, "utf8"));
+    pkgName = parsed.name;
+  } catch {
+    return {
+      status: "error",
+      message: `Refusing to remove ${pluginDir}: unreadable package.json.`
+    };
+  }
+  if (pkgName !== DSH_PLUGIN_PACKAGE_NAME) {
+    return {
+      status: "error",
+      message: `Refusing to remove foreign plugin at ${pluginDir} (package.json name is "${String(pkgName)}").`
+    };
+  }
+  rmSync6(pluginDir, { recursive: true, force: true });
+  return { status: "removed" };
+}
+function runUninstallDsh(options = {}) {
+  const env = options.env ?? process.env;
+  const customTarget = options.targetDir?.trim();
+  if (customTarget) {
+    const removal = removeVerifiedPluginDir(customTarget);
+    if (removal.status === "error") {
+      return { exitCode: 1, output: removal.message ?? "Refused to remove target." };
+    }
+    if (removal.status === "absent") {
+      return {
+        exitCode: 0,
+        output: [
+          `Locus DeepSeek Harness plugin is not installed at ${customTarget}.`,
+          "Memory data untouched."
+        ].join("\n")
+      };
+    }
+    return {
+      exitCode: 0,
+      output: [
+        `Locus DeepSeek Harness plugin removed: ${customTarget}`,
+        "Memory data untouched."
+      ].join("\n")
+    };
+  }
+  const profile = validateDshProfileName(options.profile ?? DSH_DEFAULT_PROFILE);
+  const profileDir = resolveDshProfileDir(profile, env);
+  const profileManifestPath = join29(profileDir, "package.json");
+  const profilePluginDir = resolveDshProfilePluginDir(profile, env);
+  const canonicalDir = resolveDshCanonicalPluginDir(env);
+  const profileRemoval = removeVerifiedPluginDir(profilePluginDir);
+  if (profileRemoval.status === "error") {
+    return { exitCode: 1, output: profileRemoval.message ?? "Refused to remove profile bundle." };
+  }
+  const canonicalRemoval = removeVerifiedPluginDir(canonicalDir);
+  if (canonicalRemoval.status === "error") {
+    return {
+      exitCode: 1,
+      output: canonicalRemoval.message ?? "Refused to remove canonical bundle."
+    };
+  }
+  let backupPath;
+  let manifestUpdated = false;
+  if (existsSync23(profileManifestPath)) {
+    let parsed;
+    try {
+      parsed = JSON.parse(readFileSync21(profileManifestPath, "utf8"));
+    } catch (error) {
+      return {
+        exitCode: 1,
+        output: `Failed to parse ${profileManifestPath}: ${error instanceof Error ? error.message : String(error)}`
+      };
+    }
+    if (isPlainObject4(parsed)) {
+      const deps = isPlainObject4(parsed.dependencies) ? { ...parsed.dependencies } : void 0;
+      const hadDep = deps !== void 0 && DSH_PLUGIN_PACKAGE_NAME in deps;
+      if (hadDep && deps) {
+        delete deps[DSH_PLUGIN_PACKAGE_NAME];
+      }
+      const dshField = isPlainObject4(parsed.dsh) ? { ...parsed.dsh } : void 0;
+      const profileField = dshField && isPlainObject4(dshField.profile) ? { ...dshField.profile } : void 0;
+      const existingBundles = Array.isArray(profileField?.bundles) ? profileField.bundles.filter((item) => typeof item === "string") : void 0;
+      const filteredBundles = existingBundles?.filter((item) => item !== DSH_PLUGIN_PACKAGE_NAME);
+      const hadBundle = existingBundles !== void 0 && filteredBundles !== void 0 && filteredBundles.length !== existingBundles.length;
+      if (hadDep || hadBundle) {
+        backupPath = createTimestampedFileBackup(profileManifestPath, options.now);
+        const nextManifest = { ...parsed };
+        if (deps !== void 0) {
+          nextManifest.dependencies = deps;
+        }
+        if (dshField !== void 0 && profileField !== void 0 && filteredBundles !== void 0) {
+          nextManifest.dsh = {
+            ...dshField,
+            profile: {
+              ...profileField,
+              bundles: filteredBundles
+            }
+          };
+        }
+        syncTextAtomically(profileManifestPath, `${JSON.stringify(nextManifest, null, 2)}
+`);
+        manifestUpdated = true;
+      }
+    }
+  }
+  const lines = [
+    `Locus DeepSeek Harness uninstall completed for profile "${profile}" (${profileDir}).`,
+    `Profile bundle: ${profileRemoval.status} (${profilePluginDir})`,
+    `Canonical bundle: ${canonicalRemoval.status} (${canonicalDir})`,
+    `Profile manifest: ${manifestUpdated ? "updated" : "unchanged"}`,
+    ...backupPath ? [`Backup: ${backupPath}`] : [],
+    "User cordis.patch.yml: untouched",
+    "Memory data untouched."
+  ];
+  return {
+    exitCode: 0,
+    output: lines.join("\n")
+  };
+}
+
 // packages/cli/src/index.ts
 var usage = `Usage: locus-memory <command>
 
@@ -8197,6 +8893,9 @@ Commands:
   locus-memory doctor codex           Diagnose the Codex installation
   locus-memory hook codex             Run a Codex lifecycle hook
   locus-memory uninstall codex        Remove Locus from Codex config
+  locus-memory install dsh            Install the DeepSeek Harness Cordis plugin
+  locus-memory doctor dsh             Diagnose the DeepSeek Harness plugin
+  locus-memory uninstall dsh          Remove the DeepSeek Harness plugin
 
 Options:
   --help, help     Show this help
@@ -8237,6 +8936,25 @@ Removes the package-owned Codex MCP entry while preserving skills and memory dat
 
 Options:
   --yes            Confirm removal`;
+var installDshUsage = `Usage: locus-memory install dsh [--dry-run] [--yes] [--profile <name>] [--target <dir>] [--capture <metadata|redacted|full>] [--no-mcp]
+
+Installs the in-process DeepSeek Harness (dsh) Cordis plugin bundle, skill provider, and local runtime.
+
+Options:
+  --dry-run         Show planned changes without writing files
+  --yes             Non-interactive install confirmation
+  --profile <name>  DeepSeek Harness profile name (default: desktop)
+  --target <dir>    Custom standalone bundle output directory
+  --capture <lvl>   Capture mode: metadata | redacted | full (default: redacted)
+  --no-mcp          Disable automatic locus MCP server registration`;
+var uninstallDshUsage = `Usage: locus-memory uninstall dsh --yes [--profile <name>] [--target <dir>]
+
+Removes the Locus DeepSeek Harness Cordis plugin while preserving user cordis.patch.yml and memory data.
+
+Options:
+  --yes             Confirm removal
+  --profile <name>  DeepSeek Harness profile name (default: desktop)
+  --target <dir>    Custom bundle directory to remove`;
 function readFlagValue(args, flagName) {
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -8515,6 +9233,85 @@ async function runCli(argv = process.argv.slice(2), io = {
   }
   if (command === "uninstall" && subcommand === "codex") {
     io.stderr(uninstallCodexUsage);
+    return 1;
+  }
+  if (command === "install" && subcommand === "dsh" && argv.includes("--help")) {
+    io.stdout(installDshUsage);
+    return 0;
+  }
+  if (command === "install" && subcommand === "dsh") {
+    const captureLevel = parseCaptureLevelFlag(readFlagValue(argv, "--capture"));
+    if (captureLevel === "invalid") {
+      io.stderr("Option --capture must be one of: metadata, redacted, full.");
+      return 1;
+    }
+    const profile = readFlagValue(argv, "--profile");
+    const targetDir = readFlagValue(argv, "--target");
+    const enableMcp = !argv.includes("--no-mcp");
+    try {
+      if (argv.includes("--dry-run")) {
+        io.stdout(
+          formatInstallDshDryRun({
+            env: options.env,
+            startDir: options.startDir,
+            profile,
+            targetDir,
+            captureLevel,
+            enableMcp
+          })
+        );
+        return 0;
+      }
+      const result = runInstallDsh({
+        env: options.env,
+        startDir: options.startDir,
+        sourceDistDir: options.sourceDistDir,
+        profile,
+        targetDir,
+        captureLevel,
+        enableMcp
+      });
+      io.stdout(result.output);
+      return result.exitCode;
+    } catch (error) {
+      io.stderr(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
+  }
+  if (command === "doctor" && subcommand === "dsh") {
+    try {
+      const result = formatDoctorDsh({
+        env: options.env,
+        profile: readFlagValue(argv, "--profile"),
+        targetDir: readFlagValue(argv, "--target")
+      });
+      io.stdout(result.output);
+      return result.exitCode;
+    } catch (error) {
+      io.stderr(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
+  }
+  if (command === "uninstall" && subcommand === "dsh" && argv.includes("--help")) {
+    io.stdout(uninstallDshUsage);
+    return 0;
+  }
+  if (command === "uninstall" && subcommand === "dsh" && argv.includes("--yes")) {
+    try {
+      const result = runUninstallDsh({
+        env: options.env,
+        profile: readFlagValue(argv, "--profile"),
+        targetDir: readFlagValue(argv, "--target")
+      });
+      io.stdout(result.output);
+      return result.exitCode;
+    } catch (error) {
+      io.stderr(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
+  }
+  if (command === "uninstall" && subcommand === "dsh") {
+    io.stderr(uninstallDshUsage);
     return 1;
   }
   io.stderr(`Unknown command: ${argv.join(" ")}`);

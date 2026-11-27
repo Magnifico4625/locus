@@ -26,13 +26,16 @@ describe('evaluateHookWorkspace', () => {
     const locusHome = join(mockHome, '.locus');
     const pluginDir = join(mockHome, '.gemini', 'config', 'plugins', 'locus-memory');
     const codexDir = join(mockHome, '.codex');
+    const dshDir = join(mockHome, '.dsh', 'profiles', 'desktop');
     const appDataDir = join(mockHome, 'AppData', 'Roaming', 'Code');
     mkdirSync(pluginDir, { recursive: true });
     mkdirSync(codexDir, { recursive: true });
+    mkdirSync(dshDir, { recursive: true });
     mkdirSync(locusHome, { recursive: true });
     mkdirSync(appDataDir, { recursive: true });
     mkdirSync(mockTemp, { recursive: true });
     writeFileSync(join(pluginDir, 'package.json'), '{"name":"locus-plugin"}', 'utf8');
+    writeFileSync(join(dshDir, 'package.json'), '{"name":"dsh-profile-desktop"}', 'utf8');
 
     const baseOpts = { homeDir: mockHome, tempDir: mockTemp, env: { LOCUS_HOME: locusHome } };
 
@@ -53,6 +56,10 @@ describe('evaluateHookWorkspace', () => {
       reason: 'denied_system_path',
     });
     expect(evaluateHookWorkspace({ ...baseOpts, rawCwd: codexDir })).toEqual({
+      allowed: false,
+      reason: 'denied_system_path',
+    });
+    expect(evaluateHookWorkspace({ ...baseOpts, rawCwd: dshDir })).toEqual({
       allowed: false,
       reason: 'denied_system_path',
     });
@@ -78,11 +85,25 @@ describe('evaluateHookWorkspace', () => {
     const mockTemp = join(root, 'temp');
     const tempProject = join(mockTemp, 'scratch-proj');
     const plainDir = join(mockHome, 'Documents', 'random-chat');
+    const dshDefaultDir = join(mockHome, 'Documents', 'deepseek-harness-default-workspace');
     mkdirSync(tempProject, { recursive: true });
     mkdirSync(plainDir, { recursive: true });
+    mkdirSync(dshDefaultDir, { recursive: true });
     writeFileSync(join(tempProject, 'package.json'), '{"name":"tmp-proj"}', 'utf8');
 
     const env = { LOCUS_HOME: join(mockHome, '.locus') };
+
+    expect(
+      evaluateHookWorkspace({
+        rawCwd: dshDefaultDir,
+        homeDir: mockHome,
+        tempDir: mockTemp,
+        env,
+      }),
+    ).toEqual({
+      allowed: false,
+      reason: 'no_project_marker',
+    });
 
     expect(
       evaluateHookWorkspace({

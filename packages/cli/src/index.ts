@@ -6,6 +6,7 @@ import type { CodexMcpServerConfig } from './codex/config.js';
 import { runContextCommand } from './commands/context.js';
 import { formatDoctorAntigravity } from './commands/doctor-antigravity.js';
 import { formatDoctorCodex } from './commands/doctor-codex.js';
+import { formatDoctorDsh } from './commands/doctor-dsh.js';
 import { isAntigravityHookEvent, runAntigravityHook } from './commands/hook-antigravity.js';
 import { isCodexHookEvent, runCodexHook } from './commands/hook-codex.js';
 import {
@@ -13,10 +14,12 @@ import {
   runInstallAntigravity,
 } from './commands/install-antigravity.js';
 import { formatInstallCodexDryRun, runInstallCodex } from './commands/install-codex.js';
+import { formatInstallDshDryRun, runInstallDsh } from './commands/install-dsh.js';
 import { runMcp } from './commands/mcp.js';
 import { type CommandRunner, defaultCommandRunner } from './commands/runner.js';
 import { runUninstallAntigravity } from './commands/uninstall-antigravity.js';
 import { runUninstallCodex } from './commands/uninstall-codex.js';
+import { runUninstallDsh } from './commands/uninstall-dsh.js';
 import { resolvePackageVersion } from './package-info.js';
 import { installLocalCliRuntime } from './runtime-install.js';
 
@@ -49,6 +52,9 @@ Commands:
   locus-memory doctor codex           Diagnose the Codex installation
   locus-memory hook codex             Run a Codex lifecycle hook
   locus-memory uninstall codex        Remove Locus from Codex config
+  locus-memory install dsh            Install the DeepSeek Harness Cordis plugin
+  locus-memory doctor dsh             Diagnose the DeepSeek Harness plugin
+  locus-memory uninstall dsh          Remove the DeepSeek Harness plugin
 
 Options:
   --help, help     Show this help
@@ -95,6 +101,27 @@ Removes the package-owned Codex MCP entry while preserving skills and memory dat
 
 Options:
   --yes            Confirm removal`;
+
+const installDshUsage = `Usage: locus-memory install dsh [--dry-run] [--yes] [--profile <name>] [--target <dir>] [--capture <metadata|redacted|full>] [--no-mcp]
+
+Installs the in-process DeepSeek Harness (dsh) Cordis plugin bundle, skill provider, and local runtime.
+
+Options:
+  --dry-run         Show planned changes without writing files
+  --yes             Non-interactive install confirmation
+  --profile <name>  DeepSeek Harness profile name (default: desktop)
+  --target <dir>    Custom standalone bundle output directory
+  --capture <lvl>   Capture mode: metadata | redacted | full (default: redacted)
+  --no-mcp          Disable automatic locus MCP server registration`;
+
+const uninstallDshUsage = `Usage: locus-memory uninstall dsh --yes [--profile <name>] [--target <dir>]
+
+Removes the Locus DeepSeek Harness Cordis plugin while preserving user cordis.patch.yml and memory data.
+
+Options:
+  --yes             Confirm removal
+  --profile <name>  DeepSeek Harness profile name (default: desktop)
+  --target <dir>    Custom bundle directory to remove`;
 
 function readFlagValue(args: readonly string[], flagName: string): string | undefined {
   for (let i = 0; i < args.length; i++) {
@@ -413,6 +440,94 @@ export async function runCli(
 
   if (command === 'uninstall' && subcommand === 'codex') {
     io.stderr(uninstallCodexUsage);
+    return 1;
+  }
+
+  if (command === 'install' && subcommand === 'dsh' && argv.includes('--help')) {
+    io.stdout(installDshUsage);
+    return 0;
+  }
+
+  if (command === 'install' && subcommand === 'dsh') {
+    const captureLevel = parseCaptureLevelFlag(readFlagValue(argv, '--capture'));
+    if (captureLevel === 'invalid') {
+      io.stderr('Option --capture must be one of: metadata, redacted, full.');
+      return 1;
+    }
+
+    const profile = readFlagValue(argv, '--profile');
+    const targetDir = readFlagValue(argv, '--target');
+    const enableMcp = !argv.includes('--no-mcp');
+
+    try {
+      if (argv.includes('--dry-run')) {
+        io.stdout(
+          formatInstallDshDryRun({
+            env: options.env,
+            startDir: options.startDir,
+            profile,
+            targetDir,
+            captureLevel,
+            enableMcp,
+          }),
+        );
+        return 0;
+      }
+
+      const result = runInstallDsh({
+        env: options.env,
+        startDir: options.startDir,
+        sourceDistDir: options.sourceDistDir,
+        profile,
+        targetDir,
+        captureLevel,
+        enableMcp,
+      });
+      io.stdout(result.output);
+      return result.exitCode;
+    } catch (error) {
+      io.stderr(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
+  }
+
+  if (command === 'doctor' && subcommand === 'dsh') {
+    try {
+      const result = formatDoctorDsh({
+        env: options.env,
+        profile: readFlagValue(argv, '--profile'),
+        targetDir: readFlagValue(argv, '--target'),
+      });
+      io.stdout(result.output);
+      return result.exitCode;
+    } catch (error) {
+      io.stderr(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
+  }
+
+  if (command === 'uninstall' && subcommand === 'dsh' && argv.includes('--help')) {
+    io.stdout(uninstallDshUsage);
+    return 0;
+  }
+
+  if (command === 'uninstall' && subcommand === 'dsh' && argv.includes('--yes')) {
+    try {
+      const result = runUninstallDsh({
+        env: options.env,
+        profile: readFlagValue(argv, '--profile'),
+        targetDir: readFlagValue(argv, '--target'),
+      });
+      io.stdout(result.output);
+      return result.exitCode;
+    } catch (error) {
+      io.stderr(error instanceof Error ? error.message : String(error));
+      return 1;
+    }
+  }
+
+  if (command === 'uninstall' && subcommand === 'dsh') {
+    io.stderr(uninstallDshUsage);
     return 1;
   }
 

@@ -29,7 +29,7 @@ interface RuntimeManifest {
   serverPath: string;
 }
 
-function resolveDefaultSourceDistDir(startDir?: string): string {
+export function resolveDefaultSourceDistDir(startDir?: string): string {
   const currentDir = dirname(fileURLToPath(import.meta.url));
   if (existsSync(join(currentDir, 'cli.js')) && existsSync(join(currentDir, 'server.js'))) {
     return currentDir;
@@ -60,7 +60,7 @@ export function syncTextAtomically(targetPath: string, content: string): boolean
   return true;
 }
 
-function syncFileAtomically(sourcePath: string, targetPath: string): boolean {
+export function syncFileAtomically(sourcePath: string, targetPath: string): boolean {
   const nextBytes = readFileSync(sourcePath);
   if (existsSync(targetPath)) {
     try {

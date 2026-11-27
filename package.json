@@ -14,6 +14,7 @@
   "files": [
     "dist/server.js",
     "dist/cli.js",
+    "dist/dsh-plugin.js",
     "packages/codex/skills/locus-memory/SKILL.md",
     "packages/codex/README.md",
     "packages/codex/config/config.toml.example",
@@ -28,6 +29,7 @@
   "scripts": {
     "build": "node esbuild.config.ts",
     "build:antigravity-plugin": "node scripts/build-antigravity-plugin.mjs",
+    "build:dsh-plugin": "node scripts/build-dsh-plugin.mjs",
     "build:site": "npx @tailwindcss/cli -i ./docs/source.css -o ./docs/app.css --minify",
     "dev": "node --watch packages/core/src/server.ts",
     "test": "vitest run",
