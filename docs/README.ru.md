@@ -39,6 +39,29 @@ npx -y locus-memory@latest uninstall codex --yes
 
 Команда установки добавляет MCP-сервер Locus, устанавливает Codex skill, включает практичный `redacted` режим и закрепляет runtime-команду на установленную версию пакета.
 
+### Zero-call десктопные плагины (Codex, Antigravity, DeepSeek Harness)
+
+Для автоматической инъекции контекста на старте/ходе и фонового захвата памяти без ручных вызовов MCP:
+
+```bash
+# Codex CLI / Desktop: zero-call хуки и локальный runtime в ~/.locus/bin/
+npx -y locus-memory@latest install codex --with-hooks --yes
+
+# Antigravity Desktop: нативный плагин (~/.gemini/config/plugins/locus-memory/)
+npx -y locus-memory@latest install antigravity --yes
+npx -y locus-memory@latest doctor antigravity
+npx -y locus-memory@latest uninstall antigravity --yes
+
+# DeepSeek Harness Desktop (dsh): in-process Cordis-плагин locus-memory-dsh
+npx -y locus-memory@latest install dsh --yes
+npx -y locus-memory@latest doctor dsh
+npx -y locus-memory@latest uninstall dsh --yes
+```
+
+- **Strict Workspace Gate:** хуки игнорируют домашнюю/системные/temp-папки и каталоги без маркера проекта (для opt-in достаточно пустого `.locus.json` или настройки `~/.locus/config.json`).
+- **Дневник памяти по датам:** автоматически поддерживаются `daily_summaries` в SQLite и Markdown-файлы `journal/YYYY-MM-DD.md` + `journal/INDEX.md`, а `memory_compact` сжимает старые сырые `tool_use` с `PRAGMA wal_checkpoint(TRUNCATE)`.
+- Дорожная карта десктопных плагинов: [roadmap/v4-multi-platform-plugins.md](roadmap/v4-multi-platform-plugins.md).
+
 ## Что нового в v3.7
 
 Track D добавляет надежность памяти для Codex: project-scoped recall, date buckets, `memory_calendar` для вопросов по периодам и `memory_project_state` для текущего состояния проекта.
@@ -102,9 +125,11 @@ Locus не пытается быть full agent runtime или облачной 
 
 | Клиент | Статус |
 | --- | --- |
-| Codex CLI | Основной проверенный путь |
+| Codex CLI / Desktop | Основной проверенный путь (MCP + опциональные zero-call хуки проверены вживую) |
+| Antigravity Desktop | Нативный бандл с zero-call хуками проверен вживую |
+| DeepSeek Harness Desktop (`dsh`) | In-process Cordis-плагин (`locus-memory-dsh`) проверен вживую |
 | Claude Code | Поддерживается через hooks и shared runtime |
-| Codex desktop / extension | Та же MCP-модель, но parity пока не заявляется как полностью проверенный |
+| Codex extension | Та же MCP-модель, но parity пока не заявляется как полностью проверенный |
 | Cursor / Windsurf / Cline / Zed | MCP tools работают; пассивные adapters — будущая задача |
 
 ## Разработка

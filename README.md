@@ -49,6 +49,31 @@ npx -y locus-memory@latest uninstall codex --yes
 
 The installer adds the Locus MCP server, installs the Codex skill, sets practical `redacted` capture defaults, and pins the recurring MCP runtime to the installed package version.
 
+### Zero-Call Desktop Plugins (Codex, Antigravity, DeepSeek Harness)
+
+For automatic `SessionStart` / prompt-turn memory briefs and background capture without explicit MCP calls on every turn:
+
+```bash
+# Codex CLI / Desktop zero-call hooks + local runtime under ~/.locus/bin/
+npx -y locus-memory@latest install codex --with-hooks --yes
+
+# Antigravity Desktop native plugin bundle (~/.gemini/config/plugins/locus-memory/)
+npx -y locus-memory@latest install antigravity --yes
+npx -y locus-memory@latest doctor antigravity
+npx -y locus-memory@latest uninstall antigravity --yes
+
+# DeepSeek Harness Desktop (`dsh`) in-process Cordis plugin (`locus-memory-dsh`)
+npx -y locus-memory@latest install dsh --yes
+npx -y locus-memory@latest doctor dsh
+npx -y locus-memory@latest uninstall dsh --yes
+```
+
+For DeepSeek Harness Desktop UI, you can also install the standalone bundle directory (`locus-memory-dsh`) via **Add plugin -> Install third-party plugin**.
+
+- **Strict Workspace Gate:** Hooks ignore home/temp/agent-config directories and folders without project markers (add an empty `.locus.json` to opt in a custom folder, or configure `~/.locus/config.json`).
+- **Daily Memory Journal:** Turn capture automatically maintains `daily_summaries` in SQLite plus Markdown notes under `journal/YYYY-MM-DD.md` and `journal/INDEX.md`.
+- **Bounded Compaction:** `memory_compact` prunes old raw `tool_use` rows after syncing daily summaries and runs `PRAGMA wal_checkpoint(TRUNCATE)` while keeping durable decisions and conversation history intact.
+
 ## New In v3.7
 
 **New in v3.7 / Track D:** Codex memory reliability. `memory_recall`, `memory_search`, and `memory_timeline` are scoped to the current project, date-aware recall reports searched buckets, `memory_calendar` gives day/week/month activity discovery, and `memory_project_state` summarizes current package/git/memory state before the agent relies on old context.
@@ -133,9 +158,11 @@ Current maturity:
 
 | Surface | Status |
 | --- | --- |
-| Codex CLI | Primary validated path |
+| Codex CLI / Desktop | Primary validated path (MCP + optional zero-call hooks live-verified) |
+| Antigravity Desktop | Native plugin bundle with zero-call hooks live-verified |
+| DeepSeek Harness Desktop (`dsh`) | In-process Cordis plugin (`locus-memory-dsh`) live-verified |
 | Claude Code | Supported through hooks and shared runtime |
-| Codex desktop / extension | Desktop MCP marker path validated with `LOCUS_CODEX_SURFACE=desktop`; extension still requires target-surface validation |
+| Codex extension | Same MCP model; extension parity still requires target-surface testing |
 | Cursor / Windsurf / Cline / Zed | MCP tools work; passive conversation adapters are future work |
 
 Manual MCP fallback:
@@ -148,6 +175,7 @@ codex mcp add locus -- node /path/to/locus/dist/server.js
 
 - Codex acceptance matrix: [docs/codex-acceptance-matrix.md](docs/codex-acceptance-matrix.md)
 - Codex VS Code extension notes: [docs/codex-vscode-extension.md](docs/codex-vscode-extension.md)
+- Multi-platform desktop plugins roadmap: [docs/roadmap/v4-multi-platform-plugins.md](docs/roadmap/v4-multi-platform-plugins.md)
 - Future roadmap: [docs/roadmap/codex-next.md](docs/roadmap/codex-next.md)
 - Release notes: [docs/releases/v3.7.0.md](docs/releases/v3.7.0.md)
 - Full comparison: [docs/comparison.md](docs/comparison.md)

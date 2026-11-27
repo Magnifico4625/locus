@@ -58,12 +58,12 @@ To protect the working `v3.7.0` setup and live memory databases while developing
 
 ## 3. Staged Roadmap & Checkpoint Tags
 
-| Stage | Checkpoint Tag | Scope |
-|---|---|---|
-| Baseline | `v4-plugins-baseline` | Clean anchor at `9c006ac` (`v3.7.0` + `opencode.md`) |
-| Step 0 | `v4-step0-core` | Shared Core: Windows path normalization (`\\?\`, `file://`, trailing slash), multi-client `detect-client`, `resolveLocusHome` / `resolveRuntimeBinDir`, multi-source `runDurableExtraction`, `node:sqlite` `SQLITE_BUSY` retry, Zero-Call `Context Brief Engine` (`auto-brief.ts`), `@locus/core` library barrel, `WorkspacePool` + MCP `roots/list`, CLI `context` & `sync-runtime` commands |
-| Step 1 | `v4-step1-antigravity` | Antigravity Desktop native plugin bundle (`plugin.json`, root `hooks.json`, `rules/AGENTS.md`, `skills/`, `mcp_config.json`) + `Stop` incremental `transcriptPath` ingestion + live verification |
-| Step 2 | `v4-step2-codex-hooks` | Codex Desktop live hooks (`hooks.json` referenced from `.codex-plugin/plugin.json`, stable local runtime command preserving `trusted_hash`, real `SessionStart`/`UserPromptSubmit` `additionalContext`, real `Stop` rollout JSONL import) + live verification |
-| Step 2.5 | `v4-step2.5-workspace-and-journal` | Strict Workspace Gate (`~/.locus/config.json`, deny home/temp/agent config dirs and markerless folders), hook self-injection filter, Daily Memory Library (`daily_summaries` + `journal/YYYY-MM-DD.md`), raw `tool_use` compaction + `WAL` truncate |
-| Step 3 | `v4-step3-dsh` | DeepSeek Harness Desktop (`dsh`) in-process Cordis plugin (`locus-memory-dsh`, `dsh.bundle.patch`, `agent/pre-step` `<system-reminder>` injection, `session/event` + `tools/result` capture, `turn/end` flush, optional `mcpManager.register('locus')`, `install`/`doctor`/`uninstall dsh`) |
-| Step 4 (deferred) | `v4-step4-opencode` | OpenCode Desktop in-process ESM plugin (`experimental.chat.messages.transform` + `compacting` + real-time capture + `config` skills) — deferred per user priority decision |
+| Stage | Checkpoint Tag | Status | Scope |
+|---|---|---|---|
+| Baseline | `v4-plugins-baseline` | Done | Clean anchor at `9c006ac` (`v3.7.0` + `opencode.md`) |
+| Step 0 | `v4-step0-core` | Done | Shared Core: Windows path normalization (`\\?\`, `file://`, trailing slash), multi-client `detect-client`, `resolveLocusHome` / `resolveRuntimeBinDir`, multi-source `runDurableExtraction`, `node:sqlite` `SQLITE_BUSY` retry, Zero-Call `Context Brief Engine` (`auto-brief.ts`), `@locus/core` library barrel, `WorkspacePool` + MCP `roots/list`, CLI `context` & `sync-runtime` commands |
+| Step 1 | `v4-step1-antigravity` + `fix1` | Done (live-verified) | Antigravity Desktop native plugin bundle (`plugin.json`, root `hooks.json`, `rules/AGENTS.md`, `skills/`, `mcp_config.json`) + `Stop` incremental `transcriptPath` ingestion + live verification |
+| Step 2 | `v4-step2-codex-hooks` + `fix1..fix4` | Done (live-verified) | Codex Desktop live hooks (`hooks.json` referenced from `.codex-plugin/plugin.json`, stable local runtime command preserving `trusted_hash`, real `SessionStart`/`UserPromptSubmit` `additionalContext`, real `Stop` rollout JSONL import, Cyrillic & paraphrase echo dedup) + live verification |
+| Step 2.5 | `v4-step2.5-workspace-and-journal` | Done (live-verified) | Strict Workspace Gate (`~/.locus/config.json`, `.locus.json`, deny home/temp/agent config dirs and markerless folders), hook self-injection filter, Daily Memory Library (`daily_summaries` + `journal/YYYY-MM-DD.md` + `INDEX.md`), raw `tool_use` compaction + `WAL` truncate |
+| Step 3 | `v4-step3-dsh` + `v4-step3-dsh-fix1` | Done (live-verified) | DeepSeek Harness Desktop (`dsh`) in-process Cordis plugin (`locus-memory-dsh`, `dsh.bundle.patch`, workspace-gated dynamic `ctx.systemPrompt.section` + `agent/pre-step` `<system-reminder>` injection, `session/event` + `tools/result` capture, `turn/end` flush, optional `mcpManager.register('locus')`, `install`/`doctor`/`uninstall dsh` + symlink migration) |
+| Step 4 | `v4-step4-opencode` | Deferred | OpenCode Desktop in-process ESM plugin (`experimental.chat.messages.transform` + `compacting` + real-time capture + `config` skills) — deferred per user priority decision |
