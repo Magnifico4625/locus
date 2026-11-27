@@ -479,7 +479,7 @@ This is a planning suggestion, not a hard contract.
 | `v3.6.1` | Codex one-command install hotfix: generated MCP env includes `CODEX_HOME`, keeping storage under `$CODEX_HOME/memory/` |
 | `v3.7.0` | Codex memory reliability: project isolation, temporal recall, freshness, ranking, project-state summaries, and Codex Desktop validation evidence |
 | `v4.0.0` | Multi-platform zero-call desktop plugins (Codex hooks, Antigravity Desktop native bundle, DeepSeek Harness Cordis plugin), Strict Workspace Gate, Daily Memory Journal, bounded `memory_compact` |
-| `v4.1+` | npm `4.0.0` publish, OpenCode Desktop plugin (deferred), HTML dashboard, evidence anchors, and secondary IDE adapters |
+| `v4.1+` | OpenCode adapter (deferred), HTML dashboard, evidence anchors, and secondary IDE adapters |
 
 Secondary IDE adapters should be scheduled only when they do not block the Codex-first path above.
 
@@ -487,7 +487,7 @@ Secondary IDE adapters should be scheduled only when they do not block the Codex
 
 ## Immediate Next Candidates
 
-1. Publish `locus-memory@4.0.0` to npm when maintainer credentials are ready (GitHub Release `v4.0.0` with `locus-memory-4.0.0.tgz` ships first), and run post-publish registry `npx -y locus-memory@4.0.0` smoke.
+1. `locus-memory@4.0.0` is published on npm (`latest`) and GitHub Releases; next focus shifts to post-v4 follow-ups and dashboard visibility.
 2. Improve Track D follow-ups without broadening existing claims:
    - richer evidence-anchor display for commits, files, docs, command results, timestamps, and sessions
    - user-configurable topic namespace filters only if project-root isolation proves insufficient

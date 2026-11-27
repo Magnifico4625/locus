@@ -39,8 +39,6 @@ npx -y locus-memory@latest uninstall codex --yes
 
 安装器会配置 Locus MCP server，安装 Codex skill，启用实用的 `redacted` capture 默认值，并把运行时命令固定到已安装的包版本。
 
-> **发布说明（`v4.0.0`）：** `v4.0.0` 已在 [GitHub Releases](https://github.com/Magnifico4625/locus/releases/tag/v4.0.0) 发布并附带 `locus-memory-4.0.0.tgz`；npm 仓库的 `locus-memory@4.0.0` 仍待发布，在 npm 更新前可使用 GitHub Release 压缩包或本地源码构建（`npm run build`）。
-
 ### Zero-Call 桌面插件（Codex、Antigravity、DeepSeek Harness）
 
 支持在会话启动与对话轮次中自动注入上下文摘要并在后台捕获记录，无需每轮显式调用 MCP 工具：

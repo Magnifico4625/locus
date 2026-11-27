@@ -39,8 +39,6 @@ npx -y locus-memory@latest uninstall codex --yes
 
 Команда установки добавляет MCP-сервер Locus, устанавливает Codex skill, включает практичный `redacted` режим и закрепляет runtime-команду на установленную версию пакета.
 
-> **Статус релиза `v4.0.0`:** версия `v4.0.0` опубликована в [GitHub Releases](https://github.com/Magnifico4625/locus/releases/tag/v4.0.0) с прикреплённым архивом `locus-memory-4.0.0.tgz`; публикация `locus-memory@4.0.0` в npm ожидает ручного `npm publish`, поэтому до обновления npm используйте `.tgz` из GitHub Release или локальную сборку (`npm run build`).
-
 ### Zero-call десктопные плагины (Codex, Antigravity, DeepSeek Harness)
 
 Для автоматической инъекции контекста на старте/ходе и фонового захвата памяти без ручных вызовов MCP:

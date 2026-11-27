@@ -49,8 +49,6 @@ npx -y locus-memory@latest uninstall codex --yes
 
 The installer adds the Locus MCP server, installs the Codex skill, sets practical `redacted` capture defaults, and pins the recurring MCP runtime to the installed package version.
 
-> **Release `v4.0.0` note:** `v4.0.0` is published on [GitHub Releases](https://github.com/Magnifico4625/locus/releases/tag/v4.0.0) with `locus-memory-4.0.0.tgz` attached; publishing `locus-memory@4.0.0` to npm is pending, so use the GitHub Release tarball or a local checkout (`npm run build`) for `v4.0.0` features until npm `latest` is updated.
-
 ### Zero-Call Desktop Plugins (Codex, Antigravity, DeepSeek Harness)
 
 For automatic `SessionStart` / prompt-turn memory briefs and background capture without explicit MCP calls on every turn:

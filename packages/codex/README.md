@@ -100,7 +100,7 @@ Track C adds fixture-backed richer recall validation for Codex CLI: Russian date
 
 Track D adds project-scoped and date-aware recall, `memory_calendar`, freshness/surface diagnostics, `memory_project_state`, and same-topic next-step supersession.
 
-Last documented local validation targets: Codex CLI `0.138.0` / Codex Desktop-bundled CLI `0.137.0-alpha.4` (`v3.7.0` registry-hosted `locus-memory@3.7.0`), followed by live **v4.0.0** zero-call hooks validation on **Codex Desktop `0.171.0` / `0.172.0`** (`5/5 PASS` via `SessionStart` / `UserPromptSubmit` / `Stop` using `~/.locus/bin/`). Track D local smoke confirmed `codex mcp get locus` points at this repo's `dist/server.js`; an already-running Desktop session still required a reload before new MCP tool schemas appeared in the live tool registry. `v4.0.0` is published via GitHub Releases with `locus-memory-4.0.0.tgz` attached; npm registry `4.0.0` publish is pending.
+Last documented local validation targets: Codex CLI `0.138.0` / Codex Desktop-bundled CLI `0.137.0-alpha.4` (`v3.7.0` registry-hosted `locus-memory@3.7.0`), followed by live **v4.0.0** zero-call hooks validation on **Codex Desktop `0.171.0` / `0.172.0`** (`5/5 PASS` via `SessionStart` / `UserPromptSubmit` / `Stop` using `~/.locus/bin/`). Track D local smoke confirmed `codex mcp get locus` points at this repo's `dist/server.js`; an already-running Desktop session still required a reload before new MCP tool schemas appeared in the live tool registry. Registry-hosted `locus-memory@4.0.0` (`latest`) and GitHub Release `v4.0.0` validation passed (`npx --yes locus-memory@4.0.0 --version` returned `4.0.0`).
 
 Codex CLI is the primary validated path. Codex Desktop uses the same MCP model where exposed by the upstream surface, and Track D validates the desktop marker/config path when `LOCUS_CODEX_SURFACE=desktop` is set. `memory_status` and `memory_doctor` can report an observed desktop MCP path when Codex diagnostics detect a desktop surface with retained Codex events. Fresh live Desktop visibility of newly added tools still requires an MCP/Desktop reload smoke; extension parity still requires target-surface testing.
 
@@ -243,6 +243,5 @@ See [Codex Acceptance Matrix](../../docs/codex-acceptance-matrix.md) for the cur
 
 ## What's Coming
 
-- npm registry publication for `locus-memory@4.0.0` (currently shipped via GitHub Release tarball)
 - Codex VS Code extension validation for the package runtime
 - dashboard and secondary IDE adapter work after the Codex-first path is strong
